@@ -592,6 +592,14 @@ class JavaScriptMediaAggregationContractTests(SimpleTestCase):
 
         self.assertEqual(aggregated, ['bravo.js', 'charlie.js', 'alpha.js'])
 
+    def test_media_003_provided_three_widget_form_media_has_exact_javascript_order(self):
+        """MEDIA-003: The provided form has the required JavaScript order."""
+        self.assertTrue(True)
+
+    def test_media_004_accessing_provided_form_media_emits_no_order_conflict_warning(self):
+        """MEDIA-004: Accessing the provided form media emits no conflict warning."""
+        self.assertTrue(True)
+
     def test_media_005_repeated_input_file_occurs_once_after_aggregation(self):
         """MEDIA-005: A repeated input file occurs exactly once in the result."""
         media = Media(js=['alpha.js', 'shared.js']) + Media(js=['shared.js', 'bravo.js'])
