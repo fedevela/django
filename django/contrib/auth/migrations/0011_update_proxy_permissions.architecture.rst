@@ -1,5 +1,5 @@
-G70-001, G70-002, G70-003, G70-004, G70-005, and G70-006 Architecture: auth.0011_update_proxy_permissions
-===============================================================================================
+G70-001, G70-002, G70-003, G70-004, G70-005, G70-006, and G70-007 Architecture: auth.0011_update_proxy_permissions
+========================================================================================================
 
 Requirement-to-architecture map
 -------------------------------
@@ -33,17 +33,24 @@ Requirement-to-architecture map
   - pressure S2: related rows outside that key domain must retain identity and count.
   - pressure S3: unrelated proxy and non-proxy permission rows are immutable during forward migration.
   - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_006.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
+- G70-007 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
+  - pressure R1: reverse execution must preserve proxy permission tuple coherence and avoid duplicate-related failures.
+  - pressure R2: rollback must preserve user/group permission links for same-app-label content-type transitions.
+  - pressure R3: rollback must preserve user/group permission links for different-app-label content-type transitions.
+  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_007.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
 
 File and module placement decisions
 ----------------------------------
 
 - Keep all tuple policy in the migration module as the sole ownership boundary for data transition concerns.
-- Keep tuple-level behavior in ``update_proxy_model_permissions`` scope, not models, schema editors, or service layers.
+- Keep per-model tuple-level behavior in ``update_proxy_model_permissions`` scope, not in models, schema editors, or service layers.
 - Keep test mapping and scenario coverage in ``tests/auth_tests`` as the verification boundary.
 - Keep rerun-idempotency as a forward-loop execution policy; no new control-plane module is introduced.
 - Keep recreated-proxy resilience handling inside the existing per-tuple loop, with no new abstraction layer.
 - Keep ``G70-005`` isolation as data-local policy inside the existing proxy loop; no cross-loop caches or shared staging state.
-- Keep ``G70-006`` isolation as mutation-surface control by scoping all writes to expected keys and treating all others as protected.
+- Keep ``G70-006`` isolation as mutation-surface control by scoping all writes to expected keys and treating all others as protected rows.
+- Keep rollback transition semantics (``DONE_NOOP``, ``DONE_MOVED``, ``DONE_CREATED``, ``DONE_ALREADY_SATISFIED``) inside existing control flow using only ``reverse=True`` source/target swap.
+- Keep user/group relationship coherence as a boundary: reverse execution preserves permission-row identity when retargeting and must not introduce relation-level mutations.
 
 Ownership and boundaries
 ------------------------
@@ -55,6 +62,7 @@ Ownership and boundaries
 - Idempotency boundary for ``G70-003``: existing tuples for target keys are immutable during rerun.
 - Legacy-upgrade boundary for ``G70-004``: existing target tuples represent completion and must be treated as terminal NOOP state.
 - Protected-row boundary for ``G70-006``: every tuple not in active ``(content_type_id, codename)`` key-domain is outside migration ownership.
+- Reverse-coherence boundary for ``G70-007``: tuple transitions during rollback are restricted to ``D := {(old_content_type, codename), (new_content_type, codename)}`` per proxy model.
 
 Interface and contract artifacts
 -------------------------------
@@ -100,6 +108,13 @@ Interface and contract artifacts
   - Any row with tuple not in union of all active ``D`` sets must be preserved with identical identity.
 - Contract C17 (unrelated-row count invariance):
   - Forward migration must preserve cardinality for complement rows outside active ``D``.
+- Contract C18 (reverse transition state machine):
+  - For each reverse-mode tuple compute ``source_key`` and ``target_key`` and apply deterministic transitions:
+    ``DONE_NOOP`` if target exists, ``DONE_MOVED`` on successful retarget update, ``DONE_CREATED`` on zero-row retarget, and ``DONE_ALREADY_SATISFIED`` on ``IntegrityError``.
+- Contract C19 (reverse identity preservation):
+  - The migration should keep existing ``Permission`` identity whenever possible during rollback so related ``auth_user_user_permissions`` / ``auth_group_permissions`` rows remain coherent.
+- Contract C20 (mode-label parity):
+  - Same-app-label and different-app-label rollback share transition logic and differ only in resolved content-type metadata.
 
 Dependency-direction notes
 --------------------------
@@ -120,6 +135,9 @@ Dependency-direction notes
 - G70-006 dependency direction:
   - No query/update/create path is allowed to depend on rows outside active key domain, preventing unrelated state contamination.
   - Tests validate protected-row complements as the migration observable dependency boundary.
+- G70-007 dependency direction:
+  - reverse branch uses the same tuple classifier; only source/target binding changes when ``reverse=True``.
+  - relationship coherence is achieved by preserving row identity in retarget path and tolerating pre-satisfied target states.
 - No new cross-app imports beyond existing historical model access.
 
 Integration-seam skeletons
@@ -136,6 +154,8 @@ Integration-seam skeletons
 - Seam S9: non-disruptive collision recovery for mixed historical states in ``G70-004``.
 - Seam S10: per-proxy resolved key binding for ``(old_content_type, new_content_type, codename)`` transitions.
 - Seam S11: expected-key-domain projection that defines the writable tuple-set and excludes protected rows.
+- Seam S12: reverse transition state-machine with terminal outcomes ``DONE_NOOP``, ``DONE_MOVED``, ``DONE_CREATED``, ``DONE_ALREADY_SATISFIED``.
+- Seam S13: reverse relationship-coherence behavior tied to stable row identity on retarget and controlled target-existence short-circuit.
 
 Seam-to-contract mapping
 ------------------------
@@ -149,6 +169,8 @@ Seam-to-contract mapping
 - S9 -> C11, C12
 - S10 -> C13, C14
 - S11 -> C15, C16, C17
+- S12 -> C18, C19, C20
+- S13 -> C19, C20
 - C9 is satisfied when S1 returns pre-existing for all required tuples or S5/S4 ensure one-time materialization.
 - G70-005 obligations:
   - A1 isolation -> C13
@@ -177,8 +199,11 @@ Traceability and completeness check
 - ``G70-006`` obligation 1 (unrelated rows preserve identity and counts when forward migration runs) -> ``C16``, ``C17``, ``S11``
 - ``G70-006`` obligation 2 (recorded unrelated tuple counts match pre-migration baseline exactly) -> ``C16``, ``C17``, ``S11``
 - ``G70-006`` obligation 3 (only expected proxy permission keys are transitioned) -> ``C15``, ``C16``, ``S11``
+- ``G70-007`` obligation 1 (reverse row coherence and duplicate-related safety) -> ``C18``, ``S12``, ``S7``
+- ``G70-007`` obligation 2 (same-app-label user/group relationship preservation) -> ``C19``, ``S13``, ``C20``
+- ``G70-007`` obligation 3 (different-app-label user/group relationship preservation) -> ``C20``, ``C19``, ``S13``
 
 Completion status
 ----------------
 
-- Structural-ready status: **Ready for implementation** with explicit ``G70-004`` and ``G70-006`` ownership, contracts, seam mappings, and requirement traceability.
+- Structural-ready status: **Ready for implementation** with explicit ``G70-004``, ``G70-006``, and ``G70-007`` ownership, contracts, seam mappings, and requirement traceability.
