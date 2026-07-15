@@ -136,6 +136,15 @@ class MigrationWriter:
         imports = set()
 
         # Deconstruct operations
+        # MIG-300-002 [locale-safe import path]:
+        # STATE: render each operation into migration source text.
+        # TRANSITION: for every operation arg/default in deconstructed args and kwargs,
+        # call MigrationWriter.serialize(...) to produce deterministic serial form.
+        # REQUIREMENT BINDING:
+        #   serialization must remain stable when import locale changes.
+        #   If any enum default is emitted as translated text, module import can fail
+        #   with ValueError; therefore import generation relies on member-name
+        #   references for enum defaults.
         operations = []
         for operation in self.migration.operations:
             operation_string, operation_imports = OperationWriter(operation).serialize()

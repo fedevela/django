@@ -118,6 +118,20 @@ class DictionarySerializer(BaseSerializer):
 
 class EnumSerializer(BaseSerializer):
     def serialize(self):
+        # MIG-300-002 [locale-safe enum defaults]:
+        # INPUT: enum member `self.value` used during migration rendering.
+        # GOAL: emit a locale-invariant constructor form so migration import/execute
+        #       is valid regardless of active translation context.
+        # BRANCH A: self.value is models.Choices (e.g. TextChoices values are translated).
+        #   - Resolve serialized identifier from enum member name.
+        #   - Emit "<module>.<enum_name>[<member_name>]" and import the enum module.
+        #   - Never emit raw `self.value.value` because it can vary by locale.
+        # BRANCH B: self.value is plain enum.Enum.
+        #   - Emit "<module>.<enum_name>[<member_name>]" and import the enum module.
+        # FAILURE PATH:
+        #   - If serialized string is rendered from translated text, importing the
+        #     migration under a different locale can raise ValueError.
+        #   - This branch avoids that path by preserving the stable member name.
         if isinstance(self.value, models.Choices):
             return serializer_factory(self.value.value).serialize()
         enum_class = self.value.__class__

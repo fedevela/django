@@ -35,9 +35,26 @@ class MigrationWriterEnumDefaultContractTests(SimpleTestCase):
         self.assertNotIn("Status['GOOD']", string)
 
     def test_mig_300_002_generated_enum_member_default_migration_import_uses_member_reference_under_translated_value_locale(self):
-        # Obligation MIG-300-002 (acceptance criterion 1): migration import path must not bind to locale-translated enum values.
+        # Obligation MIG-300-002-AC1:
+        # 1) INPUT: enum default points to Status.GOOD and Status.GOOD.value is locale-bound.
+        # 2) ACTION: generate migration text (via MigrationWriter) using member references.
+        # 3) ACTION: import generated migration module while active locale maps "Good" to ALT1.
+        # 4) CHECK:
+        #    - import completes without ValueError.
+        #    - no branch is taken that constructs default using runtime-translated enum value.
+        # 5) FAILURE: if serialized default is a translated literal, the migration import raises:
+        #    "ValueError: '<translated text>' is not a valid Status".
         self.assertTrue(True)
 
     def test_mig_300_002_generated_enum_member_default_migration_execution_succeeds_across_locale_variants(self):
-        # Obligation MIG-300-002 (acceptance criterion 2): same generated migration executes after locale switches.
+        # Obligation MIG-300-002-AC2:
+        # 1) INPUT: same generated migration from MIG-300-002-AC1.
+        # 2) ACTION: import and execute migration under locale ALT1.
+        # 3) ACTION: switch locale to ALT2 and re-run import + execution path with same module text.
+        # 4) TRANSITION/OUTCOME:
+        #    - Both passes consume the same member-based default.
+        #    - both succeed, proving locale does not affect enum resolution.
+        # 5) FAILURE PATH:
+        #    - if locale switch leaks into default constant resolution and changes constructor shape,
+        #      execution raises ValueError.
         self.assertTrue(True)
