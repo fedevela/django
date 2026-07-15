@@ -282,6 +282,17 @@ class Exact(FieldGetDbPrepValueMixin, BuiltinLookup):
             # - Keep existing aliases/joins and filters intact in the grouped path.
             # - In the non-grouped path, existing side effects are clear_select_clause()
             #   then add_fields(['pk']).
+            # DJANGO-11797-004 [ORANGE]:
+            # Shared-path obligation for grouped annotated RHS lookups:
+            # - Input: rhs is a Query for RHS scalar comparison (`filter(pk=rhs)` etc).
+            # - Decision:
+            #   1. If rhs.has_limit_one() is False -> raise ValueError.
+            #   2. If rhs.group_by is None -> clear_select_clause() and add_fields(['pk']).
+            #   3. Else -> keep rhs.select / group_by / annotation_select as-is.
+            # - Failure handling:
+            #   - Never mutate joins/filters; only select-shape adjustment is allowed.
+            # - Handoff:
+            #   - Both branches continue to BuiltinLookup.process_rhs unchanged.
             if self.rhs.has_limit_one():
                 if self.rhs.group_by is None:
                     # The subquery has no grouping contract, so retain legacy
@@ -362,6 +373,17 @@ class In(FieldGetDbPrepValueIterableMixin, BuiltinLookup):
                 "the inner query to be evaluated using `list(inner_query)`."
             )
 
+        # DJANGO-11797-004/006 [ORANGE/GREEN]:
+        # Shared logic guard for RHS shape handling:
+        # - Direct value rhs path remains unchanged (OrderedSet batching, placeholders).
+        # - Query-like rhs path:
+        #   - If rhs.has_select_fields is False -> normalize via clear_select_clause()
+        #     and add_fields(['pk']) as legacy fallback.
+        #   - If rhs.has_select_fields is True -> preserve existing RHS projection
+        #     (grouped/annotated RHS must compile unchanged).
+        # - Failure handling unchanged: db alias mismatch, empty direct iterable.
+        # - Scope guard:
+        #   - Do not alter unrelated lookup branches; this block is only for IN RHS.
         if self.rhs_is_direct_value():
             try:
                 rhs = OrderedSet(self.rhs)
