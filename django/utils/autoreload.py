@@ -206,6 +206,16 @@ def compute_invocation_script_path():
     """
     Return the resolved absolute path for the invoked management entry script.
     """
+    # AUTORELOAD-002
+    # [Trace logic]
+    # INPUT: sys.argv[0] (invoked command path)
+    # GOAL: produce a canonical path that can be watched by StatReloader.
+    # DECISION:
+    # 1) if path is relative -> resolve against current working directory.
+    # 2) canonicalize with resolve().
+    # 3) only return a path when it exists on disk.
+    # On a real file, this result is later fed to watch_file(), making
+    # management-script edits visible to StatReloader snapshot diff checks.
     script_path = Path(sys.argv[0])
     if not script_path.is_absolute():
         script_path = Path.cwd() / script_path
@@ -224,6 +234,13 @@ def restart_with_reloader():
     new_environ = {**os.environ, DJANGO_AUTORELOAD_ENV: 'true'}
     args = get_child_arguments()
     while True:
+        # AUTORELOAD-002
+        # [Trace logic]
+        # WAITING state: parent process delegates to child subprocess.
+        # PROCESS: call subprocess with DJANGO_AUTORELOAD_ENV=true.
+        # DECISION:
+        #  - if child exits with 3 => reload required, continue loop (standard restart).
+        #  - otherwise => return exit code to caller, end loop.
         exit_code = subprocess.call(args, env=new_environ, close_fds=False)
         if exit_code != 3:
             return exit_code
@@ -319,6 +336,12 @@ class BaseReloader:
         raise NotImplementedError('subclasses must implement check_availability().')
 
     def notify_file_changed(self, path):
+        # AUTORELOAD-002
+        # [Trace logic]
+        # INPUT: path flagged by snapshot diff as changed.
+        # OUTPUT branch:
+        #  - if any file_changed receiver marks it handled -> no process restart here;
+        #  - else call trigger_reload(path), which exits with code 3 for standard flow.
         results = file_changed.send(sender=self, file_path=path)
         logger.debug('%s notified as changed. Signal results: %s.', path, results)
         if not any(res[1] for res in results):
@@ -339,6 +362,17 @@ class StatReloader(BaseReloader):
     def tick(self):
         mtimes = {}
         while True:
+            # AUTORELOAD-002
+            # [Trace logic]
+            # INPUT state:
+            #  - persistent mtimes: previous snapshot per file
+            #  - snapshot_files(): current discovered (filepath, mtime) pairs
+            # STEP:
+            #  1) for every snapshot file:
+            #      a) no baseline -> store baseline mtime.
+            #      b) baseline exists and new_mtime > old_mtime -> notify_file_changed(filepath).
+            #  2) sleep SLEEP_TIME.
+            #  3) yield control to run_loop for next polling cycle.
             for filepath, mtime in self.snapshot_files():
                 old_time = mtimes.get(filepath)
                 if old_time is None:
@@ -353,6 +387,13 @@ class StatReloader(BaseReloader):
             yield
 
     def snapshot_files(self):
+        # AUTORELOAD-002
+        # [Trace logic]
+        # INPUT: watched_files() union (modules + extra_files + globs).
+        # RULE:
+        #  - keep first occurrence of duplicated path entries.
+        #  - include only files with successful stat() lookup.
+        # OUTPUT: ordered generator of (path, st_mtime) for all currently present watched paths.
         # watched_files may produce duplicate paths if globs overlap.
         seen_files = set()
         for file in self.watched_files():
@@ -593,6 +634,13 @@ def run_with_reloader(main_func, *args, **kwargs):
         if os.environ.get(DJANGO_AUTORELOAD_ENV) == 'true':
             reloader = get_reloader()
             if isinstance(reloader, StatReloader):
+                # AUTORELOAD-002
+                # [Trace logic]
+                # INPUT: child process with DJANGO_AUTORELOAD_ENV=true and StatReloader.
+                # DECISION: compute invocation script path -> if resolved path exists,
+                # add it to reloader.watch_file().
+                # EFFECT: manage.py path becomes part of watched set, enabling snapshot-based
+                # change detection and eventual restart handling via tick->notify_file_changed.
                 invoked_script = compute_invocation_script_path()
                 if invoked_script is not None:
                     reloader.watch_file(invoked_script)
