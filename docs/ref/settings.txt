@@ -1484,16 +1484,18 @@ This value mirrors the functionality and caveats of the
 ``FILE_UPLOAD_PERMISSIONS``
 ---------------------------
 
-Default: ``None``
+Default: ``0o644``
 
-The numeric mode (i.e. ``0o644``) to set newly uploaded files to. For
-more information about what these modes mean, see the documentation for
+The numeric mode (for example, ``0o644``) to set newly uploaded files to.
+If you don't configure this setting, Django applies ``0o644``.
+
+For more information about what these modes mean, see the documentation for
 :func:`os.chmod`.
 
-If this isn't given or is ``None``, you'll get operating-system
-dependent behavior. On most platforms, temporary files will have a mode
-of ``0o600``, and files saved from memory will be saved using the
-system's standard umask.
+If ``FILE_UPLOAD_PERMISSIONS`` is not explicitly configured, observed permission
+outcomes can differ by upload handler path (for example, ``MemoryUploadedFile``
+vs ``TemporaryUploadedFile``), depending on upload processing. To guarantee
+deterministic permissions, set ``FILE_UPLOAD_PERMISSIONS`` explicitly.
 
 For security reasons, these permissions aren't applied to the temporary files
 that are stored in :setting:`FILE_UPLOAD_TEMP_DIR`.

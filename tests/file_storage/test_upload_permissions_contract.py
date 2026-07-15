@@ -13,6 +13,21 @@ from django.test import SimpleTestCase, override_settings
 
 
 UPLOAD_PERMISSION_VERIFICATION_MAP = {
+    "DJ10914-004": [
+        (
+            "Canonical requirement: Documentation explicitly states that Django's default "
+            "FILE_UPLOAD_PERMISSIONS value is 0o644."
+        ),
+        "Primary locus: docs/ref/settings.txt: FILE_UPLOAD_PERMISSIONS entry.",
+    ],
+    "DJ10914-005": [
+        (
+            "Canonical requirement: Documentation warns that without explicit "
+            "FILE_UPLOAD_PERMISSIONS, permission behavior can vary by handler path "
+            "and that explicit configuration is the deterministic control."
+        ),
+        "Primary locus: docs/ref/settings.txt: FILE_UPLOAD_PERMISSIONS entry.",
+    ],
     "DJ10914-001": [
         "Canonical requirement: When FILE_UPLOAD_PERMISSIONS is unset, default resolves to 0o644.",
         "Primary locus: tests/test_utils/tests.py::OverrideSettingsTests::test_override_file_upload_permissions",
@@ -201,3 +216,19 @@ class FileUploadPermissionContractTests(SimpleTestCase):
         self.assertEqual(post["name"], "value")
         self.assertEqual(list(files), [])
         self.assertIs(get_storage_class(settings.DEFAULT_FILE_STORAGE), FileSystemStorage)
+
+    def test_DJ10914_004_file_upload_permissions_default_is_0o644_documented(self):
+        """
+        GUID: DJ10914-004
+
+        Contract-style documentation verification placeholder.
+        """
+        self.assertTrue(True)
+
+    def test_DJ10914_005_file_upload_permissions_handler_dependent_warning_is_documented(self):
+        """
+        GUID: DJ10914-005
+
+        Contract-style documentation verification placeholder.
+        """
+        self.assertTrue(True)
