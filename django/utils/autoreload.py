@@ -123,6 +123,14 @@ def iter_modules_and_files(modules, extra_files):
     # ARL-007:
     # - do not create or mutate alternate candidate variants; retry the same raw
     #   candidate in future cycles when observed again.
+    # ARL-004 [logic obligation mapping]:
+    # - malformed candidates that fail with ValueError("embedded null byte") are
+    #   terminally skipped for that scan (OMIT_NO_DERIVE), then retried only as
+    #   the same raw candidate on future ticks.
+    # - no parent/normalized/truncated derivative candidates are ever generated
+    #   from a malformed candidate.
+    # - false-positive watch targets must never be introduced by deriving a path
+    #   from a malformed parent/sibling candidate.
     sys_file_paths = []
     for module in modules:
         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
@@ -152,11 +160,14 @@ def iter_modules_and_files(modules, extra_files):
         if not filename:
             continue
         path = Path(filename)
-        # Pseudocode candidate transition:
-        # 1) Resolve candidate path defensively from raw filename.
-        # 2) If FileNotFoundError -> omit candidate, proceed to next.
-        # 3) If ValueError("embedded null byte") -> omit candidate, proceed to next.
-        # 4) Else add resolved_path to results set.
+        # ARL-004 [transition pseudocode]:
+        # State RAW_CANDIDATE: {candidate_path = Path(filename)}.
+        # 1) Attempt strict resolve of candidate_path.
+        #    - SUCCESS: transition to EMIT => add resolved_path to results.
+        #    - FileNotFoundError: transition to OMIT => continue to next candidate.
+        #    - ValueError("embedded null byte"): transition to OMIT_NO_DERIVE => continue;
+        #      do not emit parent/normalized/truncated alternate paths.
+        #    - ValueError(other): transition to ERROR => propagate exception.
         try:
             resolved_path = path.resolve(strict=True).absolute()
         except FileNotFoundError:
