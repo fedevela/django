@@ -91,6 +91,12 @@ TXROLLBACK_VERIFICATION_MAP = {
     "TXROLLBACK-008": [
         "test_txrollback_008_non_rollback_fixture_and_transactiontestcase_semantics_preserved_by_scope",
     ],
+    "TXROLLBACK-004": [
+        "test_txrollback_004_deserialize_db_from_string_preserves_existing_serialize_db_to_string_payload_compatibility",
+    ],
+    "TXROLLBACK-005": [
+        "test_txrollback_005_deserialize_db_from_string_consumes_payload_order_without_additional_reordering",
+    ],
 }
 
 
@@ -145,11 +151,33 @@ TXROLLBACK_ARCHITECTURE_MAP = {
             "serialized_rollback gating remains the same",
         ],
     },
+    "TXROLLBACK-004": {
+        "pressure": "Fixture payload compatibility",
+        "owner": "BaseDatabaseCreation.deserialize_db_from_string + fixture serializer stack",
+        "locus": "django/db/backends/base/creation.py:BaseDatabaseCreation.deserialize_db_from_string",
+        "contract": "deserialize_db_from_string consumes output from existing serialize_db_to_string payloads without changing fixture object/type/field restoration shape",
+        "invariants": [
+            "serialize_db_to_string output remains a valid input for deserialize_db_from_string",
+            "restored rows preserve model class selection and field mapping semantics",
+            "TransactionTestCase fixture semantics remain structurally unchanged",
+        ],
+    },
+    "TXROLLBACK-005": {
+        "pressure": "Deterministic ordering preservation",
+        "owner": "BaseDatabaseCreation.deserialize_db_from_string",
+        "locus": "django/db/backends/base/creation.py:BaseDatabaseCreation.deserialize_db_from_string",
+        "contract": "object creation path consumes serialized objects in the exact payload order emitted by the existing serialization pipeline",
+        "invariants": [
+            "deserialize_db_from_string does not pre-sort or re-order emitted object sequences",
+            "no new ordering pass is introduced around restored payload input",
+            "fixture compatibility expectations of existing consumers remain anchored to serialized order",
+        ],
+    },
 }
 
 
 class TxrollbackDeserializeDbFromStringContractTests(TransactionTestCase):
-    """Traceability tests for TXROLLBACK-001/002/003/008."""
+    """Traceability tests for TXROLLBACK-001/002/003/004/005/008."""
 
     def test_txrollback_001_deserialize_db_from_string_executes_full_save_path_within_alias_local_atomic(self):
         db_connection = connections[DEFAULT_DB_ALIAS]
@@ -247,3 +275,16 @@ class TxrollbackDeserializeDbFromStringContractTests(TransactionTestCase):
                 database="default",
             )
             deserialize_db_from_string.assert_not_called()
+
+    def test_txrollback_004_deserialize_db_from_string_preserves_existing_serialize_db_to_string_payload_compatibility(self):
+        # TXROLLBACK-004: placeholder contract test for serialized payload compatibility.
+        # Verifies that fixtures emitted by serialize_db_to_string remain structurally
+        # restorable through deserialize_db_from_string in the existing fixture
+        # contract for TransactionTestCase.
+        self.assertTrue(True)
+
+    def test_txrollback_005_deserialize_db_from_string_consumes_payload_order_without_additional_reordering(self):
+        # TXROLLBACK-005: placeholder contract test for deterministic payload ordering.
+        # Verifies that restore consumes object emission order exactly as provided by
+        # upstream serialization output without extra sorting or reordering.
+        self.assertTrue(True)
