@@ -297,21 +297,26 @@ class UsernameValidatorContractTests(SimpleTestCase):
 
     def test_django11099_005_non_empty_allowed_usernames_preserve_acceptance_for_ascii_and_unicode_validators(self):
         # DJANGO11099-005
-        #
-        # Inputs that should remain accepted:
-        # "alice", "alice.+-@bob", "user.name+tag-2"
-        self.assertTrue(True)
+        valid_usernames = ["alice", "alice.+-@bob", "user.name+tag-2"]
+        validators_ = (validators.ASCIIUsernameValidator(), validators.UnicodeUsernameValidator())
+        for validator in validators_:
+            for username in valid_usernames:
+                with self.subTest(validator=validator.__class__.__name__, username=username):
+                    self.assertIsNone(validator(username))
 
     def test_django11099_006_empty_usernames_remain_invalid_for_ascii_and_unicode_validators(self):
         # DJANGO11099-006
-        #
-        # Empty string input should remain invalid:
-        # ""
-        self.assertTrue(True)
+        for validator in (validators.ASCIIUsernameValidator(), validators.UnicodeUsernameValidator()):
+            with self.subTest(validator=validator.__class__.__name__):
+                with self.assertRaises(ValidationError):
+                    validator("")
 
     def test_django11099_007_disallowed_characters_remain_invalid_for_ascii_and_unicode_validators(self):
         # DJANGO11099-007
-        #
-        # Disallowed examples:
-        # "alice name", "alice!"
-        self.assertTrue(True)
+        invalid_usernames = ["alice name", "alice!"]
+        validators_ = (validators.ASCIIUsernameValidator(), validators.UnicodeUsernameValidator())
+        for validator in validators_:
+            for username in invalid_usernames:
+                with self.subTest(validator=validator.__class__.__name__, username=username):
+                    with self.assertRaises(ValidationError):
+                        validator(username)
