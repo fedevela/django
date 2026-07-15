@@ -528,7 +528,25 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         AUTO-005: If `manage.py` and the existing watched set are stable across
         repeated check cycles, no restart/reload event is emitted.
         """
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as tempdir:
+            manage_py = Path(tempdir) / 'manage.py'
+            watched_file = Path(tempdir) / 'watched.py'
+            manage_py.write_text('')
+            watched_file.write_text('')
+
+            with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
+                    with mock.patch('django.utils.autoreload.time.sleep'):
+                        with mock.patch('django.utils.autoreload.BaseReloader.notify_file_changed') as notify_mock:
+                            reloader = autoreload.StatReloader()
+                            reloader.watch_file(watched_file)
+
+                            ticker = reloader.tick()
+                            next(ticker)  # Seed baseline mtimes for the stable watched set.
+                            next(ticker)  # No change should be observed.
+                            next(ticker)  # No change should be observed again.
+
+                            self.assertEqual(notify_mock.call_count, 0)
 
 
 class ReloaderTests(SimpleTestCase):

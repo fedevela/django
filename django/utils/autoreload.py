@@ -477,7 +477,18 @@ class StatReloader(BaseReloader):
                     logger.debug('File %s first seen with mtime %s', filepath, mtime)
                     mtimes[filepath] = mtime
                     continue
-                elif mtime > old_time:
+                elif mtime == old_time:
+                    logger.debug('File %s unchanged (mtime %s).', filepath, mtime)
+                    continue
+                elif mtime < old_time:
+                    logger.debug(
+                        'File %s has older mtime than previous snapshot (%s < %s).',
+                        filepath,
+                        mtime,
+                        old_time,
+                    )
+                    continue
+                else:
                     logger.debug('File %s previous mtime: %s, current mtime: %s', filepath, old_time, mtime)
                     self.notify_file_changed(filepath)
 
