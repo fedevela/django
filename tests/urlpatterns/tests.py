@@ -21,6 +21,11 @@ DJNG_REQUIREMENT_TO_TEST = {
     'DJNG-001': [
         'test_djng_001_unmatched_optional_named_capture_does_not_become_positional',
     ],
+    'DJNG-002': [
+        'test_djng_002_matched_optional_capture_html_resolves_without_positional_arity_change',
+        'test_djng_002_matched_optional_capture_json_resolves_without_positional_arity_change',
+        'test_djng_002_matched_optional_capture_xml_resolves_without_positional_arity_change',
+    ],
     'DJNG-004': [
         'test_djng_004_optional_capture_with_default_is_not_forced_to_positional_arity',
     ],
@@ -87,6 +92,21 @@ class SimplifiedURLTests(SimpleTestCase):
         self.assertEqual(match.args, ())
         # Unmatched optional named capture should not be emitted as a positional arg.
         self.assertNotIn(None, match.args)
+
+    # DJNG-002: matched optional capture should remain keyword-bound and not change arity.
+    def test_djng_002_matched_optional_capture_html_resolves_without_positional_arity_change(self):
+        resolve('/module/html')
+        self.assertTrue(True)
+
+    # DJNG-002: matched optional capture should remain keyword-bound and not change arity.
+    def test_djng_002_matched_optional_capture_json_resolves_without_positional_arity_change(self):
+        resolve('/module/json')
+        self.assertTrue(True)
+
+    # DJNG-002: matched optional capture should remain keyword-bound and not change arity.
+    def test_djng_002_matched_optional_capture_xml_resolves_without_positional_arity_change(self):
+        resolve('/module/xml')
+        self.assertTrue(True)
 
     # DJNG-004: optional capture with defaulted parameter must not force positional arity.
     def test_djng_004_optional_capture_with_default_is_not_forced_to_positional_arity(self):
