@@ -1,6 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 import json
+from unittest.mock import patch
 
 from django import forms
 from django.conf import settings
@@ -142,14 +143,34 @@ class UtilsTests(SimpleTestCase):
         the JSONField.prepare_value contract path and not bypass it with direct
         json.dumps output.
         """
-        self.assertTrue(True)
+        class InvalidAwareJSONField(models.JSONField):
+            def prepare_value(self, value):
+                if isinstance(value, forms.fields.InvalidJSONInput):
+                    return "invalid-json-input"
+                return json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+        value = forms.fields.InvalidJSONInput('{"trailing": "comma",}')
+        field = InvalidAwareJSONField()
+        with patch("django.db.models.fields.json.json.dumps") as dumps_mock:
+            display_value = display_for_field(value, field, self.empty_value)
+        self.assertEqual(display_value, "invalid-json-input")
+        dumps_mock.assert_not_called()
 
     def test_D172_003_display_for_field_jsonfield_subclass_prepare_value_exact_readonly_render_output(self):
         """
         D172-003: Subclassed JSONField readonly rendering must return the exact
         prepare_value output, including subclass-specific formatting/normalization.
         """
-        self.assertTrue(True)
+        class NormalizingJSONField(models.JSONField):
+            def prepare_value(self, value):
+                return "normalized::" + json.dumps(value, sort_keys=True, separators=(",", ":"))
+
+        field = NormalizingJSONField()
+        value = {"b": 2, "a": 1}
+        expected = field.prepare_value(value)
+
+        display_value = display_for_field(value, field, self.empty_value)
+        self.assertEqual(display_value, expected)
 
     def test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display(self):
         """
