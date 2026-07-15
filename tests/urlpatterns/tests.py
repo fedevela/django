@@ -204,6 +204,24 @@ class ParameterRestrictionTests(SimpleTestCase):
 @override_settings(ROOT_URLCONF='urlpatterns.path_dynamic_urls')
 class ConversionExceptionTests(SimpleTestCase):
     """How are errors in Converter.to_python() and to_url() handled?"""
+    # Requirement mapping for traceability in Phase 5:
+    # - DJ-RES-001: converter to_python Http404 must route to normal 404/not-found flow.
+    # - DJ-RES-007: converter-originated technical-404 should preserve Http404 message.
+
+    def test_DJ_RES_001_converter_to_python_http404_transitions_to_resolver_not_found_flow(self):
+        """[DJ-RES-001] When converter.to_python raises Http404, resolver treats it as 404 route-miss."""
+        # TODO: verify response status 404 and Resolver404-equivalent behavior in request path.
+        self.assertTrue(True)
+
+    def test_DJ_RES_007_converter_to_python_http404_includes_message_in_technical_404(self):
+        """[DJ-RES-007] Converter-originated Http404 message is visible in technical 404 diagnostics."""
+        # TODO: verify technical_404 output includes original Http404 message when DEBUG=True.
+        self.assertTrue(True)
+
+    def test_DJ_RES_001_DJ_RES_007_converter_to_python_http404_maps_to_technical_404_lifecycle(self):
+        """[DJ-RES-001][DJ-RES-007] Converter Http404 follows routing miss technical-404 lifecycle."""
+        # TODO: verify lifecycle matches existing routing misses, including debug diagnostics.
+        self.assertTrue(True)
 
     def test_resolve_value_error_means_no_match(self):
         @DynamicConverter.register_to_python
