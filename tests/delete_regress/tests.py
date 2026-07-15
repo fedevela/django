@@ -435,10 +435,23 @@ class DeleteNoDependencyLookupTraceabilityTests(TestCase):
     requirements_coverage = DJ11179_002_VERIFICATION_ARTIFACTS
 
     def test_dj11179_002_stale_pk_lookup_is_false_after_no_dependency_delete(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        old_pk = instance.pk
+        instance.delete()
+        self.assertFalse(DeletionTracebook.objects.filter(pk=old_pk).exists())
 
     def test_dj11179_002_stale_instance_lookup_raises_does_not_exist_after_delete(self):
-        self.assertTrue(True)
+        instance = DeletionTraceUUID.objects.create()
+        old_pk = instance.pk
+        instance.delete()
+        with self.assertRaises(DeletionTraceUUID.DoesNotExist):
+            DeletionTraceUUID.objects.get(pk=old_pk)
 
     def test_dj11179_002_old_pk_not_found_when_inmemory_pk_is_reset_to_none(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        old_pk = instance.pk
+        instance.delete()
+        instance.pk = None
+        self.assertFalse(DeletionTracebook.objects.filter(pk=old_pk).exists())
+        with self.assertRaises(DeletionTracebook.DoesNotExist):
+            DeletionTracebook.objects.get(pk=old_pk)
