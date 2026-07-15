@@ -246,6 +246,10 @@ class HttpRequest:
             del self._post
 
     def _initialize_handlers(self):
+        # DJ10914-006:
+        # Upload handler selection remains a pure list-mapped construction from
+        # settings.FILE_UPLOAD_HANDLERS in declared order and is untouched by
+        # upload-permission-default handling.
         self._upload_handlers = [uploadhandler.load_handler(handler, self)
                                  for handler in settings.FILE_UPLOAD_HANDLERS]
 
@@ -264,6 +268,9 @@ class HttpRequest:
 
     def parse_file_upload(self, META, post_data):
         """Return a tuple of (POST QueryDict, FILES MultiValueDict)."""
+        # DJ10914-006:
+        # Request parsing still wraps the selected handlers, creates MultiPartParser
+        # once, and calls parse() once; no policy branching is introduced here.
         self.upload_handlers = ImmutableList(
             self.upload_handlers,
             warning="You cannot alter upload handlers after the upload has been processed."

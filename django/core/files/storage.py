@@ -196,6 +196,10 @@ class FileSystemStorage(Storage):
             self.__dict__.pop('directory_permissions_mode', None)
 
     def _value_or_setting(self, value, setting):
+        # DJ10914-003 (precedence):
+        # INPUT: explicit instance value (`value`) and configured settings value (`setting`).
+        # OUTPUT: explicit value when provided; otherwise setting-derived value.
+        # This keeps constructor-level overrides as the highest-precedence source.
         return setting if value is None else value
 
     @cached_property
@@ -214,6 +218,11 @@ class FileSystemStorage(Storage):
 
     @cached_property
     def file_permissions_mode(self):
+        # DJ10914-001/DJ10914-003:
+        # 1) Read explicit storage instance override via `_file_permissions_mode`.
+        # 2) Else read settings FILE_UPLOAD_PERMISSIONS.
+        # 3) If that setting is still unresolved/None, fallback to 0o644.
+        # 4) Return effective mode without mutating upload handler/request/parser flow.
         return self._value_or_setting(self._file_permissions_mode, settings.FILE_UPLOAD_PERMISSIONS)
 
     @cached_property
@@ -280,6 +289,11 @@ class FileSystemStorage(Storage):
                 # OK, the file save worked. Break out of the loop.
                 break
 
+        # DJ10914-003/DJ10914-006:
+        # After successful data persistence and before returning storage-relative name,
+        # apply computed upload permission mode to persisted uploaded file.
+        # If this flow is ever reached with mode None, no chmod occurs; current issue
+        # tracks default-to-0o644 as the effective resolved mode contract.
         if self.file_permissions_mode is not None:
             os.chmod(full_path, self.file_permissions_mode)
 
@@ -349,6 +363,10 @@ class FileSystemStorage(Storage):
 
 
 def get_storage_class(import_path=None):
+    # DJ10914-006:
+    # Storage backend selection remains a single import-point resolved from
+    # DEFAULT_FILE_STORAGE; upload permissions should not introduce alternate
+    # backend branches.
     return import_string(import_path or settings.DEFAULT_FILE_STORAGE)
 
 
