@@ -340,19 +340,49 @@ class HttpDateRFC850TraceabilityTests(unittest.TestCase):
     """
 
     def test_httpdate_001_candidate_year_is_runtime_century_plus_two_digits(self):
-        self.assertTrue(True)
+        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
+            parsed = parse_http_date("Thursday, 01-Dec-90 00:00:00 GMT")
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(1990, 12, 1, 0, 0),
+        )
 
     def test_httpdate_001_strictly_more_than_50_years_ahead_reduces_century_by_100(self):
-        self.assertTrue(True)
+        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
+            parsed = parse_http_date("Thursday, 01-Dec-77 00:00:00 GMT")
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(1977, 12, 1, 0, 0),
+        )
 
     def test_httpdate_002_exactly_50_years_ahead_keeps_current_century(self):
-        self.assertTrue(True)
+        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
+            parsed = parse_http_date("Thursday, 01-Dec-76 00:00:00 GMT")
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(2076, 12, 1, 0, 0),
+        )
 
     def test_httpdate_005_only_century_inference_changes_for_rfc850_two_digit_year(self):
-        self.assertTrue(True)
+        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
+            parsed = parse_http_date("Thursday, 01-Dec-90 00:00:00 GMT")
+        parsed_datetime = datetime.utcfromtimestamp(parsed)
+        self.assertEqual(parsed_datetime.month, 12)
+        self.assertEqual(parsed_datetime.day, 1)
+        self.assertEqual(parsed_datetime.hour, 0)
+        self.assertEqual(parsed_datetime.minute, 0)
+        self.assertEqual(parsed_datetime.second, 0)
 
     def test_httpdate_001_field_values_remain_unchanged_when_runtime_century_is_recomputed(self):
-        self.assertTrue(True)
+        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
+            parsed = parse_http_date("Thursday, 31-Mar-76 12:34:56 GMT")
+        parsed_datetime = datetime.utcfromtimestamp(parsed)
+        self.assertEqual(parsed_datetime.month, 3)
+        self.assertEqual(parsed_datetime.day, 31)
+        self.assertEqual(parsed_datetime.hour, 12)
+        self.assertEqual(parsed_datetime.minute, 34)
+        self.assertEqual(parsed_datetime.second, 56)
+        self.assertEqual(parsed_datetime.weekday(), 1)
 
 
 HTTPDATE_121_TRACEABILITY_MAP = {
