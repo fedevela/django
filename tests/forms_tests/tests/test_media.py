@@ -678,8 +678,20 @@ class JavaScriptMediaAggregationContractTests(SimpleTestCase):
 
     def test_media_008_opposite_source_orders_emit_media_order_conflict_warning(self):
         """MEDIA-008: Opposite source orders emit MediaOrderConflictWarning."""
-        self.assertTrue(True)
+        media = Media(js=['alpha.js', 'bravo.js'])
+        media += Media(js=['bravo.js', 'alpha.js'])
+
+        with self.assertWarns(MediaOrderConflictWarning):
+            media._js
 
     def test_media_009_warning_identifies_contradictory_files_not_incidental_files(self):
         """MEDIA-009: Warning names contradictory files, not incidental files."""
-        self.assertTrue(True)
+        media = Media(js=['alpha.js', 'incidental.js', 'bravo.js'])
+        media += Media(js=['bravo.js', 'alpha.js'])
+        message = (
+            'Detected duplicate Media files in an opposite order:\n'
+            'alpha.js\nbravo.js'
+        )
+
+        with self.assertWarnsMessage(MediaOrderConflictWarning, message):
+            media._js

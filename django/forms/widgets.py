@@ -102,97 +102,26 @@ class Media:
         Rendering consumes the result through ``Media._js``. CSS aggregation
         and the public shape of media declarations remain outside this seam.
         """
-        # Pseudocode contract -- MEDIA-001, MEDIA-002, MEDIA-005, MEDIA-006,
-        # MEDIA-007:
-        #
-        # aggregate_javascript(source_lists):
-        #     # MEDIA-005: insertion-order uniqueness defines the candidates.
-        #     ordered_files := empty insertion-ordered set
-        #     precedence := empty graph mapping each file to its prerequisites
-        #     FOR EACH source_list IN source_lists, in merge order:
-        #         previous_file := NONE
-        #         FOR EACH file IN source_list, in declared order:
-        #             add file to ordered_files if it has not been seen
-        #             ensure file is a node in precedence
-        #             IF previous_file exists AND file differs from it:
-        #                 add previous_file as a prerequisite of file
-        #                 # MEDIA-001, MEDIA-002: this edge comes only from a
-        #                 # source declaration, never an intermediate result.
-        #             previous_file := file
-        #     TRY:
-        #         # MEDIA-006: satisfy every compatible declared prerequisite.
-        #         result := stable topological order of precedence, using
-        #                   ordered_files to break ties between unrelated files
-        #     IF precedence is incompatible:
-        #         emit the existing media-order conflict warning as a
-        #         deterministic function of source_lists and precedence
-        #         result := deterministic deduplicated fallback from ordered_files
-        #     # MEDIA-007: fixed inputs and merge order fix the result and the
-        #     # sequence of warning events on every execution.
-        #     RETURN result, containing every file exactly once
-        #
-        # contradictory_source_order_warning(source_lists, precedence_error):
-        #     # MEDIA-008, MEDIA-009: derive conflict evidence exclusively from
-        #     # original declarations, never from an intermediate merged order.
-        #     declared_directions := empty mapping from an unordered file pair
-        #                            to its observed source-relative directions
-        #     contradictory_pairs := empty insertion-ordered set
-        #     FOR EACH source_list IN source_lists, in merge order:
-        #         FOR EACH pair (earlier_file, later_file) appearing at distinct
-        #                 positions in source_list, in declaration order:
-        #             pair_key := unordered identity of the two files
-        #             direction := earlier_file before later_file
-        #             IF the reverse direction exists in declared_directions[pair_key]:
-        #                 add pair_key to contradictory_pairs if not already present
-        #             record direction in declared_directions[pair_key]
-        #     WHEN precedence_error reports incompatible ordering:
-        #         IF contradictory_pairs is not empty:
-        #             conflict_pair := first contradictory pair in deterministic
-        #                              source encounter order
-        #             # MEDIA-008: opposite explicit declarations reach this path.
-        #             emit MediaOrderConflictWarning
-        #             # MEDIA-009: name exactly the two files in conflict_pair;
-        #             # omit files encountered only through merged placement or
-        #             # as unrelated/intermediate members of the source lists.
-        #             warning_message := existing warning text formatted with
-        #                                only conflict_pair
-        #         ELSE:
-        #             preserve the pre-existing cyclic-dependency failure path;
-        #             MEDIA-008 and MEDIA-009 impose no additional outcome
-        #         RETURN the deterministic deduplicated fallback order
-        #
-        # provided_three_widget_media(source_lists):
-        #     # MEDIA-003, MEDIA-004: source_lists preserve the unchanged
-        #     # ColorPicker, SimpleTextWidget, and FancyTextWidget declarations.
-        #     GIVEN source_lists contain [color-picker.js], [text-editor.js],
-        #         and [text-editor.js, text-editor-extras.js, color-picker.js]
-        #     collect each distinct file in first-seen order
-        #     derive precedence only between adjacent, distinct files within
-        #         the same declaration
-        #     # The singleton declarations add no precedence. The ordered
-        #     # FancyTextWidget declaration adds this compatible chain:
-        #     require text-editor.js before text-editor-extras.js
-        #     require text-editor-extras.js before color-picker.js
-        #     IF the derived precedence graph is acyclic:
-        #         select the stable topological order
-        #         # MEDIA-003: the compatible chain resolves deterministically.
-        #         RETURN [text-editor.js, text-editor-extras.js, color-picker.js]
-        #         # MEDIA-004: do not enter the conflict-warning path.
-        #     ELSE:
-        #         hand off to the existing genuine-conflict warning and
-        #             deterministic fallback path
         if len(source_lists) == 1 and len(source_lists[0]) == len(set(source_lists[0])):
             return source_lists[0]
 
         ordered_files = []
         seen_files = set()
+        declared_directions = set()
+        conflict_pair = None
         dependency_graph = {}
         for source_list in source_lists:
             previous_file = None
-            for path in source_list:
+            for index, path in enumerate(source_list):
                 if path not in seen_files:
                     ordered_files.append(path)
                     seen_files.add(path)
+                for earlier_path in source_list[:index]:
+                    if earlier_path == path:
+                        continue
+                    if conflict_pair is None and (path, earlier_path) in declared_directions:
+                        conflict_pair = (path, earlier_path)
+                    declared_directions.add((earlier_path, path))
                 dependency_graph.setdefault(path, set())
                 if previous_file is not None and previous_file != path:
                     dependency_graph[path].add(previous_file)
@@ -201,9 +130,20 @@ class Media:
         try:
             return stable_topological_sort(ordered_files, dependency_graph)
         except CyclicDependencyError:
+            if conflict_pair is not None:
+                warning_message = (
+                    'Detected duplicate Media files in an opposite order:\n%s' %
+                    '\n'.join(str(path) for path in conflict_pair)
+                )
+            else:
+                warning_message = (
+                    'Detected duplicate Media files in an opposite order: %s' %
+                    ', '.join(
+                        repr(source_list) for source_list in source_lists if source_list
+                    )
+                )
             warnings.warn(
-                'Detected duplicate Media files in an opposite order: %s' %
-                ', '.join(repr(source_list) for source_list in source_lists if source_list),
+                warning_message,
                 MediaOrderConflictWarning,
             )
             return ordered_files
