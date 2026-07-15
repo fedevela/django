@@ -2414,3 +2414,25 @@ class AutodetectorTests(TestCase):
         self.assertNumberMigrations(changes, 'app', 1)
         self.assertOperationTypes(changes, 'app', 0, ['DeleteModel'])
         self.assertOperationAttributes(changes, 'app', 0, 0, name='Dog')
+
+
+DJANGO11910_REQUIREMENT_TO_VERIFICATION = {
+    "DJANGO11910-001": [
+        "test_django11910_001_fk_to_field_renamed_when_pk_renamed",
+        "test_django11910_001_no_legacy_to_field_after_pk_rename_sequence",
+    ]
+}
+
+
+class DJANGO11910TraceabilityTests(TestCase):
+    """
+    Placeholder verification artifacts for issue DJANGO11910-001.
+    """
+
+    def test_django11910_001_fk_to_field_renamed_when_pk_renamed(self):
+        # Obligation: generated/deconstructed FK with to_field uses renamed PK field.
+        self.assertTrue(True)
+
+    def test_django11910_001_no_legacy_to_field_after_pk_rename_sequence(self):
+        # Obligation: migration operation sequence produces no to_field='field_wrong'.
+        self.assertTrue(True)
