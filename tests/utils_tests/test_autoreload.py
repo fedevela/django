@@ -11,8 +11,9 @@ import weakref
 import zipfile
 from importlib import import_module
 from pathlib import Path
-from unittest import mock, skip, skipIf
+from unittest import mock, skip, skipIf, skipUnless
 
+from django.utils._os import symlinks_supported
 from django.apps.registry import Apps
 from django.test import SimpleTestCase
 from django.test.utils import extend_sys_path
@@ -352,6 +353,11 @@ class RestartWithReloaderTests(SimpleTestCase):
 
 
 class StatReloaderTraceabilityTests(SimpleTestCase):
+    def snapshot_watched_files(self):
+        return {
+            path for path, _mtime in autoreload.StatReloader().snapshot_files()
+        }
+
     def test_auto_001_initial_watch_list_includes_manage_py_launch_path(self):
         """
         AUTO-001: Given `python manage.py runserver` starts with StatReloader,
@@ -402,7 +408,14 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         when the watcher snapshot is built, the watch entry must be exactly one
         canonical absolute real path.
         """
-        assert True
+        with tempfile.TemporaryDirectory() as tempdir:
+            manage_py = Path(tempdir) / 'manage.py'
+            manage_py.write_text('')
+            expected = manage_py.resolve()
+
+            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
+                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                    self.assertEqual(self.snapshot_watched_files(), {expected})
 
     def test_auto_003_watch_entry_for_manage_py_relative_launch_path_is_canonical_absolute_realpath(self):
         """
@@ -410,15 +423,34 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         when the watcher snapshot is built, the watch entry must be exactly one
         canonical absolute real path.
         """
-        assert True
+        with tempfile.TemporaryDirectory() as tempdir:
+            manage_py = Path(tempdir) / 'manage.py'
+            manage_py.write_text('')
+            expected = Path(tempdir) / 'manage.py'
 
+            with mock.patch('django.utils.autoreload.os.getcwd', return_value=tempdir):
+                with mock.patch('django.utils.autoreload.sys.argv', ['manage.py', 'runserver']):
+                    with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                        self.assertEqual(self.snapshot_watched_files(), {expected.resolve()})
+
+    @skipUnless(symlinks_supported(), "Must support creating symlinks to run this test.")
     def test_auto_003_watch_entry_for_manage_py_symlink_launch_path_is_canonical_absolute_realpath(self):
         """
         AUTO-003: Given runserver is launched via a symlink `manage.py` path,
         when the watcher snapshot is built, the watch entry must be exactly one
         canonical absolute real path to the symlink target.
         """
-        assert True
+        with tempfile.TemporaryDirectory() as tempdir:
+            target = Path(tempdir) / 'target_manage.py'
+            symlink = Path(tempdir) / 'manage.py'
+            target.write_text('')
+            target.resolve()
+            symlink.symlink_to(target)
+            expected = target.resolve()
+
+            with mock.patch('django.utils.autoreload.sys.argv', [str(symlink), 'runserver']):
+                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                    self.assertEqual(self.snapshot_watched_files(), {expected})
 
     def test_auto_003_watch_entry_for_manage_py_subdirectory_launch_path_is_canonical_absolute_realpath(self):
         """
@@ -426,7 +458,17 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         `manage.py` path form, when the snapshot is built, the watch entry must
         be exactly one canonical absolute real path to the target script.
         """
-        assert True
+        with tempfile.TemporaryDirectory() as tempdir:
+            project_root = Path(tempdir)
+            manage_py = project_root / 'manage.py'
+            subdirectory = project_root / 'nested'
+            subdirectory.mkdir()
+            manage_py.write_text('')
+
+            with mock.patch('django.utils.autoreload.os.getcwd', return_value=str(subdirectory)):
+                with mock.patch('django.utils.autoreload.sys.argv', [str(Path('..') / 'manage.py'), 'runserver']):
+                    with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                        self.assertEqual(self.snapshot_watched_files(), {manage_py.resolve()})
 
 
 class ReloaderTests(SimpleTestCase):

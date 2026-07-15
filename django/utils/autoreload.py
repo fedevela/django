@@ -222,29 +222,21 @@ def get_child_arguments():
 
 def get_manage_py_path():
     """Return the resolved `manage.py` path when starting `runserver`."""
-    # AUTO-003 pseudocode:
-    # INPUT:
-    #   - process launch vector: sys.argv[0] (script token), sys.argv[1] (subcommand).
-    # BRANCH:
-    #   - if argv is missing / command is not runserver / argv[0] is empty -> return None.
-    #   - else normalize argv[0] into an absolute candidate via Path.resolve()
-    #     (resolves cwd-relative forms, symbolic links, and redundant separators).
-    #   - if candidate.name != 'manage.py' -> return None.
-    #   - if candidate does not exist -> return None.
-    # TRANSITION:
-    #   - return candidate only when all preconditions pass.
-    #   - returned value must be a single canonical absolute real path for a valid
-    #     manage.py launch form (absolute, relative, symlink, subdirectory).
-    # FAILURE PATH:
-    #   - any normalization / resolution error should short-circuit to None and avoid
-    #     touching watcher state.
+    # AUTO-003 implementation:
+    # - only evaluate when runserver is the subcommand.
+    # - normalize candidate script path to a canonical absolute path.
+    # - require that the resolved path exists and is named ``manage.py``.
+    # - short-circuit to ``None`` on any resolution failure or invalid shape.
     if len(sys.argv) < 2:
         return None
     if sys.argv[1] != 'runserver':
         return None
     if not sys.argv[0]:
         return None
-    script = Path(sys.argv[0]).resolve()
+    try:
+        script = Path(sys.argv[0]).resolve(strict=False)
+    except (OSError, RuntimeError):
+        return None
     if script.name != 'manage.py' or not script.exists():
         return None
     return script
