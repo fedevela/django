@@ -57,6 +57,7 @@ REQUIREMENT_VERIFICATION_MAP = [
         "description": "If `manage.py` and all other watched paths are unchanged across multiple check cycles, no reload/restart event is emitted.",
         "artifact": "StatReloaderTraceabilityTests.test_auto_005_no_reload_when_watched_set_is_stable",
         "state": "steady-state polling with no filesystem mutation",
+        "architecture_artifact": "docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst",
     },
 ]
 
