@@ -155,6 +155,17 @@ class RegexPattern(CheckURLMixin):
     def match(self, path):
         match = self.regex.search(path)
         if match:
+            # DJNG-002: matched optional named capture remains keyword-bound.
+            # 1) named_captures = match.groupdict()
+            #    - includes optional named group keys even when unmatched (None).
+            # 2) kwargs = {name: value for name, value in named_captures.items() if value is not None}
+            #    - only matched named tokens enter callback kwargs.
+            #    - unmatched optional named tokens are dropped.
+            # 3) if named_captures has any key, args = ()
+            #    else args = match.groups()
+            # 4) return remaining_path, args, kwargs
+            #    - preserves positional arity while enabling /module/{html,json,xml}
+            #      to bind as format='...'.
             # DJNG-001 / DJNG-004 / DJNG-005:
             # 1) Capture all named groups; keep only values that are not None.
             #    - If an optional named group is unmatched, it is excluded here.
@@ -367,6 +378,12 @@ class URLPattern:
         if match:
             new_path, args, kwargs = match
             # Pass any extra_kwargs as **kwargs.
+            # DJNG-002:
+            # 1) Receive args/kwargs from RegexPattern/RoutePattern.
+            # 2) Merge self.default_args into kwargs only.
+            # 3) Return ResolverMatch(callback, args, kwargs, ...).
+            # Failure path:
+            # - default args never convert to positional args.
             # DJNG-001 / DJNG-004:
             # - Preserve args/kwargs boundary when binding URL captures.
             # - Optional named captures that are unmatched must remain absent from
@@ -578,6 +595,12 @@ class URLResolver:
                         #  c) if merged kwargs is empty, pass through positional args from
                         #     prefix + child args; otherwise positional args are scoped to
                         #     child only.
+                        # DJNG-002:
+                        # a) sub_match_dict = merged kwargs (prefix/defaults + child kwargs)
+                        #    - when present, includes format='html|json|xml' for /module/<token>
+                        # b) if sub_match_dict not empty -> positional args = sub_match.args
+                        #    (do not append outer args, preserve arity)
+                        # c) if empty -> positional args propagate via args + child args
                         # This ensures /module/ and /module/<token> resolve through the
                         # same flow while keeping optional token semantics intact.
                         # Merge captured arguments in match with submatch

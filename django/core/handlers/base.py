@@ -115,6 +115,11 @@ class BaseHandler:
                 # callback_kwargs are named captures + resolver defaults.
                 # Optional named capture misses must not appear in callback_args; if they
                 # were present as positional items here, TypeError would indicate arity drift.
+                # DJNG-002:
+                # Execute callback via wrapped_callback(request, *callback_args, **callback_kwargs),
+                # so matched named captures resolve through kwargs binding.
+                # Any optional named token must therefore appear as a kwarg (e.g. format='xml')
+                # and cannot affect positional arity.
                 response = wrapped_callback(request, *callback_args, **callback_kwargs)
             except Exception as e:
                 response = self.process_exception_by_middleware(e, request)
