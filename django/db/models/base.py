@@ -913,6 +913,12 @@ class Model(metaclass=ModelBase):
             "%s object can't be deleted because its %s attribute is set to None." %
             (self._meta.object_name, self._meta.pk.attname)
         )
+        # DJ11179-002:
+        # - INPUT: persisted instance (pk != None) is explicitly deleted in-memory.
+        # - TRANSITION: delegate to Collector.collect() then Collector.delete().
+        # - POST-CONDITION REQUIREMENT:
+        #   successful return must leave no DB row for the captured old pk, so stale
+        #   in-memory references become non-resolvable by primary-key lookup.
 
         collector = Collector(using=using)
         collector.collect([self], keep_parents=keep_parents)

@@ -284,6 +284,25 @@ class Collector:
             # - ERROR PATH:
             #   - let deletion exceptions propagate; skip identity reset in that case.
             # - NOTE: this branch exits before the shared post-delete mutation loop.
+            # DJ11179-002:
+            # - LOGIC OBLIGATION (stale PK invalidation):
+            #   - INPUTS: instance.old_pk := instance.pk captured before mutation,
+            #     no cascades/signals/dependencies for the model in this execution.
+            #   - DECISION: choose direct path iff `self.can_fast_delete(instance)`
+            #     remains true and this object remains the only candidate.
+            #   - ACTION SEQUENCE (success path):
+            #     1) execute `DeleteQuery(model).delete_batch([instance.old_pk], self.using)`.
+            #     2) treat the resulting row-count as authoritative persistence evidence for
+            #        `instance.old_pk`.
+            #     3) clear in-memory identity via `setattr(instance, pk_attr, None)`.
+            #   - OBSERVATION REQUIREMENTS:
+            #     - `Model.objects.filter(pk=instance.old_pk).exists()` must be false
+            #       after successful return from this function.
+            #     - `Model.objects.get(pk=instance.old_pk)` must raise DoesNotExist.
+            #     - this remains true when stale in-process object still exists with
+            #       its stale pk snapshot.
+            #   - FAILURE PATH:
+            #     - if SQL delete raises, propagate the error and do not mutate pk.
             if self.can_fast_delete(instance):
                 with transaction.mark_for_rollback_on_error():
                     count = sql.DeleteQuery(model).delete_batch([instance.pk], self.using)
@@ -335,6 +354,13 @@ class Collector:
         # DJ11179-001:
         # - POST-CONDITION (non-fast path): clear in-memory PKs using
         #   `model._meta.pk.attname` after DB deletions have completed.
+        # DJ11179-002:
+        # - ASSERTION MAPPING:
+        #   - For both fast and non-fast no-dependency delete outcomes, stale
+        #     captured pk values must resolve to no row post-return.
+        #   - If object identity is still referenced in memory after `delete()`,
+        #     stale lookups must still be false/DoesNotExist because rows are removed
+        #     from DB by collector-owned SQL deletion paths.
         for model, instances in self.data.items():
             for instance in instances:
                 setattr(instance, model._meta.pk.attname, None)
