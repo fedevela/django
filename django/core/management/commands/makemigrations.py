@@ -58,6 +58,21 @@ class Command(BaseCommand):
             help='Exit with a non-zero status if model changes are missing migrations.',
         )
 
+    def _iter_app_configs_for_constraints(self, app_labels):
+        if app_labels:
+            return [
+                apps.get_app_config(app_label)
+                for app_label in sorted(app_labels)
+            ]
+        return apps.get_app_configs()
+
+    def _find_invalid_unique_constraint_fields(self, app_labels):
+        errors = []
+        for app_config in self._iter_app_configs_for_constraints(app_labels):
+            for model in app_config.get_models():
+                errors.extend(model._check_unique_constraint_fields())
+        return errors
+
     @no_translations
     def handle(self, *app_labels, **options):
         self.verbosity = options['verbosity']
@@ -139,6 +154,10 @@ class Command(BaseCommand):
         # divert into the merge code
         if self.merge and conflicts:
             return self.handle_merge(loader, conflicts)
+
+        constraint_field_errors = self._find_invalid_unique_constraint_fields(app_labels)
+        if constraint_field_errors:
+            raise CommandError("\n".join(str(error) for error in constraint_field_errors))
 
         if self.interactive:
             questioner = InteractiveMigrationQuestioner(specified_apps=app_labels, dry_run=self.dry_run)

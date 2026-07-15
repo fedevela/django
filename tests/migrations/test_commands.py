@@ -1599,21 +1599,82 @@ class MakeMigrationsTests(MigrationTestBase):
         invalid field reference, makemigrations fails and does not emit a migration
         for that model.
         """
-        self.assertTrue(True)
+        class DJANGO12856InvalidConstraint(models.Model):
+            name = models.CharField(max_length=100)
+            code = models.IntegerField()
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(fields=['code'], name='django12856_valid_constraint_001'),
+                    models.UniqueConstraint(fields=['missing_field'], name='django12856_invalid_constraint_002'),
+                ]
+
+        apps.register_model('migrations', DJANGO12856InvalidConstraint)
+
+        with self.temporary_migration_module(module='migrations.test_migrations_empty') as migration_dir:
+            msg = (
+                "'constraints' refers to the nonexistent field "
+                "'missing_field'."
+            )
+            with self.assertRaisesMessage(CommandError, msg):
+                call_command("makemigrations", "migrations", verbosity=0)
+            self.assertFalse(
+                os.path.exists(os.path.join(migration_dir, "0001_initial.py"))
+            )
 
     def test_django12856_002_scenario_2_valid_and_invalid_unique_constraints_together_prevent_migration_file_output(self):
         """
         Scenario 2: when a model has both valid and invalid UniqueConstraint
         entries, the invalid entry is sufficient to block migration emission.
         """
-        self.assertTrue(True)
+        class DJANGO12856MixedConstraints(models.Model):
+            first = models.CharField(max_length=100)
+            second = models.IntegerField()
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(fields=['second'], name='django12856_valid_constraint_101'),
+                    models.UniqueConstraint(fields=['first', 'another_missing_field'], name='django12856_invalid_constraint_102'),
+                ]
+
+        apps.register_model('migrations', DJANGO12856MixedConstraints)
+
+        with self.temporary_migration_module(module='migrations.test_migrations_empty') as migration_dir:
+            msg = (
+                "'constraints' refers to the nonexistent field "
+                "'another_missing_field'."
+            )
+            with self.assertRaisesMessage(CommandError, msg):
+                call_command("makemigrations", "migrations", verbosity=0)
+            self.assertFalse(
+                os.path.exists(os.path.join(migration_dir, "0001_initial.py"))
+            )
 
     def test_django12856_002_scenario_3_all_valid_constraints_allow_migration_emission_path(self):
         """
         Scenario 3: when all UniqueConstraint references are valid, no new
         failure is introduced from this rule for makemigrations.
         """
-        self.assertTrue(True)
+        class DJANGO12856AllValidConstraint(models.Model):
+            first = models.CharField(max_length=100)
+            second = models.CharField(max_length=100)
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(fields=['first'], name='django12856_valid_constraint_201'),
+                    models.UniqueConstraint(fields=['second'], name='django12856_valid_constraint_202'),
+                ]
+
+        apps.register_model('migrations', DJANGO12856AllValidConstraint)
+
+        with self.temporary_migration_module(module='migrations.test_migrations_empty') as migration_dir:
+            call_command("makemigrations", "migrations", verbosity=0)
+            self.assertTrue(
+                os.path.exists(os.path.join(migration_dir, "0001_initial.py"))
+            )
 
 
 # Traceability map for issue DJANGO12856-002.

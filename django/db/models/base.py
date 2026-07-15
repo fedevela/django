@@ -1689,6 +1689,17 @@ class Model(metaclass=ModelBase):
         return errors
 
     @classmethod
+    def _check_unique_constraint_fields(cls):
+        """Validate local-field references used by `UniqueConstraint` entries."""
+        errors = []
+        for constraint in cls._meta.constraints:
+            if isinstance(constraint, UniqueConstraint):
+                errors.extend(
+                    cls._check_local_fields(constraint.fields, "constraints")
+                )
+        return errors
+
+    @classmethod
     def _check_ordering(cls):
         """
         Check "ordering" option -- is it a list of strings and do all fields
