@@ -965,14 +965,17 @@ class LookupTests(TestCase):
         self.assertTrue(Season.objects.filter(pk=season.pk, nulled_text_field__isnull_none_rhs=True))
 
     def test_isnull_001_filter_and_exclude_nonbool_rhs_raises_fielderror(self):
-        # ISNULL-001 Scenario 1: __isnull should reject non-bool RHS via filter/exclude paths.
-        # Placeholder verification artifact for contract coverage only.
-        self.assertTrue(True)
+        with self.assertRaises(FieldError):
+            Article.objects.filter(pub_date__isnull=0)
+        with self.assertRaises(FieldError):
+            Article.objects.exclude(headline__isnull="")
 
     def test_isnull_001_none_and_numeric_rhs_must_raise_fielderror(self):
-        # ISNULL-001 Scenario 3: None and numeric RHS are both invalid for __isnull.
-        # Placeholder verification artifact for contract coverage only.
-        self.assertTrue(True)
+        # ISNULL-001 Scenario 3: both None and numeric RHS are rejected for __isnull.
+        with self.assertRaises(FieldError):
+            Article.objects.filter(pub_date__isnull=None)
+        with self.assertRaises(FieldError):
+            Article.objects.exclude(pub_date__isnull=123)
 
     def test_exact_exists(self):
         qs = Article.objects.filter(pk=OuterRef('pk'))

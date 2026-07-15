@@ -1163,14 +1163,10 @@ class Query(BaseExpression):
             if not lookup_class:
                 return
 
-        # ISNULL-001: shared construction obligation for __isnull across filter, exclude,
-        # and Q-based predicates (all paths that call build_lookup).
-        # 1) Create lookup = lookup_class(lhs, rhs) to normalize rhs and attach metadata.
-        # 2) If lookup_name == 'isnull':
-        #    - if not isinstance(rhs, bool): raise FieldError and stop immediately.
-        #    - only bool values True/False may continue; bool is the only accepted input type.
-        # 3) No SQL should compile or execute after a failing branch in this step.
-        # 4) If lookup_name != 'isnull', proceed with existing None/'' compatibility checks.
+        # ISNULL-001: strict __isnull RHS validation across filter, exclude, and
+        # Q construction paths. The only accepted RHS type is bool.
+        if lookup_name == 'isnull' and not isinstance(rhs, bool):
+            raise FieldError("'__isnull' lookup only supports boolean values.")
 
         lookup = lookup_class(lhs, rhs)
         # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all

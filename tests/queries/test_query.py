@@ -115,6 +115,6 @@ class TestQuery(SimpleTestCase):
         self.assertEqual(query.select_related, {'creator': {}})
 
     def test_isnull_001_q_lookup_nonbool_rhs_raises_fielderror_early(self):
-        # ISNULL-001 Scenario 2: Q-based __isnull construction with non-bool RHS must fail early.
-        # Placeholder verification artifact for contract coverage only.
-        self.assertTrue(True)
+        query = Query(Author)
+        with self.assertRaises(FieldError):
+            query.build_where(Q(num__isnull=""))
