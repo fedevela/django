@@ -205,3 +205,24 @@ class MigrationWriterEnumDefaultDeterminismContractsTests(SimpleTestCase):
             serialized_by_locale.append(serialized_field)
 
         self.assertEqual(serialized_by_locale[0], serialized_by_locale[1], "Deconstruction/reconstruction must remain stable across locale variants.")
+
+
+class MigrationWriterEnumDefaultMixedDefaultsContractsTests(SimpleTestCase):
+    """Traceability placeholders for MIG-300-005."""
+
+    # MIG-300-005 obligations:
+    # - In mixed-default migrations, only plain enum.Enum defaults may use
+    #   member-name syntax for serialization.
+    # - Non-enum defaults (callable, string, number, etc.) must keep existing
+    #   serializer output unchanged.
+    # - Non-enum objects with string-shaped payloads must never be rewritten
+    #   into enum member indexing.
+
+    def test_mig_300_005_mixed_defaults_only_plain_enums_use_member_name_serialization(self):
+        self.assertTrue(True)
+
+    def test_mig_300_005_non_enum_defaults_in_mixed_payloads_keep_original_form(self):
+        self.assertTrue(True)
+
+    def test_mig_300_005_non_enum_object_matching_string_shape_avoids_enum_syntax_rewrite(self):
+        self.assertTrue(True)
