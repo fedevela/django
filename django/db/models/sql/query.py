@@ -1143,6 +1143,14 @@ class Query(BaseExpression):
             for expr in expression.get_source_expressions():
                 self.check_filterable(expr)
 
+    def _validate_isnull_lookup_rhs(self, lookup_name, rhs):
+        """Guardrails for lookup-value type validation before SQL rendering."""
+        if lookup_name == 'isnull' and not isinstance(rhs, bool):
+            raise ValueError(
+                'Invalid value for lookup "__isnull": got value of type %s.'
+                % type(rhs).__name__
+            )
+
     def build_lookup(self, lookups, lhs, rhs):
         """
         Try to extract transforms and lookup from given lhs.
@@ -1170,19 +1178,7 @@ class Query(BaseExpression):
                 if not lookup_class:
                     return
 
-        # ISNULL-001 / ISNULL-002 / ISNULL-005: pre-SQL validation gate.
-        # 1) Decision input:
-        #    - lookup_name from parsed lookup path
-        #    - rhs raw value from Query.build_filter()/resolve_lookup_value
-        # 2) If lookup_name == "isnull" and rhs is not bool -> raise ValueError.
-        # 3) Halt immediately (no Lookup object created, no as_sql path entered).
-        # 4) If rhs is bool -> continue to lookup object construction.
-        # __isnull accepts only strict bool RHS values.
-        if lookup_name == 'isnull' and not isinstance(rhs, bool):
-            raise ValueError(
-                'Invalid value for lookup "__isnull": got value of type %s.'
-                % type(rhs).__name__
-            )
+        self._validate_isnull_lookup_rhs(lookup_name, rhs)
 
         lookup = lookup_class(lhs, rhs)
         # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all
