@@ -262,7 +262,22 @@ class ConversionExceptionTests(SimpleTestCase):
     @override_settings(DEBUG=False)
     def test_DJ_RES_003_converter_to_python_http404_produces_404_status_with_production_safe_notfound_output(self):
         """[DJ-RES-003] Converter to_python(Http404) remains production-safe when DEBUG=False."""
-        self.assertTrue(True)
+        def raises_http404(value):
+            raise Http404('user not found')
+
+        self._set_dynamic_converter_to_python(raises_http404)
+        response = self.client.get('/dynamic/usernotfound/')
+
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, '<h1>Not Found</h1>', status_code=404)
+        self.assertContains(
+            response,
+            'The requested resource was not found on this server.',
+            status_code=404,
+        )
+        self.assertNotContains(response, 'Django tried these URL patterns', status_code=404)
+        self.assertNotContains(response, 'user not found', status_code=404)
+        self.assertNotContains(response, 'Request Method:', status_code=404)
 
     def test_resolve_value_error_means_no_match(self):
         @DynamicConverter.register_to_python
