@@ -84,3 +84,13 @@ class TranslationCheckTests(SimpleTestCase):
             self.assertEqual(check_language_settings_consistent(None), [
                 Error(msg, id='translation.E004'),
             ])
+
+    def test_gev_001_regional_language_code_with_base_language_present_no_e004(self):
+        # GEV-001-S1: GIVEN LANGUAGE_CODE is regional and base language exists,
+        # THEN translation.E004 must not be emitted for LANGUAGE_CODE.
+        pass
+
+    def test_gev_001_french_regional_code_with_base_language_present_no_e004(self):
+        # GEV-001-S2: GIVEN LANGUAGE_CODE='fr-ca' and LANGUAGES contains 'fr',
+        # THEN translation.E004 must not be emitted for LANGUAGE_CODE.
+        pass
