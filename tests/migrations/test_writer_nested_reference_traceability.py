@@ -4,7 +4,9 @@ import os
 import re
 import tempfile
 
+from django.db import connections
 from django.db import migrations, models
+from django.db.migrations.loader import MigrationLoader
 from django.core.management import call_command
 from django.db.migrations.writer import MigrationWriter
 from django.test.utils import extend_sys_path
@@ -207,36 +209,69 @@ class NestedReferenceTraceabilityTests(SimpleTestCase):
         self.assertIn("%s.Outer.Inner" % __name__, first_generation)
 
     def test_m154_007_import_time_nested_outer_inner_reference_resolves_from_generated_migration_module(self):
-        # M154-007.S1 (Scenario 1): Import-time nested class path resolves.
-        # Inputs:
-        # - Generated migration content contains a deconstruction for <module>.Outer.Inner.
-        # - Migration loader attempts to import that generated migration module.
-        # Procedure:
-        # - Arrange migration text so an operation serializes an Outer.Inner field path.
-        # - Emit migration module at import time entrypoint (e.g., m154_.../0001_initial.py).
-        # - Attempt module import through migration import machinery.
-        # Decision / transition:
-        # - IF import raises ImportError/AttributeError -> path is not import-resolvable (FAIL).
-        # - ELSE imported module object available for symbol resolution.
-        # - THEN resolve module.Outer then module.Outer.Inner.
-        # - IF either lookup misses -> treat as unresolved nested-attribute failure.
-        # - ELSE resolution is complete and import-time contract holds.
-        self.assertTrue(True)
+        migration = migrations.Migration("0001_initial", "migrations")
+        migration.operations = [
+            migrations.CreateModel(
+                "ReferenceModel",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("name", Outer.Inner(max_length=24)),
+                ],
+                {"ordering": ["name"]},
+                (models.Model,),
+            ),
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module_name = "m154_nested_outer_inner_import_time"
+            package_dir = os.path.join(temp_dir, module_name)
+            migration_dir = os.path.join(package_dir, "migrations")
+            os.makedirs(migration_dir)
+            open(os.path.join(package_dir, "__init__.py"), "w").close()
+            open(os.path.join(migration_dir, "__init__.py"), "w").close()
+
+            migration_file = os.path.join(migration_dir, "0001_initial.py")
+            with open(migration_file, "w", encoding="utf-8") as fp:
+                fp.write(MigrationWriter(migration).as_string())
+
+            with extend_sys_path(temp_dir):
+                with self.settings(MIGRATION_MODULES={"migrations": "%s.migrations" % module_name}):
+                    loader = MigrationLoader(connections["default"])
+                    imported_migration = loader.disk_migrations[("migrations", "0001_initial")]
+
+        imported_field = dict(imported_migration.operations[0].fields)["name"]
+        self.assertIs(imported_field.__class__, Outer.Inner)
 
     def test_m154_007_import_time_nested_enum_reference_resolves_from_generated_migration_module(self):
-        # M154-007.S2 (Scenario 2): Import-time enum-style nested path resolves.
-        # Inputs:
-        # - Generated migration content contains a deconstruction for <module>.Thing.State.
-        # - Migration import executes with module loaded to top-level object.
-        # Procedure:
-        # - Arrange migration content so deconstruction string is "<module>.Thing.State".
-        # - Emit and import the generated module via migration import path.
-        # - Validate that module-level class chain resolves before use-time evaluation.
-        # State checks:
-        # - State A: module import started.
-        # - State B: module body executed.
-        # - State C: symbol lookup "Thing" found on module.
-        # - State D: symbol lookup "Thing.State" found on nested class chain.
-        # - IF any state transition fails -> AttributeError indicates malformed nested emission.
-        # - ELSE import-time execution is accepted as correct.
-        self.assertTrue(True)
+        migration = migrations.Migration("0001_initial", "migrations")
+        migration.operations = [
+            migrations.CreateModel(
+                "ReferenceModel",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("state", EnumField(enum=Thing.State)),
+                ],
+                {"ordering": ["state"]},
+                (models.Model,),
+            ),
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module_name = "m154_nested_enum_reference_import_time"
+            package_dir = os.path.join(temp_dir, module_name)
+            migration_dir = os.path.join(package_dir, "migrations")
+            os.makedirs(migration_dir)
+            open(os.path.join(package_dir, "__init__.py"), "w").close()
+            open(os.path.join(migration_dir, "__init__.py"), "w").close()
+
+            migration_file = os.path.join(migration_dir, "0001_initial.py")
+            with open(migration_file, "w", encoding="utf-8") as fp:
+                fp.write(MigrationWriter(migration).as_string())
+
+            with extend_sys_path(temp_dir):
+                with self.settings(MIGRATION_MODULES={"migrations": "%s.migrations" % module_name}):
+                    loader = MigrationLoader(connections["default"])
+                    imported_migration = loader.disk_migrations[("migrations", "0001_initial")]
+
+        imported_field = dict(imported_migration.operations[0].fields)["state"]
+        self.assertIs(imported_field.enum, Thing.State)
