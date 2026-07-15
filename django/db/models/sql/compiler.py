@@ -499,17 +499,17 @@ class SQLCompiler:
             features = self.connection.features
             if combinator:
                 # DJANGO12908-001/004/005/008:
-                # [Pre-compilation guard: annotated UNION + explicit DISTINCT fields]
-                # if not combinator:
-                #     use existing non-compound compilation flow.
-                # if combinator is 'union' and self.query.distinct_fields is non-empty:
-                #     # explicit DISTINCT(field, ...) path in scope.
-                #     if self.query.annotation_select is non-empty:
-                #         # annotation columns are present in projection; reject to avoid
-                #         # changing annotations/projection while forcing DISTINCT ON semantics.
-                #         raise NotSupportedError(...)
-                #     # no annotations -> unchanged behavior for this path.
-                # if combinator is not 'union' -> unchanged behavior.
+                # Ownership + seam:
+                #   - Owner: SQLCompiler.as_sql() compound-query branch.
+                #   - Boundary: compiler-local rejection before combinator SQL generation.
+                #   - Dependency direction:
+                #         Query state -> compiler preflight -> SQL generation only.
+                #   - Scope contract:
+                #       - require combinator == 'union'
+                #       - require distinct_fields is non-empty (explicit distinct(...))
+                #       - require annotation_select is non-empty
+                #     before raising NotSupportedError.
+                #   - This path must not reshape projection columns.
                 if not getattr(features, 'supports_select_{}'.format(combinator)):
                     raise NotSupportedError('{} is not supported on this database backend.'.format(combinator))
                 result, params = self.get_combinator_sql(combinator, self.query.combinator_all)
