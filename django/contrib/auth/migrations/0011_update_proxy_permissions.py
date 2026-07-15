@@ -12,6 +12,7 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     - "Missing tuple should be inserted/retargeted when absent."
     - "Duplicate detection must keep mixed present/missing outcomes bounded by tuple-level state."
     - "G70-002 [RED] Missing required tuple must materialize exactly once during forward migration."
+    - "G70-003 [RED] Forward re-run on previously-migrated DB must not change rowcount for existing (content_type_id, codename) tuples."
     """
     Permission = apps.get_model('auth', 'Permission')
     ContentType = apps.get_model('contenttypes', 'ContentType')
@@ -40,6 +41,21 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     #             # O3: if unique violation occurs in update/insert, continue without duplicate
     #         except IntegrityError:
     #             continue
+    # G70-003 pseudocode map:
+    # - Scope: forward migration only (reverse=False) and rerun of already migrated DB.
+    # - State transitions by tuple (new_content_type, codename):
+    #   - STATE_PRESENT: target tuple exists.
+    #   - STATE_MISSING_SOURCE_PRESENT: target missing, source exists.
+    #   - STATE_MISSING_SOURCE_MISSING: neither source nor target exists.
+    # - For each tuple:
+    #   - Evaluate target_exists := exists(Permission where content_type=new_content_type and codename).
+    #   - If target_exists == true: transition to DONE_NOOP and emit no UPDATE/INSERT.
+    #       - rowcount invariant holds because DB writes are skipped.
+    #   - Else:
+    #       - attempt retarget from old_content_type.
+    #       - if retarget_updates > 0: transition DONE_MOVED.
+    #       - else if retarget_updates == 0: transition DONE_CREATED and create exactly one tuple.
+    #       - if IntegrityError: transition DONE_ALREADY_PRESENT (or concurrent writer created it) and continue.
 
     for Model in apps.get_models():
         opts = Model._meta
@@ -63,6 +79,12 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
             # - else attempt source retarget.
             # - if no source row updated => materialize missing tuple exactly once.
             # - if unique conflict appears in either path => SKIP as already-created target.
+            # G70-003 per-key rerun requirement:
+            # - Existing tuple invariant on rerun:
+            #   if Permission(new_content_type, codename) exists, branch to NOOP.
+            #   NOOP must leave rowcount unchanged for that tuple.
+            # - Duplicate-path prevention:
+            #   any IntegrityError while retarget/create is treated as "already satisfied" and loop continues.
             if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
                 continue
 
