@@ -33,9 +33,10 @@ __D2 = r'(?P<day>[ \d]\d)'
 __M = r'(?P<mon>\w{3})'
 __Y = r'(?P<year>\d{4})'
 __Y2 = r'(?P<year>\d{2})'
+__Y2_OR_Y4 = r'(?P<year>\d{2}(?:\d{2})?)'
 __T = r'(?P<hour>\d{2}):(?P<min>\d{2}):(?P<sec>\d{2})'
 RFC1123_DATE = re.compile(r'^\w{3}, %s %s %s %s GMT$' % (__D, __M, __Y, __T))
-RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))
+RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2_OR_Y4, __T))
 ASCTIME_DATE = re.compile(r'^\w{3} %s %s %s %s$' % (__M, __D2, __T, __Y))
 
 RFC3986_GENDELIMS = ":/?#[]@"
@@ -166,16 +167,17 @@ def parse_http_date(date):
     """
     # HTTPDATE-003: Determine parser branch before field parsing.
     # - RFC1123_DATE handles RFC1123 (four-digit year).
-    # - RFC850_DATE handles RFC850 (two-digit year form).
+    # - RFC850_DATE handles RFC850 (two- or four-digit year form).
     # - ASCTIME_DATE handles asctime (four-digit year).
     # The formats are checked in order above; parse proceeds only on first match.
     # If no pattern matches, raise a format error.
     # email.utils.parsedate() does the job for RFC1123 dates; unfortunately
     # RFC7231 makes it mandatory to support RFC850 dates too. So we roll
     # our own RFC-compliant parsing.
-    for regex in RFC1123_DATE, RFC850_DATE, ASCTIME_DATE:
+    for regex in (RFC1123_DATE, RFC850_DATE, ASCTIME_DATE):
         m = regex.match(date)
         if m is not None:
+            is_rfc850 = regex is RFC850_DATE
             break
     else:
         raise ValueError("%r is not in a valid HTTP date format" % date)
@@ -184,8 +186,9 @@ def parse_http_date(date):
         # RFC850 was the matching branch and the matched year has two digits.
         # For RFC1123 and asctime four-digit-year inputs, this branch must not
         # alter year semantics.
-        year = int(m.group('year'))
-        if year < 100:
+        year_text = m.group("year")
+        if is_rfc850 and len(year_text) == 2:
+            year = int(year_text)
             # HTTPDATE-001/002/005: RFC850 two-digit year inference.
             # HTTPDATE-003 gate: only execute this block in the RFC850
             # two-digit-year path; all other parser formats bypass it.
@@ -197,6 +200,8 @@ def parse_http_date(date):
                 year = candidate_year - 100
             else:
                 year = candidate_year
+        else:
+            year = int(year_text)
         month = MONTHS.index(m.group('mon').lower()) + 1
         day = int(m.group('day'))
         hour = int(m.group('hour'))

@@ -386,13 +386,25 @@ class HttpDateRFC850TraceabilityTests(unittest.TestCase):
         self.assertEqual(parsed_datetime.weekday(), 1)
 
     def test_httpdate_003_rfc850_four_digit_year_bypasses_two_digit_century_gate(self):
-        pass
+        parsed = parse_http_date("Thursday, 01-Dec-1977 00:00:00 GMT")
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(1977, 12, 1, 0, 0),
+        )
 
     def test_httpdate_003_rfc1123_two_digit_year_does_not_share_rfc850_century_inference_gate(self):
-        pass
+        parsed = parse_http_date("Fri, 01 Dec 1977 00:00:00 GMT")
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(1977, 12, 1, 0, 0),
+        )
 
     def test_httpdate_003_asctime_four_digit_year_bypasses_two_digit_century_gate(self):
-        pass
+        parsed = parse_http_date("Fri Dec  1 00:00:00 1977")
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(1977, 12, 1, 0, 0),
+        )
 
 
 HTTPDATE_121_TRACEABILITY_MAP = {
