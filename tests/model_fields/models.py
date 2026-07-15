@@ -118,6 +118,17 @@ class Req138SentinelDisplayModel(models.Model):
         return 'REQ-138-003-SENTINEL'
 
 
+class Req138PerFieldDisplayIsolationModel(models.Model):
+    foo = models.CharField(max_length=8, choices=(('A', 'Choice A'), ('B', 'Choice B')))
+    bar = models.CharField(max_length=8, choices=(('X', 'Choice X'), ('Y', 'Choice Y')))
+
+    def __str__(self):
+        return f'{self.get_foo_display()}:{self.get_bar_display()}'
+
+    def get_foo_display(self):
+        return f'custom:foo:{self.foo}'
+
+
 class Choiceful(models.Model):
     no_choices = models.IntegerField(null=True)
     empty_choices = models.IntegerField(choices=(), null=True)

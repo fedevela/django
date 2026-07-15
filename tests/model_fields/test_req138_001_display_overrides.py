@@ -13,6 +13,7 @@ from .models import (
     Req138DisplayGeneratedInheritedModel,
     Req138StatefulDisplayOverrideModel,
     Req138SentinelDisplayModel,
+    Req138PerFieldDisplayIsolationModel,
     Whiz,
 )
 
@@ -33,6 +34,12 @@ class Req138StatefulDisplayOverrideModelForm(forms.ModelForm):
     class Meta:
         model = Req138StatefulDisplayOverrideModel
         fields = ('status', 'is_primary')
+
+
+class Req138PerFieldDisplayIsolationModelForm(forms.ModelForm):
+    class Meta:
+        model = Req138PerFieldDisplayIsolationModel
+        fields = ('foo', 'bar')
 
 
 REQ_138_001 = "REQ-138-001"
@@ -253,10 +260,28 @@ class TestReq138006PerFieldDisplayOverrideIsolation(SimpleTestCase):
     """Specification traceability artifact for REQ-138-006."""
 
     def test_req_138_006_foo_custom_display_takes_precedence_over_generated_foo_mapping(self):
-        pass
+        instance = Req138PerFieldDisplayIsolationModel(foo='A', bar='X')
+        self.assertEqual(instance.get_foo_display(), 'custom:foo:A')
+        self.assertEqual(instance.get_bar_display(), 'Choice X')
 
     def test_req_138_006_bar_generated_display_remains_mapping_for_non_overridden_field(self):
-        pass
+        instance = Req138PerFieldDisplayIsolationModel(foo='B', bar='Y')
+        self.assertEqual(instance.get_bar_display(), 'Choice Y')
+        self.assertEqual(instance.get_foo_display(), 'custom:foo:B')
 
     def test_req_138_006_foo_override_does_not_affect_bar_display_in_string_template_and_form_paths(self):
-        pass
+        instance = Req138PerFieldDisplayIsolationModel(foo='B', bar='X')
+        display_template = Engine().from_string("{{ obj.get_foo_display }}|{{ obj.get_bar_display }}")
+        rendered = display_template.render(Context({'obj': instance}))
+        self.assertEqual(str(instance), 'custom:foo:B:Choice X')
+        self.assertEqual(rendered, 'custom:foo:B|Choice X')
+
+        bound_form = Req138PerFieldDisplayIsolationModelForm(
+            data={'foo': 'A', 'bar': 'Y'},
+            instance=Req138PerFieldDisplayIsolationModel(),
+        )
+        self.assertTrue(bound_form.is_valid())
+        saved_instance = bound_form.save(commit=False)
+        self.assertEqual(saved_instance.get_foo_display(), 'custom:foo:A')
+        self.assertEqual(saved_instance.get_bar_display(), 'Choice Y')
+        self.assertEqual(display_template.render(Context({'obj': saved_instance})), 'custom:foo:A|Choice Y')
