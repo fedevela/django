@@ -35,7 +35,7 @@ REQUIREMENT_VERIFICATION_MAP = [
         "description": "When running with StatReloader and a watched `manage.py`, a saved change to `manage.py` must be detected on the next check cycle and execute the restart/reload flow.",
         "artifact": "StatReloaderTraceabilityTests.test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts",
         "state": "post-startup polling cycle after manage.py persisted edit",
-        "architecture_artifact": "tests/utils_tests/test_autoreload.py",
+        "architecture_artifact": "docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst",
     },
 ]
 
