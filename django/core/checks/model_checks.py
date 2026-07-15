@@ -19,6 +19,11 @@ def check_all_models(app_configs=None, **kwargs):
     else:
         models = chain.from_iterable(app_config.get_models() for app_config in app_configs)
     for model in models:
+        # DJANGO11630-005: db_table duplicate detection is restricted to concrete managed models.
+        # - If managed is False -> ignore for collision bookkeeping (legacy non-managed must not
+        #   introduce fresh models.E028 failures).
+        # - If proxy is True -> ignore for collision bookkeeping (proxy/table-shadowing retains prior semantics).
+        # - Else (managed concrete): collect (db_alias, db_table) as the collision key and append model label.
         if model._meta.managed and not model._meta.proxy:
             db_alias = router.db_for_write(model)
             db_table_models[(db_alias, model._meta.db_table)].append(model._meta.label)
@@ -38,6 +43,13 @@ def check_all_models(app_configs=None, **kwargs):
         for model_constraint in model._meta.constraints:
             constraints[model_constraint.name].append(model._meta.label)
     for (_db_alias, db_table), model_labels in db_table_models.items():
+        # DJANGO11630-005 (collision semantics):
+        # Inputs: all tracked concrete-managed labels by effective alias + db_table.
+        # Transition:
+        #   if more than one tracked concrete model shares the same key -> fail once for that key.
+        #   if one or zero tracked models share the key -> pass.
+        # Failure path:
+        #   emit models.E028 and list only participating tracked labels for that effective alias/table key.
         if len(model_labels) != 1:
             errors.append(
                 Error(
