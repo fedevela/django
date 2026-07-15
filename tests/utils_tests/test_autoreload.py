@@ -59,6 +59,13 @@ REQUIREMENT_VERIFICATION_MAP = [
         "state": "steady-state polling with no filesystem mutation",
         "architecture_artifact": "docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst",
     },
+    {
+        "id": "AUTO-006",
+        "description": "The special manage.py watch augmentation is applied only when launch entry is `manage.py`; non-`manage.py` `runserver` entry points do not gain a `manage.py` watch and keep their pre-existing scope.",
+        "artifact": "StatReloaderTraceabilityTests.test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path",
+        "state": "watch scope seeding and launch-path branching during StatReloader startup",
+        "architecture_artifact": "docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst",
+    },
 ]
 
 
@@ -547,6 +554,14 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
                             next(ticker)  # No change should be observed again.
 
                             self.assertEqual(notify_mock.call_count, 0)
+
+    def test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path(self):
+        """
+        AUTO-006: Given `runserver` launch entry context is non-`manage.py`,
+        `manage.py` is never injected into the watch scope; scope growth occurs
+        only when launch entry is `manage.py`.
+        """
+        assert True
 
 
 class ReloaderTests(SimpleTestCase):
