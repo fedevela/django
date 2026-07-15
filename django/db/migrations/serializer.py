@@ -48,6 +48,15 @@ class BaseSimpleSerializer(BaseSerializer):
 
 class ChoicesSerializer(BaseSerializer):
     def serialize(self):
+        # MIG-300-002 [locale-safe enum defaults]:
+        # When an enum default is based on a locale-dependent value, rendering
+        # the value as-is can hardcode translated text and make migration
+        # imports locale-sensitive.
+        # Emit a stable member-identity form for locale-dependent values.
+        if isinstance(self.value.value, Promise):
+            enum_class = self.value.__class__
+            module = enum_class.__module__
+            return "%s.%s[%s]" % (module, enum_class.__name__, repr(self.value.name)), {"import %s" % module}
         return serializer_factory(self.value.value).serialize()
 
 
