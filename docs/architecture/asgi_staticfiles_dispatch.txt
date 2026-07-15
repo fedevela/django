@@ -1,0 +1,95 @@
+ASGI Staticfiles Dispatch Architecture (ASGI-001)
+===============================================
+
+Canonical requirement
+--------------------
+
+ASGI-001: Given an ASGI request routed through ``ASGIStaticFilesHandler``, ``get_response_async``
+must resolve to an invocable async callable so ``ASGIHandler.__call__`` can await it without
+``TypeError: 'NoneType' object is not callable``.
+
+Traceability map
+----------------
+
+- ``ASGI-001`` -> ``tests/staticfiles_tests/test_handlers.py``:
+  - ``ASGIStaticFilesHandler.get_response_async_resolves_to_callable``
+  - ``ASGIStaticFilesHandler_dispatch_invokes_resolved_async_callable_once``
+- ``ASGI-001`` -> ``django/contrib/staticfiles/handlers.py``:
+  - ``ASGIStaticFilesHandler.__call__`` dispatch gate for static paths
+  - ``ASGIStaticFilesHandler`` static response contract (commented intent)
+- ``ASGI-001`` -> ``django/core/handlers/asgi.py``:
+  - ``ASGIHandler.__call__`` async invocation point for ``get_response_async``
+
+Ownership and boundaries
+-----------------------
+
+1. Request boundary owner: ``ASGIStaticFilesHandler`` in ``django/contrib/staticfiles/handlers.py``.
+   - Owns path classification via ``_should_handle`` and static request entry.
+   - Delegates all non-static traffic to the wrapped downstream ASGI app.
+2. Dispatch boundary owner: ``ASGIHandler`` in ``django/core/handlers/asgi.py``.
+   - Owns request-body read, ``ASGIRequest`` creation, and response emission.
+   - Requires a per-handler async response entrypoint returned by ``get_response_async``.
+3. Responsibility split
+   - Static path matching and serving remain in staticfiles handler.
+   - Generic ASGI protocol mechanics remain in core handler.
+
+Architectural pressure and placement
+-----------------------------------
+
+- Pressure: *Async response entrypoint must always exist and be awaitable for static paths.*
+  - Home: ``ASGIStaticFilesHandler`` should expose/resolve an async callable in its class boundary.
+  - Consumption point: ``ASGIHandler.__call__`` must consume that callable via ``await self.get_response_async(request)``.
+- Pressure: *Middleware/dispatch target must be invoked exactly once.*
+  - Home: ``ASGIStaticFilesHandler.__call__`` must route static traffic into exactly one ASGI dispatch path.
+  - Consumption seam: core ASGI handler awaits a single async response target per request.
+
+Interface / contract placeholders
+-------------------------------
+
+Contract A: Static-path ASGI dispatch
+
+- From: ``ASGIStaticFilesHandler.__call__(scope, receive, send)``
+- To: ``ASGIHandler.__call__(scope, receive, send)``
+- Requirement:
+  - For HTTP static requests, route once through core dispatch path.
+  - For non-static requests, delegate to wrapped ``self.application`` exactly once.
+
+Contract B: Async response contract
+
+- From: ``ASGIHandler.__call__(scope, receive, send)``
+- To: ``self.get_response_async(request)`` (resolved on handler instance)
+- Requirement:
+  - Must be callable and awaitable.
+  - Must produce ``HttpResponse`` for the current request.
+  - The call must be singular per request.
+
+Dependency-direction notes
+-------------------------
+
+- ``django/contrib/staticfiles/handlers.py`` (staticfiles boundary)
+  -> depends on ``django.core.handlers.asgi.ASGIHandler`` for protocol dispatch scaffolding.
+- ``django/core/handlers/asgi.py`` (core boundary)
+  -> depends on subclass contract methods (e.g. ``get_response_async``) implemented by concrete handlers.
+- Tests remain consumers of traceability mapping and do not influence runtime wiring.
+
+Integration seams
+-----------------
+
+- Seam 1: static path gate
+  - Condition: ``scope['type'] == 'http'`` and ``_should_handle(scope['path'])``.
+  - Action: route through core dispatch for async response resolution.
+- Seam 2: non-static fallthrough
+  - Condition: static gate fails.
+  - Action: call wrapped ASGI application.
+- Seam 3: response emission boundary
+  - Condition: response object returned from async response callable.
+  - Action: send using core ``send_response`` contract.
+
+Acceptance alignment
+-------------------
+
+- The architecture now has explicit module ownership and seams for:
+  - locating the async callable contract in static handler ownership,
+  - consuming it in core handler invocation,
+  - preserving single-pass request dispatch.
+- This artifact provides implementation-ready placement and is directly traceable to ``ASGI-001``.
