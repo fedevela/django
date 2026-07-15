@@ -118,6 +118,26 @@ class DictionarySerializer(BaseSerializer):
 
 class EnumSerializer(BaseSerializer):
     def serialize(self):
+        # MIG-300-001 pseudocode:
+        # Input state:
+        # - value_class: runtime class of enum member to serialize.
+        # - value_name: member name for direct index-based rendering.
+        # - value_payload: value representation currently produced from self.value.value.
+        #
+        # Decision branch:
+        # - if enum class represents model-choice enums (e.g., models.Choices/TextChoices),
+        #   keep existing behavior (serialize by underlying value for compatibility with choices).
+        # - otherwise (plain enum.Enum member), emit member-name indexing for default literals.
+        #
+        # Transition for MIG-300-001:
+        # - plain default path:
+        #   output = "{module}.{class_name}['{member_name}']"
+        #   imports = {"import {module}"} plus imports from value payload.
+        # - non-enum path is outside this serializer and must remain unchanged.
+        #
+        # Error path:
+        # - if serializer receives non-enum data, no branch change here; existing dispatcher
+        #   responsibility remains.
         enum_class = self.value.__class__
         module = enum_class.__module__
         v_string, v_imports = serializer_factory(self.value.value).serialize()
