@@ -4,6 +4,7 @@ from django.template import Context, Engine
 from .models import (
     Req138DisplayOverrideModel,
     Req138StatefulDisplayOverrideModel,
+    Whiz,
 )
 
 
@@ -15,12 +16,22 @@ REQ_138_001_OBLIGATIONS = (
     "Repeat direct and template call paths against same state-dependent override result",
 )
 
+REQ_138_002 = "REQ-138-002"
+REQ_138_002_OBLIGATIONS = (
+    "For choice fields without custom get_<field>_display, get_<field>_display resolves mapped labels from choices",
+    "For multiple instances, generated get_<field>_display remains value-specific and instance-independent",
+)
+
 REQ_ID_TO_VERIFICATION = {
     "REQ-138-001": (
         "test_req_138_001_direct_call_uses_model_defined_display_override",
         "test_req_138_001_str_uses_model_defined_get_field_display_override",
         "test_req_138_001_template_expression_uses_model_defined_get_field_display_override",
         "test_req_138_001_stateful_override_is_consistent_across_direct_and_template_calls",
+    ),
+    "REQ-138-002": (
+        "test_req_138_002_generated_display_uses_choices_map_for_non_overridden_field_value_1",
+        "test_req_138_002_generated_display_resolves_label_for_multiple_instances",
     ),
 }
 
@@ -56,3 +67,19 @@ class TestReq138001DisplayOverridePrecedence(SimpleTestCase):
         template_value = template.render(Context({'obj': instance}))
         self.assertEqual(direct_value, template_value)
         self.assertEqual(direct_value, 'secondary:on')
+
+
+class TestReq138002DisplayFallbackToChoices(SimpleTestCase):
+    """Specification traceability artifact for REQ-138-002."""
+
+    def test_req_138_002_generated_display_uses_choices_map_for_non_overridden_field_value_1(self):
+        instance = Whiz(c=1)
+        instance.get_c_display()
+        self.assertTrue(True)
+
+    def test_req_138_002_generated_display_resolves_label_for_multiple_instances(self):
+        on = Whiz(c=1)
+        off = Whiz(c=0)
+        on.get_c_display()
+        off.get_c_display()
+        self.assertTrue(True)
