@@ -1,6 +1,7 @@
 import warnings
 
-from django.forms import CharField, Form, Media, MultiWidget, TextInput
+from django.forms import CharField, Form, Media, MultiWidget, TextInput, Widget
+from django.forms.widgets import MediaOrderConflictWarning
 from django.template import Context, Template
 from django.test import SimpleTestCase, override_settings
 
@@ -575,6 +576,27 @@ class FormsMediaTestCase(SimpleTestCase):
         self.assertEqual(merged._css, {'screen': ['a.css', 'b.css'], 'all': ['c.css']})
 
 
+class ColorPicker(Widget):
+    class Media:
+        js = ['color-picker.js']
+
+
+class SimpleTextWidget(Widget):
+    class Media:
+        js = ['text-editor.js']
+
+
+class FancyTextWidget(Widget):
+    class Media:
+        js = ['text-editor.js', 'text-editor-extras.js', 'color-picker.js']
+
+
+class ThreeWidgetForm(Form):
+    background_color = CharField(widget=ColorPicker())
+    intro = CharField(widget=SimpleTextWidget())
+    body = CharField(widget=FancyTextWidget())
+
+
 class JavaScriptMediaAggregationContractTests(SimpleTestCase):
     def test_media_001_source_relative_order_alone_defines_precedence(self):
         """MEDIA-001: Only source-list relative order defines precedence."""
@@ -594,11 +616,21 @@ class JavaScriptMediaAggregationContractTests(SimpleTestCase):
 
     def test_media_003_provided_three_widget_form_media_has_exact_javascript_order(self):
         """MEDIA-003: The provided form has the required JavaScript order."""
-        self.assertTrue(True)
+        self.assertEqual(
+            ThreeWidgetForm().media._js,
+            ['text-editor.js', 'text-editor-extras.js', 'color-picker.js'],
+        )
 
     def test_media_004_accessing_provided_form_media_emits_no_order_conflict_warning(self):
         """MEDIA-004: Accessing the provided form media emits no conflict warning."""
-        self.assertTrue(True)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter('always', MediaOrderConflictWarning)
+            ThreeWidgetForm().media._js
+
+        self.assertFalse(any(
+            issubclass(warning.category, MediaOrderConflictWarning)
+            for warning in recorded
+        ))
 
     def test_media_005_repeated_input_file_occurs_once_after_aggregation(self):
         """MEDIA-005: A repeated input file occurs exactly once in the result."""
