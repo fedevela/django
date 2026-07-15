@@ -1275,6 +1275,15 @@ class Model(metaclass=ModelBase):
             if not clash_errors:
                 errors.extend(cls._check_column_name_clashes())
             errors += [
+                # DJANGO12856-004: single validation pass must preserve legacy
+                # unique_together behavior and still surface constraint errors.
+                # Branches are additive only:
+                # 1) run index_together checks,
+                # 2) run unique_together E012/E013/E016 checks,
+                # 3) run index checks,
+                # 4) run constraints checks (including UniqueConstraint field refs).
+                # No early return occurs here; errors are concatenated so missing
+                # references from both mechanisms can be reported together.
                 *cls._check_index_together(),
                 *cls._check_unique_together(),
                 *cls._check_indexes(databases),
@@ -1582,6 +1591,10 @@ class Model(metaclass=ModelBase):
         else:
             errors = []
             for fields in cls._meta.unique_together:
+                # DJANGO12856-004: unique_together field references participate
+                # in the shared E012-family validation contract via
+                # `_check_local_fields`; behavior remains unchanged in message
+                # shape and ordering.
                 errors.extend(cls._check_local_fields(fields, "unique_together"))
             return errors
 
@@ -1893,6 +1906,9 @@ class Model(metaclass=ModelBase):
         # - State outcome:
         #   - invalid_fields_present acts as fail-fast signal for callers before migration emission.
         #   - all_errors_empty allows this model to continue to downstream migration feature checks.
+        # DJANGO12856-004: `models.E012`-family semantics must remain aligned with
+        # `unique_together` by collecting all local-field failures from this path and
+        # returning them through the same pass as other checks.
         # DJANGO12856-001: local-field validation for UniqueConstraint.
         errors = []
         valid_constraints = []
