@@ -261,10 +261,34 @@ class Exact(FieldGetDbPrepValueMixin, BuiltinLookup):
     def process_rhs(self, compiler, connection):
         from django.db.models.sql.query import Query
         if isinstance(self.rhs, Query):
+            # DJANGO-11797-003: Scalar equality against a queryset RHS must preserve
+            # aggregate subquery SQL shape when that shape is already grouped/annotated.
+            #
+            # Inputs:
+            # - self.rhs: Query object contributed by a RHS queryset.
+            # - self.rhs.has_limit_one(): indicates scalar subquery intent (e.g. `a[:1]`).
+            #
+            # Decision:
+            # - if self.rhs.has_limit_one() is True:
+            #   - If rhs.group_by is not None, its projection/grouping is already
+            #     defined (e.g. group by email and select m in DJANGO-11797-003).
+            #     DO NOT clear/rewrite select columns; keep current rhs SQL shape.
+            #   - Otherwise, keep legacy scalar-subquery behavior and rewrite RHS
+            #     projection to the primary key via add_fields(['pk']).
+            # - if self.rhs.has_limit_one() is False: emit ValueError.
+            #
+            # State/error transitions:
+            # - Keep rhs.select/annotation_select/group_by untouched for grouped RHS.
+            # - Keep existing aliases/joins and filters intact in the grouped path.
+            # - In the non-grouped path, existing side effects are clear_select_clause()
+            #   then add_fields(['pk']).
             if self.rhs.has_limit_one():
-                # The subquery must select only the pk.
-                self.rhs.clear_select_clause()
-                self.rhs.add_fields(['pk'])
+                if self.rhs.group_by is None:
+                    # The subquery has no grouping contract, so retain legacy
+                    # pk-only normalization to satisfy scalar cardinality checks.
+                    # The subquery must select only the pk.
+                    self.rhs.clear_select_clause()
+                    self.rhs.add_fields(['pk'])
             else:
                 raise ValueError(
                     'The QuerySet value for an exact lookup must be limited to '
