@@ -204,7 +204,7 @@ def parse_http_date(date):
         # alter year semantics.
         year_text = m.group("year")
         if is_rfc850 and len(year_text) == 2:
-        year = int(year_text)
+            year = int(year_text)
             # HTTPDATE-001/002/005: RFC850 two-digit year inference.
             # HTTPDATE-003 gate: only execute this block in the RFC850
             # two-digit-year path; all other parser formats bypass it.

@@ -418,16 +418,14 @@ class HttpDateMalformedInputTraceabilityTests(unittest.TestCase):
     """
 
     def test_httpdate_004_malformed_input_missing_required_tokens_stays_none(self):
-        _ = parse_http_date_safe("Sunday, 06-Nov-94 08:49 GMT")
-        self.assertTrue(True)
+        self.assertIsNone(parse_http_date_safe("Sunday, 06-Nov-94 08:49 GMT"))
 
     def test_httpdate_004_invalid_rfc850_syntax_remains_none_without_century_recovery(self):
-        _ = parse_http_date_safe("Thursday, 01-Dec-90 99:99:99 GMT")
-        self.assertTrue(True)
+        self.assertIsNone(parse_http_date_safe("Thursday, 99-Foo-90 00:00:00 GMT"))
+        self.assertIsNone(parse_http_date_safe("Thursday, 31-Dec-90 99:99:99 GMT"))
 
     def test_httpdate_004_numeric_suffix_non_date_remains_none_no_fallback(self):
-        _ = parse_http_date_safe("not-a-date-90-01-01T99")
-        self.assertTrue(True)
+        self.assertIsNone(parse_http_date_safe("not-a-date-90-01-01T99"))
 
 
 HTTPDATE_121_TRACEABILITY_MAP = {
