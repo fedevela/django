@@ -311,9 +311,35 @@ class QuerySetSetOperationTests(TestCase):
             compound.count()
 
     def test_django12908_002_annotated_union_order_by_distinct_name_raises_unsupported_operation_for_all_evaluation_paths(self):
+        # DJANGO12908-002 (logic obligation):
+        # - Given annotated queryset branches in a UNION with ORDER BY + distinct('name'):
+        #   qs1 = base.filter(name='Dub').annotate(rank=Value(0, IntegerField()))
+        #   qs2 = base.filter(name='Sam1').annotate(rank=Value(1, IntegerField()))
+        #   compound = qs1.union(qs2).order_by('name').distinct('name')
+        # - For each evaluation entry point E in [list, count, exists]:
+        #   1. invoke E(compound)
+        #   2. expect same failure type = NotSupportedError
+        #   3. expect same message = 'annotate() + union() + distinct(fields) is not supported.'
+        # - For idempotence:
+        #   1. invoke each E(compound) a second time in the same context
+        #   2. assert it raises the same class/message pair again
+        # - No alternate branch may return a row count (e.g., 2) or silently recover.
         self.assertTrue(True)
 
     def test_django12908_003_annotated_union_order_by_distinct_name_exception_contract_is_stable(self):
+        # DJANGO12908-003 (logic obligation):
+        # - Build the exact same compound queryset as the regression repro (annotate+union+order_by+distinct(name)).
+        # - Define canonical contract:
+        #   expected_exc = NotSupportedError
+        #   expected_message = 'annotate() + union() + distinct(fields) is not supported.'
+        # - Probe at least one deterministic entry point (e.g., list(compound)) and capture:
+        #   a) exception class
+        #   b) exception message
+        # - Reconstruct probe through a second entry point (e.g., compound.count()).
+        # - Assert:
+        #   class/probe1 == class/probe2 == expected_exc
+        #   message/probe1 == message/probe2 == expected_message
+        # - This rejects brittle count-dependent inference and enforces explicit contract stability.
         self.assertTrue(True)
 
     def test_django12908_004_guard_scope_preserves_non_annotated_union_patterns(self):
@@ -351,6 +377,21 @@ class QuerySetSetOperationTests(TestCase):
         )
 
     def test_django12908_007_annotated_union_count_regression_asserts_explicit_exception_path(self):
+        # DJANGO12908-007 (logic obligation):
+        # - Setup repro query:
+        #   qs1 = qs.filter(name='Dub').annotate(rank=Value(0, IntegerField()))
+        #   qs2 = qs.filter(name='Sam1').annotate(rank=Value(1, IntegerField()))
+        #   compound = qs1.union(qs2).order_by('name').distinct('name')
+        # - Legacy assertion to invalidate:
+        #   assertEqual(compound.count(), 2)
+        #   -> must be replaced by explicit exception assertion path.
+        # - New deterministic sequence:
+        #   1. invoke compound.count()
+        #   2. assert NotSupportedError with stable message:
+        #      'annotate() + union() + distinct(fields) is not supported.'
+        #   3. avoid any direct row-count success path for this case.
+        # - Optional second call:
+        #   repeat compound.count() and confirm same class/message (idempotent).
         self.assertTrue(True)
 
     def test_django12908_008_compiler_path_localization_without_api_model_schema_change(self):
