@@ -868,7 +868,39 @@ class AutodetectorTests(TestCase):
         FKEY-001: In PK rename autodetection, explicit FK.to_field references are
         expected to resolve to the post-rename PK name.
         """
-        self.assertTrue(True)
+        before = [
+            ModelState('test', 'Author', [
+                ('field_wrong', models.IntegerField(primary_key=True)),
+            ]),
+            ModelState('test', 'Book', [
+                ('id', models.AutoField(primary_key=True)),
+                ('author', models.ForeignKey('test.Author', models.CASCADE, to_field='field_wrong')),
+            ]),
+        ]
+        after = [
+            ModelState('test', 'Author', [
+                ('field_fixed', models.IntegerField(primary_key=True)),
+            ]),
+            ModelState('test', 'Book', [
+                ('id', models.AutoField(primary_key=True)),
+                ('author', models.ForeignKey('test.Author', models.CASCADE, to_field='field_fixed')),
+            ]),
+        ]
+        changes = self.get_changes(before, after, MigrationQuestioner({'ask_rename': True}))
+        self.assertNumberMigrations(changes, 'test', 1)
+        self.assertOperationTypes(changes, 'test', 0, ['RenameField', 'AlterField'])
+        self.assertOperationAttributes(
+            changes, 'test', 0, 0,
+            model_name='author', old_name='field_wrong', new_name='field_fixed',
+        )
+        self.assertEqual(
+            changes['test'][0].operations[1].field.remote_field.field_name,
+            'field_fixed',
+        )
+        self.assertNotEqual(
+            changes['test'][0].operations[1].field.remote_field.field_name,
+            'field_wrong',
+        )
 
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')

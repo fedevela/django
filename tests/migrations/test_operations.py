@@ -1516,7 +1516,33 @@ class OperationTests(OperationTestBase):
         FKEY-002: During state evolution, FK metadata for renamed PK targets must persist
         with the resolved post-rename to_field name.
         """
-        self.assertTrue(True)
+        state = ProjectState()
+        state.add_model(ModelState('app', 'Model', [
+            ('field_wrong', models.IntegerField(primary_key=True)),
+            ('title', models.CharField(max_length=255)),
+        ]))
+        state.add_model(ModelState('app', 'Book', [
+            ('id', models.AutoField(primary_key=True)),
+            ('model', models.ForeignKey('Model', models.CASCADE, to_field='field_wrong')),
+            ('fo', models.ForeignObject(
+                'Model',
+                models.CASCADE,
+                from_fields=('id',),
+                to_fields=('field_wrong',),
+            )),
+        ]))
+
+        new_state = state.clone()
+        migrations.RenameField('Model', 'field_wrong', 'field_fixed').state_forwards('app', new_state)
+
+        self.assertEqual(
+            new_state.models['app', 'model'].fields[0][0],
+            'field_fixed',
+        )
+        renamed_fk = new_state.models['app', 'book'].fields[1][1]
+        self.assertEqual(renamed_fk.remote_field.field_name, 'field_fixed')
+        renamed_fo = new_state.models['app', 'book'].fields[2][1]
+        self.assertEqual(renamed_fo.to_fields, ('field_fixed',))
 
     def test_alter_unique_together(self):
         """

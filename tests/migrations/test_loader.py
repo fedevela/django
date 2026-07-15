@@ -438,7 +438,13 @@ class LoaderTests(TestCase):
         FKEY-007: A repeatable migration-state validation pass must fail when a stale
         FK.to_field name is still referenced after a PK rename path.
         """
-        self.assertTrue(True)
+        with override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations_fkey007"}):
+            loader = MigrationLoader(connection)
+            with self.assertRaisesMessage(
+                AssertionError,
+                "Stale to_field reference 'field_wrong' on migrations.book.anchor for related model migrations.anchor",
+            ):
+                loader.project_state(("migrations", "0002_rename_pk"))
 
     @override_settings(MIGRATION_MODULES={
         "app1": "migrations.test_migrations_squashed_ref_squashed.app1",

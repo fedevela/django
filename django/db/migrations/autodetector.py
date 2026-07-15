@@ -931,23 +931,6 @@ class MigrationAutodetector:
                 )
                 if rename_key in self.renamed_models:
                     new_field.remote_field.model = old_field.remote_field.model
-                # [FKEY-001] Resolve FK relation targets against renamed PKs.
-                # - Determine rename_key from the relation target model.
-                # - If target model was renamed, normalize FK references to old_field's relation model
-                #   for deterministic comparison.
-                # - If relation has field_name (single FK), remap that target only when
-                #   (target_model, pre_rename_name) exists in renamed_fields.
-                # - If relation has from_fields/to_fields (multi-column), remap each via renamed_fields
-                #   with identity fallback.
-                # - Keep dependencies aligned through _get_dependencies_for_foreign_key(new_field).
-                # - If an explicit to_field has no rename mapping, keep stale content so repeatable
-                #   state validation can raise an unknown-target assertion.
-                # Handle ForeignKey which can only have a single to_field.
-                remote_field_name = getattr(new_field.remote_field, 'field_name', None)
-                if remote_field_name:
-                    to_field_rename_key = rename_key + (remote_field_name,)
-                    if to_field_rename_key in self.renamed_fields:
-                        new_field.remote_field.field_name = old_field.remote_field.field_name
                 # Handle ForeignObjects which can have multiple from_fields/to_fields.
                 from_fields = getattr(new_field, 'from_fields', None)
                 if from_fields:

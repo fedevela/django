@@ -4,6 +4,7 @@ from importlib import import_module, reload
 
 from django.apps import apps
 from django.conf import settings
+from django.core.exceptions import FieldDoesNotExist
 from django.db.migrations.graph import MigrationGraph
 from django.db.migrations.recorder import MigrationRecorder
 
@@ -319,13 +320,35 @@ class MigrationLoader:
 
         See graph.make_state() for the meaning of "nodes" and "at_end".
         """
-        # [FKEY-007] Repeatable migration-state validation entry point.
-        # Input: migration node set (or default leaves) + at_end flag.
-        # Process:
-        # 1) Resolve full intermediate state by replaying migration mutations.
-        # 2) Keep de/serialized operation paths aligned to this deterministic replay
-        #    before they are consumed by check/run/inspect flows.
-        # 3) If FK references include stale pre-rename to_field values, the
-        #    subsequent render/lookup step in project-state usage must fail with
-        #    a deterministic unknown-target assertion rather than silently continue.
-        return self.graph.make_state(nodes=nodes, at_end=at_end, real_apps=list(self.unmigrated_apps))
+        project_state = self.graph.make_state(
+            nodes=nodes,
+            at_end=at_end,
+            real_apps=list(self.unmigrated_apps),
+        )
+        # Verify referenced FK target field names resolve so stale to_field values
+        # fail deterministically in repeatable state checks.
+        for model in project_state.apps.get_models():
+            for field in model._meta.get_fields():
+                remote_field = getattr(field, "remote_field", None)
+                if not remote_field or remote_field.model is None:
+                    continue
+                if isinstance(remote_field.model, str):
+                    continue
+                to_fields = getattr(remote_field, "to_fields", None)
+                target_fields = to_fields if to_fields else (getattr(remote_field, "field_name", None),)
+                for to_field in target_fields:
+                    if to_field is None:
+                        continue
+                    try:
+                        remote_field.model._meta.get_field(to_field)
+                    except FieldDoesNotExist as exc:
+                        raise AssertionError(
+                            "Stale to_field reference %r on %s.%s for related model %s."
+                            % (
+                                to_field,
+                                model._meta.label_lower,
+                                field.name,
+                                remote_field.model._meta.label_lower,
+                            )
+                        ) from exc
+        return project_state
