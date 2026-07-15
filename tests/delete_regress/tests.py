@@ -611,10 +611,132 @@ class DeleteDependencyManagedAndBulkDeleteTraceabilityTests(TestCase):
     requirements_coverage = DJ11179_005_VERIFICATION_ARTIFACTS
 
     def test_dj11179_005_dependency_managed_instance_delete_keeps_cascade_outcome_without_requiring_inmemory_pk_reset(self):
-        self.assertTrue(True)
+        policy = Policy.objects.create(policy_number="DJ11179-005-instance")
+        version = Version.objects.create(policy=policy)
+        location = Location.objects.create(version=version)
+        item = Item.objects.create(version=version, location=location)
+
+        policy_pk = policy.pk
+        version_pk = version.pk
+        location_pk = location.pk
+        item_pk = item.pk
+
+        policy.delete()
+
+        # Dependency graph cleanup still occurs for cascade + null flows.
+        self.assertFalse(Policy.objects.filter(pk=policy_pk).exists())
+        self.assertFalse(Version.objects.filter(pk=version_pk).exists())
+        self.assertFalse(Item.objects.filter(pk=item_pk).exists())
+        self.assertTrue(Location.objects.filter(pk=location_pk).exists())
+        location.refresh_from_db()
+        self.assertIsNone(location.version_id)
+
+        # Dependency-managed path does not require in-memory PK clearing.
+        self.assertEqual(policy.pk, policy_pk)
+        self.assertEqual(version.pk, version_pk)
+        self.assertEqual(item.pk, item_pk)
 
     def test_dj11179_005_dependency_managed_queryset_bulk_delete_keeps_related_delete_outcomes_without_inmemory_pk_contract(self):
-        self.assertTrue(True)
+        policy_a = Policy.objects.create(policy_number="DJ11179-005-bulk-a")
+        version_a = Version.objects.create(policy=policy_a)
+        location_a = Location.objects.create(version=version_a)
+        item_a = Item.objects.create(version=version_a, location=location_a)
+
+        policy_b = Policy.objects.create(policy_number="DJ11179-005-bulk-b")
+        version_b = Version.objects.create(policy=policy_b)
+        location_b = Location.objects.create(version=version_b)
+        item_b = Item.objects.create(version=version_b, location=location_b)
+
+        policy_a_pk = policy_a.pk
+        policy_b_pk = policy_b.pk
+        version_a_pk = version_a.pk
+        version_b_pk = version_b.pk
+        location_a_pk = location_a.pk
+        location_b_pk = location_b.pk
+        item_a_pk = item_a.pk
+        item_b_pk = item_b.pk
+
+        queryset = Policy.objects.filter(pk__in=[policy_a.pk, policy_b.pk])
+        queryset.delete()
+
+        # Queryset-level collection/dependency semantics stay intact.
+        self.assertFalse(Policy.objects.filter(pk=policy_a_pk).exists())
+        self.assertFalse(Policy.objects.filter(pk=policy_b_pk).exists())
+        self.assertFalse(Version.objects.filter(pk=version_a_pk).exists())
+        self.assertFalse(Version.objects.filter(pk=version_b_pk).exists())
+        self.assertFalse(Item.objects.filter(pk=item_a_pk).exists())
+        self.assertFalse(Item.objects.filter(pk=item_b_pk).exists())
+        self.assertEqual(Location.objects.filter(pk__in=[location_a_pk, location_b_pk]).count(), 2)
+        location_a.refresh_from_db()
+        location_b.refresh_from_db()
+        self.assertIsNone(location_a.version_id)
+        self.assertIsNone(location_b.version_id)
+
+        # No new pk reset contract is introduced for bulk/delete orchestration.
+        self.assertEqual(policy_a.pk, policy_a_pk)
+        self.assertEqual(policy_b.pk, policy_b_pk)
+        self.assertIsNotNone(policy_a.pk)
+        self.assertIsNotNone(policy_b.pk)
 
     def test_dj11179_005_no_new_inmemory_pk_dependency_for_dependency_managed_or_bulk_flows(self):
-        self.assertTrue(True)
+        seen_policy_pks = []
+        seen_item_pks = []
+
+        def pre_delete_signal(sender, instance, **kwargs):
+            if sender is Policy:
+                seen_policy_pks.append(instance.pk)
+            elif sender is Version:
+                seen_item_pks.append(instance.pk)
+            else:
+                return
+            self.assertIsNotNone(instance.pk)
+
+        models.signals.pre_delete.connect(pre_delete_signal, sender=Policy)
+        models.signals.pre_delete.connect(pre_delete_signal, sender=Version)
+
+        policy = Policy.objects.create(policy_number="DJ11179-005-inmemory")
+        version = Version.objects.create(policy=policy)
+        location = Location.objects.create(version=version)
+        item = Item.objects.create(version=version, location=location)
+        policy_pk = policy.pk
+        version_pk = version.pk
+
+        try:
+            policy.delete()
+
+            self.assertEqual(seen_policy_pks, [policy_pk])
+            self.assertEqual(seen_item_pks, [version_pk])
+            self.assertEqual(policy.pk, policy_pk)
+            self.assertEqual(version.pk, version_pk)
+
+            policy_2 = Policy.objects.create(policy_number="DJ11179-005-bulk-inmemory-a")
+            version_a = Version.objects.create(policy=policy_2)
+            location_a = Location.objects.create(version=version_a)
+            item_a = Item.objects.create(version=version_a, location=location_a)
+
+            policy_3 = Policy.objects.create(policy_number="DJ11179-005-bulk-inmemory-b")
+            version_b = Version.objects.create(policy=policy_3)
+            location_b = Location.objects.create(version=version_b)
+            item_b = Item.objects.create(version=version_b, location=location_b)
+            policy_2_pk = policy_2.pk
+            policy_3_pk = policy_3.pk
+            version_a_pk = version_a.pk
+            version_b_pk = version_b.pk
+            item_a_pk = item_a.pk
+            item_b_pk = item_b.pk
+
+            seen_policy_pks[:] = []
+            seen_item_pks[:] = []
+            Policy.objects.filter(pk__in=[policy_2.pk, policy_3.pk]).delete()
+
+            self.assertEqual(set(seen_policy_pks), {policy_2_pk, policy_3_pk})
+            self.assertEqual(set(seen_item_pks), {version_a_pk, version_b_pk})
+            self.assertIsNotNone(policy_2.pk)
+            self.assertIsNotNone(policy_3.pk)
+            self.assertIsNotNone(version_a.pk)
+            self.assertIsNotNone(version_b.pk)
+            self.assertIsNotNone(item_a_pk)
+            self.assertIsNotNone(item_b_pk)
+        finally:
+            models.signals.pre_delete.disconnect(pre_delete_signal, sender=Policy)
+            models.signals.pre_delete.disconnect(pre_delete_signal, sender=Version)
