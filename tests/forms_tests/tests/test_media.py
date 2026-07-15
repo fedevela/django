@@ -1,3 +1,5 @@
+import warnings
+
 from django.forms import CharField, Form, Media, MultiWidget, TextInput
 from django.template import Context, Template
 from django.test import SimpleTestCase, override_settings
@@ -576,24 +578,60 @@ class FormsMediaTestCase(SimpleTestCase):
 class JavaScriptMediaAggregationContractTests(SimpleTestCase):
     def test_media_001_source_relative_order_alone_defines_precedence(self):
         """MEDIA-001: Only source-list relative order defines precedence."""
-        self.assertTrue(True)
+        media = Media(js=['alpha.js', 'bravo.js']) + Media(js=['charlie.js'])
+        media += Media(js=['bravo.js', 'delta.js'])
+
+        aggregated = media._js
+        self.assertLess(aggregated.index('alpha.js'), aggregated.index('bravo.js'))
+        self.assertLess(aggregated.index('bravo.js'), aggregated.index('delta.js'))
 
     def test_media_002_intermediate_merge_order_does_not_define_precedence(self):
         """MEDIA-002: Intermediate merge placement adds no precedence."""
-        self.assertTrue(True)
+        intermediate = Media(js=['alpha.js']) + Media(js=['bravo.js', 'charlie.js'])
+        aggregated = (intermediate + Media(js=['charlie.js', 'alpha.js']))._js
+
+        self.assertEqual(aggregated, ['bravo.js', 'charlie.js', 'alpha.js'])
 
     def test_media_005_repeated_input_file_occurs_once_after_aggregation(self):
         """MEDIA-005: A repeated input file occurs exactly once in the result."""
-        self.assertTrue(True)
+        media = Media(js=['alpha.js', 'shared.js']) + Media(js=['shared.js', 'bravo.js'])
+        media += Media(js=['shared.js'])
+
+        self.assertEqual(media._js.count('shared.js'), 1)
+        self.assertEqual(set(media._js), {'alpha.js', 'shared.js', 'bravo.js'})
 
     def test_media_006_compatible_source_precedence_is_satisfied(self):
         """MEDIA-006: Aggregation satisfies all compatible source constraints."""
-        self.assertTrue(True)
+        media = Media(js=['alpha.js', 'charlie.js'])
+        media += Media(js=['bravo.js', 'charlie.js', 'delta.js'])
+
+        aggregated = media._js
+        self.assertLess(aggregated.index('alpha.js'), aggregated.index('charlie.js'))
+        self.assertLess(aggregated.index('bravo.js'), aggregated.index('charlie.js'))
+        self.assertLess(aggregated.index('charlie.js'), aggregated.index('delta.js'))
 
     def test_media_007_repeated_identical_merge_has_identical_order(self):
         """MEDIA-007: Repeated identical declarations produce stable ordering."""
-        self.assertTrue(True)
+        def aggregate():
+            media = Media(js=['alpha.js', 'charlie.js'])
+            media += Media(js=['bravo.js', 'charlie.js', 'delta.js'])
+            return media._js
+
+        self.assertEqual(aggregate(), aggregate())
 
     def test_media_007_repeated_identical_merge_has_identical_warnings(self):
         """MEDIA-007: Repeated identical declarations produce stable warnings."""
-        self.assertTrue(True)
+        def aggregate_with_warnings():
+            media = Media(js=['alpha.js', 'bravo.js'])
+            media += Media(js=['bravo.js', 'alpha.js'])
+            with warnings.catch_warnings(record=True) as recorded:
+                warnings.simplefilter('always')
+                result = media._js
+            return result, [(warning.category, str(warning.message)) for warning in recorded]
+
+        first_result, first_warnings = aggregate_with_warnings()
+        second_result, second_warnings = aggregate_with_warnings()
+        self.assertEqual(first_result, second_result)
+        self.assertEqual(first_warnings, second_warnings)
+        self.assertEqual(len(first_warnings), 1)
+        self.assertTrue(issubclass(first_warnings[0][0], RuntimeWarning))

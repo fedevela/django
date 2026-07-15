@@ -16,6 +16,9 @@ from django.utils.dates import MONTHS
 from django.utils.formats import get_format
 from django.utils.html import format_html, html_safe
 from django.utils.safestring import mark_safe
+from django.utils.topological_sort import (
+    CyclicDependencyError, stable_topological_sort,
+)
 from django.utils.translation import gettext_lazy as _
 
 from .renderers import get_default_renderer
@@ -116,11 +119,32 @@ class Media:
         #     # MEDIA-007: fixed inputs and merge order fix the result and the
         #     # sequence of warning events on every execution.
         #     RETURN result, containing every file exactly once
-        js = source_lists[0]
-        # filter(None, ...) avoids calling merge() with empty lists.
-        for obj in filter(None, source_lists[1:]):
-            js = self.merge(js, obj)
-        return js
+        if len(source_lists) == 1 and len(source_lists[0]) == len(set(source_lists[0])):
+            return source_lists[0]
+
+        ordered_files = []
+        seen_files = set()
+        dependency_graph = {}
+        for source_list in source_lists:
+            previous_file = None
+            for path in source_list:
+                if path not in seen_files:
+                    ordered_files.append(path)
+                    seen_files.add(path)
+                dependency_graph.setdefault(path, set())
+                if previous_file is not None and previous_file != path:
+                    dependency_graph[path].add(previous_file)
+                previous_file = path
+
+        try:
+            return stable_topological_sort(ordered_files, dependency_graph)
+        except CyclicDependencyError:
+            warnings.warn(
+                'Detected duplicate Media files in an opposite order: %s' %
+                ', '.join(repr(source_list) for source_list in source_lists if source_list),
+                MediaOrderConflictWarning,
+            )
+            return ordered_files
 
     def render(self):
         return mark_safe('\n'.join(chain.from_iterable(getattr(self, 'render_' + name)() for name in MEDIA_TYPES)))
