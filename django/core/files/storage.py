@@ -221,8 +221,7 @@ class FileSystemStorage(Storage):
         # DJ10914-001/DJ10914-003:
         # 1) Read explicit storage instance override via `_file_permissions_mode`.
         # 2) Else read settings FILE_UPLOAD_PERMISSIONS.
-        # 3) If that setting is still unresolved/None, fallback to 0o644.
-        # 4) Return effective mode without mutating upload handler/request/parser flow.
+        # 3) Return effective mode without mutating upload handler/request/parser flow.
         return self._value_or_setting(self._file_permissions_mode, settings.FILE_UPLOAD_PERMISSIONS)
 
     @cached_property

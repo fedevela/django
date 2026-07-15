@@ -304,12 +304,7 @@ FILE_UPLOAD_TEMP_DIR = None
 
 # The numeric mode to set newly-uploaded files to. The value should be a mode
 # you'd pass directly to os.chmod; see https://docs.python.org/library/os.html#files-and-directories.
-FILE_UPLOAD_PERMISSIONS = None
-# DJ10914-001/DJ10914-003:
-# - Canonical resolution locus for the upload permission setting default.
-# - Effective behavior to encode: when FILE_UPLOAD_PERMISSIONS is unset in project
-#   settings, resolve to integer mode 0o644 before usage.
-# - Explicitly configured settings override fallback/defaults without exception.
+FILE_UPLOAD_PERMISSIONS = 0o644
 
 # The numeric mode to assign to newly-created directories, when uploading files.
 # The value should be a mode as you'd pass to os.chmod;
