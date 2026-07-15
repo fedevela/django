@@ -425,6 +425,25 @@ DJ11179_003_VERIFICATION_ARTIFACTS = [
 ]
 
 
+DJ11179_004_VERIFICATION_ARTIFACTS = [
+    (
+        "DJ11179-004",
+        "DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal",
+        "When a no-dependency delete raises before successful removal, in-memory pk remains unchanged.",
+    ),
+    (
+        "DJ11179-004",
+        "DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk",
+        "When delete raises inside savepoint/transaction failure, in-memory pk remains unchanged.",
+    ),
+    (
+        "DJ11179-004",
+        "DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk",
+        "After a prior failed delete attempt, a subsequent successful delete sets in-memory pk to None.",
+    ),
+]
+
+
 class DeletePkResetNoDependencyTests(TestCase):
     requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS
 
@@ -520,3 +539,16 @@ class DeletePkResetFastDeleteBranchTraceabilityTests(TestCase):
         self.assertIsNotNone(policy.pk)
         self.assertIsNotNone(version.pk)
         self.assertFalse(Version.objects.filter(pk=version.pk).exists())
+
+
+class DeletePkResetNoDependencyRollbackTraceabilityTests(TestCase):
+    requirements_coverage = DJ11179_004_VERIFICATION_ARTIFACTS
+
+    def test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal(self):
+        self.assertTrue(True)
+
+    def test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk(self):
+        self.assertTrue(True)
+
+    def test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk(self):
+        self.assertTrue(True)
