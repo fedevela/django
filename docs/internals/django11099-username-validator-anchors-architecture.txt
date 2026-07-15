@@ -2,7 +2,7 @@ Issue DJANGO11099 — Username validator boundary anchors
 =====================================================
 
 This artifact records where the deterministic logic for
-``DJANGO11099-001`` … ``DJANGO11099-004`` should live at the
+``DJANGO11099-001`` … ``DJANGO11099-007`` should live at the
 architecture level before implementation changes.
 
 Requirement-to-architecture map
@@ -44,6 +44,37 @@ Requirement-to-architecture map
    - **Boundary:** input-validation seam at ``v("alice\\n")`` call.
    - **Acceptance impact:** explicit failing path for trailing newline.
 
+5. ``DJANGO11099-005``
+   - **Obligation type:** contract-semantics preservation
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``ASCIIUsernameValidator.regex`` and ``UnicodeUsernameValidator.regex``
+   - **Placement:** class-level regex contracts remain unchanged and remain the
+     gate for canonical allowed-character validation.
+   - **Boundary:** positive path through full-string regex match for inputs such
+     as ``alice``, ``alice.+-@bob``, ``user.name+tag-2``.
+   - **Acceptance impact:** both validators must continue to accept the allowed
+     character set without introducing behavior drift.
+
+6. ``DJANGO11099-006``
+   - **Obligation type:** non-empty invariant preservation
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``ASCIIUsernameValidator`` and ``UnicodeUsernameValidator``
+   - **Placement:** regex contract at class boundaries via ``+`` quantifier.
+   - **Boundary:** empty-string input remains outside the allowed match shape and
+     returns validation failure at `RegexValidator.validate` seam.
+   - **Acceptance impact:** ``""`` remains invalid for both validators.
+
+7. ``DJANGO11099-007``
+   - **Obligation type:** disallowed-character failure preservation
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``ASCIIUsernameValidator`` and ``UnicodeUsernameValidator``
+   - **Placement:** character-class boundary enforced by ``[\w.@+-]``.
+   - **Boundary:** values containing whitespace or punctuation (for example
+     ``alice name``, ``alice!``) do not satisfy full-string match and fail at the
+     same seam as other boundary mismatches.
+   - **Acceptance impact:** disallowed characters keep raising
+     `ValidationError`.
+
 Topology and ownership
 ----------------------
 
@@ -69,6 +100,13 @@ Dependency-direction notes
   1. ``django.contrib.auth.validators`` public exports.
   2. ``ValidationError`` exception contract from ``django.core.exceptions``.
 
+- Requirement tracking path for these obligations:
+  1. ``tests/auth_tests/test_validators.py`` owns the traceability map
+     ``USERNAME_VALIDATOR_REQUIREMENT_TO_TEST``.
+  2. ``UsernameValidatorContractTests`` provides boundary behavior stubs for all
+     active issue IDs and is the seam where validation contracts remain
+     observable.
+
 Integration-seam skeleton
 -------------------------
 
@@ -77,15 +115,24 @@ Integration-seam skeleton
   with explicit string-boundary anchors.
 - **Behavior-seam verification skeleton:** maintain/extend
   ``tests/auth_tests/test_validators.py`` with issue-specific tests:
-  ``test_django11099_001_*`` through ``test_django11099_004_*``.
+  ``test_django11099_001_*`` through ``test_django11099_007_*``.
 - **No cross-module changes:** do not route through password validators or other
   auth validation components.
+
+- **Structural placeholders:** preserve the non-empty/disallowed-path contracts via
+  explicit placeholder assertion scaffolding in:
+  ``test_django11099_005_non_empty_allowed_usernames_preserve_acceptance_for_ascii_and_unicode_validators``,
+  ``test_django11099_006_empty_usernames_remain_invalid_for_ascii_and_unicode_validators``,
+  ``test_django11099_007_disallowed_characters_remain_invalid_for_ascii_and_unicode_validators``.
 
 Readiness check (architecture-only phase)
 ----------------------------------------
 
 - Each GUID is mapped to a concrete locus in `django.contrib.auth.validators`.
-- No ownership changes required outside this module and its tests seam.
+- All new GUIDs (005-007) are mapped to the same validator class boundary plus
+  the test traceability seam.
+- No ownership changes required outside `django.contrib.auth.validators` and its
+  contract-test seam.
 - No dependency inversions introduced; only anchor semantics are changed in the
   existing validation class contracts.
 - At least one architecture artifact has been added:
