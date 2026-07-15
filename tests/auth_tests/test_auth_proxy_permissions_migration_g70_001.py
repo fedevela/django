@@ -248,16 +248,98 @@ class G70_003UpdateProxyPermissionsTraceabilityTests(TestCase):
         'django.contrib.contenttypes',
     ]
 
+    def setUp(self):
+        Permission.objects.all().delete()
+
+    def _required_proxy_permissions(self):
+        return {
+            '%s_%s' % (action, Proxy._meta.model_name)
+            for action in Proxy._meta.default_permissions
+        }.union(codename for codename, _name in Proxy._meta.permissions)
+
     def test_G70_003_forward_rerun_preserves_existing_content_type_and_codename_rowcount(self):
-        self.assertTrue(True)
+        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
+        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
+        required_permissions = self._required_proxy_permissions()
+
+        # Simulate a previously migrated database: half the required rows are already
+        # present on the proxy content type, the others remain on concrete.
+        for codename in sorted(required_permissions):
+            Permission.objects.create(
+                content_type=concrete_content_type,
+                codename=codename,
+                name='Concrete permission for %s' % codename,
+            )
+            if codename.startswith('add_'):
+                Permission.objects.create(
+                    content_type=proxy_content_type,
+                    codename=codename,
+                    name='Existing proxy permission for %s' % codename,
+                )
+
+        update_proxy_permissions.update_proxy_model_permissions(apps, None)
+
+        rowcount_before = {
+            codename: Permission.objects.filter(
+                content_type=proxy_content_type,
+                codename=codename,
+            ).count()
+            for codename in required_permissions
+        }
+
+        update_proxy_permissions.update_proxy_model_permissions(apps, None)
+
+        for codename in required_permissions:
+            self.assertEqual(
+                Permission.objects.filter(
+                    content_type=proxy_content_type,
+                    codename=codename,
+                ).count(),
+                rowcount_before[codename],
+            )
 
     def test_G70_003_forward_rerun_rejects_duplicate_inserts_for_existing_proxy_tuples(self):
-        self.assertTrue(True)
+        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
+        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
+        required_permissions = self._required_proxy_permissions()
+
+        for codename in sorted(required_permissions):
+            Permission.objects.create(
+                content_type=concrete_content_type,
+                codename=codename,
+                name='Concrete permission for %s' % codename,
+            )
+            Permission.objects.create(
+                content_type=proxy_content_type,
+                codename=codename,
+                name='Existing proxy permission for %s' % codename,
+            )
+
+        # Rerun should treat the proxy tuple as already satisfied and perform no
+        # extra insert for these already existing codename/content_type combinations.
+        update_proxy_permissions.update_proxy_model_permissions(apps, None)
+
+        for codename in required_permissions:
+            self.assertEqual(
+                Permission.objects.filter(
+                    content_type=proxy_content_type,
+                    codename=codename,
+                ).count(),
+                1,
+            )
 
     def test_G70_003_forward_rerun_keeps_all_required_permissions_present_without_constraint_errors(self):
-        self.assertTrue(True)
+        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
+        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
+        required_permissions = self._required_proxy_permissions()
 
-        # The unique index should prevent duplicates if migration is re-run.
+        for codename in sorted(required_permissions):
+            Permission.objects.create(
+                content_type=concrete_content_type,
+                codename=codename,
+                name='Clean source permission for %s' % codename,
+            )
+
         update_proxy_permissions.update_proxy_model_permissions(apps, None)
         self.assertEqual(
             Permission.objects.filter(
@@ -266,3 +348,14 @@ class G70_003UpdateProxyPermissionsTraceabilityTests(TestCase):
             ).count(),
             1,
         )
+
+        update_proxy_permissions.update_proxy_model_permissions(apps, None)
+
+        for codename in sorted(required_permissions):
+            self.assertEqual(
+                Permission.objects.filter(
+                    content_type=proxy_content_type,
+                    codename=codename,
+                ).count(),
+                1,
+            )
