@@ -327,6 +327,13 @@ class MigrationLoader:
         )
         # Verify referenced FK target field names resolve so stale to_field values
         # fail deterministically in repeatable state checks.
+        # [FKEY-003] Replay-time fail-fast requirement.
+        # 1) Iterate every rendered model and its concrete relations.
+        # 2) Build target set from explicit to_fields (or single field_name).
+        # 3) For each target field name, perform metadata lookup on remote model.
+        # 4) On FieldDoesNotExist, raise AssertionError with stale-target detail.
+        # 5) Return validated project state so later executor replay cannot proceed
+        #    with a pre-rename FK path.
         for model in project_state.apps.get_models():
             for field in model._meta.get_fields():
                 remote_field = getattr(field, "remote_field", None)

@@ -340,6 +340,11 @@ class MigrationAutodetector:
         nicely inside the same app.
         """
         for app_label, ops in sorted(self.generated_operations.items()):
+            # [FKEY-003] Stable ordering gate for explicit FK-to_field dependency chains.
+            # 1) Resolve each operation dependency token.
+            # 2) Restrict to same-app dependencies to avoid cross-app edge explosion.
+            # 3) Resolve edges via check_dependency and add to graph.
+            # 4) Stable-topologically sort; if cycle or unsatisfiable edges remain, error.
             # construct a dependency graph for intra-app dependencies
             dependency_graph = {op: set() for op in ops}
             for op in ops:
@@ -922,6 +927,12 @@ class MigrationAutodetector:
             old_field = self.old_apps.get_model(app_label, old_model_name)._meta.get_field(old_field_name)
             new_field = self.new_apps.get_model(app_label, model_name)._meta.get_field(field_name)
             dependencies = []
+            # [FKEY-003] Downstream FK AlterField ordering requirement.
+            # 1) Input: changed field pair + explicit FK metadata + renamed field map.
+            # 2) If new_field targets renamed PK metadata (to_fields/field_name path),
+            #    enforce dependency so RenameField is ordered before this AlterField.
+            # 3) If explicit target still references non-renamed pre-rename name,
+            #    preserve that stale path for deterministic failure at project-state replay.
             # Implement any model renames on relations; these are handled by RenameModel
             # so we need to exclude them from the comparison
             if hasattr(new_field, "remote_field") and getattr(new_field.remote_field, "model", None):

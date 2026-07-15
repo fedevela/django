@@ -129,6 +129,12 @@ class MigrationExecutor:
         Take a list of 2-tuples of the form (migration instance, False) and
         apply them in the order they occur in the full_plan.
         """
+        # [FKEY-003] Execution replay ordering invariant.
+        # 1) Input: requested plan subset and computed full_plan.
+        # 2) Iterate migrations in full_plan order, not sparse sorted-by-app order.
+        # 3) Apply only migrations present in the plan, in that same sequence.
+        # 4) Stop when all requested migrations are applied.
+        # Failure path: mixed forward/backward plans are rejected earlier in migrate().
         migrations_to_run = {m[0] for m in plan}
         for migration, _ in full_plan:
             if not migrations_to_run:
