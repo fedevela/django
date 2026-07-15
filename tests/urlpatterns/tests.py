@@ -218,6 +218,55 @@ class ConversionExceptionTests(SimpleTestCase):
     # - DJ-RES-006: successful converter.to_python() and dispatch flow remains intact for matched candidates.
     # - DJ-RES-008: debug-mode technical-vs-production 404 and candidate-fallback regressions for converter Http404.
 
+    # Yesod architecture artifact (SEFIRAH 09): obligation-to-structure map for DJ-RES-008.
+    DJ_RES_008_ARCHITECTURE = (
+        {
+            "requirement_id": "DJ-RES-008",
+            "scenario": "debug_true_technical_404_message",
+            "ownership": "ConversionExceptionTests owns scenario orchestration and response assertions.",
+            "boundary": {
+                "producer": "DynamicConverter.register_to_python (test seam)",
+                "consumer": "Django URL resolution + test client response pipeline",
+            },
+            "contract": {
+                "method": "test_DJ_RES_008_debug_true_converter_to_python_http404_surfaces_technical_404_message",
+                "expected_flow": "converter Http404 -> debug-aware 404 handler path -> diagnostic body includes raised message",
+            },
+            "dependency_direction": "Scenario injects converter behavior -> resolver executes through URL path matching -> client observes result.",
+            "integration_seam": "override_settings(DEBUG=True), ROOT_URLCONF=urlpatterns.path_dynamic_urls via class decorator.",
+        },
+        {
+            "requirement_id": "DJ-RES-008",
+            "scenario": "debug_false_production_404_shape",
+            "ownership": "ConversionExceptionTests owns scenario orchestration and production-safe assertions.",
+            "boundary": {
+                "producer": "DynamicConverter.register_to_python (test seam)",
+                "consumer": "Django URL resolution + debug-to-production response switch",
+            },
+            "contract": {
+                "method": "test_DJ_RES_008_debug_false_converter_to_python_http404_yields_production_safe_404",
+                "expected_flow": "converter Http404 -> production 404 rendering -> no raised reason/debug payload.",
+            },
+            "dependency_direction": "Scenario injects converter behavior + debug setting -> resolver dispatches to generic not-found output.",
+            "integration_seam": "override_settings(DEBUG=False), ROOT_URLCONF=urlpatterns.path_dynamic_urls inherited.",
+        },
+        {
+            "requirement_id": "DJ-RES-008",
+            "scenario": "candidate_http404_fallback_success",
+            "ownership": "ConversionExceptionTests owns candidate-order coverage and dispatch assertions.",
+            "boundary": {
+                "producer": "DynamicConverter.register_to_python (test seam), candidate URLConf",
+                "consumer": "Django resolver candidate loop",
+            },
+            "contract": {
+                "method": "test_DJ_RES_008_candidate_http404_then_fallback_candidate_dispatches_successfully",
+                "expected_flow": "candidate 1 converter Http404 => miss; resolver continues; candidate 2 resolves successfully.",
+            },
+            "dependency_direction": "Injected converter behavior affects first candidate only; resolver state machine selects next matching candidate.",
+            "integration_seam": "override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates').",
+        },
+    )
+
     def _set_dynamic_converter_to_python(self, callback):
         original_converter = DynamicConverter._dynamic_to_python
         DynamicConverter.register_to_python(callback)
@@ -284,6 +333,10 @@ class ConversionExceptionTests(SimpleTestCase):
         #    debug diagnostic content remains visible.
         # 6) Failure path:
         #    If response is production-style 404 or hides reason -> regression.
+        #
+        # Architecture pressure:
+        # - Dependency seam: test-controlled converter callback into Django URL resolver.
+        # - Boundary: production-response selection controlled by DEBUG flag.
         pass
 
     @override_settings(DEBUG=True)
@@ -336,6 +389,10 @@ class ConversionExceptionTests(SimpleTestCase):
         #    response omits Django diagnostic block and "custom 404 reason".
         # 6) Failure path:
         #    If debug internals or raw message leak -> regression.
+        #
+        # Architecture pressure:
+        # - Deployment boundary: debug-mode switch must not leak resolver internals upstream.
+        # - Interface contract: same converter fault must map to production-safe output envelope.
         pass
 
     @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
@@ -373,6 +430,10 @@ class ConversionExceptionTests(SimpleTestCase):
         #    route == "candidate-miss/<slug:value>/"
         # 7) Failure path:
         #    if loop aborts on first Http404 and returns 404 -> regression.
+        #
+        # Architecture pressure:
+        # - Topology pressure: candidate traversal must preserve non-terminating semantics for Http404 faults.
+        # - Integration seam: resolver's pattern iteration contracts must continue into later candidates.
         pass
 
     @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
