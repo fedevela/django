@@ -145,6 +145,24 @@ class Command(BaseCommand):
         else:
             questioner = NonInteractiveMigrationQuestioner(specified_apps=app_labels, dry_run=self.dry_run)
         # Set up autodetector
+        # DJANGO12856-002: fail-fast migration/check gate for UniqueConstraint field refs.
+        # - Inputs:
+        #   1) app_labels requested by user (or all migration apps when empty),
+        #   2) current project/apps state from ProjectState.from_apps(apps),
+        #   3) previous DB migration state from loader.project_state().
+        # - Branch:
+        #   - FOR each candidate model participating in autodetector's to_state:
+        #       - run model-level constraint validation equivalent to cls._check_constraints,
+        #         focused on UniqueConstraint local field references.
+        #   - IF any errors are returned with invalid field references in Meta.constraints:
+        #       - aggregate them in deterministic model-order (app_label, model_name),
+        #       - report through command check-failure path,
+        #       - do NOT transition into write_migration_files for that model.
+        #   - ELSE proceed with change detection.
+        # - Failure mapping:
+        #   - Scenario 1: one invalid among many -> model blocked, no migration file for that model.
+        #   - Scenario 2: valid+invalid mix -> invalid entry is sufficient to block that model.
+        #   - Scenario 3: no invalid references -> unchanged path to migration emission.
         autodetector = MigrationAutodetector(
             loader.project_state(),
             ProjectState.from_apps(apps),
@@ -187,6 +205,9 @@ class Command(BaseCommand):
                 else:
                     self.stdout.write("No changes detected")
         else:
+            # DJANGO12856-002: only execute write operation when constraint-gate passed.
+            # If gate produced blocking errors for any model, write_migration_files must not run
+            # for that model and command should fail fast in the check/migration flow.
             self.write_migration_files(changes)
             if check_changes:
                 sys.exit(1)

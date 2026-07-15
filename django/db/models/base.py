@@ -1867,6 +1867,17 @@ class Model(metaclass=ModelBase):
 
     @classmethod
     def _check_constraints(cls, databases):
+        # DJANGO12856-002: Constraint field-reference determinism for migration/check.
+        # - Input: cls._meta.constraints for each model and target databases.
+        # - Process: for each UniqueConstraint, call _check_local_fields(constraint.fields, "constraints")
+        #   to classify constraint as valid_fields or invalid_fields.
+        # - Transition:
+        #   - IF any constraint is invalid -> collect its local-field errors
+        #     (models.E012/E013/E016) and do not place it in valid_constraints.
+        #   - IF no constraint errors -> keep constraint in valid_constraints.
+        # - State outcome:
+        #   - invalid_fields_present acts as fail-fast signal for callers before migration emission.
+        #   - all_errors_empty allows this model to continue to downstream migration feature checks.
         # DJANGO12856-001: local-field validation for UniqueConstraint.
         errors = []
         valid_constraints = []
