@@ -1163,6 +1163,15 @@ class Query(BaseExpression):
             if not lookup_class:
                 return
 
+        # ISNULL-001: shared construction obligation for __isnull across filter, exclude,
+        # and Q-based predicates (all paths that call build_lookup).
+        # 1) Create lookup = lookup_class(lhs, rhs) to normalize rhs and attach metadata.
+        # 2) If lookup_name == 'isnull':
+        #    - if not isinstance(rhs, bool): raise FieldError and stop immediately.
+        #    - only bool values True/False may continue; bool is the only accepted input type.
+        # 3) No SQL should compile or execute after a failing branch in this step.
+        # 4) If lookup_name != 'isnull', proceed with existing None/'' compatibility checks.
+
         lookup = lookup_class(lhs, rhs)
         # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all
         # uses of None as a query value unless the lookup supports it.
@@ -1232,6 +1241,10 @@ class Query(BaseExpression):
         query. However, if the filter isn't added to the query then the caller
         is responsible for unreffing the joins used.
         """
+        # ISNULL-001: execution path anchor.
+        # add_filter() wraps kwargs -> Q -> add_q() -> _add_q() -> build_filter().
+        # Query methods and direct build_filter() callers all converge here, then call
+        # build_lookup(), which is the single deterministic validation point for __isnull.
         if isinstance(filter_expr, dict):
             raise FieldError("Cannot parse keyword query as dict")
         if hasattr(filter_expr, 'resolve_expression') and getattr(filter_expr, 'conditional', False):

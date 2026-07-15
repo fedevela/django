@@ -463,6 +463,11 @@ class IsNull(BuiltinLookup):
     prepare_rhs = False
 
     def as_sql(self, compiler, connection):
+        # ISNULL-001-s1/s2/s3: render gate.
+        # Precondition enforced upstream: rhs must be bool.
+        # - True  => SQL pattern: "<field> IS NULL"
+        # - False => SQL pattern: "<field> IS NOT NULL"
+        # Invalid non-bool rhs must be rejected before as_sql is reachable.
         sql, params = compiler.compile(self.lhs)
         if self.rhs:
             return "%s IS NULL" % sql, params
