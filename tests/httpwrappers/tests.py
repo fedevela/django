@@ -366,6 +366,13 @@ class HttpResponseTests(unittest.TestCase):
         r.content = 12345
         self.assertEqual(r.content, b'12345')
 
+    def test_memoryview_constructor_rejects_legacy_payload_rendering(self):
+        r = HttpResponse(memoryview(b'My Content'))
+
+        self.assertEqual(r.content, b'My Content')
+        self.assertFalse(r.content.startswith(b'<memory at '))
+        self.assertNotEqual(r.content, b'<memory at 0x')
+
     def test_iter_content(self):
         r = HttpResponse(['abc', 'def', 'ghi'])
         self.assertEqual(r.content, b'abcdefghi')

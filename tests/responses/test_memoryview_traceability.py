@@ -9,6 +9,7 @@ MEMVIEW_REQUIREMENTS = {
     "MEMVIEW-002": "HttpResponse constructor must accept bytes-backed memoryviews including empty payloads.",
     "MEMVIEW-003": "Given existing baseline inputs, HttpResponse('My Content') and HttpResponse(b'My Content') MUST retain their current behavior with response.content == b'My Content' and preserved byte semantics.",
     "MEMVIEW-004": "Repeated .content reads on memoryview-backed responses must be stable bytes.",
+    "MEMVIEW-005": "Regression assertion must reject legacy memoryview stringified payloads when HttpResponse is constructed with memoryview input.",
 }
 
 
@@ -19,6 +20,13 @@ class HttpResponseMemoryviewTraceabilityTests(SimpleTestCase):
         self.assertIsInstance(response.content, bytes)
         self.assertEqual(response.content, b"My Content")
         self.assertFalse(response.content.startswith(b"<memory at"))
+
+    def test_memview_005_constructor_memoryview_rejects_legacy_memory_repr(self):
+        response = HttpResponse(memoryview(b"My Content"))
+
+        self.assertFalse(response.content.startswith(b"<memory at "))
+        self.assertNotEqual(response.content, b"<memory at 0x")
+        self.assertEqual(response.content, b"My Content")
 
     def test_memview_002_constructor_bytes_backed_memoryview_stable_len_and_type(self):
         payload = memoryview(bytes([0, 1, 2, 3, 4]))
