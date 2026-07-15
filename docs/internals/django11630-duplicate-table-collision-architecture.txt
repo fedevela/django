@@ -20,6 +20,12 @@ Requirement-to-architecture map
 - DJANGO11630-006: preserve existing managed/non-proxy/same-app-or-same-label
   semantics by applying new alias-aware grouping to the existing filter and
   erroring path.
+- DJANGO11630-007: same-alias duplicate failures, cross-alias duplicate passes,
+  and router-driven partitioning are owned by ``check_all_models`` by extending
+  the existing collision-key population loop to group candidates by resolved alias.
+- DJANGO11630-008: deterministic collision outcomes for fixed model/registration/router
+  inputs are owned by explicit partition-key and deterministic emission ordering in
+  ``check_all_models``, verified through fixture-locked test contracts.
 
 Topology and ownership
 ----------------------
@@ -32,6 +38,10 @@ Topology and ownership
   - ``tests/check_framework/test_model_checks.py`` exercises contract behavior.
   - ``django/core/checks/registry.py`` owns registration/discovery but stays
     unchanged.
+- Supporting boundary module: routing input for alias resolution is consumed from
+  ``DATABASE_ROUTERS`` settings and read via ``django.db import router`` at
+  check time. This preserves one-way dependency from checks to routing without
+  importing application routers directly in tests.
 
 Contract and type seams
 -----------------------
@@ -39,11 +49,16 @@ Contract and type seams
    - Key type: tuple ``(effective_db_alias, db_table)`` where
      ``effective_db_alias`` is a resolved routing alias string.
    - Value type: ordered list of model labels participating in the bucket.
+  - For ``DJANGO11630-007`` and ``DJANGO11630-008``, this contract enforces
+    split partitioning for duplicate-table candidates mapped to distinct aliases.
 2. **Alias-resolve seam**
    - Introduce a helper in ``django/core/checks/model_checks.py`` (or equivalent)
      with contract:
      ``resolve_effective_alias(model) -> str``.
    - Must return ``'default'`` when routing decision is missing/``None``.
+   - Deterministic router-seam requirement (``DJANGO11630-008``): given a fixed
+     router and model set, repeated invocations of this seam return identical
+     values and order of partition assignment.
 3. **Candidate filtering seam**
    - Track candidate set for duplicate-table evaluation as only concrete managed
      models.
@@ -53,13 +68,27 @@ Contract and type seams
      - ``True`` otherwise.
    - This codifies DJANGO11630-005 and prevents unmanaged/proxy-only overlaps from
      raising new ``models.E028``.
+   - For ``DJANGO11630-007``, this filter ensures only managed concrete pairs are
+     allowed to fail in same-alias scenarios and are excluded from cross-alias split
+     false positives.
 4. **Failure seam**
    - Emit ``models.E028`` only for buckets with cardinality > 1.
+   - For ``DJANGO11630-007``, same alias + same table resolves to one bucket and
+     yields a collision error; cross-alias mapping creates disjoint buckets and no
+     collision for that pair.
 5. **Precedence seam**
    - For any effective alias+table bucket, concrete managed collisions are the
      decisive input to erroring; unmanaged/proxy entries can co-exist in same
      table but do not alter the collision decision unless a managed concrete
      collision exists.
+   - For ``DJANGO11630-008``, this precedence check is stable only if bucket
+     population and ordering are deterministic.
+6. **Ordering contract**
+   - After bucket construction, errors are emitted in deterministic order by:
+     - stable iteration over partition keys in sorted order.
+     - stable, deterministic model-label ordering inside each partition.
+   - The output contract is strict equality of emitted ``Error`` objects sequence
+     between repeated checks with fixed app install order, settings, and model set.
 
 Dependency direction
 --------------------
@@ -69,6 +98,9 @@ Dependency direction
   - router module for alias resolution (directed dependency from checks layer to
     routing API).
 - ``tests`` depends on ``django.core.checks`` and the ``check_all_models`` contract.
+ - Determinism dependency: ``checks`` -> installed app registration order in
+   ``apps.get_app_configs()`` remains an input to stable output ordering and must be
+   treated as an explicit precondition for ``DJANGO11630-008``.
 
 Implementation boundaries and adaptation points
 ---------------------------------------------
@@ -85,6 +117,11 @@ Implementation boundaries and adaptation points
   ``if model._meta.managed and not model._meta.proxy: ...``.
 - Keep index and constraint check loops unmodified so this issue remains scoped to
   duplicate-table collision validation.
+- Keep router interaction isolated to one effective-alias resolver path; do not
+  expose routing side effects beyond duplicate-table partitioning logic.
+- Stabilize collision partition outputs by ordering both partition iteration and
+  per-partition model label lists, so repeated runs over fixed inputs reproduce
+  identical error sequences.
 
 Integration seams
 -----------------
@@ -94,6 +131,10 @@ Integration seams
   - Resolve effective alias for each candidate model before grouping.
 - **Boundary seam (selection):**
   - Filter candidate models by managed/proxy semantics before grouping.
+- **Boundary seam (contract verification):**
+  - ``tests/check_framework/test_model_checks.py`` owns scenario-level
+    obligations for same-alias failure, cross-alias pass, router partitioning,
+    and deterministic output equality.
 
 Requirement-to-architecture implementation trace
 -----------------------------------------------
@@ -102,6 +143,16 @@ Requirement-to-architecture implementation trace
 - ``DJANGO11630-005`` → ``tests/check_framework/test_model_checks.py``
   - ``DJANGO11630_VERIFICATION_MAP["DJANGO11630-005"]`` and the three
     pass-only acceptance contract tests.
+- ``DJANGO11630-007`` → ``django/core/checks/model_checks.py``
+  - ``check_all_models``: alias-aware collision partitioning contract and
+    failure/non-failure branch behavior by partition.
+- ``DJANGO11630-007`` → ``tests/check_framework/test_model_checks.py``
+  - ``DJANGO11630_VERIFICATION_MAP["DJANGO11630-007"]`` and scenario placeholders.
+- ``DJANGO11630-008`` → ``django/core/checks/model_checks.py``
+  - Partition construction and emission ordering contracts.
+- ``DJANGO11630-008`` → ``tests/check_framework/test_model_checks.py``
+  - ``DJANGO11630_VERIFICATION_MAP["DJANGO11630-008"]`` and deterministic
+    repetition scenario contract.
 
 Architectural readiness checklist
 --------------------------------
@@ -111,3 +162,6 @@ Architectural readiness checklist
   integration seams.
 - The next phase can implement runtime logic in ``check_all_models`` by swapping
   key composition and resolving the alias seam.
+- Requirement-to-architecture coverage now includes:
+  - ``DJANGO11630-007`` (same-alias fail, cross-alias pass, router partitioning).
+  - ``DJANGO11630-008`` (deterministic outcomes under fixed inputs).
