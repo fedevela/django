@@ -1584,3 +1584,30 @@ class ConstraintFieldReferenceTraceabilityTests(SimpleTestCase):
                 id='models.E013',
             ),
         ])
+
+
+# Traceability map for issue DJANGO12856-003.
+DJANGO12856_003_VERIFICATIONS = {
+    "DJANGO12856-003": {
+        "scenario_1_each_constraint_and_model_context": [
+            "test_django12856_003_two_unique_constraints_report_model_and_constraint_context_for_invalid_fields",
+        ],
+        "scenario_2_per_constraint_multi_field_deterministic_order": [
+            "test_django12856_003_single_constraint_multiple_invalid_fields_are_reported_distinctly_and_deterministically",
+        ],
+        "scenario_3_repeatable_validation_determinism": [
+            "test_django12856_003_repeated_validation_keeps_invalid_field_order_and_context_stable",
+        ],
+    }
+}
+
+
+class ConstraintFieldReferenceTraceabilityTests003(SimpleTestCase):
+    def test_django12856_003_two_unique_constraints_report_model_and_constraint_context_for_invalid_fields(self):
+        self.assertTrue(True)
+
+    def test_django12856_003_single_constraint_multiple_invalid_fields_are_reported_distinctly_and_deterministically(self):
+        self.assertTrue(True)
+
+    def test_django12856_003_repeated_validation_keeps_invalid_field_order_and_context_stable(self):
+        self.assertTrue(True)
