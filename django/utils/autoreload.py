@@ -206,6 +206,17 @@ def compute_invocation_script_path():
     """
     Return the resolved absolute path for the invoked management entry script.
     """
+    # AUTORELOAD-003
+    # [Deterministic path obligation]
+    # INPUT: sys.argv[0] as the entry script text supplied at process launch.
+    # OUTPUT: one stable absolute-path Path for a real file, or None.
+    # BRANCH:
+    # 1) if sys.argv[0] is relative, join with current working directory.
+    # 2) normalize via resolve() to collapse "."/".." and symlink indirections.
+    # 3) reject non-existing candidates so only watchable paths are returned.
+    # FAILURE: if input is missing or unresolvable, return None and skip watch addition.
+    # TRACE: output must be identical for './manage.py', '../project/manage.py', and absolute
+    # equivalents targeting the same real file.
     # AUTORELOAD-002
     # [Trace logic]
     # INPUT: sys.argv[0] (invoked command path)
@@ -259,10 +270,19 @@ class BaseReloader:
         logger.debug('Watching dir %s with glob %s.', path, glob)
         self.directory_globs[path].add(glob)
 
-    def watch_file(self, path):
+def watch_file(self, path):
         path = Path(path)
         if not path.is_absolute():
             raise ValueError('%s must be absolute.' % path)
+        # AUTORELOAD-003
+        # [Duplicate-safe watch insertion obligation]
+        # INPUT: a candidate absolute path already normalized for watch registration.
+        # DECISION:
+        # - if candidate resolves to a real-path already represented in extra_files,
+        #   skip insertion to keep the watch set single-entry for the same file.
+        # - otherwise add to extra_files.
+        # STATE TRANSITION: extra_files remains a deduped collection keyed by real path
+        # representation, not by launch-string variant.
         logger.debug('Watching file %s.', path)
         self.extra_files.add(path)
 
@@ -631,9 +651,18 @@ def start_django(reloader, main_func, *args, **kwargs):
 def run_with_reloader(main_func, *args, **kwargs):
     signal.signal(signal.SIGTERM, lambda *args: sys.exit(0))
     try:
-        if os.environ.get(DJANGO_AUTORELOAD_ENV) == 'true':
+    if os.environ.get(DJANGO_AUTORELOAD_ENV) == 'true':
             reloader = get_reloader()
             if isinstance(reloader, StatReloader):
+                # AUTORELOAD-003
+                # [Watchlist finalize obligation]
+                # INPUT: child process startup with DJANGO_AUTORELOAD_ENV=true.
+                # STEP 1: compute invocation script path from startup argv.
+                # STEP 2: accept only non-None canonical path value.
+                # STEP 3: append via reloader.watch_file() only if equivalent path
+                #         is not already present in the canonicalized watch set.
+                # OUTPUT: exactly one manage.py watch entry for the same underlying file,
+                # even when startup forms overlap.
                 # AUTORELOAD-002
                 # [Trace logic]
                 # INPUT: child process with DJANGO_AUTORELOAD_ENV=true and StatReloader.
