@@ -78,6 +78,18 @@ class DecimalSerializer(BaseSerializer):
 class DeconstructableSerializer(BaseSerializer):
     @staticmethod
     def serialize_deconstructed(path, args, kwargs):
+        # M154-005: Serialize a deconstructible value as a deterministic function-shape call.
+        # INPUTS:
+        # - deconstructed path from .deconstruct()
+        # - positional args (ordered by declaration for the target class)
+        # - kwargs (declared semantics may be unordered; sort at output boundary)
+        # PROCEDURE:
+        # 1) Resolve the stable textual path using _serialize_path(path) once.
+        # 2) Serialize args in declaration order.
+        # 3) Serialize kwargs in sorted key order to keep call text stable.
+        # 4) Emit "%s(%s)" with positional and kwarg segments joined by ", ".
+        # FAILURE:
+        # - No explicit recovery: callers propagate serializer errors from _serialize_path.
         name, imports = DeconstructableSerializer._serialize_path(path)
         strings = []
         for arg in args:
@@ -92,6 +104,36 @@ class DeconstructableSerializer(BaseSerializer):
 
     @staticmethod
     def _serialize_path(path):
+        # M154-003 (top-level path invariance):
+        # - Keep top-level deconstructible targets unchanged (e.g. "module.TopLevelField").
+        # M154-005 (nested reference determinism):
+        # - Resolve every dotted path via the same canonical scan to force identical
+        #   output shape across repeated references and field reorderings.
+        #
+        # INPUT:
+        # - path: dotted deconstruct token from value.deconstruct().
+        # STATE:
+        # - parts : split components of path.
+        # - module/name : mutable resolution output.
+        # TRANSITION loop:
+        # for split_point from len(parts)-1 down to 1:
+        #   module_candidate = ".".join(parts[:split_point])
+        #   attr_chain = parts[split_point:]
+        #   try import module_candidate:
+        #       iterate attr_chain over imported module object
+        #       if any attr missing -> candidate rejected
+        #       if full attr_chain resolves -> first successful candidate wins
+        #           module = module_candidate; name = ".".join(attr_chain); break
+        #   except ImportError: continue
+        # FALLBACK:
+        # - if no candidate resolves, retain default split result.
+        # OUTPUT:
+        # - For django.db.models target, emit "models.<name>" with models import.
+        # - Else emit "<module>.<name>" and "import <module>".
+        # INVARIANTS:
+        # - Longest-prefix-first scan is deterministic for repeated calls.
+        # - On module-level objects, first valid prefix is the module itself, so no
+        #   nested rewrite occurs.
         parts = path.split(".")
         module = ".".join(parts[:-1])
         name = parts[-1]
