@@ -1,0 +1,83 @@
+REQ-138-002 — automatic `get_<field>_display()` fallback for unmapped model overrides
+=================================================================================
+
+Requirement
+-----------
+- REQ-138-002: For any model field with `choices` that does not define
+  `get_<field>_display()` on the model, `instance.get_<field>_display()`
+  must continue to return the mapped choice label exactly as Django does today.
+
+Constraint scope
+----------------
+- No changes to validation or translation behavior.
+- No changes to form rendering.
+- No impact on non-choice fields.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-002 -> `django/db/models/fields/__init__.py`
+  - `Field.contribute_to_class()` owns generated-method installation decision
+    and conflict-avoidance for existing user-defined methods.
+  - Placement pressure: this boundary owns method-name collision checks and the
+    attach-vs-skip decision.
+- REQ-138-002 -> `django/db/models/base.py`
+  - `Model._get_FIELD_display()` owns canonical fallback map resolution for
+    fields without custom override.
+  - Placement pressure: this boundary owns raw value extraction, flatten-choice
+    mapping, and fallback-to-raw behavior.
+- REQ-138-002 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - Artifact boundary that binds `REQ_ID_TO_VERIFICATION` entries and
+    `REQ_138_002_OBLIGATIONS` to concrete verification points.
+
+Ownership and boundaries
+------------------------
+- Model field contribution boundary (`Field.contribute_to_class`)
+  - Owns generated helper registration into class namespace.
+  - Receives `self` (`Field`) and model class `cls`; emits method attribute
+    if safe to bind.
+- Model helper boundary (`Model._get_FIELD_display`)
+  - Owns fallback behavior implementation.
+  - Takes model instance (`self`) plus `field` descriptor and returns fallback
+    display text as string.
+- Test/verification boundary
+  - Owns contract naming (`REQ_138_002`, `REQ_138_002_OBLIGATIONS`) and
+    scenario coverage scaffolding.
+
+Interface and contract skeletons
+-------------------------------
+- Boundary contract C1 (installation): method name derived as
+  `get_<field>_display` and attached only when absent in `cls.__dict__`.
+- Boundary contract C2 (fallback): `_get_FIELD_display(self, field)` returns
+  `force_str(dict(field.flatchoices).get(value, value), strings_only=True)`,
+  where `value` is read from `field.attname` on the calling instance.
+- Boundary contract C3 (value contract): if no mapping exists for `value`, fallback
+  returns the raw value (post-string coercion), preserving Django 2.x behavior.
+
+Dependency direction
+--------------------
+1. Field metadata declaration -> `Field.contribute_to_class()`.
+2. `Field.contribute_to_class()` -> model class namespace (method binding edge).
+3. Runtime call to `get_<field>_display` -> model resolution path.
+4. Fallback execution -> `Model._get_FIELD_display(field)` -> `field.flatchoices`.
+5. Output is consumed by template/str/call-site usage without further model checks.
+
+Integration seams / scaffolding
+-------------------------------
+- Seam S1 (`Field.contribute_to_class` installation seam)
+  - Upstream contract: class constructor is defining concrete fields.
+  - Downstream contract: generated helper can exist only for choice fields.
+- Seam S2 (`_get_FIELD_display` fallback seam)
+  - Upstream contract: a `Field` with `choices` and an `attname`.
+  - Downstream contract: deterministic lookup from flattened choices map.
+- Seam S3 (verification seam)
+  - Upstream contract: tests reference `REQ_ID_TO_VERIFICATION` identifiers.
+  - Downstream contract: each listed test name maps back to obligation IDs.
+
+Architecture readiness check
+---------------------------
+- All logical obligations are mapped to owning artifacts:
+  - OBLIGATION[0] -> generation/install skip when override exists in model namespace.
+  - OBLIGATION[1] -> value-specific fallback mapping across instances.
+- Dependency direction is explicit and acyclic for this requirement.
+- Traceability is preserved with `REQ-138-002` references in implementation and
+  verification artifacts.
