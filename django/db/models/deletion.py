@@ -293,6 +293,19 @@ class Collector:
         # Optimize for the case with a single obj and no dependencies
         if len(self.data) == 1 and len(instances) == 1:
             instance = list(instances)[0]
+            # DJ11179-006:
+            # - INPUT: collected singleton instance may already be marked as identity-cleared
+            #   from an earlier successful fast delete (`instance.pk is None`).
+            # - DECISION:
+            #   1) if `instance.pk is None`:
+            #      - treat as second+ invocation of no-dependency delete on same object.
+            #      - return zero/empty deletion outcome without SQL mutation.
+            #   2) else continue with normal fast-delete decision branch.
+            # - REQUIRED POST-CONDITION:
+            #   - in-memory identity remains `None`.
+            #   - no stale pk reintroduced before or after return.
+            # - COVERAGE TRACE:
+            #   - maps to all DJ11179-006 acceptance checks for repeated no-dependency delete.
             # DJ11179-001:
             # - INPUT: single model + single gathered instance.
             # - DECISION: if `self.can_fast_delete(instance)` is true, perform

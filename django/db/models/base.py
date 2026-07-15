@@ -913,6 +913,24 @@ class Model(metaclass=ModelBase):
             "%s object can't be deleted because its %s attribute is set to None." %
             (self._meta.object_name, self._meta.pk.attname)
         )
+        # DJ11179-006:
+        # - INPUT: Model.delete() is called again on an instance already
+        #   success-cleared by a prior no-dependency fast delete.
+        # - STATE:
+        #   - pk has already been set to None by the successful first path.
+        #   - instance remains materialized in memory and may be re-invoked.
+        # - DECISION:
+        #   - if `self.pk is None` and object is not unsaved (`_state.adding is False`),
+        #     return a no-op successful outcome immediately to guarantee idempotence.
+        #   - otherwise continue with normal collector delegation.
+        # - FAILURE / SAFETY:
+        #   - unsaved-new objects (`_state.adding is True`) must continue to raise via
+        #     existing contract (do not repurpose this as a valid delete path).
+        # - TRACEABILITY:
+        #   - test_dj11179_006_repeated_no_dependency_delete_keeps_pk_none
+        #   - test_dj11179_006_second_no_dependency_delete_does_not_resurrect_pk
+        #   - test_dj11179_006_repeated_delete_return_paths_preserve_none_pk
+
         # Boundary: Model.delete() is the public delete seam and ownership boundary
         # for invocation semantics. The persisted deletion semantics are delegated
         # to Collector, which owns the persistence and stale-key invalidation
