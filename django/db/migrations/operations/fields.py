@@ -301,6 +301,19 @@ class RenameField(FieldOperation):
 
     def state_forwards(self, app_label, state):
         model_state = state.models[app_label, self.model_name_lower]
+        # [FKEY-002] Rename-field state propagation must keep FK metadata in-band.
+        # 1) Locate the renamed local field tuple; if missing, fail fast.
+        # 2) Rename matching local tuple and rewrite any local from_fields references.
+        # 3) Sweep model options and move index/unique-together members.
+        # 4) For every field in every model, if it references (app_label, model)
+        #    on the renamed model:
+        #    - rewrite single remote field_name values equal to old_name;
+        #    - rewrite to_fields entries equal to old_name.
+        # 5) Delay model re-render unless relationship/referenced state requires early rebuild.
+        # Failure rule:
+        # - If the source field name is absent in the model state, raise FieldDoesNotExist.
+        # - If any rewritten FK target becomes unresolved by subsequent model render, raise
+        #   a relation-lookup failure (unknown target path should not remain silent).
         # Rename the field
         fields = model_state.fields
         found = False

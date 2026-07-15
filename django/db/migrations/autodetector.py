@@ -830,6 +830,15 @@ class MigrationAutodetector:
                             # old field's column added?
                             old_field_dec[0:2] == field_dec[0:2] and
                             dict(old_field_dec[2], db_column=old_db_column) == field_dec[2])):
+                        # [FKEY-001/FKEY-002]
+                        # Input: old_field (candidate source) and field (candidate target).
+                        # - Compare deconstructed signatures, with db_column-normalized fallback.
+                        # - If equivalent, treat as a rename rather than remove/add.
+                        # - Emit RenameField with old_name=rem_field_name, new_name=field_name.
+                        # - Update rename-tracking maps: old_field_keys and self.renamed_fields.
+                        # Failure branch:
+                        # - If signature mismatch occurs, the caller must route through alter/remove/add
+                        #   paths, because this is not a rename-safe PK/FK target change.
                         if self.questioner.ask_rename(model_name, rem_field_name, field_name, field):
                             self.add_operation(
                                 app_label,
@@ -922,6 +931,17 @@ class MigrationAutodetector:
                 )
                 if rename_key in self.renamed_models:
                     new_field.remote_field.model = old_field.remote_field.model
+                # [FKEY-001] Resolve FK relation targets against renamed PKs.
+                # - Determine rename_key from the relation target model.
+                # - If target model was renamed, normalize FK references to old_field's relation model
+                #   for deterministic comparison.
+                # - If relation has field_name (single FK), remap that target only when
+                #   (target_model, pre_rename_name) exists in renamed_fields.
+                # - If relation has from_fields/to_fields (multi-column), remap each via renamed_fields
+                #   with identity fallback.
+                # - Keep dependencies aligned through _get_dependencies_for_foreign_key(new_field).
+                # - If an explicit to_field has no rename mapping, keep stale content so repeatable
+                #   state validation can raise an unknown-target assertion.
                 # Handle ForeignKey which can only have a single to_field.
                 remote_field_name = getattr(new_field.remote_field, 'field_name', None)
                 if remote_field_name:

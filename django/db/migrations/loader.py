@@ -319,4 +319,13 @@ class MigrationLoader:
 
         See graph.make_state() for the meaning of "nodes" and "at_end".
         """
+        # [FKEY-007] Repeatable migration-state validation entry point.
+        # Input: migration node set (or default leaves) + at_end flag.
+        # Process:
+        # 1) Resolve full intermediate state by replaying migration mutations.
+        # 2) Keep de/serialized operation paths aligned to this deterministic replay
+        #    before they are consumed by check/run/inspect flows.
+        # 3) If FK references include stale pre-rename to_field values, the
+        #    subsequent render/lookup step in project-state usage must fail with
+        #    a deterministic unknown-target assertion rather than silently continue.
         return self.graph.make_state(nodes=nodes, at_end=at_end, real_apps=list(self.unmigrated_apps))
