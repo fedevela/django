@@ -283,20 +283,52 @@ class ConversionExceptionTests(SimpleTestCase):
         self.assertNotContains(response, 'user not found', status_code=404)
         self.assertNotContains(response, 'Request Method:', status_code=404)
 
+    @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_002_candidate_http404_marks_candidate_as_miss_and_allows_later_match(self):
         """[DJ-RES-002] Candidate with converter Http404 should be treated as a non-match while later candidates can match."""
-        # Placeholder verification artifact for traceability; behavioral assertions are staged in later phases.
-        self.assertTrue(True)
+        def raises_http404(value):
+            raise Http404('user not found')
 
+        self._set_dynamic_converter_to_python(raises_http404)
+        response = self.client.get('/candidate-miss/abc/')
+        self.assertEqual(response.status_code, 200)
+
+        match = resolve('/candidate-miss/abc/')
+        self.assertEqual(match.url_name, 'candidate-miss-fallback')
+        self.assertEqual(match.kwargs, {'value': 'abc'})
+        self.assertEqual(match.route, 'candidate-miss/<slug:value>/')
+
+    @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_002_candidate_http404_when_no_candidates_match_results_in_not_found(self):
         """[DJ-RES-002] When all candidates fail matching (including Http404 converter failures), resolver ends in 404."""
-        # Placeholder verification artifact for traceability; behavioral assertions are staged in later phases.
-        self.assertTrue(True)
+        def raises_http404(value):
+            raise Http404('user not found')
 
+        self._set_dynamic_converter_to_python(raises_http404)
+        with self.assertRaises(Resolver404) as exc_info:
+            resolve('/candidate-all-miss/abc/')
+
+        payload = exc_info.exception.args[0]
+        self.assertEqual(payload['reason'], 'user not found')
+        self.assertIsInstance(payload['tried'], list)
+        self.assertEqual(len(payload['tried']), 2)
+        self.assertEqual(len(payload['tried'][0]), 1)
+        self.assertEqual(len(payload['tried'][1]), 1)
+
+    @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_006_http404_miss_handling_does_not_alter_successful_to_python_view_dispatch(self):
         """[DJ-RES-006] Successful converter to_python execution and view dispatch for matching candidates remains unchanged."""
-        # Placeholder verification artifact for traceability; behavioral assertions are staged in later phases.
-        self.assertTrue(True)
+        def to_python(value):
+            return value
+
+        self._set_dynamic_converter_to_python(to_python)
+        response = self.client.get('/candidate-success/123/')
+        self.assertEqual(response.status_code, 200)
+        match = resolve('/candidate-success/123/')
+
+        self.assertEqual(match.url_name, 'candidate-success-first')
+        self.assertEqual(match.kwargs, {'value': '123'})
+        self.assertEqual(match.route, 'candidate-success/<dynamic:value>/')
 
     def test_resolve_value_error_means_no_match(self):
         @DynamicConverter.register_to_python
