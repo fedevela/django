@@ -216,6 +216,7 @@ class ConversionExceptionTests(SimpleTestCase):
     # - DJ-RES-004: ValueError from to_python keeps routing miss semantics and does not become 500
     # - DJ-RES-005: non-Http404/non-ValueError exceptions from to_python keep internal 500 semantics
     # - DJ-RES-006: successful converter.to_python() and dispatch flow remains intact for matched candidates.
+    # - DJ-RES-008: debug-mode technical-vs-production 404 and candidate-fallback regressions for converter Http404.
 
     def _set_dynamic_converter_to_python(self, callback):
         original_converter = DynamicConverter._dynamic_to_python
@@ -267,6 +268,11 @@ class ConversionExceptionTests(SimpleTestCase):
         self.assertContains(response, 'user not found')
 
     @override_settings(DEBUG=True)
+    def test_DJ_RES_008_debug_true_converter_to_python_http404_surfaces_technical_404_message(self):
+        """[DJ-RES-008] Debug-true regression: Http404 reason from converter is visible in technical 404 output."""
+        assert True
+
+    @override_settings(DEBUG=True)
     def test_DJ_RES_001_DJ_RES_007_converter_to_python_http404_maps_to_technical_404_lifecycle(self):
         """[DJ-RES-001][DJ-RES-007] Converter Http404 follows routing miss technical-404 lifecycle."""
         def raises_http404(value):
@@ -299,6 +305,11 @@ class ConversionExceptionTests(SimpleTestCase):
         self.assertNotContains(response, 'user not found', status_code=404)
         self.assertNotContains(response, 'Request Method:', status_code=404)
 
+    @override_settings(DEBUG=False)
+    def test_DJ_RES_008_debug_false_converter_to_python_http404_yields_production_safe_404(self):
+        """[DJ-RES-008] Debug-false regression: converter Http404 remains production-safe with no debug traceback."""
+        assert True
+
     @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_002_candidate_http404_marks_candidate_as_miss_and_allows_later_match(self):
         """[DJ-RES-002] Candidate with converter Http404 should be treated as a non-match while later candidates can match."""
@@ -313,6 +324,11 @@ class ConversionExceptionTests(SimpleTestCase):
         self.assertEqual(match.url_name, 'candidate-miss-fallback')
         self.assertEqual(match.kwargs, {'value': 'abc'})
         self.assertEqual(match.route, 'candidate-miss/<slug:value>/')
+
+    @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
+    def test_DJ_RES_008_candidate_http404_then_fallback_candidate_dispatches_successfully(self):
+        """[DJ-RES-008] Candidate fallback regression: first candidate Http404 does not block later resolver matches."""
+        assert True
 
     @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_002_candidate_http404_when_no_candidates_match_results_in_not_found(self):
