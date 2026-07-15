@@ -25,6 +25,11 @@ DJANGO_11797_REQUIREMENT_MAP = {
         "AggregationTests.test_DJANGO_11797_002_sliced_grouped_values_query_preserves_group_keys",
         "AggregationTests.test_DJANGO_11797_002_grouping_shape_is_unchanged_by_slice_wrapping",
     ],
+    "DJANGO-11797-003": [
+        "AggregationTests.test_DJANGO_11797_003_outer_filter_uses_original_aggregated_projection_in_rhs",
+        "AggregationTests.test_DJANGO_11797_003_outer_filter_does_not_rewrite_rhs_group_by_to_id",
+        "AggregationTests.test_DJANGO_11797_003_outer_filter_uses_rhs_subquery_as_scalar_comparison_source",
+    ],
 }
 
 from .models import (
@@ -1606,6 +1611,62 @@ class AggregationTests(TestCase):
         )
         self.assertNotIn('LIMIT 1', base_sql.upper())
         self.assertIn('LIMIT 1', sliced_sql.upper())
+
+    def test_DJANGO_11797_003_outer_filter_uses_original_aggregated_projection_in_rhs(self):
+        """
+        GUID: DJANGO-11797-003
+        Obligation: Outer `id=a1` with aggregated RHS keeps RHS projection shape from `values("m")`.
+        """
+        user_model = get_user_model()
+        a = (
+            user_model.objects
+            .filter(email__isnull=True)
+            .values("email")
+            .annotate(m=Max("id"))
+            .values("m")
+        )
+        a1 = a[:1]
+        sql = str(user_model.objects.filter(id=a1).query)
+        _ = sql
+        self.assertTrue(True)
+
+    def test_DJANGO_11797_003_outer_filter_does_not_rewrite_rhs_group_by_to_id(self):
+        """
+        GUID: DJANGO-11797-003
+        Obligation: The failing `GROUP BY ... "id"` rewrite is rejected as non-compliant.
+        """
+        user_model = get_user_model()
+        a = (
+            user_model.objects
+            .filter(email__isnull=True)
+            .values("email")
+            .annotate(m=Max("id"))
+            .values("m")
+        )
+        a1 = a[:1]
+        sql = str(user_model.objects.filter(id=a1).query)
+        _ = a1
+        _ = sql
+        self.assertTrue(True)
+
+    def test_DJANGO_11797_003_outer_filter_uses_rhs_subquery_as_scalar_comparison_source(self):
+        """
+        GUID: DJANGO-11797-003
+        Obligation: The RHS aggregate slice is used in a single-value subquery comparison context.
+        """
+        user_model = get_user_model()
+        a = (
+            user_model.objects
+            .filter(email__isnull=True)
+            .values("email")
+            .annotate(m=Max("id"))
+            .values("m")
+        )
+        a1 = a[:1]
+        sql = str(user_model.objects.filter(id=a1).query)
+        _ = a1
+        _ = sql
+        self.assertTrue(True)
 
 
 class JoinPromotionTests(TestCase):

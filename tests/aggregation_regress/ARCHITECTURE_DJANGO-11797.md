@@ -6,6 +6,8 @@
   - Structural pressure: preserve initial `values()` grouping intent when entering `annotate()` and later projection narrowing.
 - `DJANGO-11797-002`  
   - Structural pressure: enforce slice as a pure row-windowing seam while preserving grouping key shape.
+- `DJANGO-11797-003`  
+  - Structural pressure: preserve aggregated RHS subquery projection and grouping shape when used as `filter(id=...)`.
 
 ## Ownership and Boundary Placement
 
