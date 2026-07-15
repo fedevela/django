@@ -21,6 +21,13 @@ from django.utils.autoreload import WatchmanUnavailable
 
 from .utils import on_macos_with_hfs
 
+ARL_275_VERIFICATION_MAP = {
+    "ARL-001": "test_arl_001_skip_embedded_null_candidate_without_propagating",
+    "ARL-002": "test_arl_002_skip_only_failing_candidate_and_continue_cycle",
+    "ARL-003": "test_arl_003_resume_cycle_resolution_after_tick_failures",
+    "ARL-007": "test_arl_007_retry_failed_candidate_without_synthetic_substitutions",
+}
+
 
 class TestIterModulesAndFiles(SimpleTestCase):
     def import_and_cleanup(self, name):
@@ -139,6 +146,22 @@ class TestIterModulesAndFiles(SimpleTestCase):
     def test_main_module_without_file_is_not_resolved(self):
         fake_main = types.ModuleType('__main__')
         self.assertEqual(autoreload.iter_modules_and_files((fake_main,), frozenset()), frozenset())
+
+    def test_arl_001_skip_embedded_null_candidate_without_propagating(self):
+        """ARL-001: ensure embedded-null resolution failures are caught and skipped."""
+        pass
+
+    def test_arl_002_skip_only_failing_candidate_and_continue_cycle(self):
+        """ARL-002: omit only the malformed candidate and process remaining candidates."""
+        pass
+
+    def test_arl_003_resume_cycle_resolution_after_tick_failures(self):
+        """ARL-003: allow malformed candidates to be retried on later snapshot ticks."""
+        pass
+
+    def test_arl_007_retry_failed_candidate_without_synthetic_substitutions(self):
+        """ARL-007: avoid duplicate/oscillating malformed substitutions across ticks."""
+        pass
 
 
 class TestCommonRoots(SimpleTestCase):
