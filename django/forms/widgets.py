@@ -70,6 +70,23 @@ class Media:
 
     @property
     def _js(self):
+        # PSEUDOCODE-GATEWAY [MEDIA-002][MEDIA-003][MEDIA-005]:
+        # Input:
+        #   ordered chunk list = self._js_lists
+        # Output contract:
+        #   produce one JS ordering that satisfies all adjacency constraints
+        #   inferred from all chunks, if at least one topological total order exists.
+        # Constraint model:
+        #   for each chunk C = [x0, x1, ..., xn]:
+        #       require x_i -> x_{i+1} for i in [0, n-2] (MEDIA-005)
+        # Branch:
+        #   IF union of constraints across all chunks is acyclic:
+        #       emit resolved order (deduplicated) with preference for chunk-local adjacency
+        #       and stable preservation of earlier chunks when non-contradictory
+        #       (supports Scenario-1 / MEDIA-001 and scenario equivalence checks).
+        #   ELSE:
+        #       emit partial/fallback order only if implementation policy allows,
+        #       raise exactly one MediaOrderConflictWarning (full-graph failure path).
         js = self._js_lists[0]
         # filter(None, ...) avoids calling merge() with empty lists.
         for obj in filter(None, self._js_lists[1:]):
@@ -125,6 +142,25 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
+        # PSEUDOCODE-LOCAL [MEDIA-005]:
+        # Inputs:
+        #   list_1: current consolidated sequence (possibly partial)
+        #   list_2: next declared media sequence
+        # Invariant:
+        #   relative precedence inside each input list must be preserved if feasible.
+        #   No final conflict decision should be made until all constraints from
+        #   all merged chunks are visible at once (MEDIA-002/003).
+        #
+        # Proposed merge semantics (full-resolution path in caller):
+        # 1. Seed constraints with adjacency edges from list_1 and list_2:
+        #    for each adjacent pair (a, b): add edge a -> b.
+        # 2. Build candidate order by topological ordering over the full edge set.
+        # 3. On cycle detection:
+        #    do not finalize contradiction as local inverse-pair; propagate to global checker.
+        # 4. Apply dedupe while maintaining each chunk adjacency where feasible.
+        #
+        # Legacy pairwise warning behavior in this helper currently triggers early.
+        # MEDIA-002 requires this warning decision to move to full-graph evaluation.
         # Start with a copy of list_1.
         combined_list = list(list_1)
         last_insert_index = len(list_1)
@@ -150,6 +186,23 @@ class Media:
         return combined_list
 
     def __add__(self, other):
+        # PSEUDOCODE-STATE [MEDIA-001][MEDIA-002][MEDIA-003][MEDIA-005]:
+        # Inputs:
+        #   self = Media A with chunk vectors A._css_lists, A._js_lists
+        #   other = Media B with chunk vectors B._css_lists, B._js_lists
+        # State transition:
+        #   combined._css_lists = A._css_lists concatenated with B._css_lists
+        #   combined._js_lists = A._js_lists concatenated with B._js_lists
+        #   chunk boundaries are preserved to allow constructing full merge graph later.
+        # Branch:
+        #   IF both sides provide chunks:
+        #       keep all chunk-level order edges available across the concatenated graph.
+        #   IF concatenation introduces contradiction only in some merge sequence:
+        #       final conflict/warning outcome must be computed from aggregated graph
+        #       once, not from transient left-to-right pairwise steps (MEDIA-002/003).
+        # Hand-off:
+        #   return Media(combined) without resolving final _js yet; _js caller performs
+        #   deterministic full-constraint resolution.
         combined = Media()
         combined._css_lists = self._css_lists + other._css_lists
         combined._js_lists = self._js_lists + other._js_lists
