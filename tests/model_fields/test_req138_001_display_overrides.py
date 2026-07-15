@@ -74,12 +74,10 @@ class TestReq138002DisplayFallbackToChoices(SimpleTestCase):
 
     def test_req_138_002_generated_display_uses_choices_map_for_non_overridden_field_value_1(self):
         instance = Whiz(c=1)
-        instance.get_c_display()
-        self.assertTrue(True)
+        self.assertEqual(instance.get_c_display(), "First")
 
     def test_req_138_002_generated_display_resolves_label_for_multiple_instances(self):
         on = Whiz(c=1)
         off = Whiz(c=0)
-        on.get_c_display()
-        off.get_c_display()
-        self.assertTrue(True)
+        self.assertEqual(on.get_c_display(), "First")
+        self.assertEqual(off.get_c_display(), "Other")
