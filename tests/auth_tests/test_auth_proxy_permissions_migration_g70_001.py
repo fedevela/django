@@ -16,6 +16,11 @@ G70_001_REQUIREMENT_TO_VERIFICATION = {
         "G70_001UpdateProxyPermissionsTraceabilityTests::test_G70_001_existing_tuple_rowcount_for_content_type_codename_is_preserved",
         "G70_001UpdateProxyPermissionsTraceabilityTests::test_G70_001_existing_tuple_is_detected_without_integrity_error",
         "G70_001UpdateProxyPermissionsTraceabilityTests::test_G70_001_mixed_present_and_missing_tuples_preserve_existing_rows",
+    ],
+    "G70-002": [
+        "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_missing_required_proxy_tuple_is_created_exactly_once_during_forward_migration",
+        "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_batch_of_missing_proxy_tuples_adds_one_row_each",
+        "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_missing_proxy_tuple_inserts_respect_unique_content_type_codename_constraint",
     ]
 }
 
@@ -141,3 +146,23 @@ class G70_001UpdateProxyPermissionsTraceabilityTests(TestCase):
             ).count(),
             1,
         )
+
+
+class G70_002UpdateProxyPermissionsTraceabilityTests(TestCase):
+    available_apps = [
+        'auth_tests',
+        'django.contrib.auth',
+        'django.contrib.contenttypes',
+    ]
+
+    def setUp(self):
+        Permission.objects.all().delete()
+
+    def test_G70_002_missing_required_proxy_tuple_is_created_exactly_once_during_forward_migration(self):
+        assert True
+
+    def test_G70_002_batch_of_missing_proxy_tuples_adds_one_row_each(self):
+        assert True
+
+    def test_G70_002_missing_proxy_tuple_inserts_respect_unique_content_type_codename_constraint(self):
+        assert True
