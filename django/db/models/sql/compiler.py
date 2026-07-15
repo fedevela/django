@@ -353,29 +353,13 @@ class SQLCompiler:
             # not taken into account so we strip it. When this entire method
             # is refactored into expressions, then we can check each part as we
             # generate it.
-            # ORDERBY-001: Dedup must use full multiline SQL fragment, not only
-            # a single line slice from ordering expression parsing.
-            # Scenario mapping:
-            # - S1: three distinct multiline fragments should each produce
-            #   a unique dedupe key and all be emitted.
-            # - S2: equivalent multiline fragments with only indentation
-            #   differences must normalize to the same dedupe key and collapse.
-            # - S3: fragments that only share trailing snippets must remain
-            #   distinct unless the full fragment is an exact match.
-            #
-            # Pseudocode obligation:
-            # 1) Determine raw ordering text for this term from `sql`.
-            # 2) Strip only the direction token (ASC/DESC) while preserving all
-            #    other fragment content.
-            # 3) Normalize fragment whitespace across full text (trim ends and
-            #    collapse interior whitespace/newlines) to ignore indent-only
-            #    drift.
-            # 4) Build dedupe key = (normalized_full_fragment, make_hashable(params)).
-            # 5) If key exists in `seen`, skip emission.
-            # 6) Else add key to `seen` and append current `(resolved, (sql, params, is_ref))`.
-            # 7) If direction-fragment extraction is not possible, fallback to a
-            #    safe canonical key based on the raw fragment+params.
-            without_ordering = self.ordering_parts.search(sql).group(1)
+            # ORDERBY-001: Dedupe keys use the full expression, excluding final
+            # direction tokens only.
+            without_ordering = sql.rstrip()
+            direction_match = re.search(r"\s+(ASC|DESC)\s*$", without_ordering, flags=re.IGNORECASE)
+            if direction_match:
+                without_ordering = without_ordering[:direction_match.start()]
+            without_ordering = re.sub(r"\s+", " ", without_ordering.strip())
             params_hash = make_hashable(params)
             if (without_ordering, params_hash) in seen:
                 continue
