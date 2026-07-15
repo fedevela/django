@@ -656,14 +656,53 @@ class FormsMediaMergeContractTests(SimpleTestCase):
 
     def test_med_002_scenario_1_satisfiable_three_or_more_media_merges_return_deterministic_js_without_warning(self):
         # Canonical requirement: MED-002 Scenario 1.
-        # - Precondition: three or more widget Media objects with satisfiable implied ordering.
-        # - Action: merge combined media set.
-        # - Outcome: deterministic JS order returned; no warning is raised.
-        self.assertTrue(True)
+        # - Precondition: three or more Media objects with satisfiable implied ordering.
+        # - Action: merge the combined JS lists.
+        # - Outcome: deterministic JS order is returned and no warning is raised.
+        base = Media(js=['alpha.js', 'framework.js'])
+        plugin = Media(js=['beta.js', 'framework.js', 'component.js'])
+        extension = Media(js=['gamma.js', 'framework.js'])
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter('always')
+            merged = Media.merge(base._js, plugin._js, extension._js)
+
+        self.assertEqual(
+            merged,
+            ['alpha.js', 'beta.js', 'gamma.js', 'framework.js', 'component.js']
+        )
+        self.assertFalse(
+            any(issubclass(w.category, MediaOrderConflictWarning) for w in captured)
+        )
+
+        # Deterministic behavior for same inputs.
+        with warnings.catch_warnings(record=True) as replayed:
+            warnings.simplefilter('always')
+            merged_again = Media.merge(base._js, plugin._js, extension._js)
+        self.assertEqual(replayed, [])
+        self.assertEqual(merged, merged_again)
 
     def test_med_002_scenario_2_pairwise_then_aggregate_merge_shapes_preserve_warning_behavior_and_deterministic_js(self):
         # Canonical requirement: MED-002 Scenario 2.
         # - Precondition: same media graph merged via different invocation shapes.
         # - Action: compute final media once with pairwise accumulation and once with aggregate merge.
-        # - Outcome: warning signal behavior stays unchanged; deterministic JS order semantics match.
-        self.assertTrue(True)
+        # - Outcome: warning signal behavior stays unchanged; deterministic JS order
+        #   semantics match.
+        base = Media(js=['alpha.js', 'framework.js'])
+        plugin = Media(js=['beta.js', 'framework.js', 'component.js'])
+        extension = Media(js=['gamma.js', 'framework.js'])
+
+        with warnings.catch_warnings(record=True) as pairwise_warnings:
+            warnings.simplefilter('always')
+            pairwise_merge = (base + plugin + extension)._js
+        with warnings.catch_warnings(record=True) as aggregate_warnings:
+            warnings.simplefilter('always')
+            aggregate_merge = Media.merge(base._js, plugin._js, extension._js)
+
+        self.assertEqual(pairwise_merge, aggregate_merge)
+        self.assertFalse(
+            any(issubclass(w.category, MediaOrderConflictWarning) for w in pairwise_warnings)
+        )
+        self.assertFalse(
+            any(issubclass(w.category, MediaOrderConflictWarning) for w in aggregate_warnings)
+        )
