@@ -1697,30 +1697,11 @@ class FilePathField(Field):
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
-        # FPF-001::O1 (deconstruction contract):
-        # Input state:
-        # - self.path expected to be either '' or configured value (possibly callable).
-        # Decision:
-        # - if self.path != '': emit kwargs['path'] using the stored object verbatim.
-        # - if self.path is '', treat as default and omit.
-        # Error path (non-implementation note for next phase):
-        # - if path is callable and not importable, migration serialization should fail explicitly
-        #   rather than forcing eager evaluation or conversion.
-        # FPF-002::O1 (callable migration-reconstruction contract):
-        # Invariant:
-        # - Preserve callable path as callable object metadata; never materialize it into an absolute filesystem path.
-        # Decision:
-        # - if self.path is callable, set kwargs['path'] to that callable directly.
-        # - else keep current branch for non-callable values (existing ''. path string handling remains unchanged).
-        # Success criteria:
-        # - deconstruction output references importable callable symbols instead of host-local path text.
-        # Failure path:
-        # - if serializer cannot turn callable into a stable migration reference, fail deterministically rather than
-        #   falling back to string conversion or os.path expansion.
-        # FPF-002::O2 (host-portability contract):
-        # - never call abspath/realpath/expanduser/expandvars on self.path during deconstruction.
-        # - ensure migration text depends only on symbolic callable reference, so host base-directory differences do not alter output.
-        if self.path != '':
+        if callable(self.path):
+            # Preserve callable path metadata so migration serialization can emit
+            # a stable importable reference.
+            kwargs['path'] = self.path
+        elif self.path != '':
             kwargs['path'] = self.path
         if self.match is not None:
             kwargs['match'] = self.match
