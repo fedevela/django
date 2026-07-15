@@ -56,19 +56,9 @@ class Command(BaseCommand):
         targets = [(app_label, migration.name)]
 
         # SQLMIGRATE-001 / SQLMIGRATE-004
-        # Decision gate for output wrapper emission:
-        # Inputs:
-        #   - migration.atomic: whether the migration itself is marked atomic.
-        #   - connection.features.can_rollback_ddl: whether backend supports DDL rollback.
-        # Output:
-        #   - self.output_transaction is true only when BOTH are true.
-        # Transition:
-        #   - if atomic AND can_rollback_ddl -> emit BEGIN/COMMIT around SQL output.
-        #   - else -> keep output unwrapped.
-        # Failure/path constraints:
-        #   - Non-atomic migration must ignore can_rollback_ddl and remain unwrapped.
-        #   - Atomic migration on non-rollback backend must remain unwrapped.
-        self.output_transaction = migration.atomic
+        # Output wrapper is only used for atomic migrations on backends that
+        # support rollback-capable DDL.
+        self.output_transaction = migration.atomic and connection.features.can_rollback_ddl
 
         # Make a plan that represents just the requested migrations and show SQL
         # for it

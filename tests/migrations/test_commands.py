@@ -627,25 +627,58 @@ class MigrateTests(MigrationTestBase):
             self.assertNotIn(connection.ops.start_transaction_sql().lower(), queries)
         self.assertNotIn(connection.ops.end_transaction_sql().lower(), queries)
 
+    @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_sqlmigrate_atomic_migration_with_rollback_capable_backend_emits_transaction_wrapper(self):
         """
         [SQLMIGRATE-001] Atomic migration on rollback-capable backend emits
         transactional wrapper markers.
         """
-        self.assertTrue(True)
+        with mock.patch.object(connection.features, "can_rollback_ddl", True):
+            out = io.StringIO()
+            call_command("sqlmigrate", "migrations", "0001", stdout=out)
+        output = out.getvalue().lower()
+        start_sql = connection.ops.start_transaction_sql().lower()
+        end_sql = connection.ops.end_transaction_sql().lower()
+        if start_sql:
+            self.assertIn(start_sql, output)
+        else:
+            self.fail("Backend does not expose transaction start SQL; expected wrapper markers for rollback-capable atomic migration")
+        if end_sql:
+            self.assertIn(end_sql, output)
+            self.assertLess(output.find(start_sql), output.find(end_sql))
 
+    @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_sqlmigrate_atomic_migration_without_rollback_capability_skips_transaction_wrapper(self):
         """
         [SQLMIGRATE-001] Atomic migration on non-rollback backend remains unwrapped.
         """
-        self.assertTrue(True)
+        with mock.patch.object(connection.features, "can_rollback_ddl", False):
+            out = io.StringIO()
+            call_command("sqlmigrate", "migrations", "0001", stdout=out)
+        output = out.getvalue().lower()
+        start_sql = connection.ops.start_transaction_sql().lower()
+        end_sql = connection.ops.end_transaction_sql().lower()
+        if start_sql:
+            self.assertNotIn(start_sql, output)
+        if end_sql:
+            self.assertNotIn(end_sql, output)
 
+    @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations_non_atomic"})
     def test_sqlmigrate_non_atomic_migration_ignores_rollback_capability_flag(self):
         """
         [SQLMIGRATE-004] Non-atomic migration output remains unwrapped regardless
         of rollback-capability flag.
         """
-        self.assertTrue(True)
+        with mock.patch.object(connection.features, "can_rollback_ddl", True):
+            out = io.StringIO()
+            call_command("sqlmigrate", "migrations", "0001", stdout=out)
+        output = out.getvalue().lower()
+        start_sql = connection.ops.start_transaction_sql().lower()
+        if start_sql:
+            self.assertNotIn(start_sql, output)
+        end_sql = connection.ops.end_transaction_sql().lower()
+        if end_sql:
+            self.assertNotIn(end_sql, output)
 
     @override_settings(
         INSTALLED_APPS=[
