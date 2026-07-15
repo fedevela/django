@@ -295,6 +295,9 @@ class Collector:
             #     2) treat the resulting row-count as authoritative persistence evidence for
             #        `instance.old_pk`.
             #     3) clear in-memory identity via `setattr(instance, pk_attr, None)`.
+            # - INTEGRATION SEAM:
+            #   - collector fast-delete branch owns the stale-PK unresolvability contract
+            #     for this requirement.
             #   - OBSERVATION REQUIREMENTS:
             #     - `Model.objects.filter(pk=instance.old_pk).exists()` must be false
             #       after successful return from this function.
@@ -355,6 +358,9 @@ class Collector:
         # - POST-CONDITION (non-fast path): clear in-memory PKs using
         #   `model._meta.pk.attname` after DB deletions have completed.
         # DJ11179-002:
+        # - INTEGRATION SEAM:
+        #   - non-fast path state-settlement loop is the fallback boundary for stale-PK
+        #     contract after all collector-owned SQL delete operations.
         # - ASSERTION MAPPING:
         #   - For both fast and non-fast no-dependency delete outcomes, stale
         #     captured pk values must resolve to no row post-return.

@@ -913,6 +913,10 @@ class Model(metaclass=ModelBase):
             "%s object can't be deleted because its %s attribute is set to None." %
             (self._meta.object_name, self._meta.pk.attname)
         )
+        # Boundary: Model.delete() is the public delete seam and ownership boundary
+        # for invocation semantics. The persisted deletion semantics are delegated
+        # to Collector, which owns the persistence and stale-key invalidation
+        # obligations for this requirement family.
         # DJ11179-002:
         # - INPUT: persisted instance (pk != None) is explicitly deleted in-memory.
         # - TRANSITION: delegate to Collector.collect() then Collector.delete().
