@@ -143,6 +143,12 @@ class EnumSerializer(BaseSerializer):
         # LOGIC OBLIGATION:
         #   render plain enum members with member-name syntax; do not invent enum-member
         #   output for any other value class.
+        # MIG-300-007 [non-plain enum-like guard]:
+        # REQUIREMENT BOUNDARY:
+        #   This serializer assumes `serializer_factory` has already filtered non-plain
+        #   enum-like/default-like objects to a non-enum serializer.
+        #   If a non-plain object reaches here, enum-member syntax must not be
+        #   introduced from this path.
         # INPUT CONTRACT:
         #   self.value is assumed to be an enum.Enum instance via registry dispatch.
         # DECISION:
@@ -417,6 +423,22 @@ def serializer_factory(value):
     # FAILURE PATH:
     #   any value with no registered serializer must fail through the existing
     #   ValueError, preserving current "cannot serialize" behavior.
+    # MIG-300-007 [non-plain enum-like defaults keep existing non-enum path]:
+    # LOGIC OBLIGATION:
+    #   INPUT: `value` is a default/default-like object from migration deconstruction.
+    #   GOAL: plain enum members remain eligible for enum-member syntax; all other enum-like
+    #   or related objects must continue through pre-existing non-enum serializers.
+    # DECISION PROCEDURE:
+    #   1) normalize Promise/LazyObject first (no semantic change to enum policy).
+    #   2) run built-in high-priority serializer checks (Field/Manager/Operation/type, deconstructables).
+    #   3) when iterating registered serializers, treat `enum.Enum` dispatch as:
+    #      a) ALLOW only when value is a plain enum member intended for member-name serialization.
+    #      b) otherwise SKIP enum-specific serializer and let the next applicable serializer
+    #         handle the value path, preserving legacy output form.
+    #   4) return first matching serializer contract.
+    # OBSERVATION:
+    #   this keeps non-plain enum-like objects on unchanged non-enum routes for repeated
+    #   autogeneration across locale switches (no `EnumClass['MEMBER']` introduction).
     if isinstance(value, Promise):
         value = str(value)
     elif isinstance(value, LazyObject):

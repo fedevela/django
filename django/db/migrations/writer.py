@@ -366,6 +366,15 @@ class MigrationWriter:
         # EFFECT:
         #   - the serialized form is the deconstruction boundary consumed later by as_string.
         #   - if the same deconstructed value is serialized twice, output must be identical.
+        # MIG-300-007 [non-plain enum-like defaults no enum-specific post-processing]:
+        # LOGIC OBLIGATION:
+        #   - Input is an already deconstructed migration value fragment.
+        #   - Primary branch is `serializer_factory(value).serialize()` only.
+        #   - Do not add enum-specific rewrite steps here after serializer_factory returns.
+        #   - Whatever serializer path serializer_factory selected must pass through untouched.
+        # SUCCESS CRITERION:
+        #   non-plain enum-like defaults retain their prior serialized syntax and do not
+        #   gain `module.Enum['MEMBER']` semantics.
         return serializer_factory(value).serialize()
 
     @classmethod
