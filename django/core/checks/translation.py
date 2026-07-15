@@ -57,30 +57,42 @@ def check_language_settings_consistent(app_configs, **kwargs):
     """Error if language settings are not consistent with each other."""
     available_tags = {i for i, _ in settings.LANGUAGES} | {'en-us'}
 
-    # GEV-001 (pseudocode obligation):
-    # INPUT:
+    # GEV-001, GEV-002 (pseudocode obligations):
+    # INPUTS:
     #   LANGUAGE_CODE = settings.LANGUAGE_CODE
     #   AVAILABLE_TAGS = {tag for (tag, _name) in settings.LANGUAGES} ∪ {'en-us'}
     #   BASE_LANGUAGE = substring before the first '-' in LANGUAGE_CODE.
+    # STATE/CONTROL:
+    #   - First branch is exact-match membership for consistency.
+    #   - Fallback branch only executes when exact match fails.
+    #   - Non-passthrough path emits translation.E004.
     # DECISION FLOW:
-    #   1) IF LANGUAGE_CODE is empty or malformed, do not consume this pseudocode path;
-    #      defer to `check_setting_language_code` for validation errors.
-    #   2) IF LANGUAGE_CODE is in AVAILABLE_TAGS -> consistent (pass).
-    #   3) IF LANGUAGE_CODE is not in AVAILABLE_TAGS:
-    #        a) IF BASE_LANGUAGE ≠ LANGUAGE_CODE AND BASE_LANGUAGE is in AVAILABLE_TAGS
-    #           -> accept as regional fallback (pass), do not emit E004.
-    #        b) OTHERWISE -> emit [E004].
-    #   4) ELSE -> pass.
-    # FAILURE PATH:
-    #   - only non-passthrough case is branch 3.b, which returns [E004].
-    # SCENARIOS:
-    #   - S1: LANGUAGE_CODE='de-at', LANGUAGES=[('de','German')] => base 'de' present -> no E004.
-    #   - S2: LANGUAGE_CODE='fr-ca', LANGUAGES=[('fr','French')] => base 'fr' present -> no E004.
+    #   1) IF LANGUAGE_CODE is empty or malformed, skip this path and let
+    #      check_setting_language_code report validation errors.
+    #   2) IF LANGUAGE_CODE ∈ AVAILABLE_TAGS -> PASS (exact-match accepted).
+    #      - This satisfies GEV-002-S1 and GEV-002-S2, including cases where
+    #        LANGUAGES includes both 'es' and 'es-ar'.
+    #      - Do NOT evaluate fallback only because of the presence of a base tag.
+    #   3) ELSE:
+    #      a) IF BASE_LANGUAGE != LANGUAGE_CODE AND BASE_LANGUAGE ∈ AVAILABLE_TAGS
+    #         -> PASS (regional fallback by base language).
+    #         - This satisfies GEV-001-S1/S2.
+    #      b) OTHERWISE -> FAIL [E004] only.
+    #   4) END.
+    #
+    # Handoff:
+    #   - Returns [] (pass) when exact-match or fallback branch succeeds.
+    #   - Returns [E004] only when neither branch can satisfy membership.
 
     language_code = settings.LANGUAGE_CODE
+    if language_code in available_tags:
+        # GEV-002: exact-match variant accepted directly (including 'es-ar').
+        return []
+
+    # GEV-001: allow regional LANGUAGE_CODE fallback to its base language
+    # if the base language exists in LANGUAGES.
+    # Do not reach this branch for GEV-002 exact-match hits.
     if language_code not in available_tags:
-        # GEV-001: allow regional LANGUAGE_CODE fallback to its base language
-        # if the base language exists in LANGUAGES.
         base_language = language_code.split('-')[0]
         if base_language != language_code and base_language in available_tags:
             return []
