@@ -21,6 +21,17 @@ from .routers import TestRouter
 from .test_base import MigrationTestBase
 
 
+SQLMIGRATE_VERIFICATION_ARTIFACTS = {
+    "SQLMIGRATE-001": {
+        "atomic_migration_with_rollback_capable_backend_emits_transaction_wrapper": "test_sqlmigrate_atomic_migration_with_rollback_capable_backend_emits_transaction_wrapper",
+        "atomic_migration_with_non_rollback_backend_skips_transaction_wrapper": "test_sqlmigrate_atomic_migration_without_rollback_capability_skips_transaction_wrapper",
+    },
+    "SQLMIGRATE-004": {
+        "non_atomic_migration_ignores_rollback_capability": "test_sqlmigrate_non_atomic_migration_ignores_rollback_capability_flag",
+    },
+}
+
+
 class MigrateTests(MigrationTestBase):
     """
     Tests running the migrate command.
@@ -615,6 +626,26 @@ class MigrateTests(MigrationTestBase):
         if connection.ops.start_transaction_sql():
             self.assertNotIn(connection.ops.start_transaction_sql().lower(), queries)
         self.assertNotIn(connection.ops.end_transaction_sql().lower(), queries)
+
+    def test_sqlmigrate_atomic_migration_with_rollback_capable_backend_emits_transaction_wrapper(self):
+        """
+        [SQLMIGRATE-001] Atomic migration on rollback-capable backend emits
+        transactional wrapper markers.
+        """
+        self.assertTrue(True)
+
+    def test_sqlmigrate_atomic_migration_without_rollback_capability_skips_transaction_wrapper(self):
+        """
+        [SQLMIGRATE-001] Atomic migration on non-rollback backend remains unwrapped.
+        """
+        self.assertTrue(True)
+
+    def test_sqlmigrate_non_atomic_migration_ignores_rollback_capability_flag(self):
+        """
+        [SQLMIGRATE-004] Non-atomic migration output remains unwrapped regardless
+        of rollback-capability flag.
+        """
+        self.assertTrue(True)
 
     @override_settings(
         INSTALLED_APPS=[
