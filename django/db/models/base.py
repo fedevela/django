@@ -968,6 +968,16 @@ class Model(metaclass=ModelBase):
         # - OUTPUT CONTRACT:
         #   - Deterministic, per-instance label source for non-override path.
         #   - Return type must stay stringified/None-preserving as today.
+        # REQ-138-007 generated-helper determinism:
+        # - Precondition: effective helper for this field was resolved during class
+        #   construction to this generated function wrapper.
+        # - Invariant across repeated calls:
+        #   - `field.attname` and `field.flatchoices` are read each call from the
+        #   resolved class field and instance state.
+        #   - for unchanged instance state, the dictionary lookup returns one
+        #     deterministic label (or raw value on miss) every time.
+        # - No alternate strategy branch exists in this function, so per-call
+        #   behavior does not oscillate between implementations.
         value = getattr(self, field.attname)
         return force_str(dict(field.flatchoices).get(value, value), strings_only=True)
 

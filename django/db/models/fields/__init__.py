@@ -837,6 +837,26 @@ class Field(RegisterLookupMixin):
             #   current value from the instance and its own flattened choices map.
             # - Failure mode: if no mapped label exists, fallback returns raw value from
             #   `_get_FIELD_display` so unmapped/invalid values pass through unchanged.
+            # REQ-138-007: effective helper resolution is stable across repeated calls.
+            # State and procedure:
+            # - Input: `cls` (model class in construction), `self` (choice field),
+            #   `display_name` (`get_<field>_display`).
+            # - Step 1: compute local helper presence:
+            #   `has_local = display_name in cls.__dict__`.
+            #   - if TRUE -> local helper is the effective implementation forever.
+            # - Step 2: compute inherited helper presence:
+            #   `has_inherited = hasattr(cls, display_name)`.
+            #   - if TRUE -> inherited helper is the effective implementation forever.
+            # - Step 3: otherwise synthesize once:
+            #   generated = partialmethod(cls._get_FIELD_display, field=self).
+            #   - install generated on class attribute `display_name` once.
+            # - Postcondition:
+            #   class construction reaches a single, fixed effective helper for this
+            #   field name; each runtime call resolves the same callable via normal
+            #   attribute lookup without re-running this branch.
+            # - Failure path:
+            #   method is only defined for fields where `self.choices is not None`; that
+            #   absence leaves no display helper path in scope for this field.
             if display_name not in cls.__dict__ and not hasattr(cls, display_name):
                 setattr(cls, display_name, partialmethod(cls._get_FIELD_display, field=self))
 
