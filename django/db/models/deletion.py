@@ -306,6 +306,24 @@ class Collector:
             #       its stale pk snapshot.
             #   - FAILURE PATH:
             #     - if SQL delete raises, propagate the error and do not mutate pk.
+            # DJ11179-003:
+            # - LOGIC OBLIGATION (branch-gated mutation):
+            #   - INPUT:
+            #     - execution has only one concrete model bucket and one in-memory instance candidate.
+            #     - branch decision point is `self.can_fast_delete(instance)`.
+            #   - DECISION:
+            #     - if branch is dependency-free fast-delete, apply in-memory pk reset here.
+            #     - if branch is dependency-managed collector flow, do not apply fast-delete pk-reset here.
+            #   - REQUIRED SEQUENCE:
+            #     1) call `transaction.mark_for_rollback_on_error()`;
+            #     2) execute `sql.DeleteQuery(model).delete_batch([instance.pk], self.using)`;
+            #     3) set `instance.pk` to `None` for this dependency-free path;
+            #     4) return collector result tuple immediately.
+            #   - TRACEABILITY:
+            #     - maps to
+            #       `test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset`
+            #       and
+            #       `test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset`.
             if self.can_fast_delete(instance):
                 with transaction.mark_for_rollback_on_error():
                     count = sql.DeleteQuery(model).delete_batch([instance.pk], self.using)
@@ -367,6 +385,12 @@ class Collector:
         #   - If object identity is still referenced in memory after `delete()`,
         #     stale lookups must still be false/DoesNotExist because rows are removed
         #     from DB by collector-owned SQL deletion paths.
+        # DJ11179-003:
+        # - BRANCH SEMANTICS:
+        #   - this loop is the dependency-managed collector settlement boundary.
+        #   - it must remain separate from the `can_fast_delete(instance)` mutation path above.
+        #   - tests named in this requirement track that collector-managed flow does not
+        #     receive the fast-delete-only pk-reset mutation here.
         for model, instances in self.data.items():
             for instance in instances:
                 setattr(instance, model._meta.pk.attname, None)
