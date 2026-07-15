@@ -2,7 +2,7 @@ Issue #59 Memoryview normalization in HttpResponse (Architecture artifact)
 =====================================================================
 
 Status: Architecture-ready for implementation (stable boundaries defined, traceability preserved).
-Requirements: MEMVIEW-001, MEMVIEW-002, MEMVIEW-003, MEMVIEW-004
+Requirements: MEMVIEW-001, MEMVIEW-002, MEMVIEW-003, MEMVIEW-004, MEMVIEW-005
 
 Requirement-to-architecture map
 ------------------------------
@@ -18,6 +18,11 @@ Requirement-to-architecture map
   - Getter returns concrete `bytes` output on every access, independent of constructor type.
 - MEMVIEW-004 -> [django/http/response.py: HttpResponse.content getter]
   - Owns repeated read behavior contract for normalized memoryview-origin content.
+- MEMVIEW-005 -> [django/http/response.py: HttpResponse.__init__, HttpResponse.content getter]
+  - Owns constructor-to-content invariant that legacy memoryview stringified payload (`<memory at ...>`) is never surfaced.
+  - Verification pressure is split across:
+    - `tests/responses/test_memoryview_traceability.py` for explicit contract-focused regression.
+    - `tests/httpwrappers/tests.py` for canonical HttpResponse suite regression coverage.
 
 File/module placement decisions
 ------------------------------
@@ -27,6 +32,8 @@ File/module placement decisions
 - `tests/responses/test_memoryview_traceability.py` (existing test artifact)
   - Remains the verification seam; behavior checks are now required to be implemented
     against public `HttpResponse(...)` and `.content`.
+- `tests/httpwrappers/tests.py` (existing test artifact)
+  - Remains the canonical suite seam for production-facing regression assertions around constructor memoryview handling.
 
 Ownership and boundaries
 -----------------------
@@ -49,6 +56,9 @@ Ownership and boundaries
 - Boundary E: Legacy assignment path boundary (out of scope of this issue)
   - Owner: `HttpResponse.content` setter path and `write()`.
   - Responsibility: unchanged behavior for runtime assignments and streaming-like appends.
+- Boundary F: Legacy-output rejection boundary (`MEMVIEW-005`)
+  - Owners: `HttpResponse.__init__`, `HttpResponse.content` getter, and regression tests.
+  - Responsibility: enforce that constructor-origin memoryview payloads can only be observed as concrete payload bytes, never as `<memory at` string forms.
 
 Interface / contract artifacts
 -----------------------------
@@ -67,6 +77,13 @@ Interface / contract artifacts
   - Stability rule: repeated getter calls return equal `bytes` objects for constructor-normalized memoryviews.
 - Failure contract:
   - Conversion/type failures remain constructor-initialization failures (no deferred recovery in getter).
+- Legacy-rejection contract (`MEMVIEW-ARCH-005`):
+  - Input: constructor receives `memoryview(b"My Content")`.
+  - Processing: constructor normalization and content materialization must not re-render as memoryview `repr`.
+  - Assertions required on `.content`:
+    - `not payload.startswith(b"<memory at ")`
+    - `payload != b"<memory at 0x"`
+    - `payload == b"My Content"`
 
 Dependency-direction notes
 -------------------------
@@ -90,9 +107,14 @@ Integration-seam skeletons
   - Location: `HttpResponse.make_bytes` and constructor comments in `django/http/response.py`.
   - Purpose: codify that `str` and `bytes` always follow legacy conversion semantics and that no memoryview-specific
     branch runs for these inbound baseline types.
+- Regression seam:
+  - Location:
+    - `tests/responses/test_memoryview_traceability.py::HttpResponseMemoryviewTraceabilityTests.test_memview_005_constructor_memoryview_rejects_legacy_memory_repr`
+    - `tests/httpwrappers/tests.py::HttpResponseTests.test_memoryview_constructor_rejects_legacy_payload_rendering`
+  - Purpose: assert deterministic negative rejection of legacy representation while preserving direct byte equality.
 - Verification seam:
   - Location: `tests/responses/test_memoryview_traceability.py`.
-  - Purpose: ensure each requirement ID has explicit test coverage name.
+  - Purpose: ensure each requirement ID has explicit test coverage name and explicit legacy-output rejection checks for `MEMVIEW-005`.
 
 Changed architecture artifact paths
 ----------------------------------
@@ -102,6 +124,6 @@ Changed architecture artifact paths
 
 Completion status
 ----------------
-- All traced obligations are assigned to explicit owners and seams, including `MEMVIEW-003`.
+- All traced obligations are assigned to explicit owners and seams, including `MEMVIEW-005`.
 - Requirement IDs map to owning module/function seams and include explicit baseline-path preservation pressure.
 - Structural artifacts are now present and implementation-safe (clear boundary and dependency direction).
