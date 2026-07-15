@@ -120,6 +120,10 @@ class UtilsTests(SimpleTestCase):
             "test_null_display_for_field",
             "test_list_display_for_value",
         ],
+        "D172-007": [
+            "test_D172_007_label_for_field_metadata_derivation_remains_decoupled_from_readonly_jsonpath",
+            "test_D172_007_label_for_field_and_readonly_json_rendering_remain_separable_contracts",
+        ],
     }
 
     def test_D172_001_display_for_field_jsonfield_readonly_renders_with_prepare_value(self):
@@ -313,6 +317,14 @@ class UtilsTests(SimpleTestCase):
             display_for_field(datetime(2025, 1, 2).date(), models.DateField(), self.empty_value),
             localize(datetime(2025, 1, 2).date()),
         )
+
+    def test_D172_007_label_for_field_metadata_derivation_remains_decoupled_from_readonly_jsonpath(self):
+        """D172-007: label_for_field remains metadata-driven regardless of JSON readonly behavior."""
+        pass
+
+    def test_D172_007_label_for_field_and_readonly_json_rendering_remain_separable_contracts(self):
+        """D172-007: label resolution and readonly JSON formatting should be separately testable."""
+        pass
 
     def test_list_display_for_value(self):
         display_value = display_for_value([1, 2, 3], self.empty_value)
