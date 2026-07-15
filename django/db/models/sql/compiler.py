@@ -258,6 +258,10 @@ class SQLCompiler:
         can add aliases to clauses that do not yet have one, or it can
         add totally new select clauses).
         """
+        # ORDERBY-004: obligation mapping for all supported ordering-expression types.
+        # - S1: normalize duplicate detection against every branch-generated term.
+        # - S2: preserve exactly one clause when normalized fragment+direction+params collide.
+        # - S3: keep dedupe scoped to this function and keyed on rendered semantics, not type tags.
         if self.query.extra_order_by:
             ordering = self.query.extra_order_by
         elif not self.query.default_ordering:
@@ -276,6 +280,9 @@ class SQLCompiler:
 
         order_by = []
         for field in ordering:
+            # ORDERBY-004 (shared term capture):
+            # Each branch below emits a single `(expr, is_ref)` tuple into `order_by`.
+            # The dedupe decision must happen later and cannot be branch-specific.
             if hasattr(field, 'resolve_expression'):
                 if not isinstance(field, OrderBy):
                     field = field.asc()
@@ -332,6 +339,8 @@ class SQLCompiler:
         seen = set()
 
         for expr, is_ref in order_by:
+            # ORDERBY-004 deterministic control flow:
+            # Step A (resolve): produce render-ready order expression from AST-like item.
             resolved = expr.resolve_expression(self.query, allow_joins=True, reuse=None)
             if self.query.combinator:
                 src = resolved.get_source_expressions()[0]
@@ -348,6 +357,7 @@ class SQLCompiler:
                         break
                 else:
                     raise DatabaseError('ORDER BY term does not match any column in the result set.')
+            # Step B (render): compile the resolved term to deterministic SQL/params for keying.
             sql, params = self.compile(resolved)
             # ORDERBY-002:
             # Deterministic-duplicate-key obligation:
@@ -372,6 +382,11 @@ class SQLCompiler:
             without_ordering = self._normalize_order_by_fragment_for_dedupe(without_ordering)
             params_hash = make_hashable(params)
             dedupe_key = (without_ordering, direction_key, params_hash)
+            # ORDERBY-004 keying condition:
+            # Match only when all three normalized dimensions are equal:
+            # body, direction, and params hash.
+            # This keeps non-RawSQL and RawSQL terms consistent under one dedupe path
+            # while preventing cross-type false-collisions when compiled fragments differ.
             if dedupe_key in seen:
                 # Step 3: duplicate-key branch.
                 # If normalized key already exists, skip append and continue loop.
