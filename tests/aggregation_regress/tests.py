@@ -1,5 +1,6 @@
 import datetime
 import pickle
+import re
 from decimal import Decimal
 from operator import attrgetter
 from unittest import mock
@@ -33,6 +34,18 @@ from .models import (
 
 
 class AggregationTests(TestCase):
+
+    def _extract_group_by(self, sql):
+        match = re.search(r"\\bGROUP BY\\b\\s*(.*?)"
+                          r"(?:\\bORDER BY\\b|\\bLIMIT\\b|\\bOFFSET\\b|\\bFOR UPDATE\\b|$)",
+                          sql,
+                          flags=re.IGNORECASE | re.DOTALL)
+        self.assertIsNotNone(match)
+        return re.sub(r"\s+", " ", match.group(1)).strip().lower()
+
+    def _normalize_group_by_clause(self, sql):
+        group_by = self._extract_group_by(sql)
+        return ", ".join(part.strip() for part in group_by.split(','))
 
     @classmethod
     def setUpTestData(cls):
@@ -1547,8 +1560,10 @@ class AggregationTests(TestCase):
             .annotate(m=Max("id"))
             .values("m")
         )
-        _ = str(queryset.query)
-        self.assertTrue(True)
+        sql = str(queryset.query)
+        group_by = self._extract_group_by(sql)
+        self.assertIn('email', group_by)
+        self.assertNotRegex(group_by, r"\\bid\\b")
 
     def test_DJANGO_11797_002_sliced_grouped_values_query_preserves_group_keys(self):
         """
@@ -1563,8 +1578,12 @@ class AggregationTests(TestCase):
             .values("m")
         )
         sliced_queryset = queryset[:1]
-        _ = str(sliced_queryset.query)
-        self.assertTrue(True)
+        sliced_sql = str(sliced_queryset.query)
+        self.assertIn('LIMIT 1', sliced_sql.upper())
+        self.assertEqual(
+            self._normalize_group_by_clause(str(queryset.query)),
+            self._normalize_group_by_clause(sliced_sql),
+        )
 
     def test_DJANGO_11797_002_grouping_shape_is_unchanged_by_slice_wrapping(self):
         """
@@ -1579,8 +1598,14 @@ class AggregationTests(TestCase):
             .values("m")
         )
         sliced_queryset = queryset[:1]
-        _ = (str(queryset.query), str(sliced_queryset.query))
-        self.assertTrue(True)
+        base_sql = str(queryset.query)
+        sliced_sql = str(sliced_queryset.query)
+        self.assertEqual(
+            self._normalize_group_by_clause(base_sql),
+            self._normalize_group_by_clause(sliced_sql),
+        )
+        self.assertNotIn('LIMIT 1', base_sql.upper())
+        self.assertIn('LIMIT 1', sliced_sql.upper())
 
 
 class JoinPromotionTests(TestCase):
