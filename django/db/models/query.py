@@ -49,6 +49,11 @@ class ModelIterable(BaseIterable):
         queryset = self.queryset
         db = queryset.db
         compiler = queryset.query.get_compiler(using=db)
+        # ISNULL-002 evaluation-path invariant:
+        # - Iteration reaches execute_sql only after filters were resolved into the
+        #   Query.where tree via Query.build_filter/build_lookup.
+        # - Any non-bool "__isnull" RHS must have already failed there, so this call
+        #   is never reached for invalid isnull lookups.
         # Execute the query. This will also fill compiler.select, klass_info,
         # and annotations.
         results = compiler.execute_sql(chunked_fetch=self.chunked_fetch, chunk_size=self.chunk_size)

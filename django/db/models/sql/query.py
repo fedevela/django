@@ -259,6 +259,10 @@ class Query(BaseExpression):
         Parameter values won't necessarily be quoted correctly, since that is
         done by the database interface at execution time.
         """
+        # ISNULL-002 compile-time precondition:
+        # - __str__ delegates to sql_with_params() and then formatting.
+        # - No direct lookup validation occurs here; it must have happened
+        #   earlier in lookup construction (e.g., build_lookup).
         sql, params = self.sql_with_params()
         return sql % params
 
@@ -267,6 +271,9 @@ class Query(BaseExpression):
         Return the query as an SQL string and the parameters that will be
         substituted into the query.
         """
+        # ISNULL-002 SQL materialization path:
+        # - Any invalid "__isnull" RHS must have been rejected before this call.
+        # - If accepted here, compiler.as_sql() can proceed with query rendering.
         return self.get_compiler(DEFAULT_DB_ALIAS).as_sql()
 
     def __deepcopy__(self, memo):
@@ -1160,10 +1167,16 @@ class Query(BaseExpression):
             lhs = self.try_transform(lhs, lookup_name)
             lookup_name = 'exact'
             lookup_class = lhs.get_lookup(lookup_name)
-            if not lookup_class:
-                return
+                if not lookup_class:
+                    return
 
-        # ISNULL-001 / ISNULL-005
+        # ISNULL-001 / ISNULL-002 / ISNULL-005: pre-SQL validation gate.
+        # 1) Decision input:
+        #    - lookup_name from parsed lookup path
+        #    - rhs raw value from Query.build_filter()/resolve_lookup_value
+        # 2) If lookup_name == "isnull" and rhs is not bool -> raise ValueError.
+        # 3) Halt immediately (no Lookup object created, no as_sql path entered).
+        # 4) If rhs is bool -> continue to lookup object construction.
         # __isnull accepts only strict bool RHS values.
         if lookup_name == 'isnull' and not isinstance(rhs, bool):
             raise ValueError(
@@ -1270,6 +1283,10 @@ class Query(BaseExpression):
 
         clause = self.where_class()
         if reffed_expression:
+            # ISNULL-002 flow checkpoint:
+            # - Build direct lookups before adding to WHERE.
+            # - Any ValueError from build_lookup must escape here and stop query
+            #   compilation before SQL generation.
             condition = self.build_lookup(lookups, reffed_expression, value)
             clause.add(condition, AND)
             return clause, []
@@ -1314,6 +1331,10 @@ class Query(BaseExpression):
         else:
             col = _get_col(targets[0], join_info.final_field, alias, simple_col)
 
+        # ISNULL-002 execution invariant:
+        # - Joined-field lookup path also routes through build_lookup.
+        # - Successful guard keeps condition available for compiler and execute_sql;
+        #   failing guard prevents both string compilation and database hit.
         condition = self.build_lookup(lookups, col, value)
         lookup_type = condition.lookup_name
         clause.add(condition, AND)
