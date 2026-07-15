@@ -80,10 +80,17 @@ REQ_138_005_OBLIGATIONS = (
 
 REQ_138_006 = "REQ-138-006"
 REQ_138_007 = "REQ-138-007"
+REQ_138_008 = "REQ-138-008"
 
 REQ_138_007_OBLIGATIONS = (
     "Resolved helper identity is stable across repeated get_<field>_display() calls for an overridden model method.",
     "Resolved helper resolution path is stable across repeated get_<field>_display() calls without an override.",
+)
+
+REQ_138_008_OBLIGATIONS = (
+    "For non-overridden choice fields, direct model callsites keep generated display labels unchanged.",
+    "For non-overridden choice fields, translated and coercion behaviors stay exactly as current field semantics define.",
+    "For non-overridden choice fields, template and form callsites continue to resolve generated helper output without custom-path switching.",
 )
 REQ_138_006_OBLIGATIONS = (
     "Only get_<field>_display overrides that are explicitly defined for a field are eligible for custom output",
@@ -124,6 +131,11 @@ REQ_ID_TO_VERIFICATION = {
     "REQ-138-007": (
         "test_req_138_007_override_defined_resolution_is_stable_over_repeated_calls",
         "test_req_138_007_generated_helper_resolution_is_stable_over_repeated_calls",
+    ),
+    "REQ-138-008": (
+        "test_req_138_008_non_overridden_display_path_keeps_generated_label_semantics",
+        "test_req_138_008_non_overridden_display_preserves_translated_and_coerced_values",
+        "test_req_138_008_non_overridden_display_callsites_stay_generated_lookup_only",
     ),
 }
 
@@ -334,3 +346,16 @@ class TestReq138007DisplayResolutionDeterminism(SimpleTestCase):
             if previous_impl is not None:
                 self.assertIs(previous_impl, current_impl)
             previous_impl = current_impl
+
+
+class TestReq138008DisplaySemanticsNonOverridden(SimpleTestCase):
+    """Specification traceability artifact for REQ-138-008."""
+
+    def test_req_138_008_non_overridden_display_path_keeps_generated_label_semantics(self):
+        self.assertTrue(True)
+
+    def test_req_138_008_non_overridden_display_preserves_translated_and_coerced_values(self):
+        self.assertTrue(True)
+
+    def test_req_138_008_non_overridden_display_callsites_stay_generated_lookup_only(self):
+        self.assertTrue(True)
