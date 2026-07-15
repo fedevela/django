@@ -1,0 +1,1309 @@
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index 7ca0d68..aecaaed 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -109,6 +109,24 @@ def iter_all_python_module_files():
+ @functools.lru_cache(maxsize=1)
+ def iter_modules_and_files(modules, extra_files):
+     """Iterate through all modules needed to be watched."""
++    # AUTO-001 pseudocode:
++    # INPUT: imported module objects + explicit extra file paths.
++    # OUTPUT: frozenset of candidate watched file paths.
++    # STATE: initialize empty sys_file_paths and results at function entry.
++    # PROCESS:
++    #   1) For each module in sorted imported modules snapshot:
++    #      - skip non-ModuleType or __spec__-less modules.
++    #      - if module has concrete location, append origin path.
++    #   2) Merge module paths with extra_files.
++    #   3) For each candidate:
++    #      - skip empties and non-existing files.
++    #      - normalize to absolute pathlib.Path.
++    #      - add to result set.
++    #   4) Return frozenset(results).
++    # AUTO-001 TRACE:
++    #   - the launch script path for `python manage.py runserver`
++    #     must remain represented in this collected stream for StatReloader's
++    #     initial snapshot.
+     sys_file_paths = []
+     for module in modules:
+         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
+@@ -202,7 +220,49 @@ def get_child_arguments():
+     return args
+ 
+ 
++def get_manage_py_path():
++    """Return the resolved `manage.py` path when starting `runserver`."""
++    # AUTO-006 pseudocode:
++    # DECISION LATTICE (launch-path gated):
++    #   IF argument length < 2 -> RETURN None.
++    #   ELSE IF argv[1] != 'runserver' -> RETURN None.
++    #   ELSE IF argv[0] is empty -> RETURN None.
++    #   ELSE TRY resolve(argv[0]) and continue only if resolution succeeds.
++    #   IF resolved name != 'manage.py' OR path missing -> RETURN None.
++    #   ELSE RETURN resolved canonical path.
++    # REQUIREMENT:
++    #   A non-manage.py launch entry must not produce a manage.py watch path
++    #   so later watch-seed logic cannot mutate scope for non-manage entry points.
++    # AUTO-003 implementation:
++    # - only evaluate when runserver is the subcommand.
++    # - normalize candidate script path to a canonical absolute path.
++    # - require that the resolved path exists and is named ``manage.py``.
++    # - short-circuit to ``None`` on any resolution failure or invalid shape.
++    if len(sys.argv) < 2:
++        return None
++    if sys.argv[1] != 'runserver':
++        return None
++    if not sys.argv[0]:
++        return None
++    try:
++        script = Path(sys.argv[0]).resolve(strict=False)
++    except (OSError, RuntimeError):
++        return None
++    if script.name != 'manage.py' or not script.exists():
++        return None
++    return script
++
++
+ def trigger_reload(filename):
++    # AUTO-002 pseudocode:
++    # INPUT: file_path identified as changed by file watcher.
++    # TRANSITION:
++    #   - Log and raise a reload request through process termination signal.
++    #   - Preserve existing contract that this request is represented by exit code 3.
++    # OUTCOME:
++    #   - restart_with_reloader() interprets exit code 3 as "restart and re-exec".
++    # FAILURE PATH:
++    #   - no in-process fallback path is declared in this pseudocode locus.
+     logger.info('%s changed, reloading.', filename)
+     sys.exit(3)
+ 
+@@ -236,11 +296,27 @@ class BaseReloader:
+         logger.debug('Watching file %s.', path)
+         self.extra_files.add(path)
+ 
+-    def watched_files(self, include_globs=True):
++def watched_files(self, include_globs=True):
+         """
+         Yield all files that need to be watched, including module files and
+         files within globs.
+         """
++        # AUTO-001 pseudocode:
++        # INITIAL SNAPSHOT SEQUENCE for StatReloader:
++        #   - yield module-backed files first.
++        #   - yield explicit reloader.extra_files.
++        #   - when include_globs, yield directory glob expansion.
++        # REQUIREMENT ALLOCATION:
++        #   - the managed launch script path from `python manage.py runserver`
++        #     must be present in this combined stream before any snapshot diff.
++        # AUTO-004 pseudocode:
++        # PRESERVE:
++        #   - treat output as additive composition:
++        #       modules + preexisting explicit files + preexisting globs.
++        #   - do not replace, clear, or filter source collections when adding
++        #     manage.py to `extra_files`.
++        #   - emit each source segment as-is, so previously discovered baseline
++        #     entries remain present in snapshot inputs.
+         yield from iter_all_python_module_files()
+         yield from self.extra_files
+         if include_globs:
+@@ -306,6 +382,15 @@ class BaseReloader:
+         raise NotImplementedError('subclasses must implement check_availability().')
+ 
+     def notify_file_changed(self, path):
++        # AUTO-002 pseudocode:
++        # TRIGGER:
++        #   - Change detection surface has emitted a concrete file path.
++        # FLOW:
++        #   - emit autoreload signal with changed path.
++        #   - if no handler accepts responsibility (all results are falsy):
++        #       -> call trigger_reload(path).
++        # EFFECT:
++        #   - changed `manage.py` in a watched path becomes a restart request.
+         results = file_changed.send(sender=self, file_path=path)
+         logger.debug('%s notified as changed. Signal results: %s.', path, results)
+         if not any(res[1] for res in results):
+@@ -323,7 +408,88 @@ class BaseReloader:
+ class StatReloader(BaseReloader):
+     SLEEP_TIME = 1  # Check for changes once per second.
+ 
++    def __init__(self):
++        super().__init__()
++        # AUTO-004 pseudocode:
++        # PRESERVE: startup watch state from `BaseReloader` and existing stream
++        # sources must remain intact when adding manage.py.
++        # DECISION:
++        #   - start from existing `self.extra_files` baseline (preexisting explicit file
++        #     watches) and `self.directory_globs` baseline (preexisting watch globs).
++        #   - resolve candidate manage.py path: `manage_py = get_manage_py_path()`.
++        #   - if candidate is present, invoke `watch_file(manage_py)`; this only inserts
++        #     into `self.extra_files` (set union) and leaves existing modules/globs/files.
++        # FAILURE PATH:
++        #   - if `manage_py` is `None`, do not mutate any baseline watch collections.
++        # AUTO-003 pseudocode:
++        # PURPOSE: install exactly one canonical manage.py watch entry at startup.
++        # DECISION:
++        #   - compute candidate = get_manage_py_path()
++        #   - if candidate is None: no runserver-manage.py watch entry is added.
++        #   - if candidate is a path: register via watch_file(candidate).
++        # POSTCONDITION:
++        #   - watcher snapshot receives only the canonical absolute real path from
++        #     get_manage_py_path.
++        # AUTO-005 pseudocode:
++        # SYNTHETIC-CYCLE GUARD:
++        #   - add manage.py to `self.extra_files` before first snapshot.
++        #   - first snapshot seeds `mtimes` for manage.py like every other baseline
++        #     watched path.
++        #   - unchanged baselines must not satisfy any trigger branch in later
++        #     cycles, so initial inclusion cannot create a restart by itself.
++        # AUTO-006 pseudocode:
++        # BRANCH:
++        #   candidate = get_manage_py_path()
++        #   IF candidate is None -> do not call self.watch_file().
++        #   IF candidate is Path -> call self.watch_file(candidate).
++        # EFFECT:
++        #   - launch entries not based on manage.py preserve their pre-seed watch
++        #     baseline exactly as-is; no synthetic manage.py scope growth occurs.
++        #   - launch entries based on manage.py append exactly one canonical
++        #     absolute watch entry.
++        manage_py = get_manage_py_path()
++        if manage_py is not None:
++            self.watch_file(manage_py)
++
+     def tick(self):
++        # AUTO-002 pseudocode:
++        # REQUIREMENT: detect persisted `manage.py` change on the next check cycle.
++        # INPUTS:
++        #   - managed snapshot map mtimes from prior check cycles.
++        #   - `snapshot_files()` stream of (filepath, mtime).
++        # STATE:
++        #   - mtimes is initialized empty on first call and retained per generator loop.
++        # LOOP:
++        #   - for each (filepath, mtime):
++        #       - if filepath unseen: seed mtimes[filepath]=mtime and continue.
++        #       - if mtime > mtimes[filepath]:
++        #           - fire notify_file_changed(filepath) immediately.
++        #           - do not block other checks until loop continues.
++        #   - sleep SLEEP_TIME before yielding control to run_loop.
++        # TRANSITION:
++        #   - next run_loop tick repeats diffing against persisted mtimes baseline.
++        # FAILURE PATH:
++        #   - snapshot read misses/deletions are filtered inside snapshot_files.
++        # AUTO-005 pseudocode:
++        # INPUT: `mtimes` state map persisted across check cycles.
++        # STEP 1: first-cycle bootstrapping:
++        #   - for each (filepath, mtime):
++        #       - if filepath not in mtimes: record mtimes[filepath] = mtime and
++        #         continue (do not notify).
++        # STEP 2: subsequent checks:
++        #   - for each (filepath, mtime):
++        #       - if filepath unseen: record baseline and continue.
++        #       - if mtime == old_time: no state change, no notification.
++        #       - if mtime < old_time: treat as unchanged for this contract, no
++        #         notification.
++        #       - if mtime > old_time: emit notify_file_changed(filepath) and keep
++        #         processing the rest of this snapshot.
++        # STEP 3: cycle conclusion:
++        #   - if STEP 2 had no positive mtime comparisons for any path, then this
++        #     check cycle has no restart path.
++        # FAILURE PATH:
++        #   - any file dropped from `snapshot_files` is already excluded from this
++        #     cycle’s comparison set; this must not be interpreted as a restart.
+         mtimes = {}
+         while True:
+             for filepath, mtime in self.snapshot_files():
+@@ -332,7 +498,18 @@ class StatReloader(BaseReloader):
+                     logger.debug('File %s first seen with mtime %s', filepath, mtime)
+                     mtimes[filepath] = mtime
+                     continue
+-                elif mtime > old_time:
++                elif mtime == old_time:
++                    logger.debug('File %s unchanged (mtime %s).', filepath, mtime)
++                    continue
++                elif mtime < old_time:
++                    logger.debug(
++                        'File %s has older mtime than previous snapshot (%s < %s).',
++                        filepath,
++                        mtime,
++                        old_time,
++                    )
++                    continue
++                else:
+                     logger.debug('File %s previous mtime: %s, current mtime: %s', filepath, old_time, mtime)
+                     self.notify_file_changed(filepath)
+ 
+@@ -341,6 +518,30 @@ class StatReloader(BaseReloader):
+ 
+     def snapshot_files(self):
+         # watched_files may produce duplicate paths if globs overlap.
++        # AUTO-001 pseudocode:
++        # INPUT: watched_files(include_globs=True) stream.
++        # OUTPUT: unique (file, mtime) pairs.
++        # FLOW:
++        #   - for each file in watched_files:
++        #       - dedupe through seen_files.
++        #       - attempt stat(); on OSError skip missing/deletions.
++        #       - emit (file, mtime).
++        # EFFECT:
++        #   - absence of the manage.py launch path at this stage
++        #     indicates a watcher snapshot gap for AUTO-001.
++        # AUTO-004 pseudocode:
++        # PURPOSE: emit an additive union of all baseline categories plus any
++        # managed launch path already present in `self.extra_files`.
++        # INPUTS:
++        #   - modules from iter_all_python_module_files()
++        #   - explicit files from `self.extra_files`
++        #   - expanded file globs from `self.directory_globs`
++        # PRESERVATION:
++        #   - do not drop or transform entries from modules/globs/explicit files.
++        #   - only remove during snapshotting are transient OSError skips for files that
++        #     disappear between collection and stat.
++        # FAILURE PATH:
++        #   - keep scanning remaining files after a single missing-file OSError.
+         seen_files = set()
+         for file in self.watched_files():
+             if file in seen_files:
+diff --git a/docs/architecture/AUTO-001-manage-py-watcher-architecture.rst b/docs/architecture/AUTO-001-manage-py-watcher-architecture.rst
+new file mode 100644
+index 0000000..2037ab6
+--- /dev/null
++++ b/docs/architecture/AUTO-001-manage-py-watcher-architecture.rst
+@@ -0,0 +1,98 @@
++AUTO-001 — Manage script inclusion in StatReloader initial watched set
++===================================================================
++
++Purpose
++-------
++
++Place the deterministic requirement for ``AUTO-001`` into a stable structure:
++
++``Given `python manage.py runserver`, the initial watcher snapshot for
++``StatReloader`` must include the concrete launch script path used for
++process start.`` 
++
++Requirement-to-architecture map
++------------------------------
++
++.. list-table::
++   :header-rows: 1
++
++   * - Requirement
++     - Obligation
++     - Architectural locus
++     - Rationale
++   * - ``AUTO-001``
++     - Include the concrete launch script path used to start ``runserver`` in the
++       initial watched-file stream.
++     - ``django.utils.autoreload``
++     - Keeps file-watcher correctness constrained to the current reloader
++       boundary without changing reload mechanics.
++
++Pressure decomposition
++---------------------
++
++*Ownership*
++  - ``django.utils.autoreload`` owns the initial snapshot pipeline
++    (``iter_modules_and_files`` → ``BaseReloader.watched_files`` →
++    ``StatReloader.snapshot_files``).
++
++*Boundary*
++  - Command-line launch context (``sys.argv``/entry script) is an
++    external boundary input.
++  - Watcher internals are internal to the reloader boundary and must consume a
++    normalized, absolute-path launch candidate.
++
++*Contracts*
++  - ``iter_modules_and_files(modules, extra_files)`` returns a ``frozenset`` of
++    absolute ``Path`` values representing candidate watched files.
++  - ``BaseReloader.watched_files(include_globs=True)`` yields absolute ``Path``
++    values by composing module candidates, explicit reloader file adds, and glob
++    expansions.
++  - ``StatReloader.snapshot_files()`` consumes that stream and emits
++    deduplicated ``(Path, mtime)``, which is the first snapshot contract boundary.
++
++*Dependency direction*
++  - Process launch context flows inward: CLI entry context -> watcher candidate
++    stream -> snapshot output.
++  - No dependency changes from file-system watcher backends; snapshot scope is
++    constrained to caller-provided path candidates.
++
++Integration seam plan
++---------------------
++
++1. Add a dedicated, ownership-local seam under ``django.utils.autoreload`` for a
++   launch-script path adapter:
++
++   - Input: resolved launch script path candidate derived from reloader startup
++     context.
++   - Output: absolute ``Path`` candidate guaranteed to participate in
++     ``watched_files`` stream composition before snapshot diff.
++
++2. Keep the seam within the reloader stack:
++
++   - Primary owner: ``BaseReloader`` for stream assembly.
++   - Initial verifier home: ``tests/utils_tests/test_autoreload.py``
++     ``StatReloaderTraceabilityTests``.
++
++3. Do not modify watcher backends or reload signaling behavior outside this
++   pipeline.
++
++Concrete artifact mapping
++-------------------------
++
++* Changed architecture artifact:
++  - ``docs/architecture/AUTO-001-manage-py-watcher-architecture.rst`` (this file)
++
++* Traceability references:
++  - ``django/utils/autoreload.py``
++    ``iter_modules_and_files`` / ``BaseReloader.watched_files`` /
++    ``StatReloader.snapshot_files``
++  - ``tests/utils_tests/test_autoreload.py``
++    ``StatReloaderTraceabilityTests.test_auto_001_initial_watch_list_includes_manage_py_launch_path``
++
++Completion notes
++---------------
++
++* All traced obligations map to a concrete file path and ownership boundary.
++* Structural direction is explicit: launch context is an upstream input; all watcher
++  snapshot behavior remains in ``django.utils.autoreload``.
++* Readiness for implementation: high, with one seam to instantiate and wire in next phase.
+diff --git a/docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst b/docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst
+new file mode 100644
+index 0000000..a308dc0
+--- /dev/null
++++ b/docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst
+@@ -0,0 +1,108 @@
++AUTO-002 — Restart when ``manage.py`` changes on next check cycle
++===============================================================
++
++Purpose
++-------
++
++Place the deterministic requirement for ``AUTO-002`` into durable architecture
++structure:
++
++``Given a running ``python manage.py runserver`` with ``StatReloader`` and ``manage.py``
++already watched, when ``manage.py`` is modified and saved, the change must be
++detected in the next polling cycle and flow into the restart/reload path without
++manual intervention.``
++
++Requirement-to-architecture map
++-------------------------------
++
++.. list-table::
++   :header-rows: 1
++
++   * - Requirement
++     - Obligation
++     - Architectural locus
++     - Rationale
++   * - ``AUTO-002``
++     - Detect persisted ``manage.py`` mtime drift on the next cycle and route to
++       the restart contract.
++     - ``django.utils.autoreload.StatReloader.tick`` →
++       ``django.utils.autoreload.BaseReloader.notify_file_changed`` →
++       ``django.utils.autoreload.trigger_reload``
++     - Keeps restart intent inside the reloader boundary and uses the existing
++       re-exec contract instead of adding a new backend.
++
++Pressure decomposition
++---------------------
++
++*Ownership*
++  - ``StatReloader`` owns the polling and baseline state (`mtimes`) for check-cycle
++    diffing.
++  - ``BaseReloader`` owns change-notification policy and signal fallback handoff.
++  - ``trigger_reload`` owns the process-restart contract consumed by ``restart_with_reloader``.
++
++*Boundary*
++  - ``StatReloader.tick`` is an internal polling boundary: it only consumes
++    ``snapshot_files`` and emits ``notify_file_changed`` on detected drift.
++  - ``BaseReloader.notify_file_changed`` is the integration seam to outside
++    observers via ``file_changed`` signal.
++  - ``trigger_reload`` is the hard boundary into process lifecycle orchestration
++    (outside the change-detection loop).
++
++*Contracts*
++  - ``StatReloader.tick`` contract:
++    - input: iterable of `(path, mtime)` from ``snapshot_files``
++    - state: persists `mtimes` map across cycles
++    - transition: `mtime > previous_mtime` => call ``notify_file_changed(path)``
++    - output: no direct return; one control turn per polling interval.
++  - ``BaseReloader.notify_file_changed`` contract:
++    - input: concrete changed `path`
++    - transition:
++      - fire ``file_changed`` signal
++      - if no receiver returns truthy value => ``trigger_reload(path)``
++    - output: reload attempt or no-op on delegated handlers.
++  - ``trigger_reload`` contract:
++    - input: changed `filename`
++    - output: `sys.exit(3)` to request supervised restart.
++
++*Dependency direction*
++  - CLI context (`sys.argv`) + module import surface -> ``BaseReloader.watched_files`` -> ``snapshot_files`` -> ``tick``.
++  - ``tick`` -> ``notify_file_changed`` -> optional signal listeners.
++  - signal fallthrough -> ``trigger_reload`` -> restart orchestrator loop (`restart_with_reloader`).
++  - No changes in this direction from watcher backends, command runner, or external APIs.
++
++Integration seam plan
++---------------------
++
++1. Treat ``StatReloader.tick`` baseline map as the only mutable detection state boundary
++   for the requirement.
++2. Keep restart delegation in ``BaseReloader.notify_file_changed`` and do not duplicate
++   restart behavior in per-reloader subclasses.
++3. Expose verification in ``tests/utils_tests/test_autoreload.py`` through the existing
++   traceability anchor test so the obligation remains connected to runtime contract
++   locations.
++
++Concrete architecture artifact mapping
++-------------------------------------
++
++* New architecture artifact:
++  - ``docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst`` (this file)
++
++* Runtime contract loci:
++  - ``django/utils/autoreload.py``
++    - ``StatReloader.tick``
++    - ``BaseReloader.notify_file_changed``
++    - ``trigger_reload``
++
++* Traceability locus:
++  - ``tests/utils_tests/test_autoreload.py``
++    ``StatReloaderTraceabilityTests.test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts``
++
++Completion notes
++---------------
++
++* ``AUTO-002`` has explicit ownership, seam, and dependency placement in a stable
++  module boundary.
++* The restart path remains owned by existing reloader contracts (`notify_file_changed` + `trigger_reload`).
++* Structural readiness is high: one new architecture artifact and one traceability
++  update complete the placement loop for implementation.
++
+diff --git a/docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst b/docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst
+new file mode 100644
+index 0000000..9459606
+--- /dev/null
++++ b/docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst
+@@ -0,0 +1,129 @@
++AUTO-003 - Manage path canonicalization in watcher snapshot
++==========================================================
++
++Purpose
++-------
++
++Place the deterministic requirement for ``AUTO-003`` into stable structure:
++
++``Given `runserver` is started via any valid `manage.py` launch form (absolute,
++relative, symlinked, or subdirectory launch), the watched entry must be the
++single canonical absolute real path to the target file.`` 
++
++Requirement
++-----------
++
++Canonicalized launch path must be determined before watcher snapshot assembly and
++cannot bypass the reloader module boundary.
++
++Requirement-to-architecture map
++-------------------------------
++
++.. list-table::
++   :header-rows: 1
++
++   * - Requirement
++     - Obligation
++     - Architectural locus
++     - Rationale
++   * - ``AUTO-003``
++     - Convert launch-script inputs to one canonical absolute real path and add
++       exactly one manage.py watch entry when valid.
++     - ``django.utils.autoreload`` (`get_manage_py_path` and
++       ``StatReloader.__init__``)
++     - Keeps path normalization and watcher seeding inside reloader ownership;
++       avoids leaking CLI normalization into restart orchestration.
++
++Pressure decomposition
++---------------------
++
++*Ownership*
++  - ``django.utils.autoreload.get_manage_py_path`` owns launch-script normalization
++    and eligibility checks.
++  - ``django.utils.autoreload.StatReloader.__init__`` owns the startup watch
++    seeding decision for manage.py.
++  - ``django.utils.autoreload.BaseReloader.watch_file`` owns invariant enforcement
++    for absolute watcher entries.
++  - ``tests.utils_tests.test_autoreload.StatReloaderTraceabilityTests`` owns
++    coverage for launch-form permutations.
++
++*Boundary*
++  - ``sys.argv`` is an external execution boundary input to the reloader module.
++  - Path normalization to a canonical filesystem location is an internal boundary
++    contract produced by ``get_manage_py_path`` before watcher registration.
++  - ``BaseReloader.watched_files`` and downstream snapshot logic consume only
++    normalized candidates.
++
++*Contracts*
++  - ``get_manage_py_path() -> Optional[Path]``
++    - Input: launch context values in ``sys.argv``.
++    - Output: either ``Path`` where
++      - file name is exactly ``manage.py``
++      - path is absolute
++      - symlink/relative tokens are resolved to a real filesystem path
++      - file exists
++      otherwise ``None``.
++  - ``StatReloader.__init__() -> None``
++    - Calls ``get_manage_py_path`` once on construction.
++    - If ``None``, contributes no extra manage.py watch entry.
++    - If ``Path``, invokes ``self.watch_file`` exactly once with that path.
++  - ``watch_file(path: Path) -> None``
++    - Requires absolute ``Path`` input.
++    - Adds to ``extra_files`` set for snapshot participation.
++
++*Dependency direction*
++  - CLI launch context (``sys.argv``) -> ``get_manage_py_path`` -> ``StatReloader.__init__`` ->
++    ``watch_file`` -> ``BaseReloader.extra_files`` -> ``BaseReloader.watched_files`` ->
++    snapshot stream.
++  - No upstream dependency is introduced from watcher internals to process restart
++    logic; canonicalization is local to the reloader startup edge.
++
++Integration seam plan
++---------------------
++
++1. Preserve and implement ownership at function level:
++   - ``get_manage_py_path`` performs only launch-script normalization and
++     validity filtering.
++   - ``StatReloader.__init__`` is the single downstream consumer for that
++     normalized value.
++
++2. Enforce one-way registration semantics:
++   - At startup, register one entry when and only when ``get_manage_py_path``
++     returns a validated canonical path.
++   - Avoid duplicate registration by using set semantics in
++     ``BaseReloader.extra_files`` and one invocation site.
++
++3. Keep path invariants at module boundary:
++   - Normalize with ``Path.resolve()`` in ``get_manage_py_path``.
++   - Preserve all canonicalization policy in one owning module to minimize
++     coupling.
++
++Concrete architecture artifact mapping
++-------------------------------------
++
++* Changed architecture artifact:
++  - ``docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst`` (this file)
++
++* Runtime contract loci:
++  - ``django/utils/autoreload.py``
++    - ``get_manage_py_path``
++    - ``StatReloader.__init__``
++    - ``BaseReloader.watch_file``
++
++* Traceability loci:
++  - ``tests/utils_tests/test_autoreload.py``
++    ``StatReloaderTraceabilityTests``
++
++    - ``test_auto_003_watch_entry_for_manage_py_absolute_launch_path_is_canonical_absolute_realpath``
++    - ``test_auto_003_watch_entry_for_manage_py_relative_launch_path_is_canonical_absolute_realpath``
++    - ``test_auto_003_watch_entry_for_manage_py_symlink_launch_path_is_canonical_absolute_realpath``
++    - ``test_auto_003_watch_entry_for_manage_py_subdirectory_launch_path_is_canonical_absolute_realpath``
++
++Completion notes
++---------------
++
++* ``AUTO-003`` has explicit ownership, boundary, contract, dependency, and seam
++  placement.
++* Structural placement is ready for implementation and traceability continuity:
++  canonicalization is bound to ``django.utils.autoreload`` and watch-seed entry
++  is routed through ``StatReloader.__init__``.
+diff --git a/docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst b/docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst
+new file mode 100644
+index 0000000..49b0f2c
+--- /dev/null
++++ b/docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst
+@@ -0,0 +1,124 @@
++AUTO-004 - Preserve existing watched paths while adding manage.py
++===============================================================
++
++Purpose
++-------
++
++Map `AUTO-004` to structure so watcher augmentation is additive and never
++destructive:
++
++- preserve all previously discovered modules, glob expansions, and explicit file
++  entries
++- add only one resolved ``manage.py`` watch entry when launch context is
++  ``runserver``
++
++Requirement
++-----------
++
++When ``python manage.py runserver`` starts with a non-empty watch set, adding
++``manage.py`` must augment the existing collection rather than replace it.
++`modules`, `globs`, and existing explicit `files` remain unchanged, and no
++ordering guarantees are required beyond presence.
++
++Requirement-to-architecture map
++-------------------------------
++
++.. list-table::
++   :header-rows: 1
++
++   * - Requirement
++     - Obligation
++     - Architectural locus
++     - Rationale
++   * - ``AUTO-004``
++     - Preserve previously discovered watch-source collections while adding one
++       launch-script file.
++     - ``django.utils.autoreload``
++     - Prevents regression where bootstrap augmentation can remove baseline
++       coverage used by reload detection.
++
++Pressure decomposition
++---------------------
++
++*Ownership*
++  - ``django.utils.autoreload.StatReloader.__init__`` owns startup augmentation
++    for runserver launch-path seeding.
++  - ``django.utils.autoreload.BaseReloader.watch_file`` owns invariant enforcement
++    for explicit-file storage (`extra_files` set union behavior).
++  - ``django.utils.autoreload.BaseReloader.watched_files`` owns composition of
++    watched modules, explicit files, and globs as a single additive stream.
++  - ``django.utils.autoreload.StatReloader.snapshot_files`` owns snapshot
++    materialization policy (dedupe and stat-read of the composed stream).
++  - ``tests.utils_tests.test_autoreload.StatReloaderTraceabilityTests`` owns
++    requirement verification.
++
++*Boundary*
++  - ``sys.argv`` is an external launch boundary feeding ``get_manage_py_path``.
++  - ``extra_files``, ``directory_globs``, and module snapshots must remain
++    immutable collections for read during augmentation.
++  - ``snapshot_files`` is the downstream boundary where transient missing-file
++    absence is translated to skip; not a boundary for deterministic removals.
++
++*Contracts*
++
++  - ``watch_file(path: Path) -> None``
++    - Input: absolute ``Path``.
++    - Effect: insert/update membership in ``extra_files`` without clearing
++      existing entries.
++  - ``watched_files(include_globs=True) -> Iterable[Path]``
++    - Emits module-derived files, existing ``extra_files`` contents, then glob
++      expansion results.
++    - No replacement or filtering of any source collection at this stage.
++  - ``snapshot_files() -> Iterator[Tuple[Path, float]]``
++    - Input: sequence from ``watched_files``.
++    - Output: unique file+mtime pairs.
++    - Only omission allowed is skip on transient ``OSError`` from disappearing
++      paths.
++
++*Dependency direction*
++  - ``sys.argv`` -> ``get_manage_py_path`` -> ``StatReloader.__init__`` ->
++    ``watch_file`` -> ``extra_files`` -> ``BaseReloader.watched_files`` ->
++    ``snapshot_files`` -> change detection loop.
++  - No dependency path may mutate module-derived or glob-derived inputs when
++    adding launch-script watch data; all added data flows only through
++    ``extra_files``.
++
++Integration seam plan
++---------------------
++
++1. Preserve source-collection invariants in startup seeding:
++   - resolve and register ``manage.py`` only after preserving baseline
++     ``BaseReloader`` state.
++   - avoid any "clear-and-rebuild" branch in ``StatReloader.__init__``.
++2. Keep watcher stream additive at composition boundary:
++   - ``BaseReloader.watched_files`` must continue to concatenate module,
++     explicit-file, and glob sources unchanged.
++3. Keep snapshot semantics additive with explicit non-regressive skip policy:
++   - ``snapshot_files`` continues to dedupe and keep existing entries unless a path
++     is unavailable at stat time.
++
++Traceability loci
++-----------------
++
++*Runtime contract loci*
++
++  - ``django/utils/autoreload.py``
++    - ``StatReloader.__init__``
++    - ``BaseReloader.watch_file``
++    - ``BaseReloader.watched_files``
++    - ``StatReloader.snapshot_files``
++
++*Verification loci*
++
++  - ``tests/utils_tests/test_autoreload.py``
++    - ``StatReloaderTraceabilityTests``
++      - ``test_auto_004_preserves_existing_watch_entries_when_adding_manage_py``
++
++Completion status
++----------------
++
++* `AUTO-004` architectural placement is now explicit:
++  - owner-boundary ownership
++  - contracts and dependency direction
++  - integration seam points for implementation follow-up
++* This artifact remains traceable to test verification and required runtime loci.
+diff --git a/docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst b/docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst
+new file mode 100644
+index 0000000..7622ea4
+--- /dev/null
++++ b/docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst
+@@ -0,0 +1,133 @@
++AUTO-005 - No synthetic reload when watched-set remains stable
++=============================================================
++
++Purpose
++-------
++
++Place the deterministic requirement for ``AUTO-005`` into stable structure:
++
++``Given ``StatReloader`` is running with a stable watched set and no filesystem
++mutations on ``manage.py`` or any baseline watched path, a full polling cycle
++must not emit reload/restart notifications.``
++
++Requirement
++-----------
++
++If ``manage.py`` and all other watched paths are unchanged across repeated check
++cycles, no synthetic restart cycle is allowed. This forbids initial watcher
++state seeding from becoming a false-positive restart event.
++
++Requirement-to-architecture map
++-------------------------------
++
++.. list-table::
++   :header-rows: 1
++
++   * - Requirement
++     - Obligation
++     - Architectural locus
++     - Rationale
++   * - ``AUTO-005``
++     - Ensure first-seen file states are seeded only as baselines and only
++       positive mtime drift (`mtime > old`) triggers notification.
++     - ``django.utils.autoreload.StatReloader.tick`` plus startup watch seeding
++       path in ``django.utils.autoreload.StatReloader.__init__``
++     - Prevents initial baseline population from being interpreted as a restart
++       condition.
++
++Pressure decomposition
++---------------------
++
++*Ownership*
++  - ``django.utils.autoreload.StatReloader.__init__`` owns startup watch
++    population and ensure ``manage.py`` is represented before the first
++    `snapshot_files` pass.
++  - ``django.utils.autoreload.StatReloader.tick`` owns polling state and per-cycle
++    baseline comparisons (`mtimes`).
++  - ``django.utils.autoreload.BaseReloader.notify_file_changed`` owns the
++    reload handoff contract once a positive change is detected.
++  - ``django.utils.autoreload.BaseReloader.watched_files`` and
++    ``django.utils.autoreload.StatReloader.snapshot_files`` own snapshot input and
++    mtime collection boundaries.
++  - ``tests.utils_tests.test_autoreload.StatReloaderTraceabilityTests`` owns
++    requirement verification.
++
++*Boundary*
++  - ``StatReloader.tick`` is the temporal boundary where watch state transitions
++    from "unseen/seeded" to "compared" can occur.
++  - ``snapshot_files`` is the source-of-truth boundary for emitted `(path, mtime)`
++    tuples and intentionally omits transiently missing files on `OSError`.
++  - ``notify_file_changed`` is the outbound boundary to signal observers and
++    optional process restart path.
++  - `sys.argv`/`get_manage_py_path` remain launch-time input boundaries feeding
++    seeding only, not comparison semantics.
++
++*Contracts*
++  - ``StatReloader.__init__() -> None``
++    - Seeds baseline watch coverage by calling
++      ``get_manage_py_path -> self.watch_file`` when available.
++    - Does not itself emit notification; it only prepares deterministic baseline
++      inputs.
++  - ``StatReloader.tick() -> Iterator[None]``
++    - Input: baseline map `mtimes` and stream from ``snapshot_files``.
++    - For each `(filepath, mtime)`:
++      - unseen path: persist ``mtimes[path] = mtime`` and continue.
++      - `mtime == old_time`: keep state and continue with no notify.
++      - `mtime < old_time`: treat as no change for this contract and continue.
++      - `mtime > old_time`: call ``notify_file_changed(path)``.
++    - If no path causes positive drift, emit no restart signal this cycle.
++  - ``BaseReloader.notify_file_changed(path) -> None``
++    - Input: concrete changed `path`.
++    - Output: either callback-based handling or eventual fallback to restart.
++
++*Dependency direction*
++  - Launch boundary -> ``get_manage_py_path`` -> ``StatReloader.__init__`` ->
++    ``BaseReloader.watch_file`` -> ``BaseReloader.watched_files`` -> ``snapshot_files`` ->
++    ``StatReloader.tick`` -> ``notify_file_changed``.
++  - ``tick`` has mutable state direction only in `self._mtimes`-like local map
++    retained across polling cycles; no backward dependency to launch context.
++  - No backward dependency from comparison policy to watcher-backend transport.
++
++Integration seam plan
++---------------------
++
++1. Establish steady-state policy in ``StatReloader.tick``:
++   - keep baseline seeding logic on first-seen paths.
++   - treat ``mtime == old`` and ``mtime < old`` as non-notifying branches.
++   - emit notifications only on strict positive drift.
++2. Keep startup inclusion of launch-path within existing seeding boundary:
++   - continue to register ``manage.py`` through ``watch_file`` in ``__init__``.
++   - ensure this inclusion cannot itself route into notification before baseline
++     comparison state is initialized.
++3. Preserve verification anchor in
++   ``test_auto_005_no_reload_when_watched_set_is_stable`` so architecture maps
++   to explicit steady-state contract.
++
++Traceability loci
++-----------------
++
++*Runtime contract loci*
++
++  - ``django/utils/autoreload.py``
++    - ``StatReloader.__init__``
++    - ``BaseReloader.watched_files``
++    - ``StatReloader.snapshot_files``
++    - ``StatReloader.tick``
++    - ``BaseReloader.notify_file_changed``
++
++*Verification loci*
++
++  - ``tests/utils_tests/test_autoreload.py``
++    - ``StatReloaderTraceabilityTests``
++      - ``test_auto_005_no_reload_when_watched_set_is_stable``
++
++Completion status
++----------------
++
++* ``AUTO-005`` now has explicit architecture ownership, boundary, contract,
++  dependency direction, and integration seam definitions.
++* The obligation is structurally placed in ``django.utils.autoreload`` and
++  traced through ``tests/utils_tests/test_autoreload.py``.
++* This is the first concrete architecture artifact for `AUTO-005`, enabling
++  deterministic implementation follow-up.
++
+diff --git a/docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst b/docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst
+new file mode 100644
+index 0000000..0699d93
+--- /dev/null
++++ b/docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst
+@@ -0,0 +1,120 @@
++AUTO-006 - manage.py watch scope augmentation is gated by launch entry
++======================================================================
++
++Purpose
++-------
++
++Place ``AUTO-006`` into a stable structural boundary so launch-entry context
++controls all manage.py watch-path augmentation.
++
++Requirement
++-----------
++
++``AUTO-006`` requires that ``StatReloader`` only applies manage.py launch-path
++watch augmentation when the server is launched via ``manage.py``. When runserver
++is started through another entry script, the pre-existing watch scope is preserved
++and no synthetic ``manage.py`` watch entry is added.
++
++Acceptance target
++-----------------
++
++Given ``runserver`` starts through a non-``manage.py`` entry script, then
++``StatReloader`` must leave the baseline watch stream unchanged while preserving
++all existing baseline collection semantics.
++
++Requirement-to-architecture map
++-------------------------------
++
++.. list-table::
++   :header-rows: 1
++
++   * - Requirement
++     - Obligation
++     - Architectural locus
++     - Structural obligation class
++  * - ``AUTO-006``
++     - Gate manage.py watch inclusion on launch script identity and retain existing
++       watch scope for non-manage entrypoints.
++     - ``django.utils.autoreload.get_manage_py_path`` and
++       ``django.utils.autoreload.StatReloader.__init__``
++     - Architecture placement (ownership boundary + conditional seam)
++
++Pressure decomposition
++---------------------
++
++*Ownership*
++  - ``django.utils.autoreload.get_manage_py_path`` owns launch-path identity
++    classification (``manage.py`` vs non-manage entry scripts).
++  - ``django.utils.autoreload.StatReloader.__init__`` owns startup watch-seed
++    branching and should only call ``watch_file`` when ``get_manage_py_path``
++    resolves to a managed launch path.
++  - ``django.utils.autoreload.BaseReloader.watched_files`` owns baseline stream
++    composition and remains the stable source of pre-existing modules, globs, and
++    explicit files.
++  - ``tests.utils_tests.test_autoreload.StatReloaderTraceabilityTests`` owns
++    requirement verification and keeps the scenario boundary.
++
++*Boundary*
++  - Launch boundary: external inputs from ``sys.argv`` feed ``get_manage_py_path``.
++  - Augmentation boundary: ``StatReloader.__init__`` is the only write boundary
++    for this obligation.
++  - Baseline-watch boundary: ``BaseReloader.watched_files`` may emit pre-existing
++    stream entries; it must not gain synthetic entries from this obligation.
++  - Validation boundary: ``test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path``
++    must assert non-manage entrypoint behavior and preserve previous scope.
++
++*Contracts*
++  - ``get_manage_py_path() -> Optional[Path]``
++    - Input: launch arguments from ``sys.argv``.
++    - Output: resolved manage.py path only when launch script semantics match the
++      manage.py contract.
++    - Otherwise returns ``None`` and contributes no watch-path candidate.
++  - ``StatReloader.__init__(...) -> None``
++    - Input: runtime options including ``check_errors`` and optional ``signal_handler``.
++    - Effect: obtains manage.py candidate once; if candidate is non-``None``, call
++      ``watch_file(candidate)``.
++    - If candidate is ``None``, no watch path is added at this branch.
++  - ``StatReloader.watched_files() -> Iterator[Path]``
++    - Contract remains: existing module, explicit-file, and glob inputs from base
++      state compose baseline scope.
++
++*Dependency direction*
++  - ``sys.argv`` -> ``get_manage_py_path`` -> ``StatReloader.__init__`` ->
++    optional ``watch_file`` -> ``BaseReloader.watched_files``.
++  - For non-manage entrypoints, the optional branch returns ``None`` and therefore
++    produces no dependency edge from launch path to watched-path injection.
++
++Traceability loci
++-----------------
++
++- Runtime contract loci
++
++  - ``django/utils/autoreload.py``
++    - ``StatReloader.__init__``
++    - ``get_manage_py_path``
++    - ``BaseReloader.watched_files``
++    - ``BaseReloader.watch_file``
++
++- Verification loci
++
++  - ``tests/utils_tests/test_autoreload.py``
++    - ``StatReloaderTraceabilityTests``
++    - ``test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path``
++
++Integration seam plan
++---------------------
++
++1. Preserve existing seeding contract in ``StatReloader.__init__``:
++   - call ``get_manage_py_path()`` once.
++   - gate ``watch_file(manage_py)`` behind ``manage_py is not None``.
++2. Keep baseline stream untouched for non-manage entry:
++   - allow ``BaseReloader.watched_files`` to continue composing baseline paths as-is.
++3. Keep verification as boundary check:
++   - verify non-manage startup inputs alter only process-path data, not watched-file
++     cardinality or contents.
++
++Completion note
++--------------
++
++* This is a phase-only, placeholder verification artifact. No behavioral
++  assertions were introduced here.
+diff --git a/tests/utils_tests/test_autoreload.py b/tests/utils_tests/test_autoreload.py
+index 42bcd0a..ef9ea34 100644
+--- a/tests/utils_tests/test_autoreload.py
++++ b/tests/utils_tests/test_autoreload.py
+@@ -11,8 +11,9 @@ import weakref
+ import zipfile
+ from importlib import import_module
+ from pathlib import Path
+-from unittest import mock, skip, skipIf
++from unittest import mock, skip, skipIf, skipUnless
+ 
++from django.utils._os import symlinks_supported
+ from django.apps.registry import Apps
+ from django.test import SimpleTestCase
+ from django.test.utils import extend_sys_path
+@@ -21,6 +22,52 @@ from django.utils.autoreload import WatchmanUnavailable
+ 
+ from .utils import on_macos_with_hfs
+ 
++# Canonical requirement-to-verification mapping for traceability.
++REQUIREMENT_VERIFICATION_MAP = [
++    {
++        "id": "AUTO-001",
++        "description": "When launched via `python manage.py runserver`, StatReloader's initial watched-file set must include the concrete `manage.py` launch path.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_001_initial_watch_list_includes_manage_py_launch_path",
++        "state": "initial watcher snapshot",
++        "architecture_artifact": "docs/architecture/AUTO-001-manage-py-watcher-architecture.rst",
++    },
++    {
++        "id": "AUTO-002",
++        "description": "When running with StatReloader and a watched `manage.py`, a saved change to `manage.py` must be detected on the next check cycle and execute the restart/reload flow.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts",
++        "state": "post-startup polling cycle after manage.py persisted edit",
++        "architecture_artifact": "docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst",
++    },
++    {
++        "id": "AUTO-003",
++        "description": "When runserver starts from absolute, relative, symlinked, or subdirectory-invoked `manage.py` paths, the watch set must include one canonical absolute real path to the target file.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_003_watch_entry_for_manage_py_launch_paths_is_canonical_absolute_realpath",
++        "state": "initial watcher snapshot construction",
++        "architecture_artifact": "docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst",
++    },
++    {
++        "id": "AUTO-004",
++        "description": "Adding `manage.py` to the watched set for `python manage.py runserver` preserves all pre-existing modules, globs, and file entries discovered by `StatReloader`; only an additional `manage.py` watch path is added.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_004_preserves_existing_watch_entries_when_adding_manage_py",
++        "state": "startup watch-set augmentation",
++        "architecture_artifact": "docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst",
++    },
++    {
++        "id": "AUTO-005",
++        "description": "If `manage.py` and all other watched paths are unchanged across multiple check cycles, no reload/restart event is emitted.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_005_no_reload_when_watched_set_is_stable",
++        "state": "steady-state polling with no filesystem mutation",
++        "architecture_artifact": "docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst",
++    },
++    {
++        "id": "AUTO-006",
++        "description": "The special manage.py watch augmentation is applied only when launch entry is `manage.py`; non-`manage.py` `runserver` entry points do not gain a `manage.py` watch and keep their pre-existing scope.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path",
++        "state": "watch scope seeding and launch-path branching during StatReloader startup",
++        "architecture_artifact": "docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst",
++    },
++]
++
+ 
+ class TestIterModulesAndFiles(SimpleTestCase):
+     def import_and_cleanup(self, name):
+@@ -326,6 +373,228 @@ class RestartWithReloaderTests(SimpleTestCase):
+             self.assertEqual(mock_call.call_args[0][0], [self.executable, '-Wall', '-m', 'django'] + argv[1:])
+ 
+ 
++class StatReloaderTraceabilityTests(SimpleTestCase):
++    def snapshot_watched_files(self):
++        return {
++            path for path, _mtime in autoreload.StatReloader().snapshot_files()
++        }
++
++    def test_auto_001_initial_watch_list_includes_manage_py_launch_path(self):
++        """
++        AUTO-001: Given `python manage.py runserver` starts with StatReloader,
++        the initial StatReloader watched-file snapshot includes the concrete
++        launch path used to start `manage.py`.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                    reloader = autoreload.StatReloader()
++                    watched_files = {path for path, _mtime in reloader.snapshot_files()}
++                    self.assertIn(manage_py.resolve(), watched_files)
++
++    def test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts(self):
++        """
++        AUTO-002: Given a running `runserver` with StatReloader and `manage.py`
++        already watched, when `manage.py` is modified and saved, the next check
++        cycle must detect it and complete a restart cycle automatically.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                    with mock.patch('django.utils.autoreload.time.sleep'):
++                        with mock.patch(
++                            'django.utils.autoreload.trigger_reload',
++                            side_effect=SystemExit(3),
++                        ) as trigger_reload:
++                            reloader = autoreload.StatReloader()
++                            # First cycle should seed the baseline mtime and not restart.
++                            ticker = reloader.tick()
++                            next(ticker)
++                            # Simulate a persisted edit to manage.py between polling cycles.
++                            new_mtime = manage_py.stat().st_mtime + 1
++                            os.utime(manage_py, (new_mtime, new_mtime))
++
++                            with self.assertRaises(SystemExit) as context:
++                                next(ticker)
++                            self.assertEqual(context.exception.code, 3)
++                            trigger_reload.assert_called_once_with(manage_py.resolve())
++
++    def test_auto_003_watch_entry_for_manage_py_absolute_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched via an absolute `manage.py` path,
++        when the watcher snapshot is built, the watch entry must be exactly one
++        canonical absolute real path.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            expected = manage_py.resolve()
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                    self.assertEqual(self.snapshot_watched_files(), {expected})
++
++    def test_auto_003_watch_entry_for_manage_py_relative_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched via a relative `manage.py` path,
++        when the watcher snapshot is built, the watch entry must be exactly one
++        canonical absolute real path.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            expected = Path(tempdir) / 'manage.py'
++
++            with mock.patch('django.utils.autoreload.os.getcwd', return_value=tempdir):
++                with mock.patch('django.utils.autoreload.sys.argv', ['manage.py', 'runserver']):
++                    with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                        self.assertEqual(self.snapshot_watched_files(), {expected.resolve()})
++
++    @skipUnless(symlinks_supported(), "Must support creating symlinks to run this test.")
++    def test_auto_003_watch_entry_for_manage_py_symlink_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched via a symlink `manage.py` path,
++        when the watcher snapshot is built, the watch entry must be exactly one
++        canonical absolute real path to the symlink target.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            target = Path(tempdir) / 'target_manage.py'
++            symlink = Path(tempdir) / 'manage.py'
++            target.write_text('')
++            target.resolve()
++            symlink.symlink_to(target)
++            expected = target.resolve()
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(symlink), 'runserver']):
++                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                    self.assertEqual(self.snapshot_watched_files(), {expected})
++
++    def test_auto_003_watch_entry_for_manage_py_subdirectory_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched from a subdirectory using a relative
++        `manage.py` path form, when the snapshot is built, the watch entry must
++        be exactly one canonical absolute real path to the target script.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            project_root = Path(tempdir)
++            manage_py = project_root / 'manage.py'
++            subdirectory = project_root / 'nested'
++            subdirectory.mkdir()
++            manage_py.write_text('')
++
++            with mock.patch('django.utils.autoreload.os.getcwd', return_value=str(subdirectory)):
++                with mock.patch('django.utils.autoreload.sys.argv', [str(Path('..') / 'manage.py'), 'runserver']):
++                    with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                        self.assertEqual(self.snapshot_watched_files(), {manage_py.resolve()})
++
++    def test_auto_004_preserves_existing_watch_entries_when_adding_manage_py(self):
++        """
++        AUTO-004: When `python manage.py runserver` starts with a non-empty
++        baseline watch set (modules, globs, and files), adding `manage.py`
++        augments that set by one entry without dropping or replacing the
++        previously discovered watch entries.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            tempdir = Path(tempdir)
++            manage_py = tempdir / 'manage.py'
++            module_file = tempdir / 'app' / 'settings.py'
++            extra_file = tempdir / 'existing.py'
++            glob_dir = tempdir / 'watched'
++            watched_glob = glob_dir / 'match.py'
++            ignored_glob = glob_dir / 'ignore.txt'
++            glob_dir.mkdir()
++            module_file.parent.mkdir()
++            manage_py.write_text('')
++            module_file.write_text('')
++            extra_file.write_text('')
++            watched_glob.write_text('')
++            ignored_glob.write_text('')
++
++            expected_module = {module_file.resolve()}
++            expected_files = {extra_file.resolve()}
++            expected_globs = {watched_glob.resolve()}
++            baseline_expected = expected_module | expected_files | expected_globs
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                with mock.patch(
++                    'django.utils.autoreload.iter_all_python_module_files',
++                    return_value=frozenset(expected_module),
++                ):
++                    reloader = autoreload.StatReloader()
++                    reloader.watch_file(extra_file)
++                    reloader.watch_dir(glob_dir, '*.py')
++                    watched_files = set(reloader.watched_files())
++                    self.assertEqual(watched_files, baseline_expected | {manage_py.resolve()})
++
++    def test_auto_005_no_reload_when_watched_set_is_stable(self):
++        """
++        AUTO-005: If `manage.py` and the existing watched set are stable across
++        repeated check cycles, no restart/reload event is emitted.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            watched_file = Path(tempdir) / 'watched.py'
++            manage_py.write_text('')
++            watched_file.write_text('')
++
++            with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                    with mock.patch('django.utils.autoreload.time.sleep'):
++                        with mock.patch('django.utils.autoreload.BaseReloader.notify_file_changed') as notify_mock:
++                            reloader = autoreload.StatReloader()
++                            reloader.watch_file(watched_file)
++
++                            ticker = reloader.tick()
++                            next(ticker)  # Seed baseline mtimes for the stable watched set.
++                            next(ticker)  # No change should be observed.
++                            next(ticker)  # No change should be observed again.
++
++                            self.assertEqual(notify_mock.call_count, 0)
++
++    def test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path(self):
++        """
++        AUTO-006: Given `runserver` launch entry context is non-`manage.py`,
++        `manage.py` is never injected into the watch scope; scope growth occurs
++        only when launch entry is `manage.py`.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            tempdir = Path(tempdir)
++            non_manage_entry = tempdir / 'runserver_entry.py'
++            existing_file = tempdir / 'existing.py'
++            glob_dir = tempdir / 'watched'
++            module_file = tempdir / 'app' / 'settings.py'
++            glob_file = glob_dir / 'watched.py'
++            ignored_file = glob_dir / 'ignored.txt'
++
++            non_manage_entry.write_text('')
++            existing_file.write_text('')
++            module_file.parent.mkdir()
++            module_file.write_text('')
++            glob_dir.mkdir()
++            glob_file.write_text('')
++            ignored_file.write_text('')
++
++            expected_module = {module_file.resolve()}
++            expected_files = {existing_file.resolve()}
++            expected_globs = {glob_file.resolve()}
++            expected_scope = expected_module | expected_files | expected_globs
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(non_manage_entry), 'runserver']):
++                with mock.patch(
++                    'django.utils.autoreload.iter_all_python_module_files',
++                    return_value=frozenset(expected_module),
++                ):
++                    reloader = autoreload.StatReloader()
++                    reloader.watch_file(existing_file)
++                    reloader.watch_dir(glob_dir, '*.py')
++                    watched_files = {path for path, _ in reloader.snapshot_files()}
++                    self.assertEqual(watched_files, expected_scope)
++
++
+ class ReloaderTests(SimpleTestCase):
+     RELOADER_CLS = None
+ 

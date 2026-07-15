@@ -1,0 +1,19 @@
+Traceback (most recent call last):
+  File "./tests/runtests.py", line 23, in <module>
+    from django.test import TestCase, TransactionTestCase
+  File "/testbed/django/test/__init__.py", line 3, in <module>
+    from django.test.client import Client, RequestFactory
+  File "/testbed/django/test/client.py", line 14, in <module>
+    from django.core.handlers.base import BaseHandler
+  File "/testbed/django/core/handlers/base.py", line 8, in <module>
+    from django.urls import get_resolver, set_urlconf
+  File "/testbed/django/urls/__init__.py", line 1, in <module>
+    from .base import (
+  File "/testbed/django/urls/base.py", line 6, in <module>
+    from django.utils.translation import override
+  File "/testbed/django/utils/translation/__init__.py", line 8, in <module>
+    from django.utils.autoreload import autoreload_started, file_changed
+  File "/testbed/django/utils/autoreload.py", line 327
+    def wait_for_apps_ready(self, app_reg, django_main_thread):
+                                                              ^
+IndentationError: unindent does not match any outer indentation level

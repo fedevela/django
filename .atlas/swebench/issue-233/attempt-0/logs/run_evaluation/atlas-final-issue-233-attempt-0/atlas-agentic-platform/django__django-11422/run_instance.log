@@ -1,0 +1,869 @@
+2026-07-15 09:43:12,303 - INFO - Creating container for django__django-11422...
+2026-07-15 09:43:12,568 - INFO - Container for django__django-11422 created: 29bf3fe71ad9745f40e52acbb316fc252df53e119aa2754d8f5de92ddfbb2824
+2026-07-15 09:43:12,685 - INFO - Container for django__django-11422 started: 29bf3fe71ad9745f40e52acbb316fc252df53e119aa2754d8f5de92ddfbb2824
+2026-07-15 09:43:12,685 - INFO - Intermediate patch for django__django-11422 written to logs/run_evaluation/atlas-final-issue-233-attempt-0/atlas-agentic-platform/django__django-11422/patch.diff, now applying to container...
+2026-07-15 09:43:12,789 - INFO - >>>>> Applied Patch:
+/tmp/patch.diff:281: trailing whitespace.
+process start.`` 
+/tmp/patch.diff:499: trailing whitespace.
+single canonical absolute real path to the target file.`` 
+Checking patch django/utils/autoreload.py...
+Checking patch docs/architecture/AUTO-001-manage-py-watcher-architecture.rst...
+Checking patch docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst...
+/tmp/patch.diff:482: new blank line at EOF.
++
+Checking patch docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst...
+Checking patch docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst...
+Checking patch docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst...
+/tmp/patch.diff:886: new blank line at EOF.
++
+Checking patch docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst...
+Checking patch tests/utils_tests/test_autoreload.py...
+Applied patch django/utils/autoreload.py cleanly.
+Applied patch docs/architecture/AUTO-001-manage-py-watcher-architecture.rst cleanly.
+Applied patch docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst cleanly.
+Applied patch docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst cleanly.
+Applied patch docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst cleanly.
+Applied patch docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst cleanly.
+Applied patch docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst cleanly.
+Applied patch tests/utils_tests/test_autoreload.py cleanly.
+warning: 4 lines add whitespace errors.
+
+2026-07-15 09:43:13,338 - INFO - Git diff before:
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index 7ca0d68fae..aecaaed764 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -109,6 +109,24 @@ def iter_all_python_module_files():
+ @functools.lru_cache(maxsize=1)
+ def iter_modules_and_files(modules, extra_files):
+     """Iterate through all modules needed to be watched."""
++    # AUTO-001 pseudocode:
++    # INPUT: imported module objects + explicit extra file paths.
++    # OUTPUT: frozenset of candidate watched file paths.
++    # STATE: initialize empty sys_file_paths and results at function entry.
++    # PROCESS:
++    #   1) For each module in sorted imported modules snapshot:
++    #      - skip non-ModuleType or __spec__-less modules.
++    #      - if module has concrete location, append origin path.
++    #   2) Merge module paths with extra_files.
++    #   3) For each candidate:
++    #      - skip empties and non-existing files.
++    #      - normalize to absolute pathlib.Path.
++    #      - add to result set.
++    #   4) Return frozenset(results).
++    # AUTO-001 TRACE:
++    #   - the launch script path for `python manage.py runserver`
++    #     must remain represented in this collected stream for StatReloader's
++    #     initial snapshot.
+     sys_file_paths = []
+     for module in modules:
+         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
+@@ -202,7 +220,49 @@ def get_child_arguments():
+     return args
+ 
+ 
++def get_manage_py_path():
++    """Return the resolved `manage.py` path when starting `runserver`."""
++    # AUTO-006 pseudocode:
++    # DECISION LATTICE (launch-path gated):
++    #   IF argument length < 2 -> RETURN None.
++    #   ELSE IF argv[1] != 'runserver' -> RETURN None.
++    #   ELSE IF argv[0] is empty -> RETURN None.
++    #   ELSE TRY resolve(argv[0]) and continue only if resolution succeeds.
++    #   IF resolved name != 'manage.py' OR path missing -> RETURN None.
++    #   ELSE RETURN resolved canonical path.
++    # REQUIREMENT:
++    #   A non-manage.py launch entry must not produce a manage.py watch path
++    #   so later watch-seed logic cannot mutate scope for non-manage entry points.
++    # AUTO-003 implementation:
++    # - only evaluate when runserver is the subcommand.
++    # - normalize candidate script path to a canonical absolute path.
++    # - require that the resolved path exists and is named ``manage.py``.
++    # - short-circuit to ``None`` on any resolution failure or invalid shape.
++    if len(sys.argv) < 2:
++        return None
++    if sys.argv[1] != 'runserver':
++        return None
++    if not sys.argv[0]:
++        return None
++    try:
++        script = Path(sys.argv[0]).resolve(strict=False)
++    except (OSError, RuntimeError):
++        return None
++    if script.name != 'manage.py' or not script.exists():
++        return None
++    return script
++
++
+ def trigger_reload(filename):
++    # AUTO-002 pseudocode:
++    # INPUT: file_path identified as changed by file watcher.
++    # TRANSITION:
++    #   - Log and raise a reload request through process termination signal.
++    #   - Preserve existing contract that this request is represented by exit code 3.
++    # OUTCOME:
++    #   - restart_with_reloader() interprets exit code 3 as "restart and re-exec".
++    # FAILURE PATH:
++    #   - no in-process fallback path is declared in this pseudocode locus.
+     logger.info('%s changed, reloading.', filename)
+     sys.exit(3)
+ 
+@@ -236,11 +296,27 @@ class BaseReloader:
+         logger.debug('Watching file %s.', path)
+         self.extra_files.add(path)
+ 
+-    def watched_files(self, include_globs=True):
++def watched_files(self, include_globs=True):
+         """
+         Yield all files that need to be watched, including module files and
+         files within globs.
+         """
++        # AUTO-001 pseudocode:
++        # INITIAL SNAPSHOT SEQUENCE for StatReloader:
++        #   - yield module-backed files first.
++        #   - yield explicit reloader.extra_files.
++        #   - when include_globs, yield directory glob expansion.
++        # REQUIREMENT ALLOCATION:
++        #   - the managed launch script path from `python manage.py runserver`
++        #     must be present in this combined stream before any snapshot diff.
++        # AUTO-004 pseudocode:
++        # PRESERVE:
++        #   - treat output as additive composition:
++        #       modules + preexisting explicit files + preexisting globs.
++        #   - do not replace, clear, or filter source collections when adding
++        #     manage.py to `extra_files`.
++        #   - emit each source segment as-is, so previously discovered baseline
++        #     entries remain present in snapshot inputs.
+         yield from iter_all_python_module_files()
+         yield from self.extra_files
+         if include_globs:
+@@ -306,6 +382,15 @@ class BaseReloader:
+         raise NotImplementedError('subclasses must implement check_availability().')
+ 
+     def notify_file_changed(self, path):
++        # AUTO-002 pseudocode:
++        # TRIGGER:
++        #   - Change detection surface has emitted a concrete file path.
++        # FLOW:
++        #   - emit autoreload signal with changed path.
++        #   - if no handler accepts responsibility (all results are falsy):
++        #       -> call trigger_reload(path).
++        # EFFECT:
++        #   - changed `manage.py` in a watched path becomes a restart request.
+         results = file_changed.send(sender=self, file_path=path)
+         logger.debug('%s notified as changed. Signal results: %s.', path, results)
+         if not any(res[1] for res in results):
+@@ -323,7 +408,88 @@ class BaseReloader:
+ class StatReloader(BaseReloader):
+     SLEEP_TIME = 1  # Check for changes once per second.
+ 
++    def __init__(self):
++        super().__init__()
++        # AUTO-004 pseudocode:
++        # PRESERVE: startup watch state from `BaseReloader` and existing stream
++        # sources must remain intact when adding manage.py.
++        # DECISION:
++        #   - start from existing `self.extra_files` baseline (preexisting explicit file
++        #     watches) and `self.directory_globs` baseline (preexisting watch globs).
++        #   - resolve candidate manage.py path: `manage_py = get_manage_py_path()`.
++        #   - if candidate is present, invoke `watch_file(manage_py)`; this only inserts
++        #     into `self.extra_files` (set union) and leaves existing modules/globs/files.
++        # FAILURE PATH:
++        #   - if `manage_py` is `None`, do not mutate any baseline watch collections.
++        # AUTO-003 pseudocode:
++        # PURPOSE: install exactly one canonical manage.py watch entry at startup.
++        # DECISION:
++        #   - compute candidate = get_manage_py_path()
++        #   - if candidate is None: no runserver-manage.py watch entry is added.
++        #   - if candidate is a path: register via watch_file(candidate).
++        # POSTCONDITION:
++        #   - watcher snapshot receives only the canonical absolute real path from
++        #     get_manage_py_path.
++        # AUTO-005 pseudocode:
++        # SYNTHETIC-CYCLE GUARD:
++        #   - add manage.py to `self.extra_files` before first snapshot.
++        #   - first snapshot seeds `mtimes` for manage.py like every other baseline
++        #     watched path.
++        #   - unchanged baselines must not satisfy any trigger branch in later
++        #     cycles, so initial inclusion cannot create a restart by itself.
++        # AUTO-006 pseudocode:
++        # BRANCH:
++        #   candidate = get_manage_py_path()
++        #   IF candidate is None -> do not call self.watch_file().
++        #   IF candidate is Path -> call self.watch_file(candidate).
++        # EFFECT:
++        #   - launch entries not based on manage.py preserve their pre-seed watch
++        #     baseline exactly as-is; no synthetic manage.py scope growth occurs.
++        #   - launch entries based on manage.py append exactly one canonical
++        #     absolute watch entry.
++        manage_py = get_manage_py_path()
++        if manage_py is not None:
++            self.watch_file(manage_py)
++
+     def tick(self):
++        # AUTO-002 pseudocode:
++        # REQUIREMENT: detect persisted `manage.py` change on the next check cycle.
++        # INPUTS:
++        #   - managed snapshot map mtimes from prior check cycles.
++        #   - `snapshot_files()` stream of (filepath, mtime).
++        # STATE:
++        #   - mtimes is initialized empty on first call and retained per generator loop.
++        # LOOP:
++        #   - for each (filepath, mtime):
++        #       - if filepath unseen: seed mtimes[filepath]=mtime and continue.
++        #       - if mtime > mtimes[filepath]:
++        #           - fire notify_file_changed(filepath) immediately.
++        #           - do not block other checks until loop continues.
++        #   - sleep SLEEP_TIME before yielding control to run_loop.
++        # TRANSITION:
++        #   - next run_loop tick repeats diffing against persisted mtimes baseline.
++        # FAILURE PATH:
++        #   - snapshot read misses/deletions are filtered inside snapshot_files.
++        # AUTO-005 pseudocode:
++        # INPUT: `mtimes` state map persisted across check cycles.
++        # STEP 1: first-cycle bootstrapping:
++        #   - for each (filepath, mtime):
++        #       - if filepath not in mtimes: record mtimes[filepath] = mtime and
++        #         continue (do not notify).
++        # STEP 2: subsequent checks:
++        #   - for each (filepath, mtime):
++        #       - if filepath unseen: record baseline and continue.
++        #       - if mtime == old_time: no state change, no notification.
++        #       - if mtime < old_time: treat as unchanged for this contract, no
++        #         notification.
++        #       - if mtime > old_time: emit notify_file_changed(filepath) and keep
++        #         processing the rest of this snapshot.
++        # STEP 3: cycle conclusion:
++        #   - if STEP 2 had no positive mtime comparisons for any path, then this
++        #     check cycle has no restart path.
++        # FAILURE PATH:
++        #   - any file dropped from `snapshot_files` is already excluded from this
++        #     cycle’s comparison set; this must not be interpreted as a restart.
+         mtimes = {}
+         while True:
+             for filepath, mtime in self.snapshot_files():
+@@ -332,7 +498,18 @@ class StatReloader(BaseReloader):
+                     logger.debug('File %s first seen with mtime %s', filepath, mtime)
+                     mtimes[filepath] = mtime
+                     continue
+-                elif mtime > old_time:
++                elif mtime == old_time:
++                    logger.debug('File %s unchanged (mtime %s).', filepath, mtime)
++                    continue
++                elif mtime < old_time:
++                    logger.debug(
++                        'File %s has older mtime than previous snapshot (%s < %s).',
++                        filepath,
++                        mtime,
++                        old_time,
++                    )
++                    continue
++                else:
+                     logger.debug('File %s previous mtime: %s, current mtime: %s', filepath, old_time, mtime)
+                     self.notify_file_changed(filepath)
+ 
+@@ -341,6 +518,30 @@ class StatReloader(BaseReloader):
+ 
+     def snapshot_files(self):
+         # watched_files may produce duplicate paths if globs overlap.
++        # AUTO-001 pseudocode:
++        # INPUT: watched_files(include_globs=True) stream.
++        # OUTPUT: unique (file, mtime) pairs.
++        # FLOW:
++        #   - for each file in watched_files:
++        #       - dedupe through seen_files.
++        #       - attempt stat(); on OSError skip missing/deletions.
++        #       - emit (file, mtime).
++        # EFFECT:
++        #   - absence of the manage.py launch path at this stage
++        #     indicates a watcher snapshot gap for AUTO-001.
++        # AUTO-004 pseudocode:
++        # PURPOSE: emit an additive union of all baseline categories plus any
++        # managed launch path already present in `self.extra_files`.
++        # INPUTS:
++        #   - modules from iter_all_python_module_files()
++        #   - explicit files from `self.extra_files`
++        #   - expanded file globs from `self.directory_globs`
++        # PRESERVATION:
++        #   - do not drop or transform entries from modules/globs/explicit files.
++        #   - only remove during snapshotting are transient OSError skips for files that
++        #     disappear between collection and stat.
++        # FAILURE PATH:
++        #   - keep scanning remaining files after a single missing-file OSError.
+         seen_files = set()
+         for file in self.watched_files():
+             if file in seen_files:
+diff --git a/tests/utils_tests/test_autoreload.py b/tests/utils_tests/test_autoreload.py
+index 42bcd0a50b..ef9ea3485d 100644
+--- a/tests/utils_tests/test_autoreload.py
++++ b/tests/utils_tests/test_autoreload.py
+@@ -11,8 +11,9 @@ import weakref
+ import zipfile
+ from importlib import import_module
+ from pathlib import Path
+-from unittest import mock, skip, skipIf
++from unittest import mock, skip, skipIf, skipUnless
+ 
++from django.utils._os import symlinks_supported
+ from django.apps.registry import Apps
+ from django.test import SimpleTestCase
+ from django.test.utils import extend_sys_path
+@@ -21,6 +22,52 @@ from django.utils.autoreload import WatchmanUnavailable
+ 
+ from .utils import on_macos_with_hfs
+ 
++# Canonical requirement-to-verification mapping for traceability.
++REQUIREMENT_VERIFICATION_MAP = [
++    {
++        "id": "AUTO-001",
++        "description": "When launched via `python manage.py runserver`, StatReloader's initial watched-file set must include the concrete `manage.py` launch path.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_001_initial_watch_list_includes_manage_py_launch_path",
++        "state": "initial watcher snapshot",
++        "architecture_artifact": "docs/architecture/AUTO-001-manage-py-watcher-architecture.rst",
++    },
++    {
++        "id": "AUTO-002",
++        "description": "When running with StatReloader and a watched `manage.py`, a saved change to `manage.py` must be detected on the next check cycle and execute the restart/reload flow.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts",
++        "state": "post-startup polling cycle after manage.py persisted edit",
++        "architecture_artifact": "docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst",
++    },
++    {
++        "id": "AUTO-003",
++        "description": "When runserver starts from absolute, relative, symlinked, or subdirectory-invoked `manage.py` paths, the watch set must include one canonical absolute real path to the target file.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_003_watch_entry_for_manage_py_launch_paths_is_canonical_absolute_realpath",
++        "state": "initial watcher snapshot construction",
++        "architecture_artifact": "docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst",
++    },
++    {
++        "id": "AUTO-004",
++        "description": "Adding `manage.py` to the watched set for `python manage.py runserver` preserves all pre-existing modules, globs, and file entries discovered by `StatReloader`; only an additional `manage.py` watch path is added.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_004_preserves_existing_watch_entries_when_adding_manage_py",
++        "state": "startup watch-set augmentation",
++        "architecture_artifact": "docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst",
++    },
++    {
++        "id": "AUTO-005",
++        "description": "If `manage.py` and all other watched paths are unchanged across multiple check cycles, no reload/restart event is emitted.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_005_no_reload_when_watched_set_is_stable",
++        "state": "steady-state polling with no filesystem mutation",
++        "architecture_artifact": "docs/architecture/AUTO-005-no-reload-stable-set-architecture.rst",
++    },
++    {
++        "id": "AUTO-006",
++        "description": "The special manage.py watch augmentation is applied only when launch entry is `manage.py`; non-`manage.py` `runserver` entry points do not gain a `manage.py` watch and keep their pre-existing scope.",
++        "artifact": "StatReloaderTraceabilityTests.test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path",
++        "state": "watch scope seeding and launch-path branching during StatReloader startup",
++        "architecture_artifact": "docs/architecture/AUTO-006-manage-py-watch-scope-gating-architecture.rst",
++    },
++]
++
+ 
+ class TestIterModulesAndFiles(SimpleTestCase):
+     def import_and_cleanup(self, name):
+@@ -326,6 +373,228 @@ class RestartWithReloaderTests(SimpleTestCase):
+             self.assertEqual(mock_call.call_args[0][0], [self.executable, '-Wall', '-m', 'django'] + argv[1:])
+ 
+ 
++class StatReloaderTraceabilityTests(SimpleTestCase):
++    def snapshot_watched_files(self):
++        return {
++            path for path, _mtime in autoreload.StatReloader().snapshot_files()
++        }
++
++    def test_auto_001_initial_watch_list_includes_manage_py_launch_path(self):
++        """
++        AUTO-001: Given `python manage.py runserver` starts with StatReloader,
++        the initial StatReloader watched-file snapshot includes the concrete
++        launch path used to start `manage.py`.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                    reloader = autoreload.StatReloader()
++                    watched_files = {path for path, _mtime in reloader.snapshot_files()}
++                    self.assertIn(manage_py.resolve(), watched_files)
++
++    def test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts(self):
++        """
++        AUTO-002: Given a running `runserver` with StatReloader and `manage.py`
++        already watched, when `manage.py` is modified and saved, the next check
++        cycle must detect it and complete a restart cycle automatically.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                    with mock.patch('django.utils.autoreload.time.sleep'):
++                        with mock.patch(
++                            'django.utils.autoreload.trigger_reload',
++                            side_effect=SystemExit(3),
++                        ) as trigger_reload:
++                            reloader = autoreload.StatReloader()
++                            # First cycle should seed the baseline mtime and not restart.
++                            ticker = reloader.tick()
++                            next(ticker)
++                            # Simulate a persisted edit to manage.py between polling cycles.
++                            new_mtime = manage_py.stat().st_mtime + 1
++                            os.utime(manage_py, (new_mtime, new_mtime))
++
++                            with self.assertRaises(SystemExit) as context:
++                                next(ticker)
++                            self.assertEqual(context.exception.code, 3)
++                            trigger_reload.assert_called_once_with(manage_py.resolve())
++
++    def test_auto_003_watch_entry_for_manage_py_absolute_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched via an absolute `manage.py` path,
++        when the watcher snapshot is built, the watch entry must be exactly one
++        canonical absolute real path.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            expected = manage_py.resolve()
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                    self.assertEqual(self.snapshot_watched_files(), {expected})
++
++    def test_auto_003_watch_entry_for_manage_py_relative_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched via a relative `manage.py` path,
++        when the watcher snapshot is built, the watch entry must be exactly one
++        canonical absolute real path.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            manage_py.write_text('')
++            expected = Path(tempdir) / 'manage.py'
++
++            with mock.patch('django.utils.autoreload.os.getcwd', return_value=tempdir):
++                with mock.patch('django.utils.autoreload.sys.argv', ['manage.py', 'runserver']):
++                    with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                        self.assertEqual(self.snapshot_watched_files(), {expected.resolve()})
++
++    @skipUnless(symlinks_supported(), "Must support creating symlinks to run this test.")
++    def test_auto_003_watch_entry_for_manage_py_symlink_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched via a symlink `manage.py` path,
++        when the watcher snapshot is built, the watch entry must be exactly one
++        canonical absolute real path to the symlink target.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            target = Path(tempdir) / 'target_manage.py'
++            symlink = Path(tempdir) / 'manage.py'
++            target.write_text('')
++            target.resolve()
++            symlink.symlink_to(target)
++            expected = target.resolve()
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(symlink), 'runserver']):
++                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                    self.assertEqual(self.snapshot_watched_files(), {expected})
++
++    def test_auto_003_watch_entry_for_manage_py_subdirectory_launch_path_is_canonical_absolute_realpath(self):
++        """
++        AUTO-003: Given runserver is launched from a subdirectory using a relative
++        `manage.py` path form, when the snapshot is built, the watch entry must
++        be exactly one canonical absolute real path to the target script.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            project_root = Path(tempdir)
++            manage_py = project_root / 'manage.py'
++            subdirectory = project_root / 'nested'
++            subdirectory.mkdir()
++            manage_py.write_text('')
++
++            with mock.patch('django.utils.autoreload.os.getcwd', return_value=str(subdirectory)):
++                with mock.patch('django.utils.autoreload.sys.argv', [str(Path('..') / 'manage.py'), 'runserver']):
++                    with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                        self.assertEqual(self.snapshot_watched_files(), {manage_py.resolve()})
++
++    def test_auto_004_preserves_existing_watch_entries_when_adding_manage_py(self):
++        """
++        AUTO-004: When `python manage.py runserver` starts with a non-empty
++        baseline watch set (modules, globs, and files), adding `manage.py`
++        augments that set by one entry without dropping or replacing the
++        previously discovered watch entries.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            tempdir = Path(tempdir)
++            manage_py = tempdir / 'manage.py'
++            module_file = tempdir / 'app' / 'settings.py'
++            extra_file = tempdir / 'existing.py'
++            glob_dir = tempdir / 'watched'
++            watched_glob = glob_dir / 'match.py'
++            ignored_glob = glob_dir / 'ignore.txt'
++            glob_dir.mkdir()
++            module_file.parent.mkdir()
++            manage_py.write_text('')
++            module_file.write_text('')
++            extra_file.write_text('')
++            watched_glob.write_text('')
++            ignored_glob.write_text('')
++
++            expected_module = {module_file.resolve()}
++            expected_files = {extra_file.resolve()}
++            expected_globs = {watched_glob.resolve()}
++            baseline_expected = expected_module | expected_files | expected_globs
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                with mock.patch(
++                    'django.utils.autoreload.iter_all_python_module_files',
++                    return_value=frozenset(expected_module),
++                ):
++                    reloader = autoreload.StatReloader()
++                    reloader.watch_file(extra_file)
++                    reloader.watch_dir(glob_dir, '*.py')
++                    watched_files = set(reloader.watched_files())
++                    self.assertEqual(watched_files, baseline_expected | {manage_py.resolve()})
++
++    def test_auto_005_no_reload_when_watched_set_is_stable(self):
++        """
++        AUTO-005: If `manage.py` and the existing watched set are stable across
++        repeated check cycles, no restart/reload event is emitted.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            manage_py = Path(tempdir) / 'manage.py'
++            watched_file = Path(tempdir) / 'watched.py'
++            manage_py.write_text('')
++            watched_file.write_text('')
++
++            with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
++                with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
++                    with mock.patch('django.utils.autoreload.time.sleep'):
++                        with mock.patch('django.utils.autoreload.BaseReloader.notify_file_changed') as notify_mock:
++                            reloader = autoreload.StatReloader()
++                            reloader.watch_file(watched_file)
++
++                            ticker = reloader.tick()
++                            next(ticker)  # Seed baseline mtimes for the stable watched set.
++                            next(ticker)  # No change should be observed.
++                            next(ticker)  # No change should be observed again.
++
++                            self.assertEqual(notify_mock.call_count, 0)
++
++    def test_auto_006_manage_py_watch_scope_is_gated_by_launch_entry_path(self):
++        """
++        AUTO-006: Given `runserver` launch entry context is non-`manage.py`,
++        `manage.py` is never injected into the watch scope; scope growth occurs
++        only when launch entry is `manage.py`.
++        """
++        with tempfile.TemporaryDirectory() as tempdir:
++            tempdir = Path(tempdir)
++            non_manage_entry = tempdir / 'runserver_entry.py'
++            existing_file = tempdir / 'existing.py'
++            glob_dir = tempdir / 'watched'
++            module_file = tempdir / 'app' / 'settings.py'
++            glob_file = glob_dir / 'watched.py'
++            ignored_file = glob_dir / 'ignored.txt'
++
++            non_manage_entry.write_text('')
++            existing_file.write_text('')
++            module_file.parent.mkdir()
++            module_file.write_text('')
++            glob_dir.mkdir()
++            glob_file.write_text('')
++            ignored_file.write_text('')
++
++            expected_module = {module_file.resolve()}
++            expected_files = {existing_file.resolve()}
++            expected_globs = {glob_file.resolve()}
++            expected_scope = expected_module | expected_files | expected_globs
++
++            with mock.patch('django.utils.autoreload.sys.argv', [str(non_manage_entry), 'runserver']):
++                with mock.patch(
++                    'django.utils.autoreload.iter_all_python_module_files',
++                    return_value=frozenset(expected_module),
++                ):
++                    reloader = autoreload.StatReloader()
++                    reloader.watch_file(existing_file)
++                    reloader.watch_dir(glob_dir, '*.py')
++                    watched_files = {path for path, _ in reloader.snapshot_files()}
++                    self.assertEqual(watched_files, expected_scope)
++
++
+ class ReloaderTests(SimpleTestCase):
+     RELOADER_CLS = None
+2026-07-15 09:43:13,338 - INFO - Eval script for django__django-11422 written to logs/run_evaluation/atlas-final-issue-233-attempt-0/atlas-agentic-platform/django__django-11422/eval.sh; copying to container...
+2026-07-15 09:43:19,648 - INFO - Test runtime: 6.27 seconds
+2026-07-15 09:43:19,648 - INFO - Test output for django__django-11422 written to logs/run_evaluation/atlas-final-issue-233-attempt-0/atlas-agentic-platform/django__django-11422/test_output.txt
+2026-07-15 09:43:19,690 - INFO - Git diff after:
+diff --git a/django/utils/autoreload.py b/django/utils/autoreload.py
+index 7ca0d68fae..aecaaed764 100644
+--- a/django/utils/autoreload.py
++++ b/django/utils/autoreload.py
+@@ -109,6 +109,24 @@ def iter_all_python_module_files():
+ @functools.lru_cache(maxsize=1)
+ def iter_modules_and_files(modules, extra_files):
+     """Iterate through all modules needed to be watched."""
++    # AUTO-001 pseudocode:
++    # INPUT: imported module objects + explicit extra file paths.
++    # OUTPUT: frozenset of candidate watched file paths.
++    # STATE: initialize empty sys_file_paths and results at function entry.
++    # PROCESS:
++    #   1) For each module in sorted imported modules snapshot:
++    #      - skip non-ModuleType or __spec__-less modules.
++    #      - if module has concrete location, append origin path.
++    #   2) Merge module paths with extra_files.
++    #   3) For each candidate:
++    #      - skip empties and non-existing files.
++    #      - normalize to absolute pathlib.Path.
++    #      - add to result set.
++    #   4) Return frozenset(results).
++    # AUTO-001 TRACE:
++    #   - the launch script path for `python manage.py runserver`
++    #     must remain represented in this collected stream for StatReloader's
++    #     initial snapshot.
+     sys_file_paths = []
+     for module in modules:
+         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
+@@ -202,7 +220,49 @@ def get_child_arguments():
+     return args
+ 
+ 
++def get_manage_py_path():
++    """Return the resolved `manage.py` path when starting `runserver`."""
++    # AUTO-006 pseudocode:
++    # DECISION LATTICE (launch-path gated):
++    #   IF argument length < 2 -> RETURN None.
++    #   ELSE IF argv[1] != 'runserver' -> RETURN None.
++    #   ELSE IF argv[0] is empty -> RETURN None.
++    #   ELSE TRY resolve(argv[0]) and continue only if resolution succeeds.
++    #   IF resolved name != 'manage.py' OR path missing -> RETURN None.
++    #   ELSE RETURN resolved canonical path.
++    # REQUIREMENT:
++    #   A non-manage.py launch entry must not produce a manage.py watch path
++    #   so later watch-seed logic cannot mutate scope for non-manage entry points.
++    # AUTO-003 implementation:
++    # - only evaluate when runserver is the subcommand.
++    # - normalize candidate script path to a canonical absolute path.
++    # - require that the resolved path exists and is named ``manage.py``.
++    # - short-circuit to ``None`` on any resolution failure or invalid shape.
++    if len(sys.argv) < 2:
++        return None
++    if sys.argv[1] != 'runserver':
++        return None
++    if not sys.argv[0]:
++        return None
++    try:
++        script = Path(sys.argv[0]).resolve(strict=False)
++    except (OSError, RuntimeError):
++        return None
++    if script.name != 'manage.py' or not script.exists():
++        return None
++    return script
++
++
+ def trigger_reload(filename):
++    # AUTO-002 pseudocode:
++    # INPUT: file_path identified as changed by file watcher.
++    # TRANSITION:
++    #   - Log and raise a reload request through process termination signal.
++    #   - Preserve existing contract that this request is represented by exit code 3.
++    # OUTCOME:
++    #   - restart_with_reloader() interprets exit code 3 as "restart and re-exec".
++    # FAILURE PATH:
++    #   - no in-process fallback path is declared in this pseudocode locus.
+     logger.info('%s changed, reloading.', filename)
+     sys.exit(3)
+ 
+@@ -236,11 +296,27 @@ class BaseReloader:
+         logger.debug('Watching file %s.', path)
+         self.extra_files.add(path)
+ 
+-    def watched_files(self, include_globs=True):
++def watched_files(self, include_globs=True):
+         """
+         Yield all files that need to be watched, including module files and
+         files within globs.
+         """
++        # AUTO-001 pseudocode:
++        # INITIAL SNAPSHOT SEQUENCE for StatReloader:
++        #   - yield module-backed files first.
++        #   - yield explicit reloader.extra_files.
++        #   - when include_globs, yield directory glob expansion.
++        # REQUIREMENT ALLOCATION:
++        #   - the managed launch script path from `python manage.py runserver`
++        #     must be present in this combined stream before any snapshot diff.
++        # AUTO-004 pseudocode:
++        # PRESERVE:
++        #   - treat output as additive composition:
++        #       modules + preexisting explicit files + preexisting globs.
++        #   - do not replace, clear, or filter source collections when adding
++        #     manage.py to `extra_files`.
++        #   - emit each source segment as-is, so previously discovered baseline
++        #     entries remain present in snapshot inputs.
+         yield from iter_all_python_module_files()
+         yield from self.extra_files
+         if include_globs:
+@@ -306,6 +382,15 @@ class BaseReloader:
+         raise NotImplementedError('subclasses must implement check_availability().')
+ 
+     def notify_file_changed(self, path):
++        # AUTO-002 pseudocode:
++        # TRIGGER:
++        #   - Change detection surface has emitted a concrete file path.
++        # FLOW:
++        #   - emit autoreload signal with changed path.
++        #   - if no handler accepts responsibility (all results are falsy):
++        #       -> call trigger_reload(path).
++        # EFFECT:
++        #   - changed `manage.py` in a watched path becomes a restart request.
+         results = file_changed.send(sender=self, file_path=path)
+         logger.debug('%s notified as changed. Signal results: %s.', path, results)
+         if not any(res[1] for res in results):
+@@ -323,7 +408,88 @@ class BaseReloader:
+ class StatReloader(BaseReloader):
+     SLEEP_TIME = 1  # Check for changes once per second.
+ 
++    def __init__(self):
++        super().__init__()
++        # AUTO-004 pseudocode:
++        # PRESERVE: startup watch state from `BaseReloader` and existing stream
++        # sources must remain intact when adding manage.py.
++        # DECISION:
++        #   - start from existing `self.extra_files` baseline (preexisting explicit file
++        #     watches) and `self.directory_globs` baseline (preexisting watch globs).
++        #   - resolve candidate manage.py path: `manage_py = get_manage_py_path()`.
++        #   - if candidate is present, invoke `watch_file(manage_py)`; this only inserts
++        #     into `self.extra_files` (set union) and leaves existing modules/globs/files.
++        # FAILURE PATH:
++        #   - if `manage_py` is `None`, do not mutate any baseline watch collections.
++        # AUTO-003 pseudocode:
++        # PURPOSE: install exactly one canonical manage.py watch entry at startup.
++        # DECISION:
++        #   - compute candidate = get_manage_py_path()
++        #   - if candidate is None: no runserver-manage.py watch entry is added.
++        #   - if candidate is a path: register via watch_file(candidate).
++        # POSTCONDITION:
++        #   - watcher snapshot receives only the canonical absolute real path from
++        #     get_manage_py_path.
++        # AUTO-005 pseudocode:
++        # SYNTHETIC-CYCLE GUARD:
++        #   - add manage.py to `self.extra_files` before first snapshot.
++        #   - first snapshot seeds `mtimes` for manage.py like every other baseline
++        #     watched path.
++        #   - unchanged baselines must not satisfy any trigger branch in later
++        #     cycles, so initial inclusion cannot create a restart by itself.
++        # AUTO-006 pseudocode:
++        # BRANCH:
++        #   candidate = get_manage_py_path()
++        #   IF candidate is None -> do not call self.watch_file().
++        #   IF candidate is Path -> call self.watch_file(candidate).
++        # EFFECT:
++        #   - launch entries not based on manage.py preserve their pre-seed watch
++        #     baseline exactly as-is; no synthetic manage.py scope growth occurs.
++        #   - launch entries based on manage.py append exactly one canonical
++        #     absolute watch entry.
++        manage_py = get_manage_py_path()
++        if manage_py is not None:
++            self.watch_file(manage_py)
++
+     def tick(self):
++        # AUTO-002 pseudocode:
++        # REQUIREMENT: detect persisted `manage.py` change on the next check cycle.
++        # INPUTS:
++        #   - managed snapshot map mtimes from prior check cycles.
++        #   - `snapshot_files()` stream of (filepath, mtime).
++        # STATE:
++        #   - mtimes is initialized empty on first call and retained per generator loop.
++        # LOOP:
++        #   - for each (filepath, mtime):
++        #       - if filepath unseen: seed mtimes[filepath]=mtime and continue.
++        #       - if mtime > mtimes[filepath]:
++        #           - fire notify_file_changed(filepath) immediately.
++        #           - do not block other checks until loop continues.
++        #   - sleep SLEEP_TIME before yielding control to run_loop.
++        # TRANSITION:
++        #   - next run_loop tick repeats diffing against persisted mtimes baseline.
++        # FAILURE PATH:
++        #   - snapshot read misses/deletions are filtered inside snapshot_files.
++        # AUTO-005 pseudocode:
++        # INPUT: `mtimes` state map persisted across check cycles.
++        # STEP 1: first-cycle bootstrapping:
++        #   - for each (filepath, mtime):
++        #       - if filepath not in mtimes: record mtimes[filepath] = mtime and
++        #         continue (do not notify).
++        # STEP 2: subsequent checks:
++        #   - for each (filepath, mtime):
++        #       - if filepath unseen: record baseline and continue.
++        #       - if mtime == old_time: no state change, no notification.
++        #       - if mtime < old_time: treat as unchanged for this contract, no
++        #         notification.
++        #       - if mtime > old_time: emit notify_file_changed(filepath) and keep
++        #         processing the rest of this snapshot.
++        # STEP 3: cycle conclusion:
++        #   - if STEP 2 had no positive mtime comparisons for any path, then this
++        #     check cycle has no restart path.
++        # FAILURE PATH:
++        #   - any file dropped from `snapshot_files` is already excluded from this
++        #     cycle’s comparison set; this must not be interpreted as a restart.
+         mtimes = {}
+         while True:
+             for filepath, mtime in self.snapshot_files():
+@@ -332,7 +498,18 @@ class StatReloader(BaseReloader):
+                     logger.debug('File %s first seen with mtime %s', filepath, mtime)
+                     mtimes[filepath] = mtime
+                     continue
+-                elif mtime > old_time:
++                elif mtime == old_time:
++                    logger.debug('File %s unchanged (mtime %s).', filepath, mtime)
++                    continue
++                elif mtime < old_time:
++                    logger.debug(
++                        'File %s has older mtime than previous snapshot (%s < %s).',
++                        filepath,
++                        mtime,
++                        old_time,
++                    )
++                    continue
++                else:
+                     logger.debug('File %s previous mtime: %s, current mtime: %s', filepath, old_time, mtime)
+                     self.notify_file_changed(filepath)
+ 
+@@ -341,6 +518,30 @@ class StatReloader(BaseReloader):
+ 
+     def snapshot_files(self):
+         # watched_files may produce duplicate paths if globs overlap.
++        # AUTO-001 pseudocode:
++        # INPUT: watched_files(include_globs=True) stream.
++        # OUTPUT: unique (file, mtime) pairs.
++        # FLOW:
++        #   - for each file in watched_files:
++        #       - dedupe through seen_files.
++        #       - attempt stat(); on OSError skip missing/deletions.
++        #       - emit (file, mtime).
++        # EFFECT:
++        #   - absence of the manage.py launch path at this stage
++        #     indicates a watcher snapshot gap for AUTO-001.
++        # AUTO-004 pseudocode:
++        # PURPOSE: emit an additive union of all baseline categories plus any
++        # managed launch path already present in `self.extra_files`.
++        # INPUTS:
++        #   - modules from iter_all_python_module_files()
++        #   - explicit files from `self.extra_files`
++        #   - expanded file globs from `self.directory_globs`
++        # PRESERVATION:
++        #   - do not drop or transform entries from modules/globs/explicit files.
++        #   - only remove during snapshotting are transient OSError skips for files that
++        #     disappear between collection and stat.
++        # FAILURE PATH:
++        #   - keep scanning remaining files after a single missing-file OSError.
+         seen_files = set()
+         for file in self.watched_files():
+             if file in seen_files:
+2026-07-15 09:43:19,690 - INFO - Git diff changed after running eval script
+2026-07-15 09:43:19,690 - INFO - Grading answer for django__django-11422...
+2026-07-15 09:43:19,694 - INFO - report: {'django__django-11422': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['test_main_module_is_resolved (utils_tests.test_autoreload.TestIterModulesAndFiles)']}, 'PASS_TO_PASS': {'success': [], 'failure': ['test_watchman_available (utils_tests.test_autoreload.GetReloaderTests)', 'test_watchman_unavailable (utils_tests.test_autoreload.GetReloaderTests)', 'test_calls_start_django (utils_tests.test_autoreload.RunWithReloaderTests)', 'test_calls_sys_exit (utils_tests.test_autoreload.RunWithReloaderTests)', 'test_swallows_keyboard_interrupt (utils_tests.test_autoreload.RunWithReloaderTests)', 'test_common_roots (utils_tests.test_autoreload.TestCommonRoots)', 'test_no_exception (utils_tests.test_autoreload.TestRaiseLastException)', 'test_raises_exception (utils_tests.test_autoreload.TestRaiseLastException)', 'test_mutates_error_files (utils_tests.test_autoreload.TestCheckErrors)', 'test_sys_paths_absolute (utils_tests.test_autoreload.TestSysPathDirectories)', 'test_sys_paths_directories (utils_tests.test_autoreload.TestSysPathDirectories)', 'test_sys_paths_non_existing (utils_tests.test_autoreload.TestSysPathDirectories)', 'test_sys_paths_with_directories (utils_tests.test_autoreload.TestSysPathDirectories)', 'test_manage_py (utils_tests.test_autoreload.RestartWithReloaderTests)', 'test_python_m_django (utils_tests.test_autoreload.RestartWithReloaderTests)', 'test_run_loop_catches_stopiteration (utils_tests.test_autoreload.BaseReloaderTests)', 'test_run_loop_stop_and_return (utils_tests.test_autoreload.BaseReloaderTests)', 'test_wait_for_apps_ready_checks_for_exception (utils_tests.test_autoreload.BaseReloaderTests)', 'test_wait_for_apps_ready_without_exception (utils_tests.test_autoreload.BaseReloaderTests)', 'test_watch_files_with_recursive_glob (utils_tests.test_autoreload.BaseReloaderTests)', 'test_watch_with_glob (utils_tests.test_autoreload.BaseReloaderTests)', 'test_watch_with_single_file (utils_tests.test_autoreload.BaseReloaderTests)', 'test_watch_without_absolute (utils_tests.test_autoreload.BaseReloaderTests)', 'test_file (utils_tests.test_autoreload.StatReloaderTests)', 'test_glob (utils_tests.test_autoreload.StatReloaderTests)', 'test_glob_recursive (utils_tests.test_autoreload.StatReloaderTests)', 'test_multiple_globs (utils_tests.test_autoreload.StatReloaderTests)', 'test_multiple_recursive_globs (utils_tests.test_autoreload.StatReloaderTests)', 'test_nested_glob_recursive (utils_tests.test_autoreload.StatReloaderTests)', 'test_overlapping_glob_recursive (utils_tests.test_autoreload.StatReloaderTests)', 'test_overlapping_globs (utils_tests.test_autoreload.StatReloaderTests)', 'test_snapshot_files_ignores_missing_files (utils_tests.test_autoreload.StatReloaderTests)', 'test_snapshot_files_updates (utils_tests.test_autoreload.StatReloaderTests)', 'test_snapshot_files_with_duplicates (utils_tests.test_autoreload.StatReloaderTests)', 'test_check_errors_called (utils_tests.test_autoreload.StartDjangoTests)', 'test_echo_on_called (utils_tests.test_autoreload.StartDjangoTests)', 'test_starts_thread_with_args (utils_tests.test_autoreload.StartDjangoTests)', 'test_watchman_becomes_unavailable (utils_tests.test_autoreload.StartDjangoTests)', '.pyc and .pyo files are included in the files list.', 'test_check_errors (utils_tests.test_autoreload.TestIterModulesAndFiles)', 'test_check_errors_catches_all_exceptions (utils_tests.test_autoreload.TestIterModulesAndFiles)', 'test_file_added (utils_tests.test_autoreload.TestIterModulesAndFiles)', 'test_module_without_spec (utils_tests.test_autoreload.TestIterModulesAndFiles)', 'test_paths_are_pathlib_instances (utils_tests.test_autoreload.TestIterModulesAndFiles)', 'iter_all_python_module_file() ignores weakref modules.', 'test_zip_reload (utils_tests.test_autoreload.TestIterModulesAndFiles)']}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for django__django-11422: resolved: False
+2026-07-15 09:43:19,694 - INFO - Attempting to stop container sweb.eval.django__django-11422.atlas-final-issue-233-attempt-0...
+2026-07-15 09:43:35,011 - INFO - Attempting to remove container sweb.eval.django__django-11422.atlas-final-issue-233-attempt-0...
+2026-07-15 09:43:35,022 - INFO - Container sweb.eval.django__django-11422.atlas-final-issue-233-attempt-0 removed.
+2026-07-15 09:43:35,022 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.django_1776_django-11422:latest...
+2026-07-15 09:43:35,173 - INFO - Image swebench/sweb.eval.x86_64.django_1776_django-11422:latest removed.

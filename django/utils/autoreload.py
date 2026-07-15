@@ -109,24 +109,6 @@ def iter_all_python_module_files():
 @functools.lru_cache(maxsize=1)
 def iter_modules_and_files(modules, extra_files):
     """Iterate through all modules needed to be watched."""
-    # AUTO-001 pseudocode:
-    # INPUT: imported module objects + explicit extra file paths.
-    # OUTPUT: frozenset of candidate watched file paths.
-    # STATE: initialize empty sys_file_paths and results at function entry.
-    # PROCESS:
-    #   1) For each module in sorted imported modules snapshot:
-    #      - skip non-ModuleType or __spec__-less modules.
-    #      - if module has concrete location, append origin path.
-    #   2) Merge module paths with extra_files.
-    #   3) For each candidate:
-    #      - skip empties and non-existing files.
-    #      - normalize to absolute pathlib.Path.
-    #      - add to result set.
-    #   4) Return frozenset(results).
-    # AUTO-001 TRACE:
-    #   - the launch script path for `python manage.py runserver`
-    #     must remain represented in this collected stream for StatReloader's
-    #     initial snapshot.
     sys_file_paths = []
     for module in modules:
         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
@@ -222,22 +204,6 @@ def get_child_arguments():
 
 def get_manage_py_path():
     """Return the resolved `manage.py` path when starting `runserver`."""
-    # AUTO-006 pseudocode:
-    # DECISION LATTICE (launch-path gated):
-    #   IF argument length < 2 -> RETURN None.
-    #   ELSE IF argv[1] != 'runserver' -> RETURN None.
-    #   ELSE IF argv[0] is empty -> RETURN None.
-    #   ELSE TRY resolve(argv[0]) and continue only if resolution succeeds.
-    #   IF resolved name != 'manage.py' OR path missing -> RETURN None.
-    #   ELSE RETURN resolved canonical path.
-    # REQUIREMENT:
-    #   A non-manage.py launch entry must not produce a manage.py watch path
-    #   so later watch-seed logic cannot mutate scope for non-manage entry points.
-    # AUTO-003 implementation:
-    # - only evaluate when runserver is the subcommand.
-    # - normalize candidate script path to a canonical absolute path.
-    # - require that the resolved path exists and is named ``manage.py``.
-    # - short-circuit to ``None`` on any resolution failure or invalid shape.
     if len(sys.argv) < 2:
         return None
     if sys.argv[1] != 'runserver':
@@ -254,15 +220,6 @@ def get_manage_py_path():
 
 
 def trigger_reload(filename):
-    # AUTO-002 pseudocode:
-    # INPUT: file_path identified as changed by file watcher.
-    # TRANSITION:
-    #   - Log and raise a reload request through process termination signal.
-    #   - Preserve existing contract that this request is represented by exit code 3.
-    # OUTCOME:
-    #   - restart_with_reloader() interprets exit code 3 as "restart and re-exec".
-    # FAILURE PATH:
-    #   - no in-process fallback path is declared in this pseudocode locus.
     logger.info('%s changed, reloading.', filename)
     sys.exit(3)
 
@@ -296,27 +253,11 @@ class BaseReloader:
         logger.debug('Watching file %s.', path)
         self.extra_files.add(path)
 
-def watched_files(self, include_globs=True):
+    def watched_files(self, include_globs=True):
         """
         Yield all files that need to be watched, including module files and
         files within globs.
         """
-        # AUTO-001 pseudocode:
-        # INITIAL SNAPSHOT SEQUENCE for StatReloader:
-        #   - yield module-backed files first.
-        #   - yield explicit reloader.extra_files.
-        #   - when include_globs, yield directory glob expansion.
-        # REQUIREMENT ALLOCATION:
-        #   - the managed launch script path from `python manage.py runserver`
-        #     must be present in this combined stream before any snapshot diff.
-        # AUTO-004 pseudocode:
-        # PRESERVE:
-        #   - treat output as additive composition:
-        #       modules + preexisting explicit files + preexisting globs.
-        #   - do not replace, clear, or filter source collections when adding
-        #     manage.py to `extra_files`.
-        #   - emit each source segment as-is, so previously discovered baseline
-        #     entries remain present in snapshot inputs.
         yield from iter_all_python_module_files()
         yield from self.extra_files
         if include_globs:
@@ -382,15 +323,6 @@ def watched_files(self, include_globs=True):
         raise NotImplementedError('subclasses must implement check_availability().')
 
     def notify_file_changed(self, path):
-        # AUTO-002 pseudocode:
-        # TRIGGER:
-        #   - Change detection surface has emitted a concrete file path.
-        # FLOW:
-        #   - emit autoreload signal with changed path.
-        #   - if no handler accepts responsibility (all results are falsy):
-        #       -> call trigger_reload(path).
-        # EFFECT:
-        #   - changed `manage.py` in a watched path becomes a restart request.
         results = file_changed.send(sender=self, file_path=path)
         logger.debug('%s notified as changed. Signal results: %s.', path, results)
         if not any(res[1] for res in results):
@@ -410,86 +342,11 @@ class StatReloader(BaseReloader):
 
     def __init__(self):
         super().__init__()
-        # AUTO-004 pseudocode:
-        # PRESERVE: startup watch state from `BaseReloader` and existing stream
-        # sources must remain intact when adding manage.py.
-        # DECISION:
-        #   - start from existing `self.extra_files` baseline (preexisting explicit file
-        #     watches) and `self.directory_globs` baseline (preexisting watch globs).
-        #   - resolve candidate manage.py path: `manage_py = get_manage_py_path()`.
-        #   - if candidate is present, invoke `watch_file(manage_py)`; this only inserts
-        #     into `self.extra_files` (set union) and leaves existing modules/globs/files.
-        # FAILURE PATH:
-        #   - if `manage_py` is `None`, do not mutate any baseline watch collections.
-        # AUTO-003 pseudocode:
-        # PURPOSE: install exactly one canonical manage.py watch entry at startup.
-        # DECISION:
-        #   - compute candidate = get_manage_py_path()
-        #   - if candidate is None: no runserver-manage.py watch entry is added.
-        #   - if candidate is a path: register via watch_file(candidate).
-        # POSTCONDITION:
-        #   - watcher snapshot receives only the canonical absolute real path from
-        #     get_manage_py_path.
-        # AUTO-005 pseudocode:
-        # SYNTHETIC-CYCLE GUARD:
-        #   - add manage.py to `self.extra_files` before first snapshot.
-        #   - first snapshot seeds `mtimes` for manage.py like every other baseline
-        #     watched path.
-        #   - unchanged baselines must not satisfy any trigger branch in later
-        #     cycles, so initial inclusion cannot create a restart by itself.
-        # AUTO-006 pseudocode:
-        # BRANCH:
-        #   candidate = get_manage_py_path()
-        #   IF candidate is None -> do not call self.watch_file().
-        #   IF candidate is Path -> call self.watch_file(candidate).
-        # EFFECT:
-        #   - launch entries not based on manage.py preserve their pre-seed watch
-        #     baseline exactly as-is; no synthetic manage.py scope growth occurs.
-        #   - launch entries based on manage.py append exactly one canonical
-        #     absolute watch entry.
         manage_py = get_manage_py_path()
         if manage_py is not None:
             self.watch_file(manage_py)
 
     def tick(self):
-        # AUTO-002 pseudocode:
-        # REQUIREMENT: detect persisted `manage.py` change on the next check cycle.
-        # INPUTS:
-        #   - managed snapshot map mtimes from prior check cycles.
-        #   - `snapshot_files()` stream of (filepath, mtime).
-        # STATE:
-        #   - mtimes is initialized empty on first call and retained per generator loop.
-        # LOOP:
-        #   - for each (filepath, mtime):
-        #       - if filepath unseen: seed mtimes[filepath]=mtime and continue.
-        #       - if mtime > mtimes[filepath]:
-        #           - fire notify_file_changed(filepath) immediately.
-        #           - do not block other checks until loop continues.
-        #   - sleep SLEEP_TIME before yielding control to run_loop.
-        # TRANSITION:
-        #   - next run_loop tick repeats diffing against persisted mtimes baseline.
-        # FAILURE PATH:
-        #   - snapshot read misses/deletions are filtered inside snapshot_files.
-        # AUTO-005 pseudocode:
-        # INPUT: `mtimes` state map persisted across check cycles.
-        # STEP 1: first-cycle bootstrapping:
-        #   - for each (filepath, mtime):
-        #       - if filepath not in mtimes: record mtimes[filepath] = mtime and
-        #         continue (do not notify).
-        # STEP 2: subsequent checks:
-        #   - for each (filepath, mtime):
-        #       - if filepath unseen: record baseline and continue.
-        #       - if mtime == old_time: no state change, no notification.
-        #       - if mtime < old_time: treat as unchanged for this contract, no
-        #         notification.
-        #       - if mtime > old_time: emit notify_file_changed(filepath) and keep
-        #         processing the rest of this snapshot.
-        # STEP 3: cycle conclusion:
-        #   - if STEP 2 had no positive mtime comparisons for any path, then this
-        #     check cycle has no restart path.
-        # FAILURE PATH:
-        #   - any file dropped from `snapshot_files` is already excluded from this
-        #     cycle’s comparison set; this must not be interpreted as a restart.
         mtimes = {}
         while True:
             for filepath, mtime in self.snapshot_files():
@@ -517,31 +374,6 @@ class StatReloader(BaseReloader):
             yield
 
     def snapshot_files(self):
-        # watched_files may produce duplicate paths if globs overlap.
-        # AUTO-001 pseudocode:
-        # INPUT: watched_files(include_globs=True) stream.
-        # OUTPUT: unique (file, mtime) pairs.
-        # FLOW:
-        #   - for each file in watched_files:
-        #       - dedupe through seen_files.
-        #       - attempt stat(); on OSError skip missing/deletions.
-        #       - emit (file, mtime).
-        # EFFECT:
-        #   - absence of the manage.py launch path at this stage
-        #     indicates a watcher snapshot gap for AUTO-001.
-        # AUTO-004 pseudocode:
-        # PURPOSE: emit an additive union of all baseline categories plus any
-        # managed launch path already present in `self.extra_files`.
-        # INPUTS:
-        #   - modules from iter_all_python_module_files()
-        #   - explicit files from `self.extra_files`
-        #   - expanded file globs from `self.directory_globs`
-        # PRESERVATION:
-        #   - do not drop or transform entries from modules/globs/explicit files.
-        #   - only remove during snapshotting are transient OSError skips for files that
-        #     disappear between collection and stat.
-        # FAILURE PATH:
-        #   - keep scanning remaining files after a single missing-file OSError.
         seen_files = set()
         for file in self.watched_files():
             if file in seen_files:
