@@ -3,12 +3,15 @@
 Requirement scope:
 - `DJ-RES-001`
 - `DJ-RES-007`
+- `DJ-RES-003`
 
 ## Requirement-to-architecture map
 - `DJ-RES-001`
   - Route miss conversion contract in [`django/urls/resolvers.py`](django/urls/resolvers.py:260).
 - `DJ-RES-007`
   - Diagnostic reason propagation through resolver payload in [`django/urls/resolvers.py`](django/urls/resolvers.py:260) and consumption in [`django/views/debug.py`](django/views/debug.py:461).
+- `DJ-RES-003`
+  - Non-debug production-safe 404 handoff for converter-originated `Http404` in [`django/core/handlers/exception.py`](django/core/handlers/exception.py:34) and stable fallback in [`django/core/handlers/exception.py`](django/core/handlers/exception.py:120).
 - `DJ-RES-001`, `DJ-RES-007`
   - end-to-end miss lifecycle in [`django/urls/resolvers.py`](django/urls/resolvers.py:565) -> [`django/views/debug.py`](django/views/debug.py:461).
 
@@ -22,6 +25,12 @@ Requirement scope:
 - `django/views/debug.py:technical_404_response`
   - Owns diagnostics rendering for routing misses.
   - Boundary rule: rendering layer must prefer converter-originated reason metadata when provided.
+- `django/core/handlers/exception.py:response_for_exception`
+  - Owns the `Http404` branch and split between debug and non-debug handling paths.
+  - Boundary rule: route-miss `Http404` must not emit technical diagnostics when `DEBUG=False`.
+- `django/core/handlers/exception.py:get_exception_response`
+  - Owns standard status-handler dispatch and handler failure fallback behavior.
+  - Boundary rule: 404 is delivered via configured handler path, with fallback to uncaught exception handling only if handler wiring/execution fails.
 
 ## Structural contract (seam)
 - Resolver miss payload (technical contract):
@@ -33,6 +42,11 @@ Requirement scope:
 - Direction:
   - `RoutePattern` / `URLResolver` create or extend payload.
   - `technical_404_response` reads payload and uses `reason` as first source of user-facing diagnostic.
+- Non-debug 404 production-safe handoff contract:
+  - Input: `response_for_exception(request, exc)` where `isinstance(exc, Http404)` and `settings.DEBUG` is false.
+  - Boundary behavior: call `get_exception_response(request, get_resolver(get_urlconf()), 404, exc)`, never `technical_404_response`.
+  - Output: `HttpResponse` with status code `404`, rendered from configured 404 handler (plain production output).
+  - Security boundary: no interactive traceback or technical internals are included in this branch.
 
 ## Integration seams to implement
 - Seam S-1: Conversion miss normalization
@@ -43,13 +57,23 @@ Requirement scope:
   - Module: [`django/views/debug.py`](django/views/debug.py)
   - Trigger: `technical_404_response()` receives `Http404` from resolver flow.
   - Required effect: `reason` from payload is rendered before fallback `str(exception)`.
+- Seam S-3: Non-debug HTTP 404 dispatch
+  - Module: [`django/core/handlers/exception.py`](django/core/handlers/exception.py)
+  - Trigger: `response_for_exception` receives `Http404` while `DEBUG=False`.
+  - Required effect: route via normal handler path with `status_code=404`, preserving only production-safe 404 body.
+- Seam S-4: Handler fallback safety
+  - Module: [`django/core/handlers/exception.py`](django/core/handlers/exception.py)
+  - Trigger: `get_exception_response` cannot resolve/execute 404 handler.
+  - Required effect: delegate to `handle_uncaught_exception` as a controlled failure boundary.
 
 ## Dependency direction
 - `converters` → `RoutePattern.match()` (conversion outcome)
 - `RoutePattern.match()` / child `pattern.resolve()` → `URLResolver.resolve()` (miss aggregation)
 - `URLResolver.resolve()` → exception payload (`Resolver404`) → global error handling → `technical_404_response()`
+- `RoutePattern.match()` (Http404) → `response_for_exception()` (`Http404`) → `get_exception_response(..., 404, exc)` → configured 404 handler / `handle_uncaught_exception` fallback
 
 ## Implementation-ready notes
 - Preserve backward-compatible resolver miss semantics for non-converter exceptions (`ValueError` already treated as local mismatch).
 - Route-miss payload should remain additive: existing `path`/`tried` behavior stays intact; `reason` is additive for diagnostics.
 - No admin or generic exception handling paths should be coupled to this seam.
+- `DJ-RES-003` requires explicit ownership of the non-debug 404 rendering boundary so converter-originated misses stay production-safe while preserving status 404.
