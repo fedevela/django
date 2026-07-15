@@ -1,8 +1,18 @@
 from django.db import connection
-from django.db.models import F, RawSQL
+from django.db.models import F, OrderBy, RawSQL
 from django.test import TestCase
 
 from .models import Article
+
+
+class _MalformedDirectionOrderBy(OrderBy):
+    def __init__(self, expression, suffix):
+        super().__init__(expression)
+        self.suffix = suffix
+
+    def as_sql(self, compiler, connection, template=None, **extra_context):
+        expression_sql, params = compiler.compile(self.expression)
+        return f"{expression_sql}{self.suffix}", params
 
 
 # Traceability map for canonical requirement ORDERBY-001.
@@ -325,7 +335,13 @@ class ORDERBY005TraceabilityTests(TestCase):
         when duplicate suppression evaluates the dedupe key,
         then the term is emitted once instead of being dropped.
         """
-        pass
+        queryset = Article.objects.order_by(
+            _MalformedDirectionOrderBy(F("headline"), " DESCENDING"),
+            _MalformedDirectionOrderBy(F("headline"), " DESCENDING"),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(len(order_by_sql.split(",")), 1)
+        self.assertIn("DESCENDING", order_by_sql.upper())
 
     def test_ORDERBY_005_S2_identical_malformed_terms_emit_once_in_dedupe_pass(self):
         """
@@ -334,7 +350,13 @@ class ORDERBY005TraceabilityTests(TestCase):
         when duplicate suppression executes,
         then only one emission occurs deterministically.
         """
-        pass
+        queryset = Article.objects.order_by(
+            _MalformedDirectionOrderBy(F("headline"), " DESCENDING"),
+            _MalformedDirectionOrderBy(F("headline"), "  DESCENDING"),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(len(order_by_sql.split(",")), 1)
+        self.assertEqual(order_by_sql.upper().count("DESCENDING"), 1)
 
     def test_ORDERBY_005_S3_malformed_and_parseable_equivalent_terms_stay_distinct_without_collision(self):
         """
@@ -343,4 +365,11 @@ class ORDERBY005TraceabilityTests(TestCase):
         when dedupe compares keys,
         then fallback handling is deterministic with no accidental omission.
         """
-        pass
+        queryset = Article.objects.order_by(
+            _MalformedDirectionOrderBy(F("headline"), ""),
+            F("headline"),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(len(order_by_sql.split(",")), 2)
+        self.assertIn("ASC", order_by_sql.upper())
+        self.assertIn("DESCENDING", order_by_sql.upper())

@@ -386,7 +386,7 @@ class SQLCompiler:
                 # S2: identical malformed terms flow through this lane and produce same dedupe key.
                 # S3: malformed term and parseable equivalent keep separate lane identifiers, preventing
                 #     accidental collision with semantically parsed direction forms.
-                direction_key = "ASC"
+                direction_key = "__MALFORMED_ORDERING_DIRECTION__"
             # Step 2: canonicalize line ending and spacing noise before hashing.
             # - Normalize `\r\n`, `\r`, and `\n` to a single line-break format.
             # - Normalize indentation/line-break-adjacent spacing noise.
