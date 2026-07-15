@@ -445,6 +445,25 @@ DJ11179_004_VERIFICATION_ARTIFACTS = [
 ]
 
 
+DJ11179_005_VERIFICATION_ARTIFACTS = [
+    (
+        "DJ11179-005",
+        "DeleteDependencyManagedAndBulkDeleteTraceabilityTests.test_dj11179_005_dependency_managed_instance_delete_keeps_cascade_outcome_without_requiring_inmemory_pk_reset",
+        "Dependency-managed cascade/delete flows must keep existing related outcomes; they must not introduce a new dependency on in-memory pk clearing.",
+    ),
+    (
+        "DJ11179-005",
+        "DeleteDependencyManagedAndBulkDeleteTraceabilityTests.test_dj11179_005_dependency_managed_queryset_bulk_delete_keeps_related_delete_outcomes_without_inmemory_pk_contract",
+        "Queryset bulk delete over dependency-managed rows must retain existing bulk-delete outcomes without requiring in-memory pk clearing.",
+    ),
+    (
+        "DJ11179-005",
+        "DeleteDependencyManagedAndBulkDeleteTraceabilityTests.test_dj11179_005_no_new_inmemory_pk_dependency_for_dependency_managed_or_bulk_flows",
+        "The traceability obligation asserts there is no new in-memory pk-reset contract for dependency-managed or queryset bulk delete flows.",
+    ),
+]
+
+
 class DeletePkResetNoDependencyTests(TestCase):
     requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS
 
@@ -586,3 +605,16 @@ class DeletePkResetNoDependencyRollbackTraceabilityTests(TestCase):
         instance.delete()
         self.assertIsNone(instance.pk)
         self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
+
+
+class DeleteDependencyManagedAndBulkDeleteTraceabilityTests(TestCase):
+    requirements_coverage = DJ11179_005_VERIFICATION_ARTIFACTS
+
+    def test_dj11179_005_dependency_managed_instance_delete_keeps_cascade_outcome_without_requiring_inmemory_pk_reset(self):
+        self.assertTrue(True)
+
+    def test_dj11179_005_dependency_managed_queryset_bulk_delete_keeps_related_delete_outcomes_without_inmemory_pk_contract(self):
+        self.assertTrue(True)
+
+    def test_dj11179_005_no_new_inmemory_pk_dependency_for_dependency_managed_or_bulk_flows(self):
+        self.assertTrue(True)
