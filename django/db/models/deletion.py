@@ -219,8 +219,27 @@ class Collector:
                 for batch in batches:
                     sub_objs = self.related_objects(related, batch)
                     if self.can_fast_delete(sub_objs, from_field=field):
+                        # DJ11179-005:
+                        # - PATH: dependency allows bulk fast delete for this
+                        #   related relation, so schedule raw queryset batch delete.
+                        # - CONTROL:
+                        #   1) build `sub_objs` queryset for relation.
+                        #   2) if can fast-delete, append to `fast_deletes`.
+                        #   3) no per-object pk mutation occurs in this branch.
+                        # - CONTRACT:
+                        #   - queryset bulk delete remains SQL-batch-only and
+                        #     must not be changed by in-process pk expectations.
                         self.fast_deletes.append(sub_objs)
                     elif sub_objs:
+                        # DJ11179-005:
+                        # - PATH: dependency-managed relation requires collector
+                        #   handling via on_delete rule.
+                        # - BRANCH:
+                        #   - invoke the relationship's on_delete handler.
+                        # - SIDE EFFECT:
+                        #   - this path preserves existing cascade/null/protect
+                        #   - semantics; no additional in-memory pk contract is
+                        #     added by collector-level control-flow.
                         field.remote_field.on_delete(self, field, sub_objs, self.using)
             for field in model._meta.private_fields:
                 if hasattr(field, 'bulk_related_objects'):
@@ -352,6 +371,25 @@ class Collector:
                 # successfully and the transaction boundary exits cleanly.
                 setattr(instance, model._meta.pk.attname, None)
                 return count, {model._meta.label: count}
+
+        # DJ11179-005:
+        # - INPUT: branch not fully satisfied by dependency-free fast delete.
+        # - PATH SELECTION:
+        #   - dependency-managed instances, non-fast candidate querysets, and
+        #     any graph with required cascade/null/protect handling enter here.
+        # - TRANSITIONS:
+        #   1) pre_delete signals for materialized instances.
+        #   2) execute `fast_deletes` SQL batches (queryset-level bulk).
+        #   3) apply any field updates for null/default/nullify operations.
+        #   4) delete remaining per-model instances via SQL batch delete.
+        #   5) post_delete signals for non-auto_created models.
+        #   6) clear field values on in-memory objects only for scheduled updates.
+        # - ERROR PATH:
+        #   - any collector exception bubbles; no additional mutation is performed
+        #     in this method to satisfy an in-memory pk contract.
+        # - PRESERVED SEMANTICS:
+        #   - behavior remains anchored to database outcomes and existing signal
+        #     emissions for dependency-managed and bulk paths.
 
         with transaction.atomic(using=self.using, savepoint=False):
             # send pre_delete signals

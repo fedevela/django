@@ -923,6 +923,21 @@ class Model(metaclass=ModelBase):
         # - POST-CONDITION REQUIREMENT:
         #   successful return must leave no DB row for the captured old pk, so stale
         #   in-memory references become non-resolvable by primary-key lookup.
+        # DJ11179-005:
+        # - INPUT: single object delete entry point for dependency-managed paths.
+        # - DECISION:
+        #   - delegate to Collector regardless of relation graph shape.
+        # - REQUIRED FLOW:
+        #   1) collect([self], keep_parents) gathers direct object, parents,
+        #      and dependent graph.
+        #   2) delete() executes collector settlement (fast-delete or
+        #      dependency-managed path).
+        # - ERROR PATH:
+        #   - on deletion failure, exceptions propagate and instance `.pk` must
+        #      remain unchanged here.
+        # - INTEGRITY NOTE:
+        #   - no new in-memory `pk` reset contract is introduced in this method;
+        #     dependency-managed outcomes remain governed by collector internals.
 
         collector = Collector(using=using)
         collector.collect([self], keep_parents=keep_parents)

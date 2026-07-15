@@ -696,6 +696,23 @@ class QuerySet:
         del_query.query.clear_ordering(force_empty=True)
 
         collector = Collector(using=del_query.db)
+        # DJ11179-005:
+        # - INPUT: caller requests bulk `.delete()` on an already-filtered queryset.
+        # - BRANCH:
+        #   - if queryset is shape-invalid for deletion, assertions above fail.
+        #   - otherwise, collect related graph (`collector.collect`) and run
+        #     collector-owned deletion (`collector.delete`).
+        # - STATE TRANSITIONS:
+        #   1) materialize write-capable queryset context (`_for_write`, lock flags);
+        #   2) build collector and gather dependent objects/operations;
+        #   3) execute collector deletion pipeline.
+        # - ERROR PATH:
+        #   - if any collection/delete step raises, bubble up exception unchanged;
+        #     no in-memory PK reset contract exists at this call site.
+        # - GUARDED SEMANTIC (requirement-preserving):
+        #   - dependency-managed and bulk-delete flows must preserve existing
+        #     cascade/null/protect and batch outcomes.
+        #   - behavior cannot depend on instance `.pk` being reset by this method.
         collector.collect(del_query)
         deleted, _rows_count = collector.delete()
 
