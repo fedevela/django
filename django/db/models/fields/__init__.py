@@ -763,11 +763,19 @@ class Field(RegisterLookupMixin):
             if not getattr(cls, self.attname, None):
                 setattr(cls, self.attname, self.descriptor_class(self))
         if self.choices is not None:
-            # REQ-138-001: Preserve model-defined get_<field>_display() methods
-            # defined on the model class itself and only install fallback helpers
-            # when no such method exists in cls.__dict__.
+            # REQ-138-003: preserve model-defined display helpers during class
+            # construction when generating field accessors.
+            # OB 1 (REQ_138_003_OBLIGATIONS[0]):
+            # IF `display_name` is already in `cls.__dict__`:
+            #   - class namespace already defines `get_<field>_display`
+            #   - exit without assignment
+            #   - return to caller, leaving the explicit method intact
+            # ELSE:
+            #   - continue to install generated helper on this field.
             display_name = 'get_%s_display' % self.name
-            # REQ-138-002.OBLIGATIONS[0] / [1]:
+            # REQ-138-002: generated helper behavior for non-overridden methods
+            # remains unchanged (lookup through `_get_FIELD_display`, fallback raw).
+            # REQ-138-003.OBLIGATIONS[1] / [2] map to this branch:
             # - Decision: if model class already defines `get_<field>_display`,
             #   skip generation to preserve explicit model override behavior.
             # - Else branch: synthesize `partialmethod(cls._get_FIELD_display, field=self)`.
