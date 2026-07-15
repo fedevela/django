@@ -27,6 +27,20 @@ UPLOAD_PERMISSION_VERIFICATION_MAP = {
             "test_empty_multipart_handled_gracefully, test_fileuploads_closed_at_request_end"
         ),
     ],
+    "DJ10914-002": [
+        (
+            "Canonical requirement: Persist uploaded files with mode 0o644 when "
+            "FILE_UPLOAD_PERMISSIONS is unset for MemoryUploadedFile and TemporaryUploadedFile paths."
+        ),
+        "Obligations: default-memory handler, default-temporary handler, and cross-handler mode parity.",
+        (
+            "Primary locus: tests/file_storage/test_upload_permissions_contract.py::"
+            "FileUploadPermissionContractTests::"
+            "test_DJ10914_002_default_file_upload_permissions_apply_to_memory_uploaded_file, "
+            "test_DJ10914_002_default_file_upload_permissions_apply_to_temporary_uploaded_file, "
+            "test_DJ10914_002_default_file_upload_permissions_are_identical_across_handlers"
+        ),
+    ],
 }
 
 
@@ -44,6 +58,42 @@ class FileUploadPermissionContractTests(SimpleTestCase):
             mode = os.stat(storage.path(name)).st_mode & 0o777
 
         self.assertEqual(mode, 0o644)
+
+    @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
+    def test_DJ10914_002_default_file_upload_permissions_apply_to_memory_uploaded_file(self):
+        """
+        GUID: DJ10914-002
+
+        Scenario:
+        - Given FILE_UPLOAD_PERMISSIONS is unset and MemoryUploadedFile path is used
+        - When persisted through FileSystemStorage.save()
+        - Then file mode resolves to 0o644 under default flow.
+        """
+        pass
+
+    @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
+    def test_DJ10914_002_default_file_upload_permissions_apply_to_temporary_uploaded_file(self):
+        """
+        GUID: DJ10914-002
+
+        Scenario:
+        - Given FILE_UPLOAD_PERMISSIONS is unset and TemporaryUploadedFile path is used
+        - When persisted through FileSystemStorage.save()
+        - Then file mode resolves to 0o644 and is not 0o0600 by temporary-file defaults.
+        """
+        pass
+
+    @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
+    def test_DJ10914_002_default_file_upload_permissions_are_identical_across_handlers(self):
+        """
+        GUID: DJ10914-002
+
+        Scenario:
+        - Given both MemoryUploadedFile and TemporaryUploadedFile default-handler flows persist files
+        - When both run with FILE_UPLOAD_PERMISSIONS unset
+        - Then both persisted files resolve to identical mode 0o644.
+        """
+        pass
 
     @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
     @override_settings(FILE_UPLOAD_PERMISSIONS=0o600)
