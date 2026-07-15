@@ -110,6 +110,11 @@ class BaseHandler:
         if response is None:
             wrapped_callback = self.make_view_atomic(callback)
             try:
+                # DJNG-004:
+                # Contract: callback_args are pre-bound positional captures (non-named only).
+                # callback_kwargs are named captures + resolver defaults.
+                # Optional named capture misses must not appear in callback_args; if they
+                # were present as positional items here, TypeError would indicate arity drift.
                 response = wrapped_callback(request, *callback_args, **callback_kwargs)
             except Exception as e:
                 response = self.process_exception_by_middleware(e, request)

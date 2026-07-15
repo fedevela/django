@@ -155,6 +155,17 @@ class RegexPattern(CheckURLMixin):
     def match(self, path):
         match = self.regex.search(path)
         if match:
+            # DJNG-001 / DJNG-004 / DJNG-005:
+            # 1) Capture all named groups; keep only values that are not None.
+            #    - If an optional named group is unmatched, it is excluded here.
+            #    - This guarantees unmatched named captures are never promoted to args.
+            # 2) Build positional args only when there are zero named captures.
+            #    - If any named capture exists (matched or excluded), args = ().
+            #    - Only unmatched optional groups without named captures may still
+            #      contribute non-named groups via match.groups().
+            # 3) Return path tail, args, kwargs for callback construction:
+            #    - matched token -> kwargs[name] = token
+            #    - unmatched optional token -> kwargs omits name
             # If there are any named groups, use those as kwargs, ignoring
             # non-named groups. Otherwise, pass all non-named arguments as
             # positional arguments.
@@ -353,6 +364,12 @@ class URLPattern:
         if match:
             new_path, args, kwargs = match
             # Pass any extra_kwargs as **kwargs.
+            # DJNG-001 / DJNG-004:
+            # - Preserve args/kwargs boundary when binding URL captures.
+            # - Optional named captures that are unmatched must remain absent from
+            #   kwargs and must not be injected into args.
+            # - default_args may add explicit keys, but they are merged in kwargs;
+            #   they must never force a positional arg path.
             kwargs.update(self.default_args)
             return ResolverMatch(self.callback, args, kwargs, self.pattern.name, route=str(self.pattern))
 
@@ -551,6 +568,15 @@ class URLResolver:
                         tried.append([pattern])
                 else:
                     if sub_match:
+                        # DJNG-005:
+                        # Match resolution contract for route variants:
+                        #  a) merge captured kwargs from outer prefix and parent defaults
+                        #  b) overlay child kwargs (child wins on collisions)
+                        #  c) if merged kwargs is empty, pass through positional args from
+                        #     prefix + child args; otherwise positional args are scoped to
+                        #     child only.
+                        # This ensures /module/ and /module/<token> resolve through the
+                        # same flow while keeping optional token semantics intact.
                         # Merge captured arguments in match with submatch
                         sub_match_dict = {**kwargs, **self.default_kwargs}
                         # Update the sub_match_dict with the kwargs from the sub_match.
