@@ -272,20 +272,22 @@ USERNAME_VALIDATOR_REQUIREMENT_TO_TEST = {
 class UsernameValidatorContractTests(SimpleTestCase):
     def test_django11099_001_ascii_validator_uses_explicit_string_boundaries(self):
         # DJANGO11099-001
-        # Placeholder assertion: traceability artifact for regex boundary anchor migration.
-        self.assertTrue(True)
+        self.assertEqual(validators.ASCIIUsernameValidator().regex, r'\A[\w.@+-]+\Z')
 
     def test_django11099_002_unicode_validator_uses_explicit_string_boundaries(self):
         # DJANGO11099-002
-        # Placeholder assertion: traceability artifact for regex boundary anchor migration.
-        self.assertTrue(True)
+        self.assertEqual(validators.UnicodeUsernameValidator().regex, r'\A[\w.@+-]+\Z')
 
     def test_django11099_003_ascii_validator_rejects_trailing_newline(self):
         # DJANGO11099-003
-        # Placeholder assertion: traceability artifact for newline rejection behavior.
-        self.assertTrue(True)
+        validator = validators.ASCIIUsernameValidator()
+        with self.assertRaises(ValidationError):
+            validator("alice\n")
+        validator("alice")
 
     def test_django11099_004_unicode_validator_rejects_trailing_newline(self):
         # DJANGO11099-004
-        # Placeholder assertion: traceability artifact for newline rejection behavior.
-        self.assertTrue(True)
+        validator = validators.UnicodeUsernameValidator()
+        with self.assertRaises(ValidationError):
+            validator("alice\n")
+        validator("alice")

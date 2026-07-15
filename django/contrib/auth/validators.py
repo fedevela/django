@@ -17,7 +17,7 @@ class ASCIIUsernameValidator(validators.RegexValidator):
     # Failure example:
     # - value="alice\n": boundary logic must fail because trailing newline cannot be
     #   part of [\\w.@+-], so validation must reject.
-    regex = r'^[\w.@+-]+$'
+    regex = r'\A[\w.@+-]+\Z'
     message = _(
         'Enter a valid username. This value may contain only English letters, '
         'numbers, and @/./+/-/_ characters.'
@@ -37,7 +37,7 @@ class UnicodeUsernameValidator(validators.RegexValidator):
     # Failure example:
     # - value="alice\n": boundary logic must fail because trailing newline cannot be
     #   part of [\\w.@+-], so validation must reject.
-    regex = r'^[\w.@+-]+$'
+    regex = r'\A[\w.@+-]+\Z'
     message = _(
         'Enter a valid username. This value may contain only letters, '
         'numbers, and @/./+/-/_ characters.'
