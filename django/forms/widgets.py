@@ -70,27 +70,63 @@ class Media:
 
     @property
     def _js(self):
-        # PSEUDOCODE-GATEWAY [MEDIA-002][MEDIA-003][MEDIA-005]:
-        # Input:
-        #   ordered chunk list = self._js_lists
-        # Output contract:
-        #   produce one JS ordering that satisfies all adjacency constraints
-        #   inferred from all chunks, if at least one topological total order exists.
-        # Constraint model:
-        #   for each chunk C = [x0, x1, ..., xn]:
-        #       require x_i -> x_{i+1} for i in [0, n-2] (MEDIA-005)
-        # Branch:
-        #   IF union of constraints across all chunks is acyclic:
-        #       emit resolved order (deduplicated) with preference for chunk-local adjacency
-        #       and stable preservation of earlier chunks when non-contradictory
-        #       (supports Scenario-1 / MEDIA-001 and scenario equivalence checks).
-        #   ELSE:
-        #       emit partial/fallback order only if implementation policy allows,
-        #       raise exactly one MediaOrderConflictWarning (full-graph failure path).
-        js = self._js_lists[0]
-        # filter(None, ...) avoids calling merge() with empty lists.
-        for obj in filter(None, self._js_lists[1:]):
-            js = self.merge(js, obj)
+        chunks = [chunk for chunk in self._js_lists if chunk]
+        if not chunks:
+            return []
+
+        # Build constraints across all chunks at once so constraints are solved
+        # globally.
+        nodes = []
+        node_position = {}
+        edges = {}
+        for chunk in chunks:
+            previous = None
+            for path in chunk:
+                if path not in node_position:
+                    node_position[path] = len(nodes)
+                    nodes.append(path)
+                if previous is not None and previous != path:
+                    edges.setdefault(previous, set()).add(path)
+                previous = path
+
+        graph = {node: set() for node in nodes}
+        in_degree = {node: 0 for node in nodes}
+        for source, targets in edges.items():
+            for target in targets:
+                graph.setdefault(source, set())
+                graph.setdefault(target, set())
+                in_degree.setdefault(target, 0)
+                if target not in graph[source]:
+                    graph[source].add(target)
+                    in_degree[target] += 1
+
+        available = [node for node in nodes if in_degree[node] == 0]
+        resolved = []
+        while available:
+            available.sort(key=node_position.get)
+            current = available.pop(0)
+            resolved.append(current)
+            for target in graph[current]:
+                in_degree[target] -= 1
+                if in_degree[target] == 0:
+                    available.append(target)
+
+        if len(resolved) == len(nodes):
+            return resolved
+
+        warnings.warn(
+            'Unable to resolve Media.js ordering while preserving all declared '
+            'relationships.  Loading order may be incorrect.',
+            MediaOrderConflictWarning,
+        )
+
+        # Fall back to deterministic pairwise merge behavior when no global order
+        # can satisfy all constraints.
+        js = chunks[0]
+        for chunk in chunks[1:]:
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore', MediaOrderConflictWarning)
+                js = self.merge(js, chunk)
         return js
 
     def render(self):
