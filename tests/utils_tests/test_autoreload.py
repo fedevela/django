@@ -33,11 +33,46 @@ AUTORELOAD_VERIFICATION_MAP = {
 
 
 class AUTORELOADRequirementTraceabilityTests(SimpleTestCase):
-    def test_AUTORELOAD_001_include_invoked_management_script_in_statreloader_watched_files_set(self):
-        self.assertTrue(True)
+    @mock.patch('django.utils.autoreload.start_django')
+    @mock.patch('django.utils.autoreload.get_reloader')
+    @mock.patch.dict(os.environ, {autoreload.DJANGO_AUTORELOAD_ENV: 'true'})
+    def test_AUTORELOAD_001_include_invoked_management_script_in_statreloader_watched_files_set(self, mocked_get_reloader, mocked_start_django):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manage_script = Path(temp_dir) / 'manage.py'
+            manage_script.touch()
+            reloader = autoreload.StatReloader()
+            reloader.watch_file = mock.MagicMock()
+            mocked_get_reloader.return_value = reloader
 
-    def test_AUTORELOAD_001_resolve_invocation_path_to_absolute_before_snapshot(self):
-        self.assertTrue(True)
+            with mock.patch.object(sys, 'argv', [str(manage_script), 'runserver']):
+                autoreload.run_with_reloader(mock.MagicMock())
+
+            reloader.watch_file.assert_called_once_with(manage_script.resolve())
+            self.assertTrue(manage_script.resolve().is_absolute())
+            mocked_start_django.assert_called_once()
+
+    @mock.patch('django.utils.autoreload.start_django')
+    @mock.patch('django.utils.autoreload.get_reloader')
+    @mock.patch.dict(os.environ, {autoreload.DJANGO_AUTORELOAD_ENV: 'true'})
+    def test_AUTORELOAD_001_resolve_invocation_path_to_absolute_before_snapshot(self, mocked_get_reloader, mocked_start_django):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir) / 'project'
+            app_dir = project_dir / 'app'
+            app_dir.mkdir(parents=True)
+            manage_script = project_dir / 'manage.py'
+            manage_script.touch()
+            reloader = autoreload.StatReloader()
+            reloader.watch_file = mock.MagicMock()
+            mocked_get_reloader.return_value = reloader
+
+            with mock.patch('django.utils.autoreload.os.getcwd', return_value=str(app_dir)):
+                with mock.patch.object(sys, 'argv', ['../manage.py', 'runserver']):
+                    autoreload.run_with_reloader(mock.MagicMock())
+
+            resolved = manage_script.resolve()
+            watched_path = reloader.watch_file.call_args[0][0]
+            self.assertEqual(watched_path, resolved)
+            self.assertTrue(watched_path.is_absolute())
 
 
 class TestIterModulesAndFiles(SimpleTestCase):

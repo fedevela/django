@@ -202,6 +202,19 @@ def get_child_arguments():
     return args
 
 
+def compute_invocation_script_path():
+    """
+    Return the resolved absolute path for the invoked management entry script.
+    """
+    script_path = Path(sys.argv[0])
+    if not script_path.is_absolute():
+        script_path = Path.cwd() / script_path
+    resolved_script_path = script_path.resolve()
+    if resolved_script_path.exists():
+        return resolved_script_path
+    return None
+
+
 def trigger_reload(filename):
     logger.info('%s changed, reloading.', filename)
     sys.exit(3)
@@ -579,22 +592,10 @@ def run_with_reloader(main_func, *args, **kwargs):
     try:
         if os.environ.get(DJANGO_AUTORELOAD_ENV) == 'true':
             reloader = get_reloader()
-            # AUTORELOAD-001: Ensure invoked manage.py entry script is included in
-            # the watched file set before any snapshot is built.
-            # DECISION:
-            # - Determine if the active reloader is StatReloader.
-            # - Derive script_path from actual startup invocation using
-            #   sys.argv[0], resolving to an absolute filesystem path.
-            # - Register resolved script_path as extra watched file.
-            # STATE/IN/OUT:
-            # - INPUT: reloader, sys.argv from process invocation, cwd context.
-            # - STATE: watched_files() should include resolved script_path.
-            # - OUTPUT: snapshot_files() and subsequent file-change scans include
-            #   the management entry script as an explicit target.
-            # FAILURE PATH:
-            # - If sys.argv[0] is missing, non-file, or resolution fails,
-            #   do not mutate behavior; keep the reloader flow unchanged and
-            #   rely on existing module-based watchers.
+            if isinstance(reloader, StatReloader):
+                invoked_script = compute_invocation_script_path()
+                if invoked_script is not None:
+                    reloader.watch_file(invoked_script)
             logger.info('Watching for file changes with %s', reloader.__class__.__name__)
             start_django(reloader, main_func, *args, **kwargs)
         else:
