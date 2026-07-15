@@ -772,6 +772,23 @@ class Field(RegisterLookupMixin):
             #   - return to caller, leaving the explicit method intact
             # ELSE:
             #   - continue to install generated helper on this field.
+            # REQ-138-004: preserve inherited model-defined display helpers under
+            # subclass generation (MRO-aware).
+            # INPUT:
+            # - field with choices being contributed to class `cls`.
+            # - target name: `display_name = get_<field>_display`.
+            # TRANSITIONS:
+            # 1) Resolve whether class namespace already defines an accessor:
+            #    - if `display_name` in `cls.__dict__`: keep local override.
+            #    - no generated assignment.
+            # 2) Resolve inherited accessor availability:
+            #    - else if attribute exists via MRO (`getattr(cls, display_name)`):
+            #      - use inherited user-defined implementation and do not generate.
+            # 3) Otherwise, no user-defined helper exists anywhere in MRO:
+            #    - synthesize `partialmethod(cls._get_FIELD_display, field=self)`.
+            # 4) Failure path:
+            #    - if generated path is unreachable because either explicit/helper
+            #      exists, class constructor leaves that behavior untouched.
             display_name = 'get_%s_display' % self.name
             # REQ-138-002: generated helper behavior for non-overridden methods
             # remains unchanged (lookup through `_get_FIELD_display`, fallback raw).
