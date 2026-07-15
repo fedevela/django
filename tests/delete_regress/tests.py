@@ -479,14 +479,44 @@ class DeleteNoDependencyLookupTraceabilityTests(TestCase):
 class DeletePkResetFastDeleteBranchTraceabilityTests(TestCase):
     requirements_coverage = DJ11179_003_VERIFICATION_ARTIFACTS
 
-    # Placeholder contract artifacts for DJ11179-003.
-    # These are intentionally no-op pass/fail tests to preserve traceability without
-    # adding behavioral assertions in this phase.
     def test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset(self):
-        self.assertTrue(True)
+        no_dependency_instance = DeletionTracebook.objects.create()
+        no_dependency_pk = no_dependency_instance.pk
+        no_dependency_instance.delete()
+        self.assertIsNone(no_dependency_instance.pk)
+        self.assertFalse(DeletionTracebook.objects.filter(pk=no_dependency_pk).exists())
+
+        dependency_root = Policy.objects.create(policy_number="003")
+        dependency_child = Version.objects.create(policy=dependency_root)
+        dependency_root.delete()
+        self.assertIsNotNone(dependency_root.pk)
+        self.assertIsNotNone(dependency_child.pk)
+        self.assertFalse(Version.objects.filter(pk=dependency_child.pk).exists())
 
     def test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset(self):
-        self.assertTrue(True)
+        def noop_signal(*args, **kwargs):
+            pass
+
+        fast_delete_instance = DeletionTracebook.objects.create()
+        fast_delete_instance.delete()
+        self.assertIsNone(fast_delete_instance.pk)
+
+        models.signals.pre_delete.connect(noop_signal, sender=DeletionTracebook)
+        try:
+            managed_delete_instance = DeletionTracebook.objects.create()
+            managed_delete_instance.delete()
+            self.assertIsNotNone(managed_delete_instance.pk)
+            self.assertFalse(
+                DeletionTracebook.objects.filter(pk=managed_delete_instance.pk).exists()
+            )
+        finally:
+            models.signals.pre_delete.disconnect(noop_signal, sender=DeletionTracebook)
 
     def test_dj11179_003_dependency_collection_internals_do_not_receive_fast_delete_pk_mutation(self):
-        self.assertTrue(True)
+        policy = Policy.objects.create(policy_number="003-branch")
+        version = Version.objects.create(policy=policy)
+        policy.delete()
+
+        self.assertIsNotNone(policy.pk)
+        self.assertIsNotNone(version.pk)
+        self.assertFalse(Version.objects.filter(pk=version.pk).exists())
