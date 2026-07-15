@@ -82,20 +82,35 @@ class SimplifiedURLTests(SimpleTestCase):
 
     # DJNG-001: unmatched optional named capture must not become a positional arg.
     def test_djng_001_unmatched_optional_named_capture_does_not_become_positional(self):
-        resolve('/module/')
-        self.assertTrue(True)
+        match = resolve('/module/')
+        self.assertEqual(match.url_name, 'modules')
+        self.assertEqual(match.args, ())
+        # Unmatched optional named capture should not be emitted as a positional arg.
+        self.assertNotIn(None, match.args)
 
     # DJNG-004: optional capture with defaulted parameter must not force positional arity.
     def test_djng_004_optional_capture_with_default_is_not_forced_to_positional_arity(self):
-        resolve('/module/')
-        self.assertTrue(True)
+        match = resolve('/module/')
+        self.assertEqual(match.url_name, 'modules')
+        self.assertEqual(match.args, ())
+        self.assertTrue(match.kwargs == {} or match.kwargs == {'format': None})
 
     # DJNG-005: '/module/' and '/module/<token>' resolve with accepted tokens.
     def test_djng_005_module_route_resolves_default_and_allowed_token_variants(self):
-        for url in ('/module/', '/module/html', '/module/json', '/module/xml'):
+        tests = (
+            ('/module/', 'html', {}),
+            ('/module/html', 'html', {'format': 'html'}),
+            ('/module/json', 'json', {'format': 'json'}),
+            ('/module/xml', 'xml', {'format': 'xml'}),
+        )
+        for url, format_value, expected_kwargs in tests:
             with self.subTest(url=url):
-                resolve(url)
-                self.assertTrue(True)
+                match = resolve(url)
+                self.assertEqual(match.url_name, 'modules')
+                self.assertEqual(match.args, ())
+                if expected_kwargs:
+                    self.assertEqual(match.kwargs, expected_kwargs)
+                self.assertEqual(self.client.get(url).content.decode(), format_value)
 
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')

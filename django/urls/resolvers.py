@@ -170,7 +170,10 @@ class RegexPattern(CheckURLMixin):
             # non-named groups. Otherwise, pass all non-named arguments as
             # positional arguments.
             kwargs = {k: v for k, v in match.groupdict().items() if v is not None}
-            args = () if kwargs else match.groups()
+            # Preserve optional named capture semantics: if the regex pattern has
+            # any named groups, matched or unmatched, we keep positional args
+            # empty and pass captures through kwargs.
+            args = () if match.groupdict() else match.groups()
             return path[match.end():], args, kwargs
         return None
 
