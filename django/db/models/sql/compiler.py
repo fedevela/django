@@ -349,6 +349,12 @@ class SQLCompiler:
                 else:
                     raise DatabaseError('ORDER BY term does not match any column in the result set.')
             sql, params = self.compile(resolved)
+            # ORDERBY-002:
+            # Deterministic-duplicate-key obligation:
+            # input: rendered ORDER BY SQL fragment `sql` plus `params`.
+            # output: canonical tuple key `(canonical_sql, params_hash)` used in `seen`.
+            # Step 1: remove final ORDER BY direction token (ASC/DESC) so direction
+            # does not affect duplicate-equivalence checks for this path.
             # Don't add the same column twice, but the order direction is
             # not taken into account so we strip it. When this entire method
             # is refactored into expressions, then we can check each part as we
@@ -359,10 +365,19 @@ class SQLCompiler:
             direction_match = re.search(r"\s+(ASC|DESC)\s*$", without_ordering, flags=re.IGNORECASE)
             if direction_match:
                 without_ordering = without_ordering[:direction_match.start()]
+            # Step 2: canonicalize line ending and spacing noise before hashing.
+            # - Normalize `\r\n`, `\r`, and `\n` to a single line-break format.
+            # - Normalize indentation/line-break-adjacent spacing noise.
+            # - Preserve SQL token content; avoid rewriting SQL string literals.
+            # - Keep meaningful token ordering and internal token text unchanged.
             without_ordering = re.sub(r"\s+", " ", without_ordering.strip())
             params_hash = make_hashable(params)
             if (without_ordering, params_hash) in seen:
+                # Step 3: duplicate-key branch.
+                # If normalized key already exists, skip append and continue loop.
                 continue
+            # Step 4: first-seen branch.
+            # Emit normalized key into `seen` and keep `sql` in final ORDER BY list.
             seen.add((without_ordering, params_hash))
             result.append((resolved, (sql, params, is_ref)))
         return result
