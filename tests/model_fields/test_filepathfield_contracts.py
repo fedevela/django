@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 
+from django.db.migrations.writer import MigrationWriter
 from django.db import models
 from django.test import SimpleTestCase
 
@@ -378,91 +379,200 @@ class FilePathFieldContractsFPF008Tests(SimpleTestCase):
     """
 
     def test_FPF_008_callable_path_serialization_preserves_runtime_callable_reference_not_host_path(self):
-        # [FPF-008-R1] Serialization preserves callable identity and does not capture host filesystem values.
-        # Inputs:
-        # - field path is module-level callable (for example get_local_upload_path).
-        # - host filesystem location varies per runtime and must not be embedded at deconstruct time.
-        # Steps:
-        # 1) field = FilePathField(path=<callable>).
-        # 2) deconstruct = field.deconstruct().
-        # 3) verify deconstruct kwargs contains path as callable reference (not evaluated path string).
-        # 4) instantiate MigrationWriter serialize path via deconstruction path for stable migration output.
-        # Expected state transitions:
-        # - callable object remains deconstructable by import path.
-        # - no host-specific path value appears in migration artifact.
-        # - host-local runtime behavior remains unresolved until formfield() call.
-        pass
+        with tempfile.TemporaryDirectory() as host_path:
+            marker_file = os.path.join(host_path, "host_file.txt")
+            with open(marker_file, "w"):
+                pass
+            calls = []
+
+            def host_relative_path():
+                calls.append(1)
+                return host_path
+
+            class FilePathFieldCallablePathSerializableModel(models.Model):
+                file = models.FilePathField(path=host_relative_path)
+
+                class Meta:
+                    app_label = "model_fields"
+
+            field = FilePathFieldCallablePathSerializableModel._meta.get_field("file")
+            name, deconstructed_path, args, kwargs = field.deconstruct()
+
+            self.assertEqual(name, "file")
+            self.assertEqual(deconstructed_path, "django.db.models.FilePathField")
+            self.assertEqual(args, [])
+            self.assertIs(kwargs["path"], host_relative_path)
+            self.assertEqual(calls, [])
+
+            serialized, imports = MigrationWriter.serialize(field)
+            self.assertIn(f"{__name__}.host_relative_path", serialized)
+            self.assertIn(f"import {__name__}", imports)
+            self.assertNotIn(host_path, serialized)
+
+            choices = field.formfield().choices
+            self.assertEqual(calls, [1])
+            self.assertIn((marker_file, os.path.basename(marker_file)), choices)
 
     def test_FPF_008_migration_text_is_stable_for_callable_and_string_path_fields(self):
-        # [FPF-008-R2] Migration text stability for callable vs string path definitions.
-        # Inputs:
-        # - callable_field: FilePathField(path=<module-level callable>).
-        # - string_field: FilePathField(path=<string literal path>). 
-        # Branches:
-        # - branch A: callable deconstruction path serialization by import string.
-        # - branch B: string deconstruction by quoted path literal.
-        # Algorithm:
-        # 1) build migration operations for both fields (same match/allow/recursive/options as needed).
-        # 2) serialize with MigrationWriter.serialize for each.
-        # 3) capture rendered migration text tokens for both fields.
-        # 4) compare with stable fixture order and canonical formatting.
-        # Failure path:
-        # - if callable no longer importable/deterministic, serialization must fail before runtime choice path logic.
-        # Outcome requirement:
-        # - deterministic output across environments and repeated runs for both path forms.
-        pass
+        def get_portable_path():
+            return "/tmp/runtime/path/should/not/appear/in/migration"
+
+        string_path = "/var/app/contracts/path"
+        callable_field = models.FilePathField(
+            path=get_portable_path,
+            match=r"^.*\.txt$",
+            recursive=True,
+            allow_files=True,
+            allow_folders=False,
+        )
+        string_field = models.FilePathField(
+            path=string_path,
+            match=r"^.*\.txt$",
+            recursive=True,
+            allow_files=True,
+            allow_folders=False,
+        )
+
+        serialized_callable_1, imports_callable_1 = MigrationWriter.serialize(callable_field)
+        serialized_callable_2, imports_callable_2 = MigrationWriter.serialize(callable_field)
+        serialized_string_1, imports_string_1 = MigrationWriter.serialize(string_field)
+        serialized_string_2, imports_string_2 = MigrationWriter.serialize(string_field)
+
+        self.assertEqual(serialized_callable_1, serialized_callable_2)
+        self.assertEqual(imports_callable_1, imports_callable_2)
+        self.assertEqual(serialized_string_1, serialized_string_2)
+        self.assertEqual(imports_string_1, imports_string_2)
+
+        self.assertIn(f"{__name__}.get_portable_path", serialized_callable_1)
+        self.assertEqual(imports_callable_1, {f"import {__name__}"})
+        self.assertNotIn("/tmp/runtime/path/should/not/appear/in/migration", serialized_callable_1)
+
+        self.assertIn(f"FilePathField(path={string_path!r}", serialized_string_1)
+        self.assertNotIn("/tmp/runtime/path/should/not/appear/in/migration", serialized_string_2)
+        self.assertEqual(imports_string_1, set())
 
     def test_FPF_008_host_local_runtime_path_output_drives_callable_form_choices(self):
-        # [FPF-008-R3] Host-local runtime path output must drive callable-form choices.
-        # Inputs:
-        # - callable path returns host_root from mutable runtime state.
-        # - temporary directory trees on host_a and host_b with distinguishable files.
-        # Control flow:
-        # 1) instantiate model field with callable path.
-        # 2) call field.formfield(); evaluate path once and build choices.
-        # 3) mutate runtime source path (or state dict/counter).
-        # 4) call field.formfield() again; expect re-resolution and new choices.
-        # Decisions:
-        # - if call source switches, choice set must switch accordingly.
-        # - if call source unchanged, choices must remain unchanged.
-        # Failure path:
-        # - callable path output must remain re-evaluated per formfield call.
-        # Invariant:
-        # - allow_files/allow_folders/match/recursive options are applied identically.
-        pass
+        with tempfile.TemporaryDirectory() as host_a_root, tempfile.TemporaryDirectory() as host_b_root:
+            host_a_file = os.path.join(host_a_root, "host-a.txt")
+            host_b_file = os.path.join(host_b_root, "host-b.txt")
+            with open(host_a_file, "w"), open(host_b_file, "w"):
+                pass
+
+            runtime_state = {"current_root": host_a_root}
+            call_order = []
+
+            def get_runtime_path():
+                call_order.append(runtime_state["current_root"])
+                return runtime_state["current_root"]
+
+            class FilePathFieldRuntimeLocalityModel(models.Model):
+                file = models.FilePathField(
+                    path=get_runtime_path,
+                    match=r"^.*\.txt$",
+                    recursive=False,
+                    allow_files=True,
+                    allow_folders=False,
+                )
+
+                class Meta:
+                    app_label = "model_fields"
+
+            field = FilePathFieldRuntimeLocalityModel._meta.get_field("file")
+
+            first = field.formfield().choices
+            self.assertEqual(len(call_order), 1)
+            self.assertIn((host_a_file, "host-a.txt"), first)
+            self.assertNotIn((host_b_file, "host-b.txt"), first)
+
+            second = field.formfield().choices
+            self.assertEqual(len(call_order), 2)
+            self.assertIn((host_a_file, "host-a.txt"), second)
+
+            runtime_state["current_root"] = host_b_root
+            third = field.formfield().choices
+            self.assertEqual(len(call_order), 3)
+            self.assertIn((host_b_file, "host-b.txt"), third)
+            self.assertNotIn((host_a_file, "host-a.txt"), third)
 
     def test_FPF_008_bad_callables_and_bad_return_types_preserve_error_behavior(self):
-        # [FPF-008-R4] Error preservation for malformed callable path inputs.
-        # Inputs:
-        # - path callable that cannot be deconstructed (local closure/lambda/object with no importable module).
-        # - path callable returning non-string (e.g. None/int/list) when formfield enumerates.
-        # Branch 1 (deconstruction error):
-        # 1) build FilePathField(path=<non-importable callable>).
-        # 2) invoke deconstruct/serializer path.
-        # 3) assert explicit migration-time error surfaces consistently.
-        # Branch 2 (runtime return-type error):
-        # 1) build FilePathField(path=<callable returning non-path-like>).
-        # 2) invoke formfield().
-        # 3) assert explicit TypeError/validation error path remains unchanged.
-        # Failure preservation requirement:
-        # - both branches must fail deterministically with existing exception families and no silent coercion.
-        pass
+        with self.assertRaisesMessage(
+            ValueError,
+            "Cannot serialize FilePathField.path as a lambda because it is not deconstructable",
+        ):
+            MigrationWriter.serialize(models.FilePathField(path=lambda: "host-path"))
+
+        def nested_path():
+            return "host-path"
+
+        with self.assertRaisesMessage(
+            ValueError,
+            "Cannot serialize FilePathField.path because it is a local/nested callable.",
+        ):
+            MigrationWriter.serialize(models.FilePathField(path=nested_path))
+
+        class FilePathFieldBadReturnPathModel(models.Model):
+            file = models.FilePathField(path=lambda: 100)
+
+            class Meta:
+                app_label = "model_fields"
+
+        bad_field = FilePathFieldBadReturnPathModel._meta.get_field("file")
+        with self.assertRaisesMessage(
+            TypeError,
+            "FilePathField.path must resolve to a string or path-like object.",
+        ):
+            bad_field.formfield()
 
     def test_FPF_008_string_and_callable_paths_share_filtering_outcomes_in_parity_suites(self):
-        # [FPF-008-R5] Parity assertion: string path and callable path produce identical filtering outcomes.
-        # Inputs:
-        # - shared test directory containing file and directory fixtures.
-        # - independent models for string path and callable path with identical allow_files/allow_folders/recursive/match.
-        # Algorithm:
-        # 1) build both fields over same logical root.
-        # 2) collect formfield().choices for each.
-        # 3) compare full ordered choices and assert equality.
-        # 4) vary host path content only where relevant and repeat parity checks.
-        # Decision:
-        # - if one path form filters differently than the other, capture regression boundary.
-        # invariant:
-        # - no behavioral drift outside callable/path-specific migration coverage.
-        pass
+        with tempfile.TemporaryDirectory() as path_root:
+            nested_dir = os.path.join(path_root, "nested")
+            os.makedirs(nested_dir)
+            root_txt = os.path.join(path_root, "document.txt")
+            root_png = os.path.join(path_root, "image.png")
+            nested_txt = os.path.join(nested_dir, "nested.txt")
+            with open(root_txt, "w"), open(root_png, "w"), open(nested_txt, "w"):
+                pass
+
+            def runtime_root():
+                return path_root
+
+            expected = [
+                (root_txt, "document.txt"),
+                (nested_txt, os.path.join("nested", "nested.txt")),
+            ]
+
+            class FilePathFieldStringPathFPF008Model(models.Model):
+                file = models.FilePathField(
+                    path=path_root,
+                    match=r"^.*\.txt$",
+                    recursive=True,
+                    allow_files=True,
+                    allow_folders=False,
+                )
+
+                class Meta:
+                    app_label = "model_fields"
+
+            class FilePathFieldCallablePathFPF008Model(models.Model):
+                file = models.FilePathField(
+                    path=runtime_root,
+                    match=r"^.*\.txt$",
+                    recursive=True,
+                    allow_files=True,
+                    allow_folders=False,
+                )
+
+                class Meta:
+                    app_label = "model_fields"
+
+            string_field = FilePathFieldStringPathFPF008Model._meta.get_field("file")
+            callable_field = FilePathFieldCallablePathFPF008Model._meta.get_field("file")
+
+            string_choices = string_field.formfield().choices
+            callable_choices = callable_field.formfield().choices
+            self.assertEqual(string_choices, expected)
+            self.assertEqual(callable_choices, expected)
+            self.assertEqual(string_choices, callable_choices)
 
     def test_FPF_007_recursive_false_immediate_folders_only_with_allow_folders_true_allow_files_false_preserved_across_path_forms(self):
         """FPF-007 Scenario 2: non-recursive folder-only filtering remains identical for both path forms."""
