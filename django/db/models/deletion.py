@@ -324,6 +324,27 @@ class Collector:
             #       `test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset`
             #       and
             #       `test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset`.
+            # DJ11179-004:
+            # - LOGIC OBLIGATION (no-dependency rollback safety):
+            #   - INPUT:
+            #     - single-instance fast-delete candidate selected by `can_fast_delete(instance)`.
+            #     - captured original PK must remain stable until a success boundary is crossed.
+            #   - PATH CONTROL:
+            #     1) execute the database delete through
+            #        `sql.DeleteQuery(model).delete_batch([instance.pk], self.using)`
+            #        inside `transaction.mark_for_rollback_on_error()`.
+            #     2) only after that operation returns successfully, clear in-memory PK.
+            #   - FAILURE PATH:
+            #     - if delete_batch raises (including savepoint-level exceptions), do not mutate
+            #       `instance.pk`; propagate the exception.
+            #     - this preserves pre-delete identity across rollback/failed-delete attempts.
+            #   - RETRY PROPERTY:
+            #     - because failure path leaves PK untouched, a subsequent call can still execute
+            #       with the original PK value and clear it on eventual success.
+            #   - TEST MAPPING:
+            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal`
+            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk`
+            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk`
             if self.can_fast_delete(instance):
                 with transaction.mark_for_rollback_on_error():
                     count = sql.DeleteQuery(model).delete_batch([instance.pk], self.using)
