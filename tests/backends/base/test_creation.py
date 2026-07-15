@@ -91,6 +91,60 @@ TXROLLBACK_VERIFICATION_MAP = {
 }
 
 
+TXROLLBACK_ARCHITECTURE_MAP = {
+    "TXROLLBACK-001": {
+        "pressure": "Ownership + atomicity boundary",
+        "owner": "BaseDatabaseCreation",
+        "locus": "django/db/backends/base/creation.py:BaseDatabaseCreation.deserialize_db_from_string",
+        "contract": "deserialize_db_from_string(self, data) wraps deserialize+save path in one atomic block using the active alias",
+        "invariants": [
+            "all obj.save() calls execute within one alias-local transaction boundary",
+            "control flow stays unchanged for call signature and return semantics",
+        ],
+    },
+    "TXROLLBACK-002": {
+        "pressure": "Failure isolation",
+        "owner": "BaseDatabaseCreation.deserialize_db_from_string",
+        "locus": "django/db/backends/base/creation.py:deserialize_db_from_string",
+        "contract": "any exception during deserialize/save propagates and leaves the active alias transaction rolled back",
+        "boundary": "rollback scope is limited to self.connection.alias only",
+        "invariants": [
+            "no partial rows committed for the target alias when save-time exceptions occur",
+            "pre-restore state remains observable after failure",
+        ],
+    },
+    "TXROLLBACK-003": {
+        "pressure": "Dependency direction / alias isolation",
+        "owner": "BaseDatabaseCreation + TransactionTestCase._fixture_setup",
+        "locus": (
+            "django/db/backends/base/creation.py:deserialize_db_from_string",
+            "django/test/testcases.py:_fixture_setup",
+        ),
+        "contract": "transaction.atomic(using=self.connection.alias) prevents cross-alias transaction coupling",
+        "boundary": "method only touches db_name resolved from self.connection.alias",
+        "invariants": [
+            "parallel aliases (e.g. default/replica) are unaffected by restore action",
+            "other aliases continue using their own fixture setup/transactions",
+        ],
+    },
+    "TXROLLBACK-008": {
+        "pressure": "Compatibility seam preservation",
+        "owner": "Fixture loading stack",
+        "locus": [
+            "django/test/testcases.py:_fixture_setup",
+            "django/core/management/commands/loaddata.py",
+            "django/db/backends/base/creation.py:deserialize_db_from_string",
+        ],
+        "contract": "atomicity is introduced only in deserialize_db_from_string, while loaddata path and existing TransactionTestCase semantics remain structurally unchanged",
+        "invariants": [
+            "deserialize_db_from_string behavior is the only changed restore operation",
+            "fixtures path in _fixture_setup retains original order and call points",
+            "serialized_rollback gating remains the same",
+        ],
+    },
+}
+
+
 class TxrollbackDeserializeDbFromStringContractTests(SimpleTestCase):
     """Traceability tests for TXROLLBACK-001/002/003/008."""
 
