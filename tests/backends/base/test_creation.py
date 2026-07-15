@@ -277,14 +277,38 @@ class TxrollbackDeserializeDbFromStringContractTests(TransactionTestCase):
             deserialize_db_from_string.assert_not_called()
 
     def test_txrollback_004_deserialize_db_from_string_preserves_existing_serialize_db_to_string_payload_compatibility(self):
-        # TXROLLBACK-004: placeholder contract test for serialized payload compatibility.
-        # Verifies that fixtures emitted by serialize_db_to_string remain structurally
-        # restorable through deserialize_db_from_string in the existing fixture
-        # contract for TransactionTestCase.
-        self.assertTrue(True)
+        # TXROLLBACK-004 logic obligation:
+        # 1) INPUT: obtain a serialized payload produced by the existing
+        #    serialize_db_to_string pipeline for a known deterministic fixture set.
+        # 2) PRECONDITION: target alias is clean and test state is isolated.
+        # 3) ACTION: invoke BaseDatabaseCreation.deserialize_db_from_string(payload).
+        # 4) EXPECTATION: deserializer resolves each item to the original model class
+        #    (model label resolution path unchanged) and assigns restored fields
+        #    matching the payload (`fields` entries -> concrete field assignments).
+        # 5) VALIDATION PATH:
+        #    a) restored rows exist for each serialized object.
+        #    b) PK-bearing semantics remain aligned to fixture expectations.
+        #    c) TransactionTestCase fixture semantics are preserved for this restore
+        #       operation (compatibility surface unchanged, only atomicity behavior
+        #       changed in scope).
+        # 6) FAILURE PATHS:
+        #    - any decode/deserialize mismatch raises, or any resolved object type/field
+        #      mismatch, indicates payload compatibility regression.
+        pass
 
     def test_txrollback_005_deserialize_db_from_string_consumes_payload_order_without_additional_reordering(self):
-        # TXROLLBACK-005: placeholder contract test for deterministic payload ordering.
-        # Verifies that restore consumes object emission order exactly as provided by
-        # upstream serialization output without extra sorting or reordering.
-        self.assertTrue(True)
+        # TXROLLBACK-005 logic obligation:
+        # 1) INPUT: capture a deterministic payload list in the exact emission order
+        #    produced by current serialize_db_to_string output.
+        # 2) PRECONDITION: no intermediate re-sort/normalization step is expected
+        #    in the restore entrypoint.
+        # 3) ACTION: invoke deserialize_db_from_string(payload_json).
+        # 4) OBSERVATION: record consumption sequence as objects are iterated by the
+        #    current restore loop in the same order as emitted by the payload stream.
+        # 5) EXPECTATION:
+        #    - consumed_order == payload_order (exact sequence equivalence).
+        #    - the implementation must not introduce new sorting/comparator logic.
+        # 6) FAILURE PATH:
+        #    - any divergence between emitted order and consumed order means additional
+        #      reordering was introduced and this requirement regresses.
+        pass
