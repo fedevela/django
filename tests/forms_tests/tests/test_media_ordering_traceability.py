@@ -93,38 +93,53 @@ class MediaOrderingTraceabilityTests(SimpleTestCase):
         def assert_valid_topological(candidate):
             position = {path: index for index, path in enumerate(candidate)}
             for before, after in constraints:
-        self.assertLess(position[before], position[after])
+                self.assertLess(position[before], position[after])
 
     def test_media_004_hard_cycle_a_before_b_and_b_before_a_emits_conflict_warning_spec(self):
         """MEDIA-004: contradictory adjacency merge emits MediaOrderConflictWarning."""
-        self.assertTrue(True)
+        left = Media(js=['a.js', 'b.js'])
+        right = Media(js=['b.js', 'a.js'])
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            merged = (left + right)._js
+
+        self.assertEqual(merged, ['a.js', 'b.js'])
+        warnings_list = [item for item in caught if issubclass(item.category, MediaOrderConflictWarning)]
+        self.assertEqual(len(warnings_list), 1)
 
     def test_media_004_warning_message_mentions_only_a_js_and_b_js_contradiction_pair_spec(self):
         """MEDIA-004: warning detail references only a.js and b.js for direct two-file contradiction."""
-        self.assertTrue(True)
+        left = Media(js=['a.js', 'b.js'])
+        right = Media(js=['b.js', 'a.js'])
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            (left + right)._js
+
+        warnings_list = [item for item in caught if issubclass(item.category, MediaOrderConflictWarning)]
+        self.assertEqual(len(warnings_list), 1)
+        message = str(warnings_list[0].message)
+        self.assertIn('Detected duplicate Media files in an opposite order:', message)
+        lines = [line.strip() for line in message.splitlines() if line.strip().endswith('.js')]
+        self.assertEqual(set(lines), {'a.js', 'b.js'})
 
     def test_media_004_cycle_a_before_b_before_c_reports_only_contradictory_files_spec(self):
         """MEDIA-004: hard A->B->C->A contradiction surfaces only cycle files."""
-        self.assertTrue(True)
+        a = Media(js=['a.js', 'b.js'])
+        b = Media(js=['b.js', 'c.js'])
+        c = Media(js=['c.js', 'a.js'])
 
-        with warnings.catch_warnings(record=True) as caught_left:
+        with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            left = (a + b + c)._js
-        with warnings.catch_warnings(record=True) as caught_right:
-            warnings.simplefilter('always')
-            right = (a + (b + c))._js
+            merged = (a + b + c)._js
 
-        assert_valid_topological(left)
-        assert_valid_topological(right)
-        self.assertEqual(left, right)
-        self.assertEqual(
-            [item for item in caught_left if issubclass(item.category, MediaOrderConflictWarning)],
-            [],
-        )
-        self.assertEqual(
-            [item for item in caught_right if issubclass(item.category, MediaOrderConflictWarning)],
-            [],
-        )
+        self.assertEqual(merged, ['a.js', 'b.js', 'c.js'])
+        warnings_list = [item for item in caught if issubclass(item.category, MediaOrderConflictWarning)]
+        self.assertEqual(len(warnings_list), 1)
+        message = str(warnings_list[0].message)
+        lines = [line.strip() for line in message.splitlines() if line.strip().endswith('.js')]
+        self.assertEqual(set(lines), {'a.js', 'b.js', 'c.js'})
 
     def test_media_005_adjacency_preservation_per_input_sequence_contract(self):
         """MEDIA-005: each input js sequence adjacency is preserved whenever feasible."""

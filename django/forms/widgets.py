@@ -70,72 +70,29 @@ class Media:
 
     @property
     def _js(self):
-        # MEDIA-004 [traceability]:
-        # test_media_ordering_traceability.py scenarios:
-        #   - test_media_004_hard_cycle_a_before_b_and_b_before_a_emits_conflict_warning_spec
-        #   - test_media_004_warning_message_mentions_only_a_js_and_b_js_contradiction_pair_spec
-        #   - test_media_004_cycle_a_before_b_before_c_reports_only_contradictory_files_spec
-        # Obligation:
-        #   emit MediaOrderConflictWarning from the merged constraint graph only,
-        #   and surface only assets participating in that contradiction cycle.
         chunks = [chunk for chunk in self._js_lists if chunk]
         if not chunks:
             return []
 
-        # Build constraints across all chunks at once so constraints are solved
-        # globally.
-        nodes = []
-        node_position = {}
-        edges = {}
-        for chunk in chunks:
-            previous = None
-            for path in chunk:
-                if path not in node_position:
-                    node_position[path] = len(nodes)
-                    nodes.append(path)
-                if previous is not None and previous != path:
-                    edges.setdefault(previous, set()).add(path)
-                previous = path
-
-        graph = {node: set() for node in nodes}
-        in_degree = {node: 0 for node in nodes}
-        for source, targets in edges.items():
-            for target in targets:
-                graph.setdefault(source, set())
-                graph.setdefault(target, set())
-                in_degree.setdefault(target, 0)
-                if target not in graph[source]:
-                    graph[source].add(target)
-                    in_degree[target] += 1
-
-        available = [node for node in nodes if in_degree[node] == 0]
-        resolved = []
-        while available:
-            available.sort(key=node_position.get)
-            current = available.pop(0)
-            resolved.append(current)
-            for target in graph[current]:
-                in_degree[target] -= 1
-                if in_degree[target] == 0:
-                    available.append(target)
+        nodes, node_position, graph = self._build_js_constraint_graph(chunks)
+        resolved = self._resolve_js_order(nodes, node_position, graph)
 
         if len(resolved) == len(nodes):
             return resolved
 
-        # MEDIA-004 [failure-path extraction]:
-        # 1) unresolved_nodes = nodes - resolved
-        # 2) select deterministic seed from unresolved_nodes by node_position
-        # 3) run directed cycle discovery restricted to unresolved_nodes:
-        #    - track recursion stack to catch back edge u -> v
-        #    - back edge identifies a concrete contradiction cycle [v..u]
-        # 4) contradiction_edges = consecutive pairs from that cycle
-        # 5) warning message should include contradiction_edges (and/or cycle
-        #    node list), not transient intermediate pairwise merge artifacts.
-        warnings.warn(
-            'Unable to resolve Media.js ordering while preserving all declared '
-            'relationships.  Loading order may be incorrect.',
-            MediaOrderConflictWarning,
-        )
+        cycle = self._discover_js_cycle(graph, node_position, resolved)
+        if cycle:
+            warnings.warn(
+                'Detected duplicate Media files in an opposite order:\n%s'
+                % '\n'.join(cycle),
+                MediaOrderConflictWarning,
+            )
+        else:
+            warnings.warn(
+                'Unable to resolve Media.js ordering while preserving all '
+                'declared relationships.  Loading order may be incorrect.',
+                MediaOrderConflictWarning,
+            )
 
         # Fall back to deterministic pairwise merge behavior when no global order
         # can satisfy all constraints.
@@ -145,6 +102,90 @@ class Media:
                 warnings.simplefilter('ignore', MediaOrderConflictWarning)
                 js = self.merge(js, chunk)
         return js
+
+    @staticmethod
+    def _build_js_constraint_graph(chunks):
+        nodes = []
+        node_position = {}
+        graph = {}
+
+        for chunk in chunks:
+            previous = None
+            for path in chunk:
+                if path not in node_position:
+                    node_position[path] = len(nodes)
+                    nodes.append(path)
+                graph.setdefault(path, set())
+                if previous is not None and previous != path:
+                    graph.setdefault(previous, set()).add(path)
+                previous = path
+
+        return nodes, node_position, graph
+
+    @staticmethod
+    def _resolve_js_order(nodes, node_position, graph):
+        in_degree = {node: 0 for node in nodes}
+        for source, targets in graph.items():
+            for target in targets:
+                in_degree[target] += 1
+
+        available = [node for node, count in in_degree.items() if count == 0]
+        resolved = []
+
+        while available:
+            available.sort(key=node_position.get)
+            current = available.pop(0)
+            resolved.append(current)
+            for target in sorted(graph[current], key=node_position.get):
+                in_degree[target] -= 1
+                if in_degree[target] == 0:
+                    available.append(target)
+
+        return resolved
+
+    @staticmethod
+    def _discover_js_cycle(graph, node_position, resolved):
+        unresolved_nodes = [
+            node for node in node_position
+            if node not in set(resolved)
+        ]
+        unresolved = set(unresolved_nodes)
+        if not unresolved:
+            return None
+
+        unresolved_nodes.sort(key=node_position.get)
+        state = {node: 0 for node in unresolved}
+        stack = []
+        index_in_stack = {}
+
+        def visit(node):
+            state[node] = 1
+            index_in_stack[node] = len(stack)
+            stack.append(node)
+
+            for target in sorted(graph[node], key=node_position.get):
+                if target not in unresolved:
+                    continue
+                if state[target] == 0:
+                    cycle = visit(target)
+                    if cycle:
+                        return cycle
+                elif state[target] == 1:
+                    return stack[index_in_stack[target]:]
+
+            state[node] = 2
+            index_in_stack.pop(node, None)
+            stack.pop()
+            return None
+
+        for start_node in unresolved_nodes:
+            if state[start_node] != 0:
+                continue
+            cycle = visit(start_node)
+            if cycle:
+                return cycle
+
+        return None
 
     def render(self):
         return mark_safe('\n'.join(chain.from_iterable(getattr(self, 'render_' + name)() for name in MEDIA_TYPES)))
