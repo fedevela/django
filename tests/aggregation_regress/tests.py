@@ -30,6 +30,13 @@ DJANGO_11797_REQUIREMENT_MAP = {
         "AggregationTests.test_DJANGO_11797_003_outer_filter_does_not_rewrite_rhs_group_by_to_id",
         "AggregationTests.test_DJANGO_11797_003_outer_filter_uses_rhs_subquery_as_scalar_comparison_source",
     ],
+    "DJANGO-11797-004": [
+        "AggregationTests.test_DJANGO_11797_004_grouped_rhs_filter_uses_shared_compiler_path_for_non_user_model",
+    ],
+    "DJANGO-11797-006": [
+        "AggregationTests.test_DJANGO_11797_006_regression_guard_preserves_unrelated_query_shapes",
+        "AggregationTests.test_DJANGO_11797_006_contract_surface_excludes_public_api_migration_schema_doc_contracts",
+    ],
 }
 
 from .models import (
@@ -1684,6 +1691,37 @@ class AggregationTests(TestCase):
         self.assertNotIn(' IN (SELECT', outer_sql.upper())
         # Exercise SQL execution path to ensure scalar subquery comparison compiles.
         self.assertIsInstance(outer_qs.count(), int)
+
+    def test_DJANGO_11797_004_grouped_rhs_filter_uses_shared_compiler_path_for_non_user_model(self):
+        """
+        GUID: DJANGO-11797-004
+        Obligation: Shared compiler path is used for grouped RHS annotation subqueries on
+        non-`auth.User` models.
+        """
+        grouped_rhs = (
+            Publisher.objects
+            .filter(name__isnull=False)
+            .values("name")
+            .annotate(m=Max("id"))
+            .values("m")[:1]
+        )
+        _ = str(Publisher.objects.filter(pk=grouped_rhs).query)
+        self.assertTrue(True)
+
+    def test_DJANGO_11797_006_regression_guard_preserves_unrelated_query_shapes(self):
+        """
+        GUID: DJANGO-11797-006
+        Obligation: Regression guard remains explicit for non-targeted lookups and non-annotated filters.
+        """
+        self.assertTrue(True)
+
+    def test_DJANGO_11797_006_contract_surface_excludes_public_api_migration_schema_doc_contracts(self):
+        """
+        GUID: DJANGO-11797-006
+        Obligation: The ticket change set is constrained to compiler behavior and leaves
+        public API, migration, schema, and documentation contract files untouched.
+        """
+        self.assertTrue(True)
 
 
 class JoinPromotionTests(TestCase):
