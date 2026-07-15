@@ -119,6 +119,27 @@ class Media:
         #     # MEDIA-007: fixed inputs and merge order fix the result and the
         #     # sequence of warning events on every execution.
         #     RETURN result, containing every file exactly once
+        #
+        # provided_three_widget_media(source_lists):
+        #     # MEDIA-003, MEDIA-004: source_lists preserve the unchanged
+        #     # ColorPicker, SimpleTextWidget, and FancyTextWidget declarations.
+        #     GIVEN source_lists contain [color-picker.js], [text-editor.js],
+        #         and [text-editor.js, text-editor-extras.js, color-picker.js]
+        #     collect each distinct file in first-seen order
+        #     derive precedence only between adjacent, distinct files within
+        #         the same declaration
+        #     # The singleton declarations add no precedence. The ordered
+        #     # FancyTextWidget declaration adds this compatible chain:
+        #     require text-editor.js before text-editor-extras.js
+        #     require text-editor-extras.js before color-picker.js
+        #     IF the derived precedence graph is acyclic:
+        #         select the stable topological order
+        #         # MEDIA-003: the compatible chain resolves deterministically.
+        #         RETURN [text-editor.js, text-editor-extras.js, color-picker.js]
+        #         # MEDIA-004: do not enter the conflict-warning path.
+        #     ELSE:
+        #         hand off to the existing genuine-conflict warning and
+        #             deterministic fallback path
         if len(source_lists) == 1 and len(source_lists[0]) == len(set(source_lists[0])):
             return source_lists[0]
 
