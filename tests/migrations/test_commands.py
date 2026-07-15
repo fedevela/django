@@ -701,25 +701,18 @@ class MigrateTests(MigrationTestBase):
 
     def test_sqlmigrate_atomic_migration_with_rollback_ddl_scoped_includes_wrapper(self):
         """
-        [SQLMIGRATE-003] Placeholder contract: atomic migration with can_rollback_ddl=True
-        keeps BEGIN/COMMIT wrapper pair when mocked for test scope.
+        [SQLMIGRATE-003] Atomic migration with can_rollback_ddl=True keeps
+        BEGIN;/COMMIT; wrapper pair when mocked for test scope.
         """
-        # [SQLMIGRATE-003] Pseudocode:
-        # [ARCH] Ownership:
-        #   - Module: tests.migrations.test_commands
-        #   - Class: MigrateTests
-        # [ARCH] Boundary (SQL wrapper behavior):
-        #   - Input seam: connection.features.can_rollback_ddl (mocked True in local scope)
-        #   - Output seam: sqlmigrate STDOUT for app="migrations", migration="0001"
-        #   - Pair assertion domain: BEGIN/COMMIT presence only
-        # [ARCH] Dependency direction:
-        #   test -> call_command("sqlmigrate") -> connection.features
-        #   feature flag -> SQL wrapper emission path
-        # [ARCH] Scope contract:
-        #   - mock.patch.object(connection.features, "can_rollback_ddl", True) only inside test
-        #   - no class/module-level mutation
-        #   - wrapper assertions do not inspect body SQL ordering
-        pass
+        with mock.patch.object(connection.features, "can_rollback_ddl", True):
+            out = io.StringIO()
+            call_command("sqlmigrate", "migrations", "0001", stdout=out)
+        output = out.getvalue().lower()
+        begin_index = output.find("begin;")
+        commit_index = output.find("commit;")
+        self.assertGreater(begin_index, -1)
+        self.assertGreater(commit_index, -1)
+        self.assertLess(begin_index, commit_index)
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_sqlmigrate_atomic_migration_without_rollback_capability_skips_transaction_wrapper(self):
@@ -739,47 +732,40 @@ class MigrateTests(MigrationTestBase):
 
     def test_sqlmigrate_atomic_migration_without_rollback_ddl_scoped_skips_wrapper(self):
         """
-        [SQLMIGRATE-002] Placeholder contract: atomic migration with can_rollback_ddl=False
-        omits BEGIN/COMMIT wrapper boundaries when mocked for test scope.
+        [SQLMIGRATE-002] Atomic migration with can_rollback_ddl=False omits
+        BEGIN;/COMMIT; wrapper boundaries when mocked for test scope.
         """
-        # [SQLMIGRATE-002] Pseudocode:
-        # [ARCH] Ownership:
-        #   - Module: tests.migrations.test_commands
-        #   - Class: MigrateTests
-        # [ARCH] Boundary (SQL wrapper behavior):
-        #   - Input seam: connection.features.can_rollback_ddl (mocked False in local scope)
-        #   - Output seam: sqlmigrate STDOUT for app="migrations", migration="0001"
-        #   - Pair assertion domain: BEGIN/COMMIT absence only
-        # [ARCH] Dependency direction:
-        #   test -> call_command("sqlmigrate") -> connection.features
-        #   feature flag false -> omit transaction wrapper emission
-        # [ARCH] Scope contract:
-        #   - mock.patch.object(connection.features, "can_rollback_ddl", False) only inside test
-        #   - no class/module-level mutation
-        #   - wrapper assertions do not inspect body SQL ordering
-        pass
+        with mock.patch.object(connection.features, "can_rollback_ddl", False):
+            out = io.StringIO()
+            call_command("sqlmigrate", "migrations", "0001", stdout=out)
+        output = out.getvalue().lower()
+        self.assertNotIn("begin;", output)
+        self.assertNotIn("commit;", output)
 
     def test_sqlmigrate_atomic_migration_can_rollback_ddl_mock_scope_is_local(self):
         """
-        [SQLMIGRATE-005] Placeholder contract: can_rollback_ddl mocking remains scoped
-        to each test and is restored after test completion.
+        [SQLMIGRATE-005] can_rollback_ddl mocking remains scoped to each call and
+        is restored after each context exits.
         """
-        # [SQLMIGRATE-005] Pseudocode:
-        # [ARCH] Ownership:
-        #   - Module: tests.migrations.test_commands
-        #   - Class: MigrateTests
-        # [ARCH] Boundary (isolation):
-        #   - Input seam: temporary connection.features.can_rollback_ddl patch values
-        #   - Observation seam: sqlmigrate output and connection feature state at scope boundaries
-        # [ARCH] Dependency direction:
-        #   test -> scoped mock context -> command execution -> state restoration point
-        #   (rollback-capable and non-capable branches must remain symmetric)
-        # [ARCH] Scope contract:
-        #   - capture original_flag before entering first mock scope
-        #   - enter/exit False scope, then enter/exit True scope
-        #   - verify state equality to original_flag on each exit path
-        #   - no class-level feature mutation; no setup/teardown mutation
-        pass
+        original_value = connection.features.can_rollback_ddl
+        with mock.patch.object(connection.features, "can_rollback_ddl", False):
+            out = io.StringIO()
+            call_command("sqlmigrate", "migrations", "0001", stdout=out)
+            false_output = out.getvalue().lower()
+        self.assertEqual(original_value, connection.features.can_rollback_ddl)
+        self.assertNotIn("begin;", false_output)
+        self.assertNotIn("commit;", false_output)
+
+        with mock.patch.object(connection.features, "can_rollback_ddl", True):
+            out = io.StringIO()
+            call_command("sqlmigrate", "migrations", "0001", stdout=out)
+            true_output = out.getvalue().lower()
+        self.assertEqual(original_value, connection.features.can_rollback_ddl)
+        begin_index = true_output.find("begin;")
+        commit_index = true_output.find("commit;")
+        self.assertGreater(begin_index, -1)
+        self.assertGreater(commit_index, -1)
+        self.assertLess(begin_index, commit_index)
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations_non_atomic"})
     def test_sqlmigrate_non_atomic_migration_ignores_rollback_capability_flag(self):
