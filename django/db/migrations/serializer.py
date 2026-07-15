@@ -139,6 +139,20 @@ class EnumSerializer(BaseSerializer):
         # MIG-300-002 [locale-safe enum defaults]:
         # MIG-300-003 [enum member identity preservation across locales]:
         # MIG-300-004 [repeated autogeneration stability + deconstruction/reconstruction stability]:
+        # MIG-300-005 [mixed defaults: plain enum only, non-enum untouched]:
+        # LOGIC OBLIGATION:
+        #   render plain enum members with member-name syntax; do not invent enum-member
+        #   output for any other value class.
+        # INPUT CONTRACT:
+        #   self.value is assumed to be an enum.Enum instance via registry dispatch.
+        # DECISION:
+        #   - emit module.EnumClass['MEMBER'] for enum instances.
+        #   - all other serializer paths remain unchanged and are responsible for their
+        #     own output forms.
+        # SUCCESS:
+        #   mixed-default migration payload keeps enum form only for true enum members.
+        # FAILURE:
+        #   missing/invalid member metadata is surfaced by existing runtime errors.
         # LOGIC OBLIGATION:
         #   render enum defaults as member-index form, never by value.
         # STATE:
@@ -357,6 +371,19 @@ def serializer_factory(value):
     # INVARIANT:
     #   enum members with stable __class__ registration map to EnumSerializer.
     #   locale changes do not alter this branch selection.
+    # MIG-300-005 [mixed-defaults: enum-only member-name rewrite]:
+    # LOGIC OBLIGATION:
+    #   For each default in a migration payload:
+    #   - Evaluate only the concrete runtime type, never textual shape/value resemblance.
+    #   - If dispatch selects EnumSerializer -> emit member-name syntax.
+    #   - Else preserve existing serializer path and output form exactly as that serializer
+    #     defines.
+    # BRANCH GUARANTEE (mixed defaults):
+    #   plain enum member, callable, string, int, float, bool, date, etc. in the same
+    #   deconstruction frame are each serialized independently and independently.
+    # FAILURE PATH:
+    #   any value with no registered serializer must fail through the existing
+    #   ValueError, preserving current "cannot serialize" behavior.
     if isinstance(value, Promise):
         value = str(value)
     elif isinstance(value, LazyObject):

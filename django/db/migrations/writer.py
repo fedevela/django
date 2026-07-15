@@ -86,6 +86,21 @@ class OperationWriter:
 
         self.indent()
 
+        # MIG-300-005 [mixed defaults: enum-only member-name rewrite]:
+        # STATE:
+        #   arg stream may contain mixed default payloads (enum + non-enum).
+        # CONTROL FLOW:
+        #   for each positional arg:
+        #     - pass raw arg_value to _write() unchanged.
+        #     - _write() delegates through MigrationWriter.serialize on the value.
+        #   for each remaining keyword arg in signature order:
+        #     - same raw-pass-through path and same delegate boundary.
+        # DECISION:
+        #   per-element serializer dispatch remains type-based.
+        #   only values resolved to EnumSerializer become member-name syntax.
+        #   all others follow their existing serializer branch.
+        # ERROR PATH:
+        #   missing serializer for any arg is delegated to the existing serialize failure.
         for i, arg in enumerate(args):
             arg_value = arg
             arg_name = operation_args[i]
