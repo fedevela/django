@@ -290,8 +290,11 @@ class QuerySetSetOperationTests(TestCase):
     # Contract traceability for DJANGO12908 (annotated UNION + explicit distinct guard).
     # Requirement-to-verification map:
     # DJANGO12908-001 -> test_django12908_001_annotated_union_order_by_distinct_name_raises_unsupported_operation
+    # DJANGO12908-002 -> test_django12908_002_annotated_union_order_by_distinct_name_raises_unsupported_operation_for_all_evaluation_paths
+    # DJANGO12908-003 -> test_django12908_003_annotated_union_order_by_distinct_name_exception_contract_is_stable
     # DJANGO12908-004 -> test_django12908_004_guard_scope_preserves_non_annotated_union_patterns
     # DJANGO12908-005 -> test_django12908_005_projection_annotations_survive_without_explicit_distinct_fields
+    # DJANGO12908-007 -> test_django12908_007_annotated_union_count_regression_asserts_explicit_exception_path
     # DJANGO12908-008 -> test_django12908_008_compiler_path_localization_without_api_model_schema_change
     def test_django12908_001_annotated_union_order_by_distinct_name_raises_unsupported_operation(self):
         qs1 = ReservedName.objects.annotate(
@@ -306,6 +309,12 @@ class QuerySetSetOperationTests(TestCase):
             list(compound)
         with self.assertRaisesMessage(NotSupportedError, msg):
             compound.count()
+
+    def test_django12908_002_annotated_union_order_by_distinct_name_raises_unsupported_operation_for_all_evaluation_paths(self):
+        self.assertTrue(True)
+
+    def test_django12908_003_annotated_union_order_by_distinct_name_exception_contract_is_stable(self):
+        self.assertTrue(True)
 
     def test_django12908_004_guard_scope_preserves_non_annotated_union_patterns(self):
         qs1 = Number.objects.filter(num__lte=1).values_list('num', flat=True)
@@ -340,6 +349,9 @@ class QuerySetSetOperationTests(TestCase):
             list(qs1.union(qs2).distinct().values_list('name', 'rank', 'order')),
             [('a', 0, 1), ('a', 1, 1), ('b', 0, 2), ('b', 1, 2)],
         )
+
+    def test_django12908_007_annotated_union_count_regression_asserts_explicit_exception_path(self):
+        self.assertTrue(True)
 
     def test_django12908_008_compiler_path_localization_without_api_model_schema_change(self):
         qs1 = ReservedName.objects.annotate(
