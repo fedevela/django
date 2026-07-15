@@ -40,6 +40,49 @@ SQLMIGRATE_VERIFICATION_ARTIFACTS = {
     },
 }
 
+SQLMIGRATE_ARCHITECTURE_ARTIFACTS = {
+    "SQLMIGRATE-002": {
+        "owner_module": "tests.migrations.test_commands",
+        "owner_class": "MigrateTests",
+        "locus": "test_sqlmigrate_atomic_migration_without_rollback_ddl_scoped_skips_wrapper",
+        "pressure": "boundary",
+        "contract": "wrapper suppression when can_rollback_ddl is False",
+        "integration_seam": "local patch of connection.features.can_rollback_ddl",
+        "depends_on": [
+            "django.db.connection",
+            "django.core.management.call_command",
+        ],
+        "scope": "context-managed test-local mutation only",
+    },
+    "SQLMIGRATE-003": {
+        "owner_module": "tests.migrations.test_commands",
+        "owner_class": "MigrateTests",
+        "locus": "test_sqlmigrate_atomic_migration_with_rollback_ddl_scoped_includes_wrapper",
+        "pressure": "boundary",
+        "contract": "transaction wrapper pair remains for rollback-capable backend",
+        "integration_seam": "local patch of connection.features.can_rollback_ddl",
+        "depends_on": [
+            "django.db.connection",
+            "django.core.management.call_command",
+        ],
+        "scope": "context-managed test-local mutation only",
+    },
+    "SQLMIGRATE-005": {
+        "owner_module": "tests.migrations.test_commands",
+        "owner_class": "MigrateTests",
+        "locus": "test_sqlmigrate_atomic_migration_can_rollback_ddl_mock_scope_is_local",
+        "pressure": "boundary",
+        "contract": "feature flag mutation is restored outside each context",
+        "integration_seam": "patch lifecycle in method-local scope",
+        "depends_on": [
+            "unittest.mock",
+            "django.db.connection",
+            "django.core.management.call_command",
+        ],
+        "scope": "scoped patch enter/exit pairs",
+    },
+}
+
 
 class MigrateTests(MigrationTestBase):
     """
@@ -662,25 +705,20 @@ class MigrateTests(MigrationTestBase):
         keeps BEGIN/COMMIT wrapper pair when mocked for test scope.
         """
         # [SQLMIGRATE-003] Pseudocode:
-        # IF backend transactional SQL tokens are unavailable:
-        #   ASSERT: transaction_start_sql = connection.ops.start_transaction_sql().lower()
-        #   ASSERT: transaction_end_sql = connection.ops.end_transaction_sql().lower()
-        # ELSE:
-        #   GIVEN atomic migration module is already selected by the test class decorator
-        #   AND the mock scope is active:
-        #     - PATCH connection.features.can_rollback_ddl TO True for the duration of this test only
-        #     - CAPTURE `sqlmigrate` output for app="migrations", migration="0001"
-        #     - DERIVE normalized output lower-case
-        #     - DERIVE normalized BEGIN marker = connection.ops.start_transaction_sql().lower()
-        #     - DERIVE normalized COMMIT marker = connection.ops.end_transaction_sql().lower()
-        #   THEN:
-        #     - ASSERT begin marker is present in output
-        #     - ASSERT commit marker is present in output
-        #     - ASSERT begin index is strictly less than commit index
-        #   AND:
-        #     - PATCH context exits and no assertion here depends on global state after this line.
-        # NOTE: This placeholder describes the required control flow; it intentionally avoids
-        #       SQL body ordering checks outside BEGIN/COMMIT boundaries.
+        # [ARCH] Ownership:
+        #   - Module: tests.migrations.test_commands
+        #   - Class: MigrateTests
+        # [ARCH] Boundary (SQL wrapper behavior):
+        #   - Input seam: connection.features.can_rollback_ddl (mocked True in local scope)
+        #   - Output seam: sqlmigrate STDOUT for app="migrations", migration="0001"
+        #   - Pair assertion domain: BEGIN/COMMIT presence only
+        # [ARCH] Dependency direction:
+        #   test -> call_command("sqlmigrate") -> connection.features
+        #   feature flag -> SQL wrapper emission path
+        # [ARCH] Scope contract:
+        #   - mock.patch.object(connection.features, "can_rollback_ddl", True) only inside test
+        #   - no class/module-level mutation
+        #   - wrapper assertions do not inspect body SQL ordering
         pass
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
@@ -705,23 +743,20 @@ class MigrateTests(MigrationTestBase):
         omits BEGIN/COMMIT wrapper boundaries when mocked for test scope.
         """
         # [SQLMIGRATE-002] Pseudocode:
-        # IF backend transactional SQL tokens are unavailable:
-        #   ASSERT: transaction_start_sql = connection.ops.start_transaction_sql().lower()
-        #   ASSERT: transaction_end_sql = connection.ops.end_transaction_sql().lower()
-        # ELSE:
-        #   GIVEN atomic migration module is already selected by the test class decorator
-        #   AND the mock scope is active:
-        #     - PATCH connection.features.can_rollback_ddl TO False for the duration of this test only
-        #     - CAPTURE `sqlmigrate` output for app="migrations", migration="0001"
-        #     - DERIVE normalized output lower-case
-        #     - DERIVE normalized BEGIN marker = connection.ops.start_transaction_sql().lower()
-        #     - DERIVE normalized COMMIT marker = connection.ops.end_transaction_sql().lower()
-        #   THEN:
-        #     - ASSERT begin marker is NOT present in output
-        #     - ASSERT commit marker is NOT present in output
-        #   AND:
-        #     - PATCH context exits; remaining assertions do not depend on mutated state.
-        # NOTE: Wrapper assertion is intentionally only pair presence/absence, no body-order coupling.
+        # [ARCH] Ownership:
+        #   - Module: tests.migrations.test_commands
+        #   - Class: MigrateTests
+        # [ARCH] Boundary (SQL wrapper behavior):
+        #   - Input seam: connection.features.can_rollback_ddl (mocked False in local scope)
+        #   - Output seam: sqlmigrate STDOUT for app="migrations", migration="0001"
+        #   - Pair assertion domain: BEGIN/COMMIT absence only
+        # [ARCH] Dependency direction:
+        #   test -> call_command("sqlmigrate") -> connection.features
+        #   feature flag false -> omit transaction wrapper emission
+        # [ARCH] Scope contract:
+        #   - mock.patch.object(connection.features, "can_rollback_ddl", False) only inside test
+        #   - no class/module-level mutation
+        #   - wrapper assertions do not inspect body SQL ordering
         pass
 
     def test_sqlmigrate_atomic_migration_can_rollback_ddl_mock_scope_is_local(self):
@@ -730,23 +765,20 @@ class MigrateTests(MigrationTestBase):
         to each test and is restored after test completion.
         """
         # [SQLMIGRATE-005] Pseudocode:
-        # GIVEN original_flag = connection.features.can_rollback_ddl
-        # WHEN entering scoped mock:
-        #   WITH patch.object(connection.features, "can_rollback_ddl", False):
-        #     - CAPTURE `sqlmigrate` output for app="migrations", migration="0001"
-        #     - NORMALIZE output = out.getvalue().lower()
-        #     - ASSERT begin_sql = connection.ops.start_transaction_sql().lower()
-        #     - ASSERT end_sql = connection.ops.end_transaction_sql().lower()
-        #     - ASSERT begin_sql not in output AND end_sql not in output
-        # WHEN scope exits:
-        #   - ASSERT connection.features.can_rollback_ddl == original_flag
-        # AND then REPEAT with a different local scope:
-        #   WITH patch.object(connection.features, "can_rollback_ddl", True):
-        #     - CAPTURE output again
-        #     - ASSERT begin_sql in output AND end_sql in output as a complete pair
-        #     - ASSERT begin index < end index
-        #     - ASSERT completion check still independent of non-wrapper SQL ordering
-        # ENSURE no test class uses global mutation in setup/teardown; all state change is local context.
+        # [ARCH] Ownership:
+        #   - Module: tests.migrations.test_commands
+        #   - Class: MigrateTests
+        # [ARCH] Boundary (isolation):
+        #   - Input seam: temporary connection.features.can_rollback_ddl patch values
+        #   - Observation seam: sqlmigrate output and connection feature state at scope boundaries
+        # [ARCH] Dependency direction:
+        #   test -> scoped mock context -> command execution -> state restoration point
+        #   (rollback-capable and non-capable branches must remain symmetric)
+        # [ARCH] Scope contract:
+        #   - capture original_flag before entering first mock scope
+        #   - enter/exit False scope, then enter/exit True scope
+        #   - verify state equality to original_flag on each exit path
+        #   - no class-level feature mutation; no setup/teardown mutation
         pass
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations_non_atomic"})
