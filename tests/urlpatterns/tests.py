@@ -2,7 +2,7 @@ import uuid
 
 from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404
-from django.test import SimpleTestCase
+from django.test import Client, SimpleTestCase
 from django.test.utils import override_settings
 from django.urls import Resolver404, path, resolve, reverse
 
@@ -222,10 +222,22 @@ class ConversionExceptionTests(SimpleTestCase):
         DynamicConverter.register_to_python(callback)
         self.addCleanup(setattr, DynamicConverter, '_dynamic_to_python', original_converter)
 
+    @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_004_converter_to_python_value_error_keeps_candidate_matching_semantics(self):
         """[DJ-RES-004] Preserve ValueError as converter match-miss without turning it into a 500 path."""
-        # Traceability-only placeholder for contract coverage.
-        self.assertTrue(True)
+        def raises_value_error(value):
+            raise ValueError('not a match')
+
+        self._set_dynamic_converter_to_python(raises_value_error)
+
+        response = self.client.get('/candidate-miss/abc/')
+        self.assertEqual(response.status_code, 200)
+        match = resolve('/candidate-miss/abc/')
+        self.assertEqual(match.url_name, 'candidate-miss-fallback')
+        self.assertEqual(match.kwargs, {'value': 'abc'})
+        self.assertEqual(match.route, 'candidate-miss/<slug:value>/')
+        with self.assertRaises(Resolver404):
+            resolve('/candidate-all-miss/abc/')
 
     def test_DJ_RES_001_converter_to_python_http404_transitions_to_resolver_not_found_flow(self):
         """[DJ-RES-001] When converter.to_python raises Http404, resolver treats it as 404 route-miss."""
@@ -336,8 +348,18 @@ class ConversionExceptionTests(SimpleTestCase):
 
     def test_DJ_RES_005_converter_to_python_runtimeerror_keeps_internal_failure_path(self):
         """[DJ-RES-005] Preserve non-Http404, non-ValueError converter exceptions as internal failures."""
-        # Traceability-only placeholder for contract coverage.
-        self.assertTrue(True)
+        def raises_runtime_error(value):
+            raise RuntimeError('conversion blew up')
+
+        self._set_dynamic_converter_to_python(raises_runtime_error)
+        with self.assertRaises(RuntimeError):
+            resolve('/dynamic/abc/')
+
+        client = Client(raise_request_exception=False)
+        response = client.get('/dynamic/abc/')
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(response.exc_info[0], RuntimeError)
+        self.assertEqual(str(response.exc_info[1]), 'conversion blew up')
 
     def test_resolve_value_error_means_no_match(self):
         @DynamicConverter.register_to_python
