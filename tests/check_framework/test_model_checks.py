@@ -99,23 +99,130 @@ class DuplicateDBTableTests(SimpleTestCase):
 class DuplicateDBTableCollisionContractTests(SimpleTestCase):
     def test_DJANGO11630_001_collision_key_is_effective_alias_and_db_table(self):
         """DJANGO11630-001: collision key includes effective alias and db_table."""
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                if 'Tenant' in model.__name__:
+                    return 'tenant'
+                return 'default'
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class SharedAliasDefault1(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class SharedAliasDefault2(models.Model):
+                class Meta:
+                    db_table = 'shared_table_other'
+
+            class SharedAliasTenantA(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class SharedAliasTenantB(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+                Error(
+                    "db_table 'shared_table' is used by multiple models: "
+                    "check_framework.SharedAliasTenantA, check_framework.SharedAliasTenantB.",
+                    obj='shared_table',
+                    id='models.E028',
+                )
+            ])
 
     def test_DJANGO11630_002_same_effective_alias_collision_emit_models_E028(self):
         """DJANGO11630-002: same alias + same db_table must fail with models.E028."""
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                return 'tenant'
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class Model1(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class Model2(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+                Error(
+                    "db_table 'shared_table' is used by multiple models: "
+                    "check_framework.Model1, check_framework.Model2.",
+                    obj='shared_table',
+                    id='models.E028',
+                )
+            ])
 
     def test_DJANGO11630_003_cross_alias_collision_no_models_E028(self):
         """DJANGO11630-003: different aliases + same db_table must not fail with models.E028."""
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                if model.__name__ == 'TenantModel':
+                    return 'tenant'
+                return 'default'
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class DefaultModel(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class TenantModel(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [])
 
     def test_DJANGO11630_004_unspecified_routing_defaults_to_default_alias(self):
         """DJANGO11630-004: unspecified routing decision defaults to default alias."""
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                if model.__name__ == 'ExplicitDefaultModel':
+                    return 'default'
+                return None
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class ExplicitDefaultModel(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class UnspecifiedModel(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+                Error(
+                    "db_table 'shared_table' is used by multiple models: "
+                    "check_framework.ExplicitDefaultModel, check_framework.UnspecifiedModel.",
+                    obj='shared_table',
+                    id='models.E028',
+                )
+            ])
 
     def test_DJANGO11630_006_same_app_or_same_label_collision_remains_hard_error_on_alias(self):
         """DJANGO11630-006: same-app/same-label collision remains hard error on one alias."""
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                return 'tenant'
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class Model1(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class Model2(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+                Error(
+                    "db_table 'shared_table' is used by multiple models: "
+                    "check_framework.Model1, check_framework.Model2.",
+                    obj='shared_table',
+                    id='models.E028',
+                )
+            ])
 
 
 @isolate_apps('check_framework', attr_name='apps')
