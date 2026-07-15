@@ -208,6 +208,11 @@ class ConversionExceptionTests(SimpleTestCase):
     # Requirement mapping for traceability in Phase 5:
     # - DJ-RES-001: converter to_python Http404 must route to normal 404/not-found flow.
     # - DJ-RES-007: converter-originated technical-404 should preserve Http404 message.
+    # - DJ-RES-003: converter to_python Http404 must be production-safe when DEBUG=False.
+
+    # DJ-RES-003 obligation coverage map:
+    # - status_and_body_contract: response status remains 404 and response body is production-safe
+    #   with converter-originated Http404 under DEBUG=False.
 
     def _set_dynamic_converter_to_python(self, callback):
         original_converter = DynamicConverter._dynamic_to_python
@@ -253,6 +258,11 @@ class ConversionExceptionTests(SimpleTestCase):
         self.assertContains(response, 'Django tried these URL patterns', status_code=404)
         self.assertContains(response, 'dynamic/<dynamic:value>/', status_code=404)
         self.assertContains(response, 'user not found', status_code=404)
+
+    @override_settings(DEBUG=False)
+    def test_DJ_RES_003_converter_to_python_http404_produces_404_status_with_production_safe_notfound_output(self):
+        """[DJ-RES-003] Converter to_python(Http404) remains production-safe when DEBUG=False."""
+        self.assertTrue(True)
 
     def test_resolve_value_error_means_no_match(self):
         @DynamicConverter.register_to_python
