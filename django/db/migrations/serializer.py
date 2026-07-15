@@ -1,3 +1,5 @@
+from importlib import import_module
+
 import builtins
 import collections.abc
 import datetime
@@ -90,22 +92,31 @@ class DeconstructableSerializer(BaseSerializer):
 
     @staticmethod
     def _serialize_path(path):
-        # M154-001 / M154-004 logic locus: preserve already-qualified deconstruct paths.
-        # PSEUDOCODE:
-        # INPUT: dotted path from deconstruct() (e.g., module.Outer.Inner).
-        # DECISION: split only at final dot into module + attr_tail.
-        #   IF module == "django.db.models":
-        #       emit "models.attr_tail" with django.db import shortcut.
-        #   ELSE:
-        #       emit original "path" unchanged and import module.
-        # PROHIBITION: do not mutate "attr_tail" by dropping inner segments.
-        module, name = path.rsplit(".", 1)
+        parts = path.split(".")
+        module = ".".join(parts[:-1])
+        name = parts[-1]
+        for split_point in range(len(parts) - 1, 0, -1):
+            module_candidate = ".".join(parts[:split_point])
+            attr_candidate = parts[split_point:]
+            try:
+                module_obj = import_module(module_candidate)
+            except ImportError:
+                continue
+            for part in attr_candidate:
+                if not hasattr(module_obj, part):
+                    break
+                module_obj = getattr(module_obj, part)
+            else:
+                module = module_candidate
+                name = ".".join(attr_candidate)
+                break
+
         if module == "django.db.models":
             imports = {"from django.db import models"}
             name = "models.%s" % name
         else:
             imports = {"import %s" % module}
-            name = path
+            name = "%s.%s" % (module, name)
         return name, imports
 
     def serialize(self):
@@ -270,31 +281,36 @@ class TypeSerializer(BaseSerializer):
             (models.Model, "models.Model", []),
             (type(None), 'type(None)', []),
         ]
-        # M154-002 / M154-004 logic locus: serialize class objects with stable, nested paths.
-        # PSEUDOCODE:
-        # INPUT: a class object value that reached serializer_factory via isinstance(type) path.
-        # TRANSITION: evaluate explicit model/sentinel special-cases first.
         for case, string, imports in special_cases:
             if case is self.value:
                 return string, set(imports)
-        # DECISION A: if module is builtins, keep bare class name.
         if hasattr(self.value, "__module__"):
             module = self.value.__module__
             if module == builtins.__name__:
                 return self.value.__name__, set()
-            # DECISION B: for nested classes, preserve full qualname chain.
-            # - candidate = module + "." + value.__qualname__
-            # - this includes all enclosing class names, e.g. module.Outer.Inner.
-            # - this should be used instead of module + value.__name__.
-            # DECODE-FAILURE PATH (M154-004):
-            # - before emitting candidate, verify it resolves via import/module/class chain:
-            #   1) import module object
-            #   2) walk each segment in value.__qualname__ against attributes
-            #   3) if any segment missing OR final object is not `value`, do not invent a new path
-            # - on failure, surface existing non-serializable report path (same failure channel as generic serializer errors),
-            #   instead of returning a shortened dotted path.
-            else:
-                return "%s.%s" % (module, self.value.__qualname__), {"import %s" % module}
+            candidate = "%s.%s" % (module, self.value.__qualname__)
+            value = self.value
+            module_object = import_module(module)
+            for attr in value.__qualname__.split("."):
+                if not hasattr(module_object, attr):
+                    raise ValueError(
+                        "Could not find class %s in %s.\nPlease note that you cannot serialize "
+                        "local class scope objects. Please move the class into the module "
+                        "body to use migrations.\nFor more information, see "
+                        "https://docs.djangoproject.com/en/%s/topics/migrations/#migration-serializing\n"
+                        % (value.__name__, module, get_docs_version())
+                    )
+                module_object = getattr(module_object, attr)
+            if module_object is not value:
+                raise ValueError(
+                    "Could not find class %s in %s.\nPlease note that you cannot serialize "
+                    "local class scope objects. Please move the class into the module "
+                    "body to use migrations.\nFor more information, see "
+                    "https://docs.djangoproject.com/en/%s/topics/migrations/#migration-serializing\n"
+                    % (value.__name__, module, get_docs_version())
+                )
+            return candidate, {"import %s" % module}
+        raise TypeError("Cannot serialize: %r" % self.value)
 
 
 class UUIDSerializer(BaseSerializer):
