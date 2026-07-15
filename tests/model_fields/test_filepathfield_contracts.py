@@ -221,8 +221,123 @@ class FilePathFieldContractsFPF007Tests(SimpleTestCase):
 
     def test_FPF_007_parity_between_string_and_callable_paths_for_match_recursive_allow_files_and_allow_folders(self):
         """FPF-007 Scenario 1: options parity for callable vs string path."""
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as path_root:
+            nested_a = os.path.join(path_root, "nested_a")
+            nested_b = os.path.join(path_root, "nested_b")
+            nested_a_inner = os.path.join(nested_a, "inner")
+            nested_b_inner = os.path.join(nested_b, "inner")
+            pycache_dir = os.path.join(path_root, "__pycache__")
+            pycache_file = os.path.join(pycache_dir, "cache.txt")
+            os.makedirs(nested_a_inner)
+            os.makedirs(nested_b_inner)
+            os.makedirs(pycache_dir)
+
+            root_txt = os.path.join(path_root, "root.txt")
+            root_py = os.path.join(path_root, "root.py")
+            root_md = os.path.join(path_root, "root.md")
+            nested_a_txt = os.path.join(nested_a, "nested_a.txt")
+            nested_a_py = os.path.join(nested_a, "nested_a.py")
+            nested_b_txt = os.path.join(nested_b, "nested_b.txt")
+            nested_b_py = os.path.join(nested_b, "nested_b.py")
+            nested_a_inner_txt = os.path.join(nested_a_inner, "nested_a_inner.txt")
+            nested_b_inner_txt = os.path.join(nested_b_inner, "nested_b_inner.txt")
+            with open(root_txt, "w"), open(root_py, "w"), open(root_md, "w"):
+                pass
+            with open(nested_a_txt, "w"), open(nested_a_py, "w"), open(nested_b_txt, "w"), open(nested_b_py, "w"):
+                pass
+            with open(nested_a_inner_txt, "w"), open(nested_b_inner_txt, "w"), open(pycache_file, "w"):
+                pass
+
+            expected = [
+                (root_txt, "root.txt"),
+                (nested_a_txt, "nested_a/nested_a.txt"),
+                (nested_b_txt, "nested_b/nested_b.txt"),
+                (nested_a_inner_txt, "nested_a/inner/nested_a_inner.txt"),
+                (nested_b_inner_txt, "nested_b/inner/nested_b_inner.txt"),
+            ]
+
+            def get_root_path():
+                return path_root
+
+            class FilePathFieldStringPathFPF007Model(models.Model):
+                file = models.FilePathField(
+                    path=path_root,
+                    match=r"^.*\.txt$",
+                    recursive=True,
+                    allow_files=True,
+                    allow_folders=False,
+                )
+
+                class Meta:
+                    app_label = "model_fields"
+
+            class FilePathFieldCallablePathFPF007Model(models.Model):
+                file = models.FilePathField(
+                    path=get_root_path,
+                    match=r"^.*\.txt$",
+                    recursive=True,
+                    allow_files=True,
+                    allow_folders=False,
+                )
+
+                class Meta:
+                    app_label = "model_fields"
+
+            string_field = FilePathFieldStringPathFPF007Model._meta.get_field("file")
+            callable_field = FilePathFieldCallablePathFPF007Model._meta.get_field("file")
+            self.assertEqual(string_field.formfield().choices, expected)
+            self.assertEqual(callable_field.formfield().choices, expected)
+            self.assertEqual(string_field.formfield().choices, callable_field.formfield().choices)
 
     def test_FPF_007_recursive_false_immediate_folders_only_with_allow_folders_true_allow_files_false_preserved_across_path_forms(self):
         """FPF-007 Scenario 2: non-recursive folder-only filtering remains identical for both path forms."""
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as path_root:
+            immediate_folder_a = os.path.join(path_root, "alpha")
+            immediate_folder_b = os.path.join(path_root, "bravo")
+            nested_folder = os.path.join(path_root, "alpha", "nested")
+            pycache_dir = os.path.join(path_root, "__pycache__")
+            os.makedirs(nested_folder)
+            os.makedirs(pycache_dir)
+
+            with open(os.path.join(path_root, "file.txt"), "w"), open(os.path.join(path_root, "another.bin"), "w"):
+                pass
+            with open(os.path.join(immediate_folder_a, "a.txt"), "w"), open(os.path.join(immediate_folder_b, "b.txt"), "w"):
+                pass
+            with open(os.path.join(pycache_dir, "bad.txt"), "w"):
+                pass
+
+            expected = [
+                (os.path.join(path_root, "alpha"), "alpha"),
+                (os.path.join(path_root, "bravo"), "bravo"),
+            ]
+
+            def get_root_path():
+                return path_root
+
+            class FilePathFieldStringPathImmediateFolderModel(models.Model):
+                file = models.FilePathField(
+                    path=path_root,
+                    recursive=False,
+                    allow_files=False,
+                    allow_folders=True,
+                )
+
+                class Meta:
+                    app_label = "model_fields"
+
+            class FilePathFieldCallablePathImmediateFolderModel(models.Model):
+                file = models.FilePathField(
+                    path=get_root_path,
+                    recursive=False,
+                    allow_files=False,
+                    allow_folders=True,
+                )
+
+                class Meta:
+                    app_label = "model_fields"
+
+            string_field = FilePathFieldStringPathImmediateFolderModel._meta.get_field("file")
+            callable_field = FilePathFieldCallablePathImmediateFolderModel._meta.get_field("file")
+            self.assertEqual(string_field.formfield().choices, expected)
+            self.assertEqual(callable_field.formfield().choices, expected)
+            self.assertEqual(string_field.formfield().choices, callable_field.formfield().choices)
