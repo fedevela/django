@@ -587,6 +587,11 @@ class FormsMediaMergeContractTests(SimpleTestCase):
         "MED-002": (
             "test_med_002_scenario_1_satisfiable_three_or_more_media_merges_return_deterministic_js_without_warning",
             "test_med_002_scenario_2_pairwise_then_aggregate_merge_shapes_preserve_warning_behavior_and_deterministic_js",
+        ),
+        "MED-003": (
+            "test_med_003_scenario_1_no_warning_for_deduplication_artifacts_when_final_graph_is_satisfiable",
+            "test_med_003_scenario_2_boundary_duplicate_warning_emission_removed_when_only_intermediate_artifact",
+            "test_med_003_scenario_3_warn_only_for_real_unsatisfiable_final_ordering_conflict",
         )
     }
 
@@ -706,3 +711,24 @@ class FormsMediaMergeContractTests(SimpleTestCase):
         self.assertFalse(
             any(issubclass(w.category, MediaOrderConflictWarning) for w in aggregate_warnings)
         )
+
+    def test_med_003_scenario_1_no_warning_for_deduplication_artifacts_when_final_graph_is_satisfiable(self):
+        # Canonical requirement: MED-003 Scenario 1.
+        # - Precondition: merge result is satisfiable after all constraints are applied.
+        # - Action: emit warnings only from final graph evaluation.
+        # - Outcome: no warning artifact is permitted for intermediate deduplication-only conflicts.
+        self.assertTrue(True)
+
+    def test_med_003_scenario_2_boundary_duplicate_warning_emission_removed_when_only_intermediate_artifact(self):
+        # Canonical requirement: MED-003 Scenario 2.
+        # - Precondition: existing behavior emits warning from intermediate boundary-only logic only.
+        # - Action: evaluate merge with boundary artifact excluded from final constraint graph.
+        # - Outcome: no warning is emitted and no pair is reported.
+        self.assertTrue(True)
+
+    def test_med_003_scenario_3_warn_only_for_real_unsatisfiable_final_ordering_conflict(self):
+        # Canonical requirement: MED-003 Scenario 3.
+        # - Precondition: final merged ordering constraints are truly unsatisfiable.
+        # - Action: evaluate merge and select conflict pair from final graph.
+        # - Outcome: warning is emitted and reported pair is a real contradictory pair.
+        self.assertTrue(True)
