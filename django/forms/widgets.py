@@ -70,6 +70,13 @@ class Media:
 
     @property
     def _js(self):
+        # MED-002-1 / MED-002-2:
+        # - Aggregate the JS source list chunks from all compositional hops.
+        # - Resolve ordering once via Media.merge over the full chunk sequence,
+        #   not by incremental re-sorting.
+        # - This makes final JS ordering depend only on the accumulated logical
+        #   constraints, not on whether composition happened pairwise or as an
+        #   aggregate.
         return self.merge(*filter(None, self._js_lists))
 
     def render(self):
@@ -157,6 +164,34 @@ class Media:
 
         # For three or more lists, build a dependency graph and compute a stable
         # topological order so one merge can honor all dependency constraints.
+        # MED-002-1 deterministic satisfiable merge:
+        # Input contract:
+        # - list_i are ordered sequences of assets where each adjacent pair
+        #   (A, B) is a "must appear before" constraint A -> B.
+        # - Output must be one topological ordering satisfying all constraints,
+        #   with no warnings, when such an ordering exists.
+        # - If constraints are unsatisfiable, emit MediaOrderConflictWarning.
+        #
+        # Algorithmic state:
+        # - graph[path] = set of immediate successors for path.
+        # - incoming[path] = set of immediate predecessors for path.
+        # - ordered = output order for this media merge.
+        #
+        # Step 1: build dependency graph:
+        #   - iterate media_list in original sequence for each list.
+        #   - register nodes in graph on first encounter.
+        #   - register edges previous -> path for each adjacent pair.
+        # Step 2: initialize indegree/incoming from graph.
+        # Step 3: repeatedly emit a ready node:
+        #   - choose the first path with an empty predecessor set, scanning in
+        #     dict order to keep deterministic ties.
+        #   - append it to ordered.
+        #   - remove it from all successor incoming sets.
+        # Step 4: failure path:
+        #   - if no ready path exists before processing all nodes, cycle exists.
+        #   - emit MediaOrderConflictWarning and return stable fallback dedup list.
+        # Step 5: success path:
+        #   - return ordered when all paths have been placed.
         graph = {}
         for media_list in lists:
             previous = None
@@ -173,6 +208,11 @@ class Media:
 
         ordered = []
         while len(ordered) < len(graph):
+            # MED-002-2:
+            # The following selection must remain deterministic.
+            # Choosing the first no-predecessor node in insertion order is the
+            # key guarantee that equivalent media graphs produce equivalent JS
+            # order, independent of how they were composed.
             next_path = None
             for path, edges in incoming.items():
                 if path in ordered:
@@ -194,6 +234,11 @@ class Media:
         return ordered
 
     def __add__(self, other):
+        # MED-002-2:
+        # Merge-shape preservation:
+        # - Keep left and right media lists as concatenated chunk lists.
+        # - Delay resolution until _js/_css is read so pairwise addition and
+        #   one-shot aggregate merge observe the same graph constraints.
         combined = Media()
         combined._css_lists = self._css_lists + other._css_lists
         combined._js_lists = self._js_lists + other._js_lists
