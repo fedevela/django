@@ -13,6 +13,10 @@ Requirement-to-architecture map
   across different aliases does not share a bucket.
 - DJANGO11630-004: enforce default alias fallback policy at the boundary where
   the effective alias is resolved.
+- DJANGO11630-005: preserve existing behavior so non-managed and proxy models do
+  not introduce new ``models.E028`` failures; only concrete managed overlaps
+  with matching ``(effective_db_alias, db_table)`` should participate in hard
+  duplicate-table checks.
 - DJANGO11630-006: preserve existing managed/non-proxy/same-app-or-same-label
   semantics by applying new alias-aware grouping to the existing filter and
   erroring path.
@@ -40,8 +44,22 @@ Contract and type seams
      with contract:
      ``resolve_effective_alias(model) -> str``.
    - Must return ``'default'`` when routing decision is missing/``None``.
-3. **Failure seam**
+3. **Candidate filtering seam**
+   - Track candidate set for duplicate-table evaluation as only concrete managed
+     models.
+   - ``include_in_collision_check(model) -> bool`` where:
+     - ``False`` when ``model._meta.managed`` is ``False``;
+     - ``False`` when ``model._meta.proxy`` is ``True``;
+     - ``True`` otherwise.
+   - This codifies DJANGO11630-005 and prevents unmanaged/proxy-only overlaps from
+     raising new ``models.E028``.
+4. **Failure seam**
    - Emit ``models.E028`` only for buckets with cardinality > 1.
+5. **Precedence seam**
+   - For any effective alias+table bucket, concrete managed collisions are the
+     decisive input to erroring; unmanaged/proxy entries can co-exist in same
+     table but do not alter the collision decision unless a managed concrete
+     collision exists.
 
 Dependency direction
 --------------------
@@ -63,6 +81,27 @@ Implementation boundaries and adaptation points
 - Keep fallback behavior explicit at the seam: unresolved/unspecified routing
   yields ``default`` and therefore participates in collisions with other default
   scoped models.
+- Enforce candidate filtering in the same loop before bookkeeping:
+  ``if model._meta.managed and not model._meta.proxy: ...``.
+- Keep index and constraint check loops unmodified so this issue remains scoped to
+  duplicate-table collision validation.
+
+Integration seams
+-----------------
+- **Primary seam (owner-local):**
+  - ``check_all_models`` owns ``db_table_models`` population and E028 emission.
+- **Boundary seam (routing):**
+  - Resolve effective alias for each candidate model before grouping.
+- **Boundary seam (selection):**
+  - Filter candidate models by managed/proxy semantics before grouping.
+
+Requirement-to-architecture implementation trace
+-----------------------------------------------
+- ``DJANGO11630-005`` → ``django/core/checks/model_checks.py``
+  - ``check_all_models``: predicate gating and bucket population.
+- ``DJANGO11630-005`` → ``tests/check_framework/test_model_checks.py``
+  - ``DJANGO11630_VERIFICATION_MAP["DJANGO11630-005"]`` and the three
+    pass-only acceptance contract tests.
 
 Architectural readiness checklist
 --------------------------------
