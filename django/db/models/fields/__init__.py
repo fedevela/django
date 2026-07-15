@@ -1663,6 +1663,16 @@ class FilePathField(Field):
 
     def __init__(self, verbose_name=None, name=None, path='', match=None,
                  recursive=False, allow_files=True, allow_folders=False, **kwargs):
+        # FPF-001::O1 (model-definition metadata):
+        # Inputs:
+        # - path: either string path or no-argument callable intended for deferred execution.
+        # - match, recursive, allow_files, allow_folders forwarded as metadata.
+        # Branch:
+        # - if path is callable: store callable object directly on self.path.
+        # - else: store provided string/path-like value directly on self.path.
+        # Transition:
+        # - No path resolution, os-level lookup, import/realpath resolution, or callable invocation.
+        # - State after init must preserve the original path object identity for introspection.
         self.path, self.match, self.recursive = path, match, recursive
         self.allow_files, self.allow_folders = allow_files, allow_folders
         kwargs.setdefault('max_length', 100)
@@ -1687,6 +1697,15 @@ class FilePathField(Field):
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
+        # FPF-001::O1 (deconstruction contract):
+        # Input state:
+        # - self.path expected to be either '' or configured value (possibly callable).
+        # Decision:
+        # - if self.path != '': emit kwargs['path'] using the stored object verbatim.
+        # - if self.path is '', treat as default and omit.
+        # Error path (non-implementation note for next phase):
+        # - if path is callable and not importable, migration serialization should fail explicitly
+        #   rather than forcing eager evaluation or conversion.
         if self.path != '':
             kwargs['path'] = self.path
         if self.match is not None:
@@ -1708,6 +1727,15 @@ class FilePathField(Field):
         return str(value)
 
     def formfield(self, **kwargs):
+        # FPF-001::O2 (no eager resolution at module import):
+        # This method is the defer point; avoid resolving callables during model import.
+        # Expected runtime sequence (for implementation phase):
+        # 1) read self.path from field metadata.
+        # 2) if callable, call once with no arguments at form instantiation time.
+        # 3) pass resulting string-like path into forms.FilePathField initialization.
+        # 4) then propagate match/recursive/allow_* metadata unchanged.
+        # Failure path:
+        # - if callable rejects no-arg invocation, propagate configuration error at this boundary.
         return super().formfield(**{
             'path': self.path,
             'match': self.match,
