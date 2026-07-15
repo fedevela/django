@@ -1522,10 +1522,65 @@ DJANGO12856_001_VERIFICATIONS = {
 
 class ConstraintFieldReferenceTraceabilityTests(SimpleTestCase):
     def test_django12856_001_unique_constraint_fields_bad_name_emits_models_e012_family_error(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['bad_name'],
+                        name='bad_name_unique',
+                    ),
+                ]
+
+        self.assertEqual(Model.check(), [
+            Error(
+                "'constraints' refers to the nonexistent field 'bad_name'.",
+                obj=Model,
+                id='models.E012',
+            ),
+        ])
 
     def test_django12856_001_unique_constraint_fields_inherited_name_emits_models_e012_family_error(self):
-        self.assertTrue(True)
+        class Foo(models.Model):
+            field1 = models.IntegerField()
+
+        class Bar(Foo):
+            field2 = models.IntegerField()
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['field2', 'field1'],
+                        name='inherited_field_unique',
+                    ),
+                ]
+
+        self.assertEqual(Bar.check(), [
+            Error(
+                "'constraints' refers to field 'field1' which is not "
+                "local to model 'Bar'.",
+                hint='This issue may be caused by multi-table inheritance.',
+                obj=Bar,
+                id='models.E016',
+            ),
+        ])
 
     def test_django12856_001_unique_constraint_fields_m2m_reference_emits_models_e012_family_error(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            m2m = models.ManyToManyField('self')
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['m2m'],
+                        name='m2m_unique',
+                    ),
+                ]
+
+        self.assertEqual(Model.check(), [
+            Error(
+                "'constraints' refers to a ManyToManyField 'm2m', but "
+                "ManyToManyFields are not permitted in 'constraints'.",
+                obj=Model,
+                id='models.E013',
+            ),
+        ])

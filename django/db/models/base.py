@@ -1640,20 +1640,8 @@ class Model(metaclass=ModelBase):
     def _check_local_fields(cls, fields, option):
         from django.db import models
 
-        # [DJANGO12856-001]
-        # Input:
-        #   fields: iterable[str] field names referenced by a uniqueness option/constraint.
-        #   option: label to include in diagnostics for traceability.
-        # Required obligation: field-reference resolution must be deterministic and
-        # report local/non-local/ManyToMany violations through an E012-family path
-        # for UniqueConstraint validation.
-        # Transition:
-        #   for each field_name -> resolve from forward local field map -> classify missing/non-local/m2m.
-        # Failure path:
-        #   missing -> E012
-        #   inherited/non-local -> E016 (treated as invalid-field-reference in constraint context)
-        #   m2m -> E013 (treated as invalid-field-reference in constraint context)
-
+        # DJANGO12856-001: shared field-reference resolver used by uniqueness
+        # checks (index_together/unique_together/indexes and UniqueConstraint).
         # In order to avoid hitting the relation tree prematurely, we use our
         # own fields_map instead of using get_field()
         forward_fields_map = {}
@@ -1879,33 +1867,24 @@ class Model(metaclass=ModelBase):
 
     @classmethod
     def _check_constraints(cls, databases):
-        # [DJANGO12856-001]
-        # Goal: validate UniqueConstraint.fields for local model existence before or as part
-        # of constraint-level checks.
-        # State machine (per constraint):
-        #   START -> FIELD_REFERENCE_CHECK -> (INVALID -> SKIP_CONSTRAINT_CHECKS)
-        #   or (VALID -> FEATURE_CHECKS)
-        #   OUTPUT: append checks errors for invalid field references and continue model check flow.
-        # Inputs:
-        #   databases: configured DB aliases from Model.check().
-        #   cls._meta.constraints: includes UniqueConstraint entries.
-        # Deterministic flow:
-        #   for each constraint in cls._meta.constraints:
-        #     if not UniqueConstraint: continue
-        #     ref_errors = cls._check_local_fields(constraint.fields, "constraints")
-        #     if ref_errors:
-        #         append ref_errors; transition to SKIP_CONSTRAINT_CHECKS for this constraint.
-        #     else:
-        #         transition to FEATURE_CHECKS (existing W027/W036/W038 branches).
-        # Failure outcome requirement:
-        #   at least one DJANGO12856-001 scenario must emit non-empty DJANGO12856-001
-        #   invalid-reference error list; model check should not treat the constrained model as valid.
-
+        # DJANGO12856-001: local-field validation for UniqueConstraint.
         errors = []
+        valid_constraints = []
+        for constraint in cls._meta.constraints:
+            if not isinstance(constraint, UniqueConstraint):
+                continue
+            field_errors = cls._check_local_fields(constraint.fields, "constraints")
+            if field_errors:
+                errors.extend(field_errors)
+            else:
+                valid_constraints.append(constraint)
+
         for db in databases:
             if not router.allow_migrate_model(db, cls):
                 continue
             connection = connections[db]
+            # DJANGO12856-001: only run unique-constraint feature checks on
+            # constraints that already passed field-resolution.
             if not (
                 connection.features.supports_table_check_constraints or
                 'supports_table_check_constraints' in cls._meta.required_db_features
@@ -1924,12 +1903,13 @@ class Model(metaclass=ModelBase):
                         id='models.W027',
                     )
                 )
+
             if not (
                 connection.features.supports_partial_indexes or
                 'supports_partial_indexes' in cls._meta.required_db_features
             ) and any(
-                isinstance(constraint, UniqueConstraint) and constraint.condition is not None
-                for constraint in cls._meta.constraints
+                constraint.condition is not None
+                for constraint in valid_constraints
             ):
                 errors.append(
                     checks.Warning(
@@ -1947,8 +1927,8 @@ class Model(metaclass=ModelBase):
                 connection.features.supports_deferrable_unique_constraints or
                 'supports_deferrable_unique_constraints' in cls._meta.required_db_features
             ) and any(
-                isinstance(constraint, UniqueConstraint) and constraint.deferrable is not None
-                for constraint in cls._meta.constraints
+                constraint.deferrable is not None
+                for constraint in valid_constraints
             ):
                 errors.append(
                     checks.Warning(
