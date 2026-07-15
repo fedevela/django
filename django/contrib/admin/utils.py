@@ -409,8 +409,20 @@ def display_for_field(value, field, empty_value_display):
         return formats.number_format(value)
     elif isinstance(field, models.FileField) and value:
         return format_html('<a href="{}">{}</a>', value.url, value)
-    # D172-001:
+    # D172-001/D172-002/D172-003:
     elif isinstance(field, models.JSONField):
+        # D172-002 logic obligation:
+        # INPUT: readonly JSONField rendering with value that may be invalid JSON-like input.
+        # DECISION: do not serialize via json.dumps here; always defer to field.prepare_value contract.
+        # TRANSITION: compute prepared = prepare_value(value) through subclass/mixin override resolution.
+        # SUCCESS PATH: pass prepared through display_for_value(…, empty_value_display) and return result.
+        # FAILURE PATH: if prepare_value handles invalid input by normalization, string sentinel, or exception
+        # (e.g., InvalidJSONInput patterns), that behavior is preserved because this branch does not wrap,
+        # intercept, or coerce prepared output.
+        # D172-003 logic obligation:
+        # Branch output must be the exact transformed string/path from field.prepare_value, including
+        # subclass-specific formatting (e.g., custom whitespace/ordering/normalization), not a copy or
+        # reconstructed JSON dump from this function.
         prepare_value = getattr(field, 'prepare_value', field.get_prep_value)
         return display_for_value(prepare_value(value), empty_value_display)
     else:
