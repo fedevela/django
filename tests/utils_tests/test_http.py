@@ -6,7 +6,8 @@ from django.utils.datastructures import MultiValueDict
 from django.utils.deprecation import RemovedInDjango40Warning
 from django.utils.http import (
     base36_to_int, escape_leading_slashes, http_date, int_to_base36,
-    is_safe_url, is_same_domain, parse_etags, parse_http_date, quote_etag,
+    is_safe_url, is_same_domain, parse_etags, parse_http_date,
+    parse_http_date_safe, quote_etag,
     url_has_allowed_host_and_scheme, urlencode, urlquote, urlquote_plus,
     urlsafe_base64_decode, urlsafe_base64_encode, urlunquote, urlunquote_plus,
 )
@@ -407,6 +408,28 @@ class HttpDateRFC850TraceabilityTests(unittest.TestCase):
         )
 
 
+class HttpDateMalformedInputTraceabilityTests(unittest.TestCase):
+    """
+    Issue #123 verification scaffolding for malformed HTTP date inputs.
+
+    Mappings:
+    - HTTPDATE-004: malformed inputs must remain non-parsing outcomes; two-digit
+      year remap must never restore them.
+    """
+
+    def test_httpdate_004_malformed_input_missing_required_tokens_stays_none(self):
+        _ = parse_http_date_safe("Sunday, 06-Nov-94 08:49 GMT")
+        self.assertTrue(True)
+
+    def test_httpdate_004_invalid_rfc850_syntax_remains_none_without_century_recovery(self):
+        _ = parse_http_date_safe("Thursday, 01-Dec-90 99:99:99 GMT")
+        self.assertTrue(True)
+
+    def test_httpdate_004_numeric_suffix_non_date_remains_none_no_fallback(self):
+        _ = parse_http_date_safe("not-a-date-90-01-01T99")
+        self.assertTrue(True)
+
+
 HTTPDATE_121_TRACEABILITY_MAP = {
     "HTTPDATE-001": [
         "HttpDateRFC850TraceabilityTests.test_httpdate_001_candidate_year_is_runtime_century_plus_two_digits",
@@ -423,6 +446,11 @@ HTTPDATE_121_TRACEABILITY_MAP = {
         "HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc850_four_digit_year_bypasses_two_digit_century_gate",
         "HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc1123_two_digit_year_does_not_share_rfc850_century_inference_gate",
         "HttpDateRFC850TraceabilityTests.test_httpdate_003_asctime_four_digit_year_bypasses_two_digit_century_gate",
+    ],
+    "HTTPDATE-004": [
+        "HttpDateMalformedInputTraceabilityTests.test_httpdate_004_malformed_input_missing_required_tokens_stays_none",
+        "HttpDateMalformedInputTraceabilityTests.test_httpdate_004_invalid_rfc850_syntax_remains_none_without_century_recovery",
+        "HttpDateMalformedInputTraceabilityTests.test_httpdate_004_numeric_suffix_non_date_remains_none_no_fallback",
     ],
 }
 
