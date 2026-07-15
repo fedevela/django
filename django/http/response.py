@@ -225,6 +225,13 @@ class HttpResponseBase:
         # Per PEP 3333, this response body must be bytes. To avoid returning
         # an instance of a subclass, this function returns `bytes(value)`.
         # This doesn't make a copy when `value` already contains bytes.
+        # MEMVIEW-003:
+        # INPUT VALUE TYPE -> OUTPUT VALUE FLOW
+        #   - bytes => return bytes(value) (identity-preserving byte semantics)
+        #   - str   => return bytes(value.encode(self.charset)) (charset-preserving encoding)
+        #   - other => return str(value).encode(self.charset)
+        # The string and bytes branches are intentionally explicit so memoryview-specific
+        # handling cannot accidentally intercept baseline str/bytes inputs.
 
         # Handle string types -- we can't rely on force_bytes here because:
         # - Python attempts str conversion first
@@ -288,6 +295,12 @@ class HttpResponse(HttpResponseBase):
         super().__init__(*args, **kwargs)
         # MEMVIEW-001 / MEMVIEW-002:
         # Normalize constructor-time memoryviews so response content is always bytes.
+        # MEMVIEW-003:
+        # Pseudocode:
+        # 1) Receive constructor input `content`.
+        # 2) If content is memoryview, coerce via bytes(content).
+        # 3) Otherwise leave content as-is for the centralized content setter.
+        # 4) Route to `self.content = content`; do not add any str/bytes-specific branch here.
         if isinstance(content, memoryview):
             content = bytes(content)
         self.content = content
@@ -309,10 +322,18 @@ class HttpResponse(HttpResponseBase):
     def content(self):
         # MEMVIEW-004:
         # Return deterministic bytes from stored container chunks on every read.
+        # MEMVIEW-003:
+        # Always materialize a concrete bytes object so both str and bytes constructor
+        # paths observe response.content as bytes.
         return b''.join(self._container)
 
     @content.setter
     def content(self, value):
+        # MEMVIEW-003:
+        # Ingest contract:
+        # - str inputs must be processed through make_bytes(value), not iterated.
+        # - bytes inputs must be processed through make_bytes(value), preserving bytes.
+        # - iterable non-bytes/str inputs are consumed chunk-by-chunk then joined.
         # Consume iterators upon assignment to allow repeated iteration.
         if hasattr(value, '__iter__') and not isinstance(value, (bytes, str)):
             content = b''.join(self.make_bytes(chunk) for chunk in value)
