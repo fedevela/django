@@ -109,6 +109,24 @@ def iter_all_python_module_files():
 @functools.lru_cache(maxsize=1)
 def iter_modules_and_files(modules, extra_files):
     """Iterate through all modules needed to be watched."""
+    # AUTO-001 pseudocode:
+    # INPUT: imported module objects + explicit extra file paths.
+    # OUTPUT: frozenset of candidate watched file paths.
+    # STATE: initialize empty sys_file_paths and results at function entry.
+    # PROCESS:
+    #   1) For each module in sorted imported modules snapshot:
+    #      - skip non-ModuleType or __spec__-less modules.
+    #      - if module has concrete location, append origin path.
+    #   2) Merge module paths with extra_files.
+    #   3) For each candidate:
+    #      - skip empties and non-existing files.
+    #      - normalize to absolute pathlib.Path.
+    #      - add to result set.
+    #   4) Return frozenset(results).
+    # AUTO-001 TRACE:
+    #   - the launch script path for `python manage.py runserver`
+    #     must remain represented in this collected stream for StatReloader's
+    #     initial snapshot.
     sys_file_paths = []
     for module in modules:
         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
@@ -236,11 +254,19 @@ class BaseReloader:
         logger.debug('Watching file %s.', path)
         self.extra_files.add(path)
 
-    def watched_files(self, include_globs=True):
+def watched_files(self, include_globs=True):
         """
         Yield all files that need to be watched, including module files and
         files within globs.
         """
+        # AUTO-001 pseudocode:
+        # INITIAL SNAPSHOT SEQUENCE for StatReloader:
+        #   - yield module-backed files first.
+        #   - yield explicit reloader.extra_files.
+        #   - when include_globs, yield directory glob expansion.
+        # REQUIREMENT ALLOCATION:
+        #   - the managed launch script path from `python manage.py runserver`
+        #     must be present in this combined stream before any snapshot diff.
         yield from iter_all_python_module_files()
         yield from self.extra_files
         if include_globs:
@@ -341,6 +367,17 @@ class StatReloader(BaseReloader):
 
     def snapshot_files(self):
         # watched_files may produce duplicate paths if globs overlap.
+        # AUTO-001 pseudocode:
+        # INPUT: watched_files(include_globs=True) stream.
+        # OUTPUT: unique (file, mtime) pairs.
+        # FLOW:
+        #   - for each file in watched_files:
+        #       - dedupe through seen_files.
+        #       - attempt stat(); on OSError skip missing/deletions.
+        #       - emit (file, mtime).
+        # EFFECT:
+        #   - absence of the manage.py launch path at this stage
+        #     indicates a watcher snapshot gap for AUTO-001.
         seen_files = set()
         for file in self.watched_files():
             if file in seen_files:
