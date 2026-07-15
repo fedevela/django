@@ -939,6 +939,13 @@ class Model(metaclass=ModelBase):
     delete.alters_data = True
 
     def _get_FIELD_display(self, field):
+        # REQ-138-002 obligation mapping:
+        # - Input: model instance `self`, one choice-enabled field descriptor `field`.
+        # - Branch: no custom method path here; this is the generated fallback.
+        # - Action: load raw stored value from `field.attname`.
+        # - Mapping: flatten field choices and return mapped label for current value.
+        # - Failure path: when mapping is missing, fall back to the raw value (including invalid/unknown values).
+        # - Output: coerce mapped or fallback value to string via `force_str(..., strings_only=True)`.
         value = getattr(self, field.attname)
         return force_str(dict(field.flatchoices).get(value, value), strings_only=True)
 

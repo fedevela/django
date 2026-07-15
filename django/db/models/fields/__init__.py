@@ -767,6 +767,14 @@ class Field(RegisterLookupMixin):
             # defined on the model class itself and only install fallback helpers
             # when no such method exists in cls.__dict__.
             display_name = 'get_%s_display' % self.name
+            # REQ-138-002.OBLIGATIONS[0] / [1]:
+            # - Decision: if model class already defines `get_<field>_display`,
+            #   skip generation to preserve explicit model override behavior.
+            # - Else branch: synthesize `partialmethod(cls._get_FIELD_display, field=self)`.
+            # - This creates per-instance dynamic resolution that always uses this field's
+            #   current value from the instance and its own flattened choices map.
+            # - Failure mode: if no mapped label exists, fallback returns raw value from
+            #   `_get_FIELD_display` so unmapped/invalid values pass through unchanged.
             if display_name not in cls.__dict__:
                 setattr(cls, display_name, partialmethod(cls._get_FIELD_display, field=self))
 
