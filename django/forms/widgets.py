@@ -70,6 +70,14 @@ class Media:
 
     @property
     def _js(self):
+        # MEDIA-004 [traceability]:
+        # test_media_ordering_traceability.py scenarios:
+        #   - test_media_004_hard_cycle_a_before_b_and_b_before_a_emits_conflict_warning_spec
+        #   - test_media_004_warning_message_mentions_only_a_js_and_b_js_contradiction_pair_spec
+        #   - test_media_004_cycle_a_before_b_before_c_reports_only_contradictory_files_spec
+        # Obligation:
+        #   emit MediaOrderConflictWarning from the merged constraint graph only,
+        #   and surface only assets participating in that contradiction cycle.
         chunks = [chunk for chunk in self._js_lists if chunk]
         if not chunks:
             return []
@@ -114,6 +122,15 @@ class Media:
         if len(resolved) == len(nodes):
             return resolved
 
+        # MEDIA-004 [failure-path extraction]:
+        # 1) unresolved_nodes = nodes - resolved
+        # 2) select deterministic seed from unresolved_nodes by node_position
+        # 3) run directed cycle discovery restricted to unresolved_nodes:
+        #    - track recursion stack to catch back edge u -> v
+        #    - back edge identifies a concrete contradiction cycle [v..u]
+        # 4) contradiction_edges = consecutive pairs from that cycle
+        # 5) warning message should include contradiction_edges (and/or cycle
+        #    node list), not transient intermediate pairwise merge artifacts.
         warnings.warn(
             'Unable to resolve Media.js ordering while preserving all declared '
             'relationships.  Loading order may be incorrect.',
@@ -197,6 +214,9 @@ class Media:
         #
         # Legacy pairwise warning behavior in this helper currently triggers early.
         # MEDIA-002 requires this warning decision to move to full-graph evaluation.
+        # MEDIA-004 extension:
+        # This helper remains a local, deterministic order-preserving merge and
+        # must not define the contradiction payload for merged constraints.
         # Start with a copy of list_1.
         combined_list = list(list_1)
         last_insert_index = len(list_1)
@@ -239,6 +259,9 @@ class Media:
         # Hand-off:
         #   return Media(combined) without resolving final _js yet; _js caller performs
         #   deterministic full-constraint resolution.
+        # MEDIA-004: keep warning decision and message composition in `_js` merge-time
+        # flow so contradiction reporting is anchored to full constraints and not
+        # transient pairwise composition.
         combined = Media()
         combined._css_lists = self._css_lists + other._css_lists
         combined._js_lists = self._js_lists + other._js_lists
