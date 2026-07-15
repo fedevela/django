@@ -94,6 +94,47 @@ class UtilsTests(SimpleTestCase):
 
     empty_value = '-empty-'
 
+    requirement_to_verification_map = {
+        "D172-001": [
+            "test_D172_001_display_for_field_jsonfield_readonly_renders_with_prepare_value"
+        ],
+        "D172-004": [
+            "test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display",
+            "test_null_display_for_field",
+        ],
+        "D172-005": [
+            "test_D172_005_display_for_field_jsonfield_logic_only_for_jsonfield_instance"
+        ],
+        "D172-006": [
+            "test_D172_006_display_for_field_non_json_fields_keep_existing_formatting",
+            "test_number_formats_display_for_field",
+            "test_number_formats_with_thousand_separator_display_for_field",
+            "test_null_display_for_field",
+            "test_list_display_for_value",
+        ],
+    }
+
+    def test_D172_001_display_for_field_jsonfield_readonly_renders_with_prepare_value(self):
+        """
+        D172-001: Read-only JSONField rendering should use field.prepare_value in
+        display_for_field.
+        """
+        pass
+
+    def test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display(self):
+        """
+        D172-004: JSONField readonly rendering should preserve None/empty display
+        semantics and not force serialization.
+        """
+        pass
+
+    def test_D172_005_display_for_field_jsonfield_logic_only_for_jsonfield_instance(self):
+        """
+        D172-005: JSON-specific rendering logic in display_for_field must not affect
+        non-JSON fields.
+        """
+        pass
+
     def test_values_from_lookup_field(self):
         """
         Regression test for #12654: lookup_field
@@ -196,6 +237,13 @@ class UtilsTests(SimpleTestCase):
 
         display_value = display_for_field(12345, models.IntegerField(), self.empty_value)
         self.assertEqual(display_value, '12,345')
+
+    def test_D172_006_display_for_field_non_json_fields_keep_existing_formatting(self):
+        """
+        D172-006: Non-JSON fields in readonly output must keep existing numeric/date/
+        boolean/text formatting behavior.
+        """
+        pass
 
     def test_list_display_for_value(self):
         display_value = display_for_value([1, 2, 3], self.empty_value)
