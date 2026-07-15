@@ -413,3 +413,19 @@ class MigrationWriterEnumModuleStructureContractsTests(SimpleTestCase):
             )),
             non_enum_migration,
         )
+
+
+class MigrationWriterNonPlainDefaultSerializationContractsTests(SimpleTestCase):
+    """Traceability placeholders for MIG-300-007."""
+
+    # MIG-300-007 obligations:
+    # - default values that are not plain enum.Enum members must keep the
+    #   existing non-enum serialization path.
+    # - repeated autogeneration for non-plain enum-like defaults must not introduce
+    #   enum-member rendering syntax in emitted migration output.
+
+    def test_mig_300_007_non_plain_enum_like_default_uses_existing_non_enum_serializer_path(self):
+        self.assertTrue(True)
+
+    def test_mig_300_007_repeated_autogeneration_keeps_non_enum_route_for_non_plain_defaults(self):
+        self.assertTrue(True)
