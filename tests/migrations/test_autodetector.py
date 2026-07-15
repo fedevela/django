@@ -2426,13 +2426,64 @@ DJANGO11910_REQUIREMENT_TO_VERIFICATION = {
 
 class DJANGO11910TraceabilityTests(TestCase):
     """
-    Placeholder verification artifacts for issue DJANGO11910-001.
+    Verification artifacts for issue DJANGO11910-001.
     """
 
     def test_django11910_001_fk_to_field_renamed_when_pk_renamed(self):
-        # Obligation: generated/deconstructed FK with to_field uses renamed PK field.
-        self.assertTrue(True)
+        before = [
+            ModelState("app1", "A", [
+                ("field_wrong", models.IntegerField(primary_key=True)),
+            ]),
+            ModelState("app1", "B", [
+                ("id", models.AutoField(primary_key=True)),
+                ("a", models.ForeignKey("app1.A", models.CASCADE, to_field="field_wrong")),
+            ]),
+        ]
+        after = [
+            ModelState("app1", "A", [
+                ("field_fixed", models.IntegerField(primary_key=True)),
+            ]),
+            ModelState("app1", "B", [
+                ("id", models.AutoField(primary_key=True)),
+                ("a", models.ForeignKey("app1.A", models.CASCADE, to_field="field_wrong")),
+            ]),
+        ]
+        changes = self.get_changes(before, after, MigrationQuestioner({"ask_rename": True}))
+        self.assertNumberMigrations(changes, "app1", 1)
+        self.assertOperationTypes(changes, "app1", 0, ["RenameField", "AlterField"])
+        alter_ops = [
+            op for op in changes["app1"][0].operations
+            if op.__class__.__name__ == "AlterField" and op.name == "a"
+        ]
+        self.assertEqual(len(alter_ops), 1)
+        self.assertEqual(alter_ops[0].field.remote_field.field_name, "field_fixed")
+        self.assertNotEqual(alter_ops[0].field.remote_field.field_name, "field_wrong")
 
     def test_django11910_001_no_legacy_to_field_after_pk_rename_sequence(self):
-        # Obligation: migration operation sequence produces no to_field='field_wrong'.
-        self.assertTrue(True)
+        before = [
+            ModelState("app1", "A", [
+                ("field_wrong", models.IntegerField(primary_key=True)),
+            ]),
+            ModelState("app1", "B", [
+                ("id", models.AutoField(primary_key=True)),
+                ("a", models.ForeignKey("app1.A", models.CASCADE, to_field="field_wrong", related_name="old")),
+            ]),
+        ]
+        after = [
+            ModelState("app1", "A", [
+                ("field_fixed", models.IntegerField(primary_key=True)),
+            ]),
+            ModelState("app1", "B", [
+                ("id", models.AutoField(primary_key=True)),
+                ("a", models.ForeignKey("app1.A", models.CASCADE, to_field="field_wrong", related_name="new")),
+            ]),
+        ]
+        changes = self.get_changes(before, after, MigrationQuestioner({"ask_rename": True}))
+        self.assertNumberMigrations(changes, "app1", 1)
+        self.assertEqual(len(changes["app1"][0].operations), 2)
+        alter_ops = [
+            op for op in changes["app1"][0].operations
+            if op.__class__.__name__ == "AlterField" and op.name == "a"
+        ]
+        self.assertEqual(len(alter_ops), 1)
+        self.assertEqual(alter_ops[0].field.remote_field.field_name, "field_fixed")
