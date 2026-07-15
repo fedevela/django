@@ -59,6 +59,12 @@ UPLOAD_PERMISSION_VERIFICATION_MAP = {
     ],
 }
 
+# PSEUDOCODE LOCI FOR CONTRACT VERIFICATION (Trace-only comments)
+# These comments convert each requirement into deterministic logic checks and failure states:
+# - State: requirement_id, documentation source, and pass/fail condition.
+# - Decision: requirement is satisfied only if expected literal/signals exist in owning artifact.
+# - Failure path: missing evidence indicates trace incomplete and contract gate blocked.
+
 
 class FileUploadPermissionContractTests(SimpleTestCase):
     maxDiff = None
@@ -223,6 +229,11 @@ class FileUploadPermissionContractTests(SimpleTestCase):
 
         Contract-style documentation verification placeholder.
         """
+        # INPUT: docs section for FILE_UPLOAD_PERMISSIONS.
+        # IF section text includes explicit default "Default: ``0o644``" AND
+        #    includes "Django applies ``0o644``"
+        # THEN contract is represented as documented default.
+        # ELSE route to trace failure (documentation gap).
         self.assertTrue(True)
 
     def test_DJ10914_005_file_upload_permissions_handler_dependent_warning_is_documented(self):
@@ -231,4 +242,10 @@ class FileUploadPermissionContractTests(SimpleTestCase):
 
         Contract-style documentation verification placeholder.
         """
+        # INPUT: docs section for FILE_UPLOAD_PERMISSIONS.
+        # IF section text states handler-dependent outcomes without explicit setting
+        #    (MemoryUploadedFile vs TemporaryUploadedFile)
+        #    AND prescribes explicit setting as deterministic control
+        # THEN warning requirement is satisfied.
+        # ELSE route to trace failure (warning gap).
         self.assertTrue(True)

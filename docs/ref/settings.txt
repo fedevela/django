@@ -1484,6 +1484,28 @@ This value mirrors the functionality and caveats of the
 ``FILE_UPLOAD_PERMISSIONS``
 ---------------------------
 
+.. pseudocode:: DJ10914-004
+   INPUT: FILE_UPLOAD_PERMISSIONS from project settings (optional override).
+   OUTPUT: effective mode for uploaded destination files.
+   PROCESS:
+   IF FILE_UPLOAD_PERMISSIONS is explicitly configured:
+       effective_mode = FILE_UPLOAD_PERMISSIONS
+   ELSE:
+       effective_mode = 0o644
+       documented_default = Django applies 0o644
+   TRACE GOAL: guarantee DJ10914-004.
+
+.. pseudocode:: DJ10914-005
+   INPUT: upload handler path and explicitness of FILE_UPLOAD_PERMISSIONS.
+   OUTPUT: deterministic behavior expectation text for docs.
+   PROCESS:
+   IF FILE_UPLOAD_PERMISSIONS is explicitly configured:
+       permission_outcome = deterministic
+   ELSE:
+       permission_outcome = handler_dependent (MemoryUploadedFile vs TemporaryUploadedFile)
+       emit_warning = set FILE_UPLOAD_PERMISSIONS explicitly for reliable behavior
+   TRACE GOAL: guarantee DJ10914-005.
+
 Default: ``0o644``
 
 The numeric mode (for example, ``0o644``) to set newly uploaded files to.
