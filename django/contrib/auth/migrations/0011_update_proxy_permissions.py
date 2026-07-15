@@ -29,6 +29,13 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
 
         for codename in required_permissions:
             if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
+                print(
+                    "A problem arose migrating proxy model permissions: "
+                    "permission %r for %r already exists, skipping." % (
+                        codename,
+                        opts.label,
+                    )
+                )
                 continue
             try:
                 updated = Permission.objects.filter(
@@ -42,6 +49,13 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
                         name='Proxy permission for %s' % opts.model_name,
                     )
             except IntegrityError:
+                print(
+                    "A problem arose migrating proxy model permissions: "
+                    "permission %r for %r already exists." % (
+                        codename,
+                        opts.label,
+                    )
+                )
                 Permission.objects.get_or_create(
                     content_type=new_content_type,
                     codename=codename,
