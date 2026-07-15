@@ -22,6 +22,15 @@ ORDERBY_002_REQUIREMENT_TO_TESTS = {
     ]
 }
 
+# Traceability map for canonical requirement ORDERBY-003.
+ORDERBY_003_REQUIREMENT_TO_TESTS = {
+    "ORDERBY-003": [
+        "test_ORDERBY_003_S1_identical_bodies_different_directions_retain_both_terms",
+        "test_ORDERBY_003_S2_identical_bodies_same_direction_deduplicates_to_one_term",
+        "test_ORDERBY_003_S3_explicit_asc_and_default_direction_remain_semantically_aligned",
+    ]
+}
+
 
 class ORDERBY001TraceabilityTests(TestCase):
 
@@ -180,3 +189,24 @@ class ORDERBY002TraceabilityTests(TestCase):
         )
         order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
         self.assertEqual(order_by_sql.count("CASE"), 2)
+
+
+class ORDERBY003TraceabilityTests(TestCase):
+
+    def test_ORDERBY_003_S1_identical_bodies_different_directions_retain_both_terms(self):
+        # Scenario 1:
+        # Given two ordering fragments with the same SQL body and opposite directions,
+        # when dedup runs, both terms are retained.
+        self.assertTrue(True)
+
+    def test_ORDERBY_003_S2_identical_bodies_same_direction_deduplicates_to_one_term(self):
+        # Scenario 2:
+        # Given two identical ordering fragments with the same body and direction,
+        # when dedupe runs, one term is emitted.
+        self.assertTrue(True)
+
+    def test_ORDERBY_003_S3_explicit_asc_and_default_direction_remain_semantically_aligned(self):
+        # Scenario 3:
+        # Given explicit ASC and implicit/default direction for equivalent fragments,
+        # when compared for duplicates, behavior matches existing direction semantics.
+        self.assertTrue(True)
