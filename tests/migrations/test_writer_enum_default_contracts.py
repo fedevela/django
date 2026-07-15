@@ -327,11 +327,89 @@ class MigrationWriterEnumModuleStructureContractsTests(SimpleTestCase):
     # - AC2: non-enum defaults do not trigger enum-member shape changes in serialized output.
     # - AC3: equivalent non-enum-only model inputs keep emitted migration text structure unchanged.
 
+    def _migration_text(self, fields):
+        migration = type(
+            "Migration",
+            (migrations.Migration,),
+            {
+                "operations": [
+                    migrations.CreateModel(
+                        "StatusModel",
+                        fields=fields,
+                        bases=(models.Model,),
+                    ),
+                ],
+                "dependencies": [],
+            },
+        )
+        return MigrationWriter(migration, include_header=False).as_string()
+
+    def _import_lines(self, migration_text):
+        import_section = migration_text.split("class Migration(migrations.Migration):", 1)[0]
+        return [line for line in import_section.splitlines() if line.startswith(("from ", "import "))]
+
     def test_mig_300_006_import_block_and_non_enum_fragment_preserve_shape(self):
-        self.assertTrue(True)
+        with_enum = self._migration_text((
+            ("status", models.CharField(default=PlainStatus.GOOD, max_length=16)),
+            ("status_text", models.CharField(default="x", max_length=16)),
+            ("status_code", models.IntegerField(default=42)),
+        ))
+        without_enum = self._migration_text((
+            ("status_text", models.CharField(default="x", max_length=16)),
+            ("status_code", models.IntegerField(default=42)),
+        ))
+
+        with_enum_imports = self._import_lines(with_enum)
+        without_enum_imports = self._import_lines(without_enum)
+        enum_import = "import %s" % PlainStatus.__module__
+
+        self.assertNotIn(enum_import, without_enum_imports)
+        self.assertIn(enum_import, with_enum_imports)
+        self.assertEqual(
+            [line for line in with_enum_imports if line != enum_import],
+            without_enum_imports,
+        )
+        self.assertIn("default=%s.PlainStatus['GOOD']" % PlainStatus.__module__, with_enum)
+        self.assertIn("status_text=models.CharField(default='x', max_length=16)", with_enum)
+        self.assertIn("status_text=models.CharField(default='x', max_length=16)", without_enum)
+        self.assertIn("status_code=models.IntegerField(default=42)", with_enum)
+        self.assertIn("status_code=models.IntegerField(default=42)", without_enum)
 
     def test_mig_300_006_non_enum_defaults_does_not_change_under_enum_name_rendering(self):
-        self.assertTrue(True)
+        with_enum = self._migration_text((
+            ("status", models.CharField(default=PlainStatus.GOOD, max_length=16)),
+            ("status_text", models.CharField(default="x", max_length=16)),
+            ("status_code", models.IntegerField(default=42)),
+            ("status_callable", models.CharField(default=_mixed_default_callable, max_length=16)),
+        ))
+        without_enum = self._migration_text((
+            ("status_text", models.CharField(default="x", max_length=16)),
+            ("status_code", models.IntegerField(default=42)),
+            ("status_callable", models.CharField(default=_mixed_default_callable, max_length=16)),
+        ))
+
+        self.assertIn("default=%s.PlainStatus['GOOD']" % PlainStatus.__module__, with_enum)
+        self.assertIn("status_text=models.CharField(default='x', max_length=16)", with_enum)
+        self.assertIn("status_text=models.CharField(default='x', max_length=16)", without_enum)
+        self.assertIn("status_code=models.IntegerField(default=42)", with_enum)
+        self.assertIn("status_code=models.IntegerField(default=42)", without_enum)
+        self.assertIn("default=%s._mixed_default_callable" % __name__, with_enum)
+        self.assertIn("default=%s._mixed_default_callable" % __name__, without_enum)
+        self.assertNotIn("default=PlainStatus('Good')", with_enum)
+        self.assertNotIn("default=PlainStatus('Good')", without_enum)
 
     def test_mig_300_006_non_enum_only_models_keep_output_shape_stable(self):
-        self.assertTrue(True)
+        non_enum_migration = self._migration_text((
+            ("status_text", models.CharField(default="x", max_length=16)),
+            ("status_code", models.IntegerField(default=42)),
+        ))
+        self.assertIn("status_text=models.CharField(default='x', max_length=16)", non_enum_migration)
+        self.assertIn("status_code=models.IntegerField(default=42)", non_enum_migration)
+        self.assertIn("from django.db import migrations, models", self._import_lines(non_enum_migration))
+        self.assertEqual(
+            self._migration_text((
+                ("status_text", models.CharField(default="x", max_length=16)),
+                ("status_code", models.IntegerField(default=42)),
+            )),
+            non_enum_migration,
+        )
