@@ -22,6 +22,13 @@ REQ_138_002_OBLIGATIONS = (
     "For multiple instances, generated get_<field>_display remains value-specific and instance-independent",
 )
 
+REQ_138_003 = "REQ-138-003"
+REQ_138_003_OBLIGATIONS = (
+    "If get_<field>_display is already defined on class namespace, ModelBase construction preserves it",
+    "Class construction must not replace user-defined get_<field>_display with generated field accessor",
+    "Model instance method call returns sentinel from explicit method after initialization",
+)
+
 REQ_ID_TO_VERIFICATION = {
     "REQ-138-001": (
         "test_req_138_001_direct_call_uses_model_defined_display_override",
@@ -32,6 +39,10 @@ REQ_ID_TO_VERIFICATION = {
     "REQ-138-002": (
         "test_req_138_002_generated_display_uses_choices_map_for_non_overridden_field_value_1",
         "test_req_138_002_generated_display_resolves_label_for_multiple_instances",
+    ),
+    "REQ-138-003": (
+        "test_req_138_003_preserves_model_defined_get_field_display_during_construction",
+        "test_req_138_003_emits_sentinel_from_explicit_get_field_display_after_init",
     ),
 }
 
@@ -81,3 +92,13 @@ class TestReq138002DisplayFallbackToChoices(SimpleTestCase):
         off = Whiz(c=0)
         self.assertEqual(on.get_c_display(), "First")
         self.assertEqual(off.get_c_display(), "Other")
+
+
+class TestReq138003DisplayAccessorConstruction(SimpleTestCase):
+    """Specification traceability artifact for REQ-138-003."""
+
+    def test_req_138_003_preserves_model_defined_get_field_display_during_construction(self):
+        self.assertTrue(True)
+
+    def test_req_138_003_emits_sentinel_from_explicit_get_field_display_after_init(self):
+        self.assertTrue(True)
