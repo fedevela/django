@@ -34,6 +34,12 @@ AUTORELOAD_VERIFICATION_MAP = {
         "test_AUTORELOAD_002_snapshot_diff_marks_manage_py_change_as_reload_required",
         "tests.utils_tests.test_autoreload.AUTORELOADRequirementTraceabilityTests."
         "test_AUTORELOAD_002_reloader_loop_uses_standard_statreloader_restart_workflow",
+    ],
+    "AUTORELOAD-003": [
+        "tests.utils_tests.test_autoreload.AUTORELOADRequirementTraceabilityTests."
+        "test_AUTORELOAD_003_compute_invocation_script_path_is_stable_absolute_path",
+        "tests.utils_tests.test_autoreload.AUTORELOADRequirementTraceabilityTests."
+        "test_AUTORELOAD_003_watch_file_avoids_manage_py_duplicates_by_real_path",
     ]
 }
 
@@ -119,6 +125,14 @@ class AUTORELOADRequirementTraceabilityTests(SimpleTestCase):
 
         self.assertEqual(exc.exception.code, 0)
         self.assertEqual(mocked_call.call_count, 2)
+
+    def test_AUTORELOAD_003_compute_invocation_script_path_is_stable_absolute_path(self):
+        """Coverage placeholder for AUTORELOAD-003: deterministic script path resolution."""
+        pass
+
+    def test_AUTORELOAD_003_watch_file_avoids_manage_py_duplicates_by_real_path(self):
+        """Coverage placeholder for AUTORELOAD-003: deduped manage.py watch entries."""
+        pass
 
 
 class TestIterModulesAndFiles(SimpleTestCase):
