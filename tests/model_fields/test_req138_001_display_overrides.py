@@ -352,10 +352,46 @@ class TestReq138008DisplaySemanticsNonOverridden(SimpleTestCase):
     """Specification traceability artifact for REQ-138-008."""
 
     def test_req_138_008_non_overridden_display_path_keeps_generated_label_semantics(self):
-        self.assertTrue(True)
+        self.assertEqual(Req138DisplayGeneratedBaseModel(status='on').get_status_display(), 'On')
+        self.assertEqual(Req138DisplayGeneratedBaseModel(status='off').get_status_display(), 'Off')
+        self.assertEqual(Whiz(c=1).get_c_display(), 'First')
+        self.assertEqual(Whiz(c=0).get_c_display(), 'Other')
+        self.assertEqual(Whiz(c=9).get_c_display(), 9)
 
     def test_req_138_008_non_overridden_display_preserves_translated_and_coerced_values(self):
-        self.assertTrue(True)
+        self.assertEqual(Whiz(c=5).get_c_display(), 'translated')
+        self.assertIsInstance(Whiz(c=5).get_c_display(), str)
+        self.assertIsNone(Whiz(c=None).get_c_display())
+        self.assertEqual(Req138DisplayGeneratedBaseModel(status='unknown').get_status_display(), 'unknown')
+        self.assertIsInstance(
+            Req138DisplayGeneratedBaseModel(status='unknown').get_status_display(),
+            str,
+        )
+        self.assertEqual(Whiz(c=9).get_c_display(), 9)
 
     def test_req_138_008_non_overridden_display_callsites_stay_generated_lookup_only(self):
-        self.assertTrue(True)
+        template = Engine().from_string("{{ obj.get_status_display }}")
+        generated_helper = Req138DisplayGeneratedBaseModel.__dict__['get_status_display']
+        self.assertIsInstance(generated_helper, partialmethod)
+
+        instance = Req138DisplayGeneratedBaseModel(status='on')
+        self.assertIs(instance.get_status_display.__func__, generated_helper.func)
+        self.assertEqual(instance.get_status_display(), 'On')
+        self.assertEqual(template.render(Context({'obj': instance})), 'On')
+        instance.status = 'off'
+        self.assertIs(instance.get_status_display.__func__, generated_helper.func)
+        self.assertEqual(instance.get_status_display(), 'Off')
+        self.assertEqual(template.render(Context({'obj': instance})), 'Off')
+
+        bound_form = Req138DisplayGeneratedBaseModelForm(
+            data={'status': 'off'},
+            instance=Req138DisplayGeneratedBaseModel(),
+        )
+        self.assertTrue(bound_form.is_valid())
+        saved_instance = bound_form.save(commit=False)
+        self.assertIs(saved_instance.get_status_display.__func__, generated_helper.func)
+        self.assertEqual(saved_instance.get_status_display(), 'Off')
+        self.assertEqual(
+            template.render(Context({'obj': saved_instance})),
+            'Off',
+        )
