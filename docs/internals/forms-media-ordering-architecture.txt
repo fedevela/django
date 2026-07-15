@@ -1,4 +1,4 @@
-Issue #241 + #242 Media.__add__ and conflict reporting architecture
+Issue #241 + #242 + #243 Media.__add__ and conflict reporting architecture
 ===============================================================
 
 Issue: MEDIA-001, MEDIA-002, MEDIA-003, MEDIA-004, MEDIA-005
@@ -32,6 +32,24 @@ implementation. No API surface changes are introduced in this phase.
 - ``MEDIA-005``
   - Home: ``django/forms/widgets.py`` ``Media.merge``, ``Media._js``
   - Pressure: preserve adjacency of each input chunk whenever satisfiable globally.
+- ``MEDIA-006``
+  - Home: ``django/forms/widgets.py`` ``Media._build_js_constraint_graph``, ``Media._js``
+  - Pressure: duplicate JavaScript paths must be represented once in the internal graph and emitted once in output.
+  - Observation points:
+    - ``tests/forms_tests/tests/test_media_ordering_traceability.py``:
+      - ``test_media_006_duplicate_js_paths_appear_once_during_merge_contract``
+- ``MEDIA-007``
+  - Home: ``django/forms/widgets.py`` ``Media.__add__``, ``Media._js``, ``Media.merge``
+  - Pressure: maintain legacy-compatible two-object ordering semantics when no true contradiction exists.
+  - Observation points:
+    - ``tests/forms_tests/tests/test_media_ordering_traceability.py``:
+      - ``test_media_007_two_object_merge_backwards_compat_without_false_positive_blocker_contract``
+- ``MEDIA-008``
+  - Home: ``django/forms/widgets.py`` ``Media._build_js_constraint_graph``, ``Media._resolve_js_order``, ``Media._discover_js_cycle``
+  - Pressure: equivalent merge graphs and grouping must produce deterministic JS order and warning payload.
+  - Observation points:
+    - ``tests/forms_tests/tests/test_media_ordering_traceability.py``:
+      - ``test_media_008_equivalent_merge_grouping_determinism_contract``
 
 
 2) Module and file placement
@@ -62,12 +80,39 @@ implementation. No API surface changes are introduced in this phase.
   - Responsibility: build/merge adjacency edges without concluding conflict decisions.
   - Constraint behavior: should emit local edges for each adjacent pair; conflict state is deferred.
   - MEDIA-004 pressure: do not construct warning payload from this local path.
+- ``MEDIA-006``: dedupe policy must live in graph materialization, not in rendering-time post-filters.
+
+- ``Media._build_js_constraint_graph``
+  - Ownership: canonical node identity and edge extraction from chunk input.
+  - Responsibility: normalize duplicate paths to one node while preserving first-seen index metadata.
+  - Boundary: no warning emission or output formatting should occur here.
+  - Pressure mapping:
+    - ``MEDIA-006``: repeated path in any chunk is reduced to a single node.
+    - ``MEDIA-008``: node order hints must be deterministic across equivalent chunk groupings.
+
+- ``Media._resolve_js_order``
+  - Ownership: deterministic global order candidate selection.
+  - Responsibility: stable topological ordering using deterministic tie-breakers derived from node_position.
+  - Boundary: ordering must be deterministic independent of insertion/collection path shape.
+  - Pressure mapping:
+    - ``MEDIA-007``: valid two-object outcomes preserve legacy order where no global contradiction exists.
+    - ``MEDIA-008``: identical graphs collapse to identical node processing sequences.
+
+- ``Media._discover_js_cycle``
+  - Ownership: deterministic contradiction witness extraction.
+  - Responsibility: return one ordered representative cycle for warning reporting on unresolved graphs.
+  - Boundary: traversal ordering must be deterministic to stabilize warning payload under associativity permutations.
+  - Pressure mapping:
+    - ``MEDIA-008``: equivalent graph structure always generates same cycle node order.
+    - ``MEDIA-007``: warning only when no satisfiable global resolution exists.
 
 - ``Media._js``
   - Ownership: final global constraint resolution.
   - Responsibility: collect all chunk constraints from ``_js_lists`` and solve global ordering.
   - Responsibility boundary: this is the single place to emit ``MediaOrderConflictWarning``.
   - MEDIA-004 pressure: warning payload must be derived from contradiction cycle extracted from the merged graph; exclude transient intermediate pairwise artifacts.
+  - ``MEDIA-006``: output list comes from resolved node order; duplicates are eliminated by node identity.
+  - ``MEDIA-008``: warning and output contracts must be deterministic for equivalent graphs.
 
 - ``media_property``
   - Boundary: stable external seam that combines class/widget media trees via ``Media`` arithmetic.
@@ -123,6 +168,7 @@ implementation. No API surface changes are introduced in this phase.
 - Internal helper(s) to materialize adjacency constraints from all chunks (can stay inside ``Media``, private scope).
 - Topological ordering utility inside ``Media._js`` path; warning emission remains in ``Media._js``.
 - Optional private helper for stable output de-duplication under a fixed topological order.
+ - Deterministic tie-break helpers based on first-seen node index for both ordering and cycle discovery.
 
 
 Completion status
