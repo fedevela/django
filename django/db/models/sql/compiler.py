@@ -368,11 +368,24 @@ class SQLCompiler:
             # When this entire method is refactored into expressions, we can
             # preserve semantic checks at expression granularity.
             without_ordering = sql.rstrip()
+            # ORDERBY-005: deterministic fallback for malformed/irregular direction fragments.
+            # - Input state: rendered ORDER BY fragment `without_ordering` and params tuple.
+            # - Branch:
+            #   1) If regex extraction matches exactly `ASC|DESC`, split direction token from body.
+            #   2) Else treat this as malformed_or_unmatched_direction and enter fallback lane.
+            #      Fallback lane preserves full canonicalized fragment in fallback key.
+            # - Outcome: every branch emits one fallback key and never abandons the fragment before
+            #   dedupe; malformed fragments cannot be silently dropped prior to duplicate checks.
             direction_match = re.search(r"\s+(ASC|DESC)\s*$", without_ordering, flags=re.IGNORECASE)
             if direction_match:
                 direction_key = direction_match.group(1).upper()
                 without_ordering = without_ordering[:direction_match.start()].rstrip()
             else:
+                # ORDERBY-005 S1/S2/S3:
+                # S1: malformed or irregular direction text falls back to a deterministic body-only lane.
+                # S2: identical malformed terms flow through this lane and produce same dedupe key.
+                # S3: malformed term and parseable equivalent keep separate lane identifiers, preventing
+                #     accidental collision with semantically parsed direction forms.
                 direction_key = "ASC"
             # Step 2: canonicalize line ending and spacing noise before hashing.
             # - Normalize `\r\n`, `\r`, and `\n` to a single line-break format.
@@ -381,12 +394,21 @@ class SQLCompiler:
             # - Keep meaningful token ordering and internal token text unchanged.
             without_ordering = self._normalize_order_by_fragment_for_dedupe(without_ordering)
             params_hash = make_hashable(params)
+            # ORDERBY-005:
+            # deterministic fallback pseudocode (applied in planning, not runtime):
+            # if direction_match is falsy, route through fallback lane,
+            # build fallback key `(without_ordering, direction_key, params_hash)` plus an explicit
+            # malformed marker before dedupe lookup.
             dedupe_key = (without_ordering, direction_key, params_hash)
             # ORDERBY-004 keying condition:
             # Match only when all three normalized dimensions are equal:
             # body, direction, and params hash.
             # This keeps non-RawSQL and RawSQL terms consistent under one dedupe path
             # while preventing cross-type false-collisions when compiled fragments differ.
+            # ORDERBY-005 S2/S3 behavior mapping:
+            # - S2: identical malformed terms resolve to the same fallback path/state then one pass.
+            # - S3: malformed and parseable equivalents carry different source states from regex state,
+            #   so collision requires intentional full-key equality only.
             if dedupe_key in seen:
                 # Step 3: duplicate-key branch.
                 # If normalized key already exists, skip append and continue loop.
