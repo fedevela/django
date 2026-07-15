@@ -367,18 +367,12 @@ class HttpResponseTests(unittest.TestCase):
         self.assertEqual(r.content, b'12345')
 
     def test_memoryview_constructor_rejects_legacy_payload_rendering(self):
-        # MEMVIEW-005 regression: constructor path must never emit memoryview repr
-        # Control-flow map:
-        #   response = HttpResponse(memoryview(b'My Content'))
-        #   payload = response.content
-        #   if payload startswith b"<memory at ": ERROR
-        #   if payload == b"<memory at 0x": ERROR
-        #   success condition: payload == b"My Content"
         r = HttpResponse(memoryview(b'My Content'))
+        payload = r.content
 
-        self.assertEqual(r.content, b'My Content')
-        self.assertFalse(r.content.startswith(b'<memory at '))
-        self.assertNotEqual(r.content, b'<memory at 0x')
+        self.assertFalse(payload.startswith(b'<memory at '))
+        self.assertNotEqual(payload, b'<memory at 0x')
+        self.assertEqual(payload, b'My Content')
 
     def test_iter_content(self):
         r = HttpResponse(['abc', 'def', 'ghi'])
