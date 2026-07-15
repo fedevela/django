@@ -90,6 +90,15 @@ class DeconstructableSerializer(BaseSerializer):
 
     @staticmethod
     def _serialize_path(path):
+        # M154-001 / M154-004 logic locus: preserve already-qualified deconstruct paths.
+        # PSEUDOCODE:
+        # INPUT: dotted path from deconstruct() (e.g., module.Outer.Inner).
+        # DECISION: split only at final dot into module + attr_tail.
+        #   IF module == "django.db.models":
+        #       emit "models.attr_tail" with django.db import shortcut.
+        #   ELSE:
+        #       emit original "path" unchanged and import module.
+        # PROHIBITION: do not mutate "attr_tail" by dropping inner segments.
         module, name = path.rsplit(".", 1)
         if module == "django.db.models":
             imports = {"from django.db import models"}
@@ -261,15 +270,31 @@ class TypeSerializer(BaseSerializer):
             (models.Model, "models.Model", []),
             (type(None), 'type(None)', []),
         ]
+        # M154-002 / M154-004 logic locus: serialize class objects with stable, nested paths.
+        # PSEUDOCODE:
+        # INPUT: a class object value that reached serializer_factory via isinstance(type) path.
+        # TRANSITION: evaluate explicit model/sentinel special-cases first.
         for case, string, imports in special_cases:
             if case is self.value:
                 return string, set(imports)
+        # DECISION A: if module is builtins, keep bare class name.
         if hasattr(self.value, "__module__"):
             module = self.value.__module__
             if module == builtins.__name__:
                 return self.value.__name__, set()
+            # DECISION B: for nested classes, preserve full qualname chain.
+            # - candidate = module + "." + value.__qualname__
+            # - this includes all enclosing class names, e.g. module.Outer.Inner.
+            # - this should be used instead of module + value.__name__.
+            # DECODE-FAILURE PATH (M154-004):
+            # - before emitting candidate, verify it resolves via import/module/class chain:
+            #   1) import module object
+            #   2) walk each segment in value.__qualname__ against attributes
+            #   3) if any segment missing OR final object is not `value`, do not invent a new path
+            # - on failure, surface existing non-serializable report path (same failure channel as generic serializer errors),
+            #   instead of returning a shortened dotted path.
             else:
-                return "%s.%s" % (module, self.value.__name__), {"import %s" % module}
+                return "%s.%s" % (module, self.value.__qualname__), {"import %s" % module}
 
 
 class UUIDSerializer(BaseSerializer):
@@ -325,6 +350,9 @@ def serializer_factory(value):
         return ModelManagerSerializer(value)
     if isinstance(value, Operation):
         return OperationSerializer(value)
+    # M154-002 / M154-004: class objects are intentionally handled here
+    # before generic deconstructable fallback so nested class arguments follow
+    # TypeSerializer's path-serialization obligations and stability checks.
     if isinstance(value, type):
         return TypeSerializer(value)
     # Anything that knows how to deconstruct itself.

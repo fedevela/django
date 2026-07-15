@@ -487,6 +487,22 @@ class Field(RegisterLookupMixin):
             else:
                 if value is not default:
                     keywords[name] = value
+        # M154-001 logic locus: preserve nested field subclass paths.
+        # PSEUDOCODE M154-001:
+        # INPUT: self is a Field instance whose class may be nested.
+        # STEP 1: compute candidate path using class module + class __qualname__.
+        # STEP 2: normalize only known Django core field module prefixes.
+        #   IF path starts with django.db.models.fields.related:
+        #       replace with django.db.models
+        #   ELSE IF path starts with django.db.models.fields.files:
+        #       replace with django.db.models
+        #   ELSE IF path starts with django.db.models.fields.proxy:
+        #       replace with django.db.models
+        #   ELSE IF path starts with django.db.models.fields:
+        #       replace with django.db.models
+        # STEP 3: return path unchanged for all user-defined nested classes
+        #        so Outer.Inner stays module.Outer.Inner.
+        # STEP 4: do not emit fallback path that strips nesting to module.Inner.
         # Work out path - we shorten it for known Django core fields
         path = "%s.%s" % (self.__class__.__module__, self.__class__.__qualname__)
         if path.startswith("django.db.models.fields.related"):
