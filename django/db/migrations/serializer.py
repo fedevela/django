@@ -138,29 +138,25 @@ class FunctionTypeSerializer(BaseSerializer):
             klass = self.value.__self__
             module = klass.__module__
             return "%s.%s.%s" % (module, klass.__name__, self.value.__name__), {"import %s" % module}
-        # FPF-005::O1 (deconstruction validation for function callables):
-        # Input: function value being serialized into migration code.
-        # Decision sequence:
-        # 1) if callable is lambda -> reject immediately (not importable).
-        # 2) if module metadata is missing -> reject (cannot build import path).
-        # 3) if qualname is local/nested -> reject (not reconstructable via module import).
-        # 4) else emit fully-qualified importable path and required import string.
-        # Failure path:
-        # - raise ValueError with deconstructability/import-path context so makemigrations
-        #   stops before writing migration content.
-        # Further error checking
         if self.value.__name__ == '<lambda>':
-            raise ValueError("Cannot serialize function: lambda")
-        if self.value.__module__ is None:
-            raise ValueError("Cannot serialize function %r: No module" % self.value)
+            raise ValueError(
+                "Cannot serialize function: lambda is not deconstructable for "
+                "migration generation. Use a module-level callable."
+            )
+        module_name = getattr(self.value, "__module__", None)
+        if not module_name or module_name == "__main__":
+            raise ValueError(
+                "Cannot serialize function %r: it has no importable module. "
+                "Use a module-level callable." % self.value
+            )
 
-        module_name = self.value.__module__
-
-        if '<' not in self.value.__qualname__:  # Qualname can include <locals>
+        qualname = getattr(self.value, "__qualname__", "")
+        if '<' not in qualname:  # Qualname can include <locals>
             return '%s.%s' % (module_name, self.value.__qualname__), {'import %s' % self.value.__module__}
 
         raise ValueError(
-            'Could not find function %s in %s.\n' % (self.value.__name__, module_name)
+            "Cannot serialize function %r in %s because it is a local/nested callable "
+            "and is not importable for migrations. " % (self.value.__name__, module_name)
         )
 
 
@@ -200,14 +196,6 @@ class IterableSerializer(BaseSerializer):
 class ModelFieldSerializer(DeconstructableSerializer):
     def serialize(self):
         attr_name, path, args, kwargs = self.value.deconstruct()
-        # FPF-005::O2 (no opaque fallback on invalid callables):
-        # Input: deconstructed field payload from any model field (including FilePathField).
-        # Sequence:
-        # - serialize_deconstructed() serializes path/args/kwargs through serializer_factory.
-        # - any non-importable callable in kwargs['path'] must raise a ValueError during this phase.
-        # - failure must propagate to MigrationWriter so command aborts before migration emission.
-        # Output:
-        # - only fully serializable tuples produce migration code; otherwise fail fast.
         return self.serialize_deconstructed(path, args, kwargs)
 
 

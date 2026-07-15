@@ -1706,19 +1706,29 @@ class FilePathField(Field):
         # Failure path:
         # - no normalization/expansion errors are introduced here; no filesystem touch in deconstruction.
         if callable(self.path):
-            # FPF-005::O1 (migration-time callable importability gate):
-            # Input: callable `path` object intended for migration serialization.
-            # Branch:
-            # - if callable path can be deconstructed into a stable module-level import path:
-            #     - write callable object into kwargs['path'].
-            #     - allow serializer to emit `module.qualname`.
-            # - else (lambda/nested/locals/other non-importable callable):
-            #     - emit deterministic serialization failure before migration rendering continues.
-            # Failure path:
-            # - do not convert non-importable callable to opaque values (repr/string literal/path token),
-            #   ensuring no generated migration can hide an unreconstructable callable.
-            # Preserve callable path metadata so migration serialization can emit
-            # a stable importable reference.
+            path_name = getattr(self.path, "__name__", None)
+            if path_name == "<lambda>":
+                raise ValueError(
+                    "Cannot serialize FilePathField.path as a lambda because it is not "
+                    "deconstructable for migration generation. Use a module-level "
+                    "callable import path instead."
+                )
+            if path_name is None:
+                raise ValueError(
+                    "Cannot serialize FilePathField.path because it is not a "
+                    "reconstructable function-like callable. Use a module-level "
+                    "callable import path instead."
+                )
+            if getattr(self.path, "__module__", None) in {None, "", "__main__"}:
+                raise ValueError(
+                    "Cannot serialize FilePathField.path because it has no importable module. "
+                    "Use a module-level callable defined in an importable module."
+                )
+            if "<locals>" in getattr(self.path, "__qualname__", ""):
+                raise ValueError(
+                    "Cannot serialize FilePathField.path because it is a local/nested callable. "
+                    "Use a module-level callable with a stable import path."
+                )
             kwargs['path'] = self.path
         elif self.path != '':
             kwargs['path'] = self.path

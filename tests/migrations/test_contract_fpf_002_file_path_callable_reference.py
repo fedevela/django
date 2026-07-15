@@ -143,18 +143,37 @@ class FilePathFieldStringPathMigrationContractTests(SimpleTestCase):
 
 
 class FilePathFieldPathCallableImportabilityContractTests(SimpleTestCase):
-    """FPF-005 migration-locus traceability placeholders."""
+    """FPF-005 migration-locus runtime checks."""
 
     def test_fpf_005_makemigrations_fails_when_path_callable_is_not_importable(self):
         """
         FPF-005 Scenario 1: non-importable callable path must fail deterministically
         during migration serialization.
         """
-        self.assertTrue(True)
+        with self.assertRaisesMessage(ValueError, "deconstructable"):
+            self._serialize_file_path_field(lambda: "dynamic-host-path")
+
+        def make_nested_callable():
+            def nested_path():
+                return "nested-host-path"
+
+            return nested_path
+
+        nested_path = make_nested_callable()
+        with self.assertRaisesMessage(ValueError, "local/nested callable"):
+            self._serialize_file_path_field(nested_path)
 
     def test_fpf_005_no_opaque_path_value_written_for_invalid_callable(self):
         """
         FPF-005 Scenario 2: no fallback opaque migration value is emitted for invalid
         path callables.
         """
-        self.assertTrue(True)
+        def make_nested_callable():
+            def nested_path():
+                return "nested-host-path"
+
+            return nested_path
+
+        path_callable = make_nested_callable()
+        with self.assertRaisesMessage(ValueError, "local/nested callable"):
+            models.FilePathField(path=path_callable).deconstruct()
