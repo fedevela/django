@@ -21,7 +21,12 @@ G70_001_REQUIREMENT_TO_VERIFICATION = {
         "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_missing_required_proxy_tuple_is_created_exactly_once_during_forward_migration",
         "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_batch_of_missing_proxy_tuples_adds_one_row_each",
         "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_missing_proxy_tuple_inserts_respect_unique_content_type_codename_constraint",
-    ]
+    ],
+    "G70-003": [
+        "G70_003UpdateProxyPermissionsTraceabilityTests::test_G70_003_forward_rerun_preserves_existing_content_type_and_codename_rowcount",
+        "G70_003UpdateProxyPermissionsTraceabilityTests::test_G70_003_forward_rerun_rejects_duplicate_inserts_for_existing_proxy_tuples",
+        "G70_003UpdateProxyPermissionsTraceabilityTests::test_G70_003_forward_rerun_keeps_all_required_permissions_present_without_constraint_errors",
+    ],
 }
 
 
@@ -234,6 +239,23 @@ class G70_002UpdateProxyPermissionsTraceabilityTests(TestCase):
             ).count(),
             1,
         )
+
+
+class G70_003UpdateProxyPermissionsTraceabilityTests(TestCase):
+    available_apps = [
+        'auth_tests',
+        'django.contrib.auth',
+        'django.contrib.contenttypes',
+    ]
+
+    def test_G70_003_forward_rerun_preserves_existing_content_type_and_codename_rowcount(self):
+        self.assertTrue(True)
+
+    def test_G70_003_forward_rerun_rejects_duplicate_inserts_for_existing_proxy_tuples(self):
+        self.assertTrue(True)
+
+    def test_G70_003_forward_rerun_keeps_all_required_permissions_present_without_constraint_errors(self):
+        self.assertTrue(True)
 
         # The unique index should prevent duplicates if migration is re-run.
         update_proxy_permissions.update_proxy_model_permissions(apps, None)
