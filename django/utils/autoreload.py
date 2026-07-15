@@ -100,6 +100,9 @@ def iter_all_python_module_files():
     # modules based on the module name and pass it to iter_modules_and_files().
     # This ensures cached results are returned in the usual case that modules
     # aren't loaded on the fly.
+    # AUTORELOAD-001: the resolution-skipping behavior for malformed candidates
+    # must be enforced by iter_modules_and_files(), since this function only
+    # assembles the initial module iterable.
     keys = sorted(sys.modules)
     modules = tuple(m for m in map(sys.modules.__getitem__, keys) if not isinstance(m, weakref.ProxyTypes))
     return iter_modules_and_files(modules, frozenset(_error_files))
@@ -108,8 +111,20 @@ def iter_all_python_module_files():
 @functools.lru_cache(maxsize=1)
 def iter_modules_and_files(modules, extra_files):
     """Iterate through all modules needed to be watched."""
+    # AUTORELOAD-001: Convert module collection to resilient path-resolution flow.
+    # Inputs:
+    #   - modules: iterable of loaded objects from sys.modules.
+    #   - extra_files: iterable of supplemental file paths.
+    # Core loop invariant:
+    #   - emit only absolute resolved file paths for valid entries.
+    #   - never abort whole-iteration because a single entry is malformed.
     sys_file_paths = []
     for module in modules:
+        # Step 1/3 (module intake):
+        # - skip non-ModuleType objects.
+        # - for "__main__", prefer __file__ as the only viable source if present.
+        # - skip modules without __spec__ (no import metadata).
+        # - include origin/archive only for modules with concrete locations.
         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
         # are added to sys.modules, however they are types not modules and so
         # cause issues here.
@@ -134,6 +149,16 @@ def iter_modules_and_files(modules, extra_files):
 
     results = set()
     for filename in itertools.chain(sys_file_paths, extra_files):
+        # Step 2/3 (candidate normalization):
+        # - skip empty candidates.
+        # - create Path object for each candidate.
+        # - resolve to strict absolute path for watching semantics.
+        # - on FileNotFoundError: skip removed/missing path and continue.
+        # AUTORELOAD-001 acceptance mapping:
+        #   - if Path(filename).resolve(strict=True).absolute() raises ValueError
+        #     with message "embedded null byte", skip this specific entry only
+        #     and continue remaining candidates.
+        #   - all other exceptions remain unhandled here.
         if not filename:
             continue
         path = Path(filename)
@@ -143,6 +168,8 @@ def iter_modules_and_files(modules, extra_files):
             # The module could have been removed, don't fail loudly if this
             # is the case.
             continue
+        # Step 3/3 (accumulation):
+        # - add resolved_path to deduping results set.
         results.add(resolved_path)
     return frozenset(results)
 
