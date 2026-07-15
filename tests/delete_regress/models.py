@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.contenttypes.fields import (
     GenericForeignKey, GenericRelation,
 )
@@ -141,3 +143,13 @@ class OrderedPerson(models.Model):
 
     class Meta:
         ordering = ['name']
+
+
+class DeletionTracebook(models.Model):
+    """No-dependency model using Django default AutoField PK."""
+
+
+class DeletionTraceUUID(models.Model):
+    """No-dependency model using non-default UUID primary key."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

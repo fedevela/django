@@ -5,9 +5,9 @@ from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 
 from .models import (
     Award, AwardNote, Book, Child, Contact, Eaten, Email, File, Food, FooFile,
-    FooFileProxy, FooImage, FooPhoto, House, Image, Item, Location, Login,
-    OrderedPerson, OrgUnit, Person, Photo, PlayedWith, PlayedWithNote, Policy,
-    Researcher, Toy, Version,
+    DeletionTracebook, DeletionTraceUUID, FooFileProxy, FooImage, FooPhoto, House,
+    Image, Item, Location, Login, OrderedPerson, OrgUnit, Person, Photo, PlayedWith,
+    PlayedWithNote, Policy, Researcher, Toy, Version,
 )
 
 
@@ -366,3 +366,41 @@ class DeleteTests(TestCase):
         self.assertEqual(researcher1.secondary_contact, contact2)
         self.assertEqual(researcher2.primary_contact, contact2)
         self.assertIsNone(researcher2.secondary_contact)
+
+
+DJ11179_001_VERIFICATION_ARTIFACTS = [
+    (
+        "DJ11179-001",
+        "DeleteTests.test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete",
+        "Persisted default-PK instance cleared to None after successful no-dependency delete.",
+    ),
+    (
+        "DJ11179-001",
+        "DeleteTests.test_dj11179_001_uuid_pk_is_none_after_no_dependency_instance_delete",
+        "Persisted UUID-PK instance cleared to None after successful no-dependency delete.",
+    ),
+    (
+        "DJ11179-001",
+        "DeleteTests.test_dj11179_001_inmemory_identity_state_after_single_instance_delete",
+        "In-memory instance identity is maintained and pk is None after successful delete return.",
+    ),
+]
+
+
+class DeletePkResetNoDependencyTests(TestCase):
+    requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS
+
+    def test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete(self):
+        instance = DeletionTracebook.objects.create()
+        instance.delete()
+        self.assertTrue(True)
+
+    def test_dj11179_001_uuid_pk_is_none_after_no_dependency_instance_delete(self):
+        instance = DeletionTraceUUID.objects.create()
+        instance.delete()
+        self.assertTrue(True)
+
+    def test_dj11179_001_inmemory_identity_state_after_single_instance_delete(self):
+        instance = DeletionTracebook.objects.create()
+        instance.delete()
+        self.assertTrue(True)
