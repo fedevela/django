@@ -22,6 +22,12 @@ Requirement-to-architecture map
   - pressure R2: pre-existing legacy ``auth_permission`` rows from those upgrade paths must not cause migration failure.
   - pressure R3: migration success must hold for same-app-label and different-app-label recreated-proxy transitions.
   - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_004.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
+- G70-005 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
+  - pressure A1: each proxy model’s workflow is keyed by that model’s resolved concrete/proxy ``ContentType`` pair and permission ``codename``.
+  - pressure A2: missing/renamed tuple operations must never read, update, or create outside the active tuple key.
+  - pressure A3: same ``codename`` on different ``(content_type_id, codename)`` keys must never cross-pollute state.
+  - pressure A4: same-app-label and different-app-label proxy pairs with shared codenames remain isolated by resolved content type.
+  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_005.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
 
 File and module placement decisions
 ----------------------------------
@@ -31,6 +37,7 @@ File and module placement decisions
 - Keep test mapping and scenario coverage in ``tests/auth_tests`` as the verification boundary.
 - Keep rerun-idempotency as a forward-loop execution policy; no new control-plane module is introduced.
 - Keep recreated-proxy resilience handling inside the existing per-tuple loop, with no new abstraction layer.
+- Keep ``G70-005`` isolation as data-local policy inside the existing proxy loop; no cross-loop caches or shared staging state.
 
 Ownership and boundaries
 ------------------------
@@ -71,6 +78,13 @@ Interface and contract artifacts
   - Any ``IntegrityError`` in update/create paths means the required key is already satisfied and migration continues.
 - Contract C12 (upgrade-route parity):
   - The same tuple policy applies regardless of whether recreated-proxy transitions share or change app labels.
+- Contract C13 (per-model tuple key binding):
+  - For each proxy model, bind ``resolved_content_type`` pairs:
+    ``concrete_content_type = CT(Model, for_concrete_model=True)`` and
+    ``proxy_content_type = CT(Model, for_concrete_model=False)``.
+  - For each codename, policy operations must execute only on ``(content_type_id, codename)`` keys derived from those resolved models.
+- Contract C14 (cross-model codename safety):
+  - Two proxy models can share a codename only if their resolved ``content_type_id`` differs; contracts require that no operation crosses to another key by using both fields in every filter.
 
 Dependency-direction notes
 -------------------------
@@ -85,6 +99,9 @@ Dependency-direction notes
   - duplicate-key or pre-existing-key branches must not alter rowcount state, only transition control locally.
 - G70-004 dependency direction:
   - no new imports, services, or cross-app call sites; legacy-row outcomes are consumed locally by the tuple gate and collision handler.
+- G70-005 dependency direction:
+  - key derivation from ``for_concrete_model=True/False`` must feed every permission query and write in that model iteration.
+  - no data from sibling proxy model iterations is referenced in key transitions, writes, or collision handling.
 - No new cross-app imports beyond existing historical model access.
 
 Integration-seam skeletons
@@ -99,6 +116,7 @@ Integration-seam skeletons
 - Seam S7: integrity collision sink mapped to tuple-local completion (``DONE_ALREADY_PRESENT``).
 - Seam S8: legacy target presence branch for recreated-proxy rows.
 - Seam S9: non-disruptive collision recovery for mixed historical states in ``G70-004``.
+- Seam S10: per-proxy resolved key binding for ``(old_content_type, new_content_type, codename)`` transitions.
 
 Seam-to-contract mapping
 ------------------------
@@ -110,7 +128,13 @@ Seam-to-contract mapping
 - S7 -> C4, C7
 - S8 -> C10, C12
 - S9 -> C11, C12
+- S10 -> C13, C14
 - C9 is satisfied when S1 returns pre-existing for all required tuples or S5/S4 ensure one-time materialization.
+- G70-005 obligations:
+  - A1 isolation -> C13
+  - A2 boundary -> C14, S10
+  - A3 no cross-pollution -> C14, C13
+  - A4 app-label variants -> C13, C14, S10
 
 Traceability and completeness check
 ----------------------------------
@@ -127,6 +151,9 @@ Traceability and completeness check
 - ``G70-004`` obligation 1 (legacy 2.0.13/2.1.8 upgrade completes without manual cleanup) -> C10, C11, S1, S7
 - ``G70-004`` obligation 2 (preexisting proxy rows are accepted) -> C10, S8
 - ``G70-004`` obligation 3 (same-app-label and different-app-label scenarios remain valid) -> C12, S8, S9
+- ``G70-005`` obligation 1 (proxy updates are resolved by each model’s content type + codename) -> C13, S10
+- ``G70-005`` obligation 2 (same-app-label and different-app-label proxy models are independent) -> C13, C14, S1, S10
+- ``G70-005`` obligation 3 (shared codenames across models do not overwrite each other) -> C14, S1, S10
 
 Completion status
 ----------------
