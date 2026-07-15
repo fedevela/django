@@ -89,33 +89,14 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
     def __init__(self, application):
         self.application = application
         self.base_url = urlparse(self.get_base_url())
-        # ASGI-001: Deterministic initialization requirement:
-        # - ensure static-handler has an async response invocation path available
-        #   and registered before handling the first request.
-        # - this is currently the owning artifact point for resolving the failure
-        #   mode where ASGI pipeline dereferences None.
+        # Static middleware intentionally reuses the app-level middleware chain.
+        # Keep this no-op placeholder to match the StaticFilesHandler mixin API.
+        super().__init__()
 
     # ASGI-001 trace map -> tests:
     # - ASGIStaticFilesHandler.get_response_async_resolves_to_callable
     # - ASGIStaticFilesHandler_dispatch_invokes_resolved_async_callable_once
     async def __call__(self, scope, receive, send):
-        # ASGI-001: Async dispatch decision + call target obligations.
-        # Inputs:
-        # - scope['type']: expected to be "http" for request handling
-        # - scope['path']: candidate path for static file match
-        # - self._should_handle(scope['path']): static path predicate
-        #
-        # Control flow:
-        # 1) Only HTTP scopes participate.
-        # 2) If HTTP + static path:
-        #    a) The static dispatch path must go through an async response
-        #       callable (`self.get_response_async`) and be awaited once.
-        #    b) `await super().__call__(scope, receive, send)` executes that path.
-        # 3) Else:
-        #    a) delegate to wrapped downstream app exactly once.
-        # Error/failure paths:
-        # - if the resolved response callable is not callable/awaitable, fail in
-        #   ASGIHandler.__call__ with the NoneType callable pathway.
         # Only even look at HTTP requests
         if scope['type'] == 'http' and self._should_handle(scope['path']):
             # Serve static content
@@ -124,13 +105,11 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
         # Hand off to the main app
         return await self.application(scope, receive, send)
 
-    # ASGI-001:
-    # get_response_async (to be implemented in the next phase) is the required
-    # async callable slot that ASGIHandler.__call__ invokes.
-    # Pseudocode contract to encode during implementation:
-    # async def get_response_async(request):
-    #   # 1) Build/obtain request-bound context for static dispatch.
-    #   # 2) Resolve static response by delegating to self.get_response(request).
-    #   # 3) Ensure the result is an HttpResponse instance and return it.
-    #   # 4) Preserve single await boundary (exactly one invocation for this
-    #      request in __call__ route).
+    async def get_response_async(self, request):
+        """
+        ASGI dispatch path for static files.
+
+        This bypasses middleware resolution so this handler always returns a
+        concrete HttpResponse for static paths instead of resolving a URL view.
+        """
+        return self.get_response(request)
