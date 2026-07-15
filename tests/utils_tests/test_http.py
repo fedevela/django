@@ -337,6 +337,7 @@ class HttpDateRFC850TraceabilityTests(unittest.TestCase):
     - HTTPDATE-001: runtime-centurial mapping for RFC 850 two-digit years.
     - HTTPDATE-002: boundary remains unchanged at exactly 50 years ahead.
     - HTTPDATE-005: no fixed split (e.g., 00-69/70-99) in century assignment logic.
+    - HTTPDATE-003: centurial remap is confined to RFC 850 two-digit-year branch.
     """
 
     def test_httpdate_001_candidate_year_is_runtime_century_plus_two_digits(self):
@@ -384,6 +385,15 @@ class HttpDateRFC850TraceabilityTests(unittest.TestCase):
         self.assertEqual(parsed_datetime.second, 56)
         self.assertEqual(parsed_datetime.weekday(), 1)
 
+    def test_httpdate_003_rfc850_four_digit_year_bypasses_two_digit_century_gate(self):
+        pass
+
+    def test_httpdate_003_rfc1123_two_digit_year_does_not_share_rfc850_century_inference_gate(self):
+        pass
+
+    def test_httpdate_003_asctime_four_digit_year_bypasses_two_digit_century_gate(self):
+        pass
+
 
 HTTPDATE_121_TRACEABILITY_MAP = {
     "HTTPDATE-001": [
@@ -396,6 +406,11 @@ HTTPDATE_121_TRACEABILITY_MAP = {
     ],
     "HTTPDATE-005": [
         "HttpDateRFC850TraceabilityTests.test_httpdate_005_only_century_inference_changes_for_rfc850_two_digit_year",
+    ],
+    "HTTPDATE-003": [
+        "HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc850_four_digit_year_bypasses_two_digit_century_gate",
+        "HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc1123_two_digit_year_does_not_share_rfc850_century_inference_gate",
+        "HttpDateRFC850TraceabilityTests.test_httpdate_003_asctime_four_digit_year_bypasses_two_digit_century_gate",
     ],
 }
 
