@@ -56,6 +56,27 @@ def check_setting_languages_bidi(app_configs, **kwargs):
 def check_language_settings_consistent(app_configs, **kwargs):
     """Error if language settings are not consistent with each other."""
     available_tags = {i for i, _ in settings.LANGUAGES} | {'en-us'}
+
+    # GEV-001 (pseudocode obligation):
+    # INPUT:
+    #   LANGUAGE_CODE = settings.LANGUAGE_CODE
+    #   AVAILABLE_TAGS = {tag for (tag, _name) in settings.LANGUAGES} ∪ {'en-us'}
+    #   BASE_LANGUAGE = substring before the first '-' in LANGUAGE_CODE.
+    # DECISION FLOW:
+    #   1) IF LANGUAGE_CODE is empty or malformed, do not consume this pseudocode path;
+    #      defer to `check_setting_language_code` for validation errors.
+    #   2) IF LANGUAGE_CODE is in AVAILABLE_TAGS -> consistent (pass).
+    #   3) IF LANGUAGE_CODE is not in AVAILABLE_TAGS:
+    #        a) IF BASE_LANGUAGE ≠ LANGUAGE_CODE AND BASE_LANGUAGE is in AVAILABLE_TAGS
+    #           -> accept as regional fallback (pass), do not emit E004.
+    #        b) OTHERWISE -> emit [E004].
+    #   4) ELSE -> pass.
+    # FAILURE PATH:
+    #   - only non-passthrough case is branch 3.b, which returns [E004].
+    # SCENARIOS:
+    #   - S1: LANGUAGE_CODE='de-at', LANGUAGES=[('de','German')] => base 'de' present -> no E004.
+    #   - S2: LANGUAGE_CODE='fr-ca', LANGUAGES=[('fr','French')] => base 'fr' present -> no E004.
+
     if settings.LANGUAGE_CODE not in available_tags:
         return [E004]
     return []
