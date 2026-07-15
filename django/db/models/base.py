@@ -946,6 +946,17 @@ class Model(metaclass=ModelBase):
         # - Mapping: flatten field choices and return mapped label for current value.
         # - Failure path: when mapping is missing, fall back to the raw value (including invalid/unknown values).
         # - Output: coerce mapped or fallback value to string via `force_str(..., strings_only=True)`.
+        # REQ-138-005 form+template parity mapping:
+        # - Input state for both call paths:
+        #   - `self` is model instance with `field.attname` and `field.flatchoices`.
+        # - BRANCH:
+        #   - If `field.flatchoices` has exact key match for stored value:
+        #       emit corresponding mapped label.
+        #   - Else:
+        #       emit stored value unchanged (raw instance state).
+        # - OUTPUT CONTRACT:
+        #   - Deterministic, per-instance label source for non-override path.
+        #   - Return type must stay stringified/None-preserving as today.
         value = getattr(self, field.attname)
         return force_str(dict(field.flatchoices).get(value, value), strings_only=True)
 

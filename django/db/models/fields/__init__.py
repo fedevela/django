@@ -789,6 +789,22 @@ class Field(RegisterLookupMixin):
             # 4) Failure path:
             #    - if generated path is unreachable because either explicit/helper
             #      exists, class constructor leaves that behavior untouched.
+            # REQ-138-005: display helper resolution contract for parity artifacts.
+            # - INPUT:
+            #   - model class `cls` with field name-based helper target
+            #     `display_name = get_<field>_display`.
+            # - STATE:
+            #   - explicit implementation may exist in `cls.__dict__`
+            #   - implementation may exist in ancestor MRO via `hasattr(cls, ...)`
+            #   - no implementation anywhere.
+            # - TRANSITION:
+            #   - IF in `cls.__dict__`: keep explicit local method; no synthesis.
+            #   - ELIF inherited/ancestor method exists: keep inherited method;
+            #     no synthesis.
+            #   - ELSE: install partialmethod(cls._get_FIELD_display, field=self).
+            # - OUTPUT:
+            #   - runtime callable at instance level that resolves to:
+            #     explicit user override when present, generated fallback otherwise.
             display_name = 'get_%s_display' % self.name
             # REQ-138-002: generated helper behavior for non-overridden methods
             # remains unchanged (lookup through `_get_FIELD_display`, fallback raw).

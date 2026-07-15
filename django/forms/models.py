@@ -90,6 +90,13 @@ def model_to_dict(instance, fields=None, exclude=None):
             continue
         if exclude and f.name in exclude:
             continue
+        # REQ-138-005: seeded form data must preserve instance-based state.
+        # - INPUT: editable field descriptor `f` and concrete instance.
+        # - ACTION: `data[f.name] = f.value_from_object(instance)`.
+        # - OUTPUT:
+        #   - raw persisted value used for form initialisation.
+        #   - downstream rendering/selection paths must apply the same
+        #     fallback/override contract as direct model accessor calls.
         data[f.name] = f.value_from_object(instance)
     return data
 
@@ -290,6 +297,12 @@ class BaseModelForm(BaseForm):
             object_data = {}
         else:
             self.instance = instance
+            # REQ-138-005: form-flow display consistency checkpoint.
+            # - INPUT: model `instance`, selected field include/exclude.
+            # - TRANSITION: build `object_data` from `model_to_dict`.
+            # - POSTCONDITION:
+            #   - all values entering form state are sampled from the same
+            #     instance-resolution path used by instance method calls.
             object_data = model_to_dict(instance, opts.fields, opts.exclude)
         # if initial was provided, it should override the values from instance
         if initial is not None:

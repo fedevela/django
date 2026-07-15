@@ -854,6 +854,18 @@ class Variable:
                     elif getattr(current, 'alters_data', False):
                         current = context.template.engine.string_if_invalid
                     else:
+                        # REQ-138-005 template-resolution parity:
+                        # - INPUT: resolved attribute `current` for lookup token `bit`.
+                        # - DECISION:
+                        #   - if method must not run in templates -> return placeholder.
+                        #   - if method declares side effects (`alters_data`) -> return placeholder.
+                        #   - otherwise attempt zero-argument invocation.
+                        # - OUTPUT:
+                        #   - on success, return method result (same as direct model method call path).
+                        #   - on call signature mismatch, return `string_if_invalid`.
+                        # - FAILURE PATH:
+                        #   - if this exception is `silent_variable_failure`, fallback
+                        #     placeholder; else propagate for debug/trace.
                         try:  # method call (assuming no args required)
                             current = current()
                         except TypeError:
