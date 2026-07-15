@@ -125,6 +125,21 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
+        # MED-001 logic:
+        # - Goal: compute a deterministic merged JS order that is dependency-valid
+        #   for identical compositions, and avoid spurious conflict warnings
+        #   in non-conflicting cases.
+        # 1) Initialize output state:
+        #    - combined_list starts as a copy of list_1.
+        #    - last_insert_index starts at end of list_1.
+        # 2) Process each path in list_2 from right to left:
+        #    - If path is missing in combined_list, insert it at last_insert_index.
+        #    - If path exists in combined_list:
+        #         * if existing index > last_insert_index, emit
+        #           MediaOrderConflictWarning (reverse pair order).
+        #         * always move last_insert_index to existing index so earlier
+        #           elements from list_2 are forced before this anchor.
+        # 3) Return combined_list as the merged deterministic order.
         # Start with a copy of list_1.
         combined_list = list(list_1)
         last_insert_index = len(list_1)
@@ -158,6 +173,13 @@ class Media:
 
 def media_property(cls):
     def _media(self):
+        # MED-001 logic:
+        # - Resolve inherited class-level media as explicit precedence chain:
+        #   1) start from superclass media if present, else default Media().
+        #   2) apply class Media declaration by extend policy.
+        #   3) combine base and local media with Media.__add__.
+        # - This defines the canonical order foundations before widget instance
+        #   merges are applied by field-form composition.
         # Get the media property of the superclass, if it exists
         sup_cls = super(cls, self)
         try:
@@ -870,6 +892,13 @@ class MultiWidget(Widget):
         Media for a multiwidget is the combination of all media of the
         subwidgets.
         """
+        # MED-001 logic:
+        # - Aggregate subwidget media in declaration order.
+        # - Start with empty Media accumulator.
+        # - For each subwidget, merge previous accumulator with subwidget.media
+        #   using Media.__add__, preserving each subwidget's relative order.
+        # - Return final merged media; same input sequence yields same output
+        #   and no extra side effects.
         media = Media()
         for w in self.widgets:
             media = media + w.media

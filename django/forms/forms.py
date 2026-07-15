@@ -454,6 +454,23 @@ class BaseForm:
     @property
     def media(self):
         """Return all media required to render the widgets on this form."""
+        # MED-001 logic:
+        # - Compute media per form evaluation with deterministic pass over
+        #   self.fields.values() (declaration-preserving order).
+        # - Start with empty Media accumulator.
+        # - For each field in order, merge current accumulator with field.widget.media
+        #   via Media.__add__.
+        # - Return merged media.
+        #
+        # Scenario 1 trace:
+        #   For ColorPicker + SimpleTextWidget + FancyTextWidget in MyForm,
+        #   this aggregation path must produce JS equivalent to:
+        #   ['text-editor.js', 'text-editor-extras.js', 'color-picker.js'].
+        #
+        # Scenario 2 trace:
+        #   The property is pure, read-only composition; repeated access in one
+        #   process repeats identical merges and must keep sequence and warning
+        #   count stable.
         media = Media()
         for field in self.fields.values():
             media = media + field.widget.media
