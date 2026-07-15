@@ -1,0 +1,74 @@
+Duplicate Table Collision Architecture (Issue DJANGO11630)
+=======================================================
+
+Requirement-to-architecture map
+------------------------------
+- DJANGO11630-001: place collision key derivation at check time in
+  ``django/core/checks/model_checks.py`` so grouping key is an explicit
+  architectural contract: ``(effective_db_alias, db_table)``.
+- DJANGO11630-002: keep ``models.E028`` hard-failure in
+  ``check_all_models`` when multiple managed concrete models share one
+  collision key.
+- DJANGO11630-003: keep collision buckets separated by alias, so same table name
+  across different aliases does not share a bucket.
+- DJANGO11630-004: enforce default alias fallback policy at the boundary where
+  the effective alias is resolved.
+- DJANGO11630-006: preserve existing managed/non-proxy/same-app-or-same-label
+  semantics by applying new alias-aware grouping to the existing filter and
+  erroring path.
+
+Topology and ownership
+----------------------
+- Owner: ``check_all_models`` in ``django/core/checks/model_checks.py``
+  owns duplicate-table collision validation.
+- Caller boundary: system check execution through
+  ``@override_system_checks([checks.model_checks.check_all_models])`` in test
+  modules and any check-dispatch path that triggers ``Tags.models``.
+- Downstream modules:
+  - ``tests/check_framework/test_model_checks.py`` exercises contract behavior.
+  - ``django/core/checks/registry.py`` owns registration/discovery but stays
+    unchanged.
+
+Contract and type seams
+-----------------------
+1. **Collision key contract**
+   - Key type: tuple ``(effective_db_alias, db_table)`` where
+     ``effective_db_alias`` is a resolved routing alias string.
+   - Value type: ordered list of model labels participating in the bucket.
+2. **Alias-resolve seam**
+   - Introduce a helper in ``django/core/checks/model_checks.py`` (or equivalent)
+     with contract:
+     ``resolve_effective_alias(model) -> str``.
+   - Must return ``'default'`` when routing decision is missing/``None``.
+3. **Failure seam**
+   - Emit ``models.E028`` only for buckets with cardinality > 1.
+
+Dependency direction
+--------------------
+- ``model_checks`` depends on:
+  - ``django.apps`` for model enumeration.
+  - ``django.core.checks`` for ``Error``.
+  - router module for alias resolution (directed dependency from checks layer to
+    routing API).
+- ``tests`` depends on ``django.core.checks`` and the ``check_all_models`` contract.
+
+Implementation boundaries and adaptation points
+---------------------------------------------
+- Keep E028 emission and non-duplicate checks in the existing loop over
+  ``db_table_models`` buckets; do not alter index/constraint validation paths.
+- Replace bucket key currently based only on ``db_table`` with an alias-aware
+  collision key.
+- Preserve deterministic behavior for existing same-app/same-label expectations by
+  retaining current concrete+managed filtering and check-time error emission shape.
+- Keep fallback behavior explicit at the seam: unresolved/unspecified routing
+  yields ``default`` and therefore participates in collisions with other default
+  scoped models.
+
+Architectural readiness checklist
+--------------------------------
+- Requirement-to-architecture mapping complete for all IDs listed in the issue.
+- Module boundaries, ownership, and dependencies are explicit.
+- A dedicated architecture artifact was added and updated with requirement IDs and
+  integration seams.
+- The next phase can implement runtime logic in ``check_all_models`` by swapping
+  key composition and resolving the alias seam.
