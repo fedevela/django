@@ -67,6 +67,18 @@ class Command(BaseCommand):
         return apps.get_app_configs()
 
     def _find_invalid_unique_constraint_fields(self, app_labels):
+        # DJANGO12856-003: deterministic aggregation path for UniqueConstraint field checks.
+        # Inputs:
+        # - app_labels (possibly empty => all apps).
+        # - per-app model listings from `apps`.
+        # Ordered flow:
+        # 1) resolve ordered app configs through _iter_app_configs_for_constraints(app_labels).
+        # 2) iterate app configs in that deterministic order.
+        # 3) for each model in app_config.get_models(), call model._check_unique_constraint_fields().
+        # 4) append errors in model/field traversal order (stable across runs).
+        # Output contract:
+        # - each models.E012-family error keeps full model context (model class) and
+        #   per-constraint context established by model-level check.
         errors = []
         for app_config in self._iter_app_configs_for_constraints(app_labels):
             for model in app_config.get_models():

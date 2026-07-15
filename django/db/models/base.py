@@ -1691,6 +1691,36 @@ class Model(metaclass=ModelBase):
     @classmethod
     def _check_unique_constraint_fields(cls):
         """Validate local-field references used by `UniqueConstraint` entries."""
+        # DJANGO12856-003: deterministic per-constraint/per-model invalid-field trace.
+        # Inputs:
+        # - cls: model currently being validated.
+        # - ordered constraints in cls._meta.constraints (class-defined order).
+        # Flow:
+        # 1) initialize `errors = []`.
+        # 2) for each `constraint` in cls._meta.constraints:
+        #    a) continue only for `UniqueConstraint` instances.
+        #    b) bind `constraint_name = constraint.name` and constraint identity.
+        #    c) resolve `constraint.fields` in declaration order.
+        #    d) for each `field_name` in that tuple, map `cls._check_local_fields` result.
+        #    e) enrich each invalid-field error output with:
+        #       - model context (`cls` / model name),
+        #       - constraint context (`constraint_name`),
+        #       - stable sequence index for this field within this constraint.
+        # 3) append local-field errors in order produced for each field.
+        # 4) return `errors`.
+        # Branch and failure mapping:
+        # - IF constraint is not UniqueConstraint -> no output, proceed.
+        # - IF _check_local_fields emits models.E012 for field_name -> keep error
+        #   bound to that constraint and this model.
+        # - IF multiple constraints each have invalid fields -> messages remain grouped
+        #   by model, then by constraint, then by field declaration order.
+        # Scenario mapping:
+        # - 1) two invalid fields across two constraints: two explicit outputs
+        #   identify same model and distinct constraint name.
+        # - 2) one constraint, many invalid fields: each field output emitted once,
+        #   deterministic by field iteration order.
+        # - 3) repeated validations: same constraints/fields produce identical
+        #   emission order because source containers are ordered lists/tuples.
         errors = []
         for constraint in cls._meta.constraints:
             if isinstance(constraint, UniqueConstraint):
