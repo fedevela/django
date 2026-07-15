@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import SimpleTestCase
 from django.http import HttpResponse
 
@@ -47,10 +49,36 @@ class HttpResponseBaselineInputTraceabilityTests(SimpleTestCase):
     """
 
     def test_memview_003_scenario1_string_constructor_preserves_bytes_payload_identity(self):
-        self.assertTrue(True)
+        response = HttpResponse("My Content")
+
+        self.assertIsInstance(response.content, bytes)
+        self.assertEqual(response.content, b"My Content")
 
     def test_memview_003_scenario2_bytes_constructor_preserves_bytes_payload_identity(self):
-        self.assertTrue(True)
+        payload = b"My Content"
+        response = HttpResponse(payload)
+        payload_identity = response.content
+
+        self.assertIsInstance(payload_identity, bytes)
+        self.assertEqual(payload_identity, payload)
+        self.assertEqual(payload_identity, b"My Content")
 
     def test_memview_003_scenario3_no_memoryview_specific_branch_for_string_inputs(self):
-        self.assertTrue(True)
+        payload = "My Content"
+        with patch.object(HttpResponse, "make_bytes", wraps=HttpResponse.make_bytes) as make_bytes:
+            response = HttpResponse(payload)
+            self.assertEqual(response.content, b"My Content")
+            self.assertEqual(make_bytes.call_count, 1)
+            _, ctor_value = make_bytes.call_args.args
+            self.assertIs(ctor_value, payload)
+
+        utf16_payload = "Unicode: Ω"
+        with patch.object(HttpResponse, "make_bytes", wraps=HttpResponse.make_bytes) as make_bytes:
+            response = HttpResponse(
+                utf16_payload,
+                content_type="text/plain; charset=utf-16",
+            )
+            self.assertEqual(response.content, utf16_payload.encode("utf-16"))
+            self.assertEqual(make_bytes.call_count, 1)
+            _, ctor_value = make_bytes.call_args.args
+            self.assertIs(ctor_value, utf16_payload)
