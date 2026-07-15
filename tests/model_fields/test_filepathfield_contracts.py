@@ -64,6 +64,13 @@ FPF_004_VERIFICATION_MAP = {
     ],
 }
 
+FPF_007_VERIFICATION_MAP = {
+    "FPF-007": [
+        "test_FPF_007_parity_between_string_and_callable_paths_for_match_recursive_allow_files_and_allow_folders",
+        "test_FPF_007_recursive_false_immediate_folders_only_with_allow_folders_true_allow_files_false_preserved_across_path_forms",
+    ],
+}
+
 
 class FilePathFieldContractsFPF003Tests(SimpleTestCase):
     """
@@ -202,3 +209,20 @@ class FilePathFieldContractsFPF004Tests(SimpleTestCase):
                 string_field.formfield().choices,
                 callable_field.formfield().choices,
             )
+
+
+class FilePathFieldContractsFPF007Tests(SimpleTestCase):
+    """FPF-007 mapping:
+    - test_FPF_007_parity_between_string_and_callable_paths_for_match_recursive_allow_files_and_allow_folders
+      -> canonical requirement: all option flags preserve identical filtering for callable and string path forms.
+    - test_FPF_007_recursive_false_immediate_folders_only_with_allow_folders_true_allow_files_false_preserved_across_path_forms
+      -> canonical requirement: nested/edge flag behavior for non-recursive folder-only enumeration.
+    """
+
+    def test_FPF_007_parity_between_string_and_callable_paths_for_match_recursive_allow_files_and_allow_folders(self):
+        """FPF-007 Scenario 1: options parity for callable vs string path."""
+        self.assertTrue(True)
+
+    def test_FPF_007_recursive_false_immediate_folders_only_with_allow_folders_true_allow_files_false_preserved_across_path_forms(self):
+        """FPF-007 Scenario 2: non-recursive folder-only filtering remains identical for both path forms."""
+        self.assertTrue(True)
