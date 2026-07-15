@@ -1,0 +1,60 @@
+REQ-138-001 — model-defined `get_<field>_display()` precedence
+=============================================================
+
+Requirement
+-----------
+- REQ-138-001: For model fields with `choices`, a user-defined
+  `get_<field>_display()` on the model class must take precedence over any
+  framework-generated helper for every runtime call path.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-001 -> `django/db/models/fields/__init__.py`
+  - `Field.contribute_to_class()` owns the generated binding decision point.
+  - Placement pressure: install helper only when model namespace does not own
+    `get_<field>_display`.
+- REQ-138-001 -> `django/db/models/base.py`
+  - `Model._get_FIELD_display()` owns fallback value resolution.
+  - Placement pressure: remain a pure fallback path (`value -> flatchoices ->
+    force_str`), never the first-line resolver.
+- REQ-138-001 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - traceability artifact for obligations and expected verification points.
+
+Ownership boundaries
+--------------------
+- Field definition boundary (`Field.contribute_to_class`)
+  - Owns class-namespace mutation for display helper exposure.
+  - Decides whether generated helper is attached.
+- Model behavior boundary (`Model._get_FIELD_display`)
+  - Owns canonical fallback logic when no custom namespace method exists.
+  - Depends on field metadata (`field.attname`, `field.flatchoices`) and
+    serialization helper (`force_str`).
+- Verification boundary (`tests/model_fields/test_req138_001_display_overrides.py`)
+  - Owns obligation identifiers and test entrypoints
+    (`REQ_ID_TO_VERIFICATION`) until concrete assertions are added.
+
+Dependency direction
+--------------------
+1. Model field declaration -> `Field.contribute_to_class()`
+2. `Field.contribute_to_class()` -> `Model` class namespace (method binding edge)
+3. Runtime direct call / template expression -> normal Python attribute resolution
+4. Missing override case -> `Model._get_FIELD_display()` fallback edge
+
+Integration seams / contracts
+-----------------------------
+- Seam A (installation seam): class-attribute method binding in
+  `Field.contribute_to_class`.
+  - Upstream contract: model class already prepared and has field metadata.
+  - Downstream contract: helper names are `get_<field>_display`.
+- Seam B (resolution seam): runtime method dispatch.
+  - Upstream contract: call site resolves `get_<field>_display` on model instance.
+  - Downstream contract: user-defined method executes when present;
+    framework helper executes only as fallback.
+- Seam C (fallback contract): `Model._get_FIELD_display` with `field.flatchoices`.
+
+Architecture readiness check
+---------------------------
+- Every traced obligation has a structural home.
+- Dependency direction is explicit and acyclic for this feature: namespace ownership
+  is decided during class contribution; runtime only consumes that decision.
+- Traceability is preserved through `REQ-138-001` references in all three artifacts.
