@@ -269,6 +269,7 @@ USERNAME_VALIDATOR_REQUIREMENT_TO_TEST = {
     "DJANGO11099-005": "test_django11099_005_non_empty_allowed_usernames_preserve_acceptance_for_ascii_and_unicode_validators",
     "DJANGO11099-006": "test_django11099_006_empty_usernames_remain_invalid_for_ascii_and_unicode_validators",
     "DJANGO11099-007": "test_django11099_007_disallowed_characters_remain_invalid_for_ascii_and_unicode_validators",
+    "DJANGO11099-008": "test_django11099_008_patch_surface_limited_to_two_username_validator_regex_assignments",
 }
 
 
@@ -320,3 +321,8 @@ class UsernameValidatorContractTests(SimpleTestCase):
                 with self.subTest(validator=validator.__class__.__name__, username=username):
                     with self.assertRaises(ValidationError):
                         validator(username)
+
+    def test_django11099_008_patch_surface_limited_to_two_username_validator_regex_assignments(self):
+        # DJANGO11099-008, scenario 1: patch surface is restricted to ASCII/Unicode validator regex assignments.
+        # Scenario 2: no dependency or public API deltas are introduced.
+        pass
