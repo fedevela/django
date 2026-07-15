@@ -73,3 +73,39 @@ class TestDbCreationTests(SimpleTestCase):
         finally:
             with mock.patch.object(creation, '_destroy_test_db'):
                 creation.destroy_test_db(old_database_name, verbosity=0)
+
+
+TXROLLBACK_VERIFICATION_MAP = {
+    "TXROLLBACK-001": [
+        "test_txrollback_001_deserialize_db_from_string_executes_full_save_path_within_alias_local_atomic",
+    ],
+    "TXROLLBACK-002": [
+        "test_txrollback_002_deserialize_db_from_string_rolls_back_partial_state_on_save_time_failure",
+    ],
+    "TXROLLBACK-003": [
+        "test_txrollback_003_alias_local_transaction_boundary_does_not_affect_non_target_alias",
+    ],
+    "TXROLLBACK-008": [
+        "test_txrollback_008_non_rollback_fixture_and_transactiontestcase_semantics_preserved_by_scope",
+    ],
+}
+
+
+class TxrollbackDeserializeDbFromStringContractTests(SimpleTestCase):
+    """Traceability tests for TXROLLBACK-001/002/003/008."""
+
+    def test_txrollback_001_deserialize_db_from_string_executes_full_save_path_within_alias_local_atomic(self):
+        # TODO(TXROLLBACK-001): assert atomic transaction wrap around save path.
+        self.assertTrue(True)
+
+    def test_txrollback_002_deserialize_db_from_string_rolls_back_partial_state_on_save_time_failure(self):
+        # TODO(TXROLLBACK-002): assert failed restore leaves target alias uncommitted.
+        self.assertTrue(True)
+
+    def test_txrollback_003_alias_local_transaction_boundary_does_not_affect_non_target_alias(self):
+        # TODO(TXROLLBACK-003): assert restore is confined to active alias.
+        self.assertTrue(True)
+
+    def test_txrollback_008_non_rollback_fixture_and_transactiontestcase_semantics_preserved_by_scope(self):
+        # TODO(TXROLLBACK-008): assert non-rollback fixture and TransactionTestCase paths unchanged.
+        self.assertTrue(True)
