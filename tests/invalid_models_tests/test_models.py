@@ -1533,7 +1533,8 @@ class ConstraintFieldReferenceTraceabilityTests(SimpleTestCase):
 
         self.assertEqual(Model.check(), [
             Error(
-                "'constraints' refers to the nonexistent field 'bad_name'.",
+                "'constraints 'bad_name_unique' on model 'Model' refers to the "
+                "nonexistent field 'bad_name'.",
                 obj=Model,
                 id='models.E012',
             ),
@@ -1556,8 +1557,8 @@ class ConstraintFieldReferenceTraceabilityTests(SimpleTestCase):
 
         self.assertEqual(Bar.check(), [
             Error(
-                "'constraints' refers to field 'field1' which is not "
-                "local to model 'Bar'.",
+                "'constraints 'inherited_field_unique' on model 'Bar' refers to "
+                "field 'field1' which is not local to model 'Bar'.",
                 hint='This issue may be caused by multi-table inheritance.',
                 obj=Bar,
                 id='models.E016',
@@ -1578,8 +1579,9 @@ class ConstraintFieldReferenceTraceabilityTests(SimpleTestCase):
 
         self.assertEqual(Model.check(), [
             Error(
-                "'constraints' refers to a ManyToManyField 'm2m', but "
-                "ManyToManyFields are not permitted in 'constraints'.",
+                "'constraints 'm2m_unique' on model 'Model' refers to a "
+                "ManyToManyField 'm2m', but ManyToManyFields are not "
+                "permitted in 'constraints'.",
                 obj=Model,
                 id='models.E013',
             ),
@@ -1604,10 +1606,69 @@ DJANGO12856_003_VERIFICATIONS = {
 
 class ConstraintFieldReferenceTraceabilityTests003(SimpleTestCase):
     def test_django12856_003_two_unique_constraints_report_model_and_constraint_context_for_invalid_fields(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing_alpha'],
+                        name='bad_alpha_unique',
+                    ),
+                    models.UniqueConstraint(
+                        fields=['missing_omega'],
+                        name='bad_omega_unique',
+                    ),
+                ]
+
+        self.assertEqual(Model._check_unique_constraint_fields(), [
+            Error(
+                "'constraints 'bad_alpha_unique' on model 'Model' refers to the "
+                "nonexistent field 'missing_alpha'.",
+                obj=Model,
+                id='models.E012',
+            ),
+            Error(
+                "'constraints 'bad_omega_unique' on model 'Model' refers to the "
+                "nonexistent field 'missing_omega'.",
+                obj=Model,
+                id='models.E012',
+            ),
+        ])
 
     def test_django12856_003_single_constraint_multiple_invalid_fields_are_reported_distinctly_and_deterministically(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing_second', 'missing_first'],
+                        name='multi_invalid_fields_unique',
+                    ),
+                ]
+
+        self.assertEqual(Model._check_unique_constraint_fields(), [
+            Error(
+                "'constraints 'multi_invalid_fields_unique' on model 'Model' refers to "
+                "the nonexistent field 'missing_second'.",
+                obj=Model,
+                id='models.E012',
+            ),
+            Error(
+                "'constraints 'multi_invalid_fields_unique' on model 'Model' refers to "
+                "the nonexistent field 'missing_first'.",
+                obj=Model,
+                id='models.E012',
+            ),
+        ])
 
     def test_django12856_003_repeated_validation_keeps_invalid_field_order_and_context_stable(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing_first', 'missing_second'],
+                        name='stable_order_unique',
+                    ),
+                ]
+
+        first = Model._check_unique_constraint_fields()
+        second = Model._check_unique_constraint_fields()
+        self.assertEqual(first, second)

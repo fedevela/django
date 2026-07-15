@@ -1614,8 +1614,10 @@ class MakeMigrationsTests(MigrationTestBase):
 
         with self.temporary_migration_module(module='migrations.test_migrations_empty') as migration_dir:
             msg = (
-                "'constraints' refers to the nonexistent field "
-                "'missing_field'."
+                "migrations.DJANGO12856InvalidConstraint: (models.E012) "
+                "'constraints 'django12856_invalid_constraint_002' on model "
+                "'DJANGO12856InvalidConstraint' refers to the nonexistent "
+                "field 'missing_field'."
             )
             with self.assertRaisesMessage(CommandError, msg):
                 call_command("makemigrations", "migrations", verbosity=0)
@@ -1643,7 +1645,9 @@ class MakeMigrationsTests(MigrationTestBase):
 
         with self.temporary_migration_module(module='migrations.test_migrations_empty') as migration_dir:
             msg = (
-                "'constraints' refers to the nonexistent field "
+                "migrations.DJANGO12856MixedConstraints: (models.E012) "
+                "'constraints 'django12856_invalid_constraint_102' on model "
+                "'DJANGO12856MixedConstraints' refers to the nonexistent field "
                 "'another_missing_field'."
             )
             with self.assertRaisesMessage(CommandError, msg):
@@ -1689,6 +1693,132 @@ DJANGO12856_002_VERIFICATIONS = {
         "scenario_3_all_constraints_valid_no_short_circuit": (
             "test_django12856_002_scenario_3_all_valid_constraints_allow_migration_emission_path"
         ),
+    },
+}
+
+
+class ConstraintFieldReferenceTraceabilityTests003(SimpleTestCase):
+    def test_django12856_003_two_unique_constraints_report_model_and_constraint_context_for_invalid_fields(self):
+        """
+        Scenario 1: each invalid constraint must report the model and constraint
+        that produced the failure.
+        """
+        class DJANGO12856BothConstraints(models.Model):
+            valid = models.IntegerField()
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing_alpha'],
+                        name='django12856_invalid_constraint_201',
+                    ),
+                    models.UniqueConstraint(
+                        fields=['missing_omega'],
+                        name='django12856_invalid_constraint_202',
+                    ),
+                ]
+
+        apps.register_model('migrations', DJANGO12856BothConstraints)
+
+        with self.temporary_migration_module(module='migrations.test_migrations_empty'):
+            with self.assertRaises(CommandError) as context:
+                call_command("makemigrations", "migrations", verbosity=0)
+        message = str(context.exception)
+        expected_alpha = (
+            "migrations.DJANGO12856BothConstraints: (models.E012) "
+            "'constraints 'django12856_invalid_constraint_201' on model "
+            "'DJANGO12856BothConstraints' refers to the nonexistent "
+            "field 'missing_alpha'."
+        )
+        expected_omega = (
+            "migrations.DJANGO12856BothConstraints: (models.E012) "
+            "'constraints 'django12856_invalid_constraint_202' on model "
+            "'DJANGO12856BothConstraints' refers to the nonexistent "
+            "field 'missing_omega'."
+        )
+        self.assertIn(expected_alpha, message)
+        self.assertIn(expected_omega, message)
+
+    def test_django12856_003_single_constraint_multiple_invalid_fields_are_reported_distinctly_and_deterministically(self):
+        """
+        Scenario 2: one constraint with multiple invalid fields emits one error per
+        field in field-declaration order.
+        """
+        class DJANGO12856MultiFieldConstraint(models.Model):
+            title = models.CharField(max_length=50)
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing_second', 'missing_first'],
+                        name='django12856_multi_field_unique',
+                    ),
+                ]
+
+        apps.register_model('migrations', DJANGO12856MultiFieldConstraint)
+
+        with self.temporary_migration_module(module='migrations.test_migrations_empty'):
+            with self.assertRaises(CommandError) as context:
+                call_command("makemigrations", "migrations", verbosity=0)
+        message = str(context.exception)
+        expected_second = (
+            "migrations.DJANGO12856MultiFieldConstraint: (models.E012) "
+            "'constraints 'django12856_multi_field_unique' on model "
+            "'DJANGO12856MultiFieldConstraint' refers to the nonexistent "
+            "field 'missing_second'."
+        )
+        expected_first = (
+            "migrations.DJANGO12856MultiFieldConstraint: (models.E012) "
+            "'constraints 'django12856_multi_field_unique' on model "
+            "'DJANGO12856MultiFieldConstraint' refers to the nonexistent "
+            "field 'missing_first'."
+        )
+        alpha_index = message.index(expected_second)
+        omega_index = message.index(expected_first)
+        self.assertLess(alpha_index, omega_index)
+
+    def test_django12856_003_repeated_validation_keeps_invalid_field_order_and_context_stable(self):
+        """
+        Scenario 3: repeated validations emit errors in the same context/order.
+        """
+        class DJANGO12856DeterministicConstraint(models.Model):
+            value = models.IntegerField()
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing_beta', 'missing_alpha'],
+                        name='django12856_repeated_unique',
+                    ),
+                ]
+
+        apps.register_model('migrations', DJANGO12856DeterministicConstraint)
+
+        with self.temporary_migration_module(module='migrations.test_migrations_empty'):
+            with self.assertRaises(CommandError) as first:
+                call_command("makemigrations", "migrations", verbosity=0)
+            first_message = str(first.exception)
+            with self.assertRaises(CommandError) as second:
+                call_command("makemigrations", "migrations", verbosity=0)
+            second_message = str(second.exception)
+
+        self.assertEqual(first_message, second_message)
+
+
+DJANGO12856_003_VERIFICATIONS = {
+    "DJANGO12856-003": {
+        "scenario_1_each_constraint_and_model_context": [
+            "test_django12856_003_two_unique_constraints_report_model_and_constraint_context_for_invalid_fields",
+        ],
+        "scenario_2_per_constraint_multi_field_deterministic_order": [
+            "test_django12856_003_single_constraint_multiple_invalid_fields_are_reported_distinctly_and_deterministically",
+        ],
+        "scenario_3_repeatable_validation_determinism": [
+            "test_django12856_003_repeated_validation_keeps_invalid_field_order_and_context_stable",
+        ],
     },
 }
 
