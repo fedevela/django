@@ -702,7 +702,19 @@ class FormsMediaTraceabilityTests(SimpleTestCase):
         when Media merge is attempted, exactly one conflict warning must be recorded
         and the warning payload must enumerate only directly involved files.
         """
-        self.assertTrue(True)
+        media_left = Media(js=['a.js', 'b.js'])
+        media_right = Media(js=['b.js', 'a.js'])
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter('always')
+            merged_js = (media_left + media_right)._js
+
+        conflict_messages = [
+            str(item.message) for item in recorded
+            if issubclass(item.category, MediaOrderConflictWarning)
+        ]
+        self.assertEqual(len(conflict_messages), 1)
+        self.assertEqual(conflict_messages[0], 'Detected duplicate Media files in an opposite order:\na.js\nb.js')
+        self.assertEqual(merged_js, ['a.js', 'b.js'])
 
     def test_med_004_no_conflict_warning_when_js_constraints_are_satisfiable(self):
         """
@@ -710,7 +722,17 @@ class FormsMediaTraceabilityTests(SimpleTestCase):
         Given satisfiable but non-adjacent or unrelated JS constraints,
         when Media merge is attempted, no MediaOrderConflictWarning is emitted.
         """
-        self.assertTrue(True)
+        media_a_then_d = Media(js=['a.js', 'd.js'])
+        media_b_then_d = Media(js=['b.js', 'd.js'])
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter('always')
+            merged_js = (media_a_then_d + media_b_then_d)._js
+
+        self.assertEqual(merged_js, ['a.js', 'b.js', 'd.js'])
+        self.assertEqual(
+            [message for message in recorded if issubclass(message.category, MediaOrderConflictWarning)],
+            []
+        )
 
     def test_med_007_merge_returns_usable_media_on_true_js_conflict(self):
         """
@@ -718,7 +740,33 @@ class FormsMediaTraceabilityTests(SimpleTestCase):
         Given a true JS cycle, when merge completes, a Media object must still be
         returned with deduplicated JS/CSS collections and serializable rendering.
         """
-        self.assertTrue(True)
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter('always')
+            merged = Media(
+                css={'all': ['/base.css', '/theme.css', '/base.css']},
+                js=['/a.js', '/b.js'],
+            ) + Media(
+                css={'all': ['/theme.css', '/layout.css']},
+                js=['/b.js', '/a.js'],
+            )
+
+        self.assertEqual(
+            merged._js,
+            ['/a.js', '/b.js'],
+        )
+        self.assertEqual(
+            merged._css,
+            {'all': ['/base.css', '/theme.css', '/layout.css']},
+        )
+        self.assertIn(
+            '<script type="text/javascript" src="/a.js"></script>',
+            ''.join(merged.render_js()),
+        )
+        self.assertIn(
+            '<link href="/base.css" type="text/css" media="all" rel="stylesheet">',
+            ''.join(merged.render_css()),
+        )
+        self.assertEqual(len([message for message in recorded if issubclass(message.category, MediaOrderConflictWarning)]), 1)
 
     def test_med_007_merge_warns_on_conflict_but_preserves_deduplicated_css_js(self):
         """
@@ -726,4 +774,24 @@ class FormsMediaTraceabilityTests(SimpleTestCase):
         Given an irreconcilable relation, merge output must preserve deduplicated
         CSS/JS ordering and still emit an unresolved-order warning signal.
         """
-        self.assertTrue(True)
+        left = Media(
+            css={'all': ('/editor.css', '/shared.css', '/editor.css')},
+            js=['/editor.js', '/widget.js'],
+        )
+        right = Media(
+            css={'print': ('/shared.css', '/print.css')},
+            js=['/shared.js', '/widget.js', '/editor.js'],
+        )
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter('always')
+            merged = left + right
+
+        self.assertEqual(
+            merged._js,
+            ['/editor.js', '/shared.js', '/widget.js'],
+        )
+        self.assertEqual(
+            merged._css,
+            {'all': ['/editor.css', '/shared.css'], 'print': ['/shared.css', '/print.css']},
+        )
+        self.assertEqual(len([message for message in recorded if issubclass(message.category, MediaOrderConflictWarning)]), 1)

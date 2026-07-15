@@ -144,61 +144,9 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
-        # PSEUDOCODE (MED-001, MED-002, MED-003, MED-004, MED-007)
-        # INPUTS:
-        #   - list_1: currently merged JS order (possibly containing all prior
-        #     constraints).
-        #   - list_2: next JS order to reconcile against list_1.
-        # OUTPUT:
-        #   - combined_list: new order that satisfies merged relative constraints.
-        # STATE:
-        #   - combined_list: copy(list_1)
-        #   - last_insert_index: insertion frontier in combined_list
-        #
-        # ALGO:
-        #   combined_list = copy(list_1)
-        #   last_insert_index = len(list_1)
-        #   for path in reverse(list_2):               # right-to-left fold
-        #     if path not in combined_list:
-        #       insert path at last_insert_index        # MED-001 / MED-003 dedupe by insert-if-missing
-        #     else:
-        #       existing_index = index(path in combined_list)
-        #       if existing_index > last_insert_index:
-        #         warn MediaOrderConflictWarning         # inverse order would be required
-        #       last_insert_index = existing_index      # anchor frontier for earlier neighbors
-        #   return combined_list
-        #
-        # REQUIREMENT TRACE:
-        # - MED-002: reverse traversal + moving frontier captures transitive chains
-        #   (a before b before c) and avoids false inversions from merge sequencing.
-        # - MED-003: uniqueness is enforced as each unmatched path is inserted at
-        #   most once; matched paths never duplicate.
-        # - MED-001: reproducer expectation depends on stable anchor movement and
-        #   first-merge-then-merge ordering defined by _js list composition.
-        #
-        # PSEUDOCODE (MED-004, MED-007):
-        # INPUTS:
-        #   - current_frontier: deduplicated list_1
-        #   - incoming_frontier: deduplicated list_2
-        # OUTPUT:
-        #   - merged list for `_js`, plus optional one-shot warning only if irreconcilable.
-        # ALGO:
-        #   1) Build/refresh constraint edges from adjacent pairs in both frontiers
-        #      (left file must precede right file).
-        #   2) Traverse `incoming_frontier` from right to left against `combined_list`,
-        #      maintaining `last_insert_index`.
-        #   3) When an existing node is encountered before anchor movement:
-        #      a. If moving the anchor past it breaks a satisfiable partial-order,
-        #         continue without warning (reconciliation is possible).
-        #      b. If movement introduces a cycle, snapshot only the violating direct
-        #         pair as the conflict payload.
-        #   4) If new file missing from `combined_list`, insert at anchor.
-        #   5) After traversal, emit at most one `MediaOrderConflictWarning` for the
-        #      detected cycle pair, then return `combined_list` unchanged as usable output.
-        # GUARDRAILS:
-        #   - Warn only when constraints are truly irreconcilable.
-        #   - Never warn for satisfiable but non-adjacent/no-cycle relations.
-        #   - Include only directly participating files in warning payload.
+        # MED-004/MED-007: first classify whether list_2 introduces an actual
+        # irreconcilable ordering cycle against list_1. If so, keep a usable merged
+        # output but emit one explicit warning for the direct conflicting pair.
         # Ensure each list is de-duplicated before merge constraints are
         # reconciled, preserving first-seen order.
         deduped_list_1 = []
@@ -209,6 +157,38 @@ class Media:
         for path in list_2:
             if path not in deduped_list_2:
                 deduped_list_2.append(path)
+
+        # Build a direct precedence graph from known-order constraints and detect the
+        # first contradiction introduced by the adjacent pairs in list_2.
+        def graph_has_path(graph, origin, target):
+            seen = set([origin])
+            pending = [origin]
+            while pending:
+                current = pending.pop()
+                for successor in graph.get(current, ()):
+                    if successor == target:
+                        return True
+                    if successor not in seen:
+                        seen.add(successor)
+                        pending.append(successor)
+            return False
+
+        constraints = {}
+        for left in deduped_list_1:
+            constraints[left] = set()
+        for i, left in enumerate(deduped_list_1):
+            for right in deduped_list_1[i + 1:]:
+                constraints[left].add(right)
+
+        conflict_pair = None
+        for left, right in zip(deduped_list_2, deduped_list_2[1:]):
+            # left must be emitted before right.
+            if conflict_pair is None:
+                if graph_has_path(constraints, right, left):
+                    # left -> right is a new edge; right already depends on left.
+                    # Report the direct files in the actual conflicting relation.
+                    conflict_pair = (right, left)
+            constraints.setdefault(left, set()).add(right)
 
         # Start with a copy of list_1 (de-duplicated), then reconcile list_2.
         combined_list = list(deduped_list_1)
@@ -223,15 +203,16 @@ class Media:
                 # Add path to combined_list since it doesn't exist.
                 combined_list.insert(last_insert_index, path)
             else:
-                if index > last_insert_index:
-                    warnings.warn(
-                        'Detected duplicate Media files in an opposite order:\n'
-                        '%s\n%s' % (combined_list[last_insert_index], combined_list[index]),
-                        MediaOrderConflictWarning,
-                    )
                 # path already exists in the list. Update last_insert_index so
                 # that the following elements are inserted in front of this one.
                 last_insert_index = index
+
+        if conflict_pair is not None:
+            warnings.warn(
+                'Detected duplicate Media files in an opposite order:\n'
+                '%s\n%s' % (conflict_pair[0], conflict_pair[1]),
+                MediaOrderConflictWarning,
+            )
         return combined_list
 
     def __add__(self, other):
