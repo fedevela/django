@@ -1,6 +1,9 @@
+import warnings
+
 from django.forms import CharField, Form, Media, MultiWidget, TextInput
 from django.template import Context, Template
 from django.test import SimpleTestCase, override_settings
+from django.forms.widgets import MediaOrderConflictWarning
 
 
 @override_settings(
@@ -585,13 +588,64 @@ class FormsMediaMergeContractTests(SimpleTestCase):
 
     def test_med_001_scenario_1_colorpicker_simpletext_fancytext_myform_media_resolves_dependency_valid_sequence_without_warning(self):
         # Canonical requirement: MED-001 Scenario 1.
-        # Expected obligation: three-way merge produces dependency-valid order for
-        # ['text-editor.js', 'text-editor-extras.js', 'color-picker.js'] and no
-        # MediaOrderConflictWarning in this non-conflicting composition.
-        self.assertTrue(True)
+        class ColorPicker(TextInput):
+            class Media:
+                js = ['color-picker.js']
+
+        class SimpleTextWidget(TextInput):
+            class Media:
+                js = ['text-editor.js']
+
+        class FancyTextWidget(TextInput):
+            class Media:
+                js = ['text-editor.js', 'text-editor-extras.js', 'color-picker.js']
+
+        class MyForm(Form):
+            background_color = CharField(widget=ColorPicker())
+            intro = CharField(widget=SimpleTextWidget())
+            body = CharField(widget=FancyTextWidget())
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter('always')
+            form_media = MyForm().media
+
+        self.assertEqual(
+            form_media._js,
+            ['text-editor.js', 'text-editor-extras.js', 'color-picker.js']
+        )
+        self.assertFalse(
+            any(issubclass(w.category, MediaOrderConflictWarning) for w in captured)
+        )
 
     def test_med_001_scenario_2_repeated_media_access_is_stable_for_identical_three_way_form_composition(self):
         # Canonical requirement: MED-001 Scenario 2.
-        # Expected obligation: repeated access to MyForm().media yields stable JS
-        # order and stable warning count for equivalent composition inputs.
-        self.assertTrue(True)
+        class ColorPicker(TextInput):
+            class Media:
+                js = ['color-picker.js']
+
+        class SimpleTextWidget(TextInput):
+            class Media:
+                js = ['text-editor.js']
+
+        class FancyTextWidget(TextInput):
+            class Media:
+                js = ['text-editor.js', 'text-editor-extras.js', 'color-picker.js']
+
+        class MyForm(Form):
+            background_color = CharField(widget=ColorPicker())
+            intro = CharField(widget=SimpleTextWidget())
+            body = CharField(widget=FancyTextWidget())
+
+        with warnings.catch_warnings(record=True) as captured_1:
+            warnings.simplefilter('always')
+            first = MyForm().media._js
+
+        with warnings.catch_warnings(record=True) as captured_2:
+            warnings.simplefilter('always')
+            second = MyForm().media._js
+
+        self.assertEqual(first, second)
+        self.assertEqual(
+            [w.category for w in captured_1 if issubclass(w.category, MediaOrderConflictWarning)],
+            [w.category for w in captured_2 if issubclass(w.category, MediaOrderConflictWarning)],
+        )

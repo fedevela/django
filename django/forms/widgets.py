@@ -70,11 +70,7 @@ class Media:
 
     @property
     def _js(self):
-        js = self._js_lists[0]
-        # filter(None, ...) avoids calling merge() with empty lists.
-        for obj in filter(None, self._js_lists[1:]):
-            js = self.merge(js, obj)
-        return js
+        return self.merge(*filter(None, self._js_lists))
 
     def render(self):
         return mark_safe('\n'.join(chain.from_iterable(getattr(self, 'render_' + name)() for name in MEDIA_TYPES)))
@@ -115,9 +111,9 @@ class Media:
         raise KeyError('Unknown media type "%s"' % name)
 
     @staticmethod
-    def merge(list_1, list_2):
+    def merge(*lists):
         """
-        Merge two lists while trying to keep the relative order of the elements.
+        Merge lists while trying to keep the relative order of the elements.
         Warn if the lists have the same two elements in a different relative
         order.
 
@@ -125,44 +121,77 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
-        # MED-001 logic:
-        # - Goal: compute a deterministic merged JS order that is dependency-valid
-        #   for identical compositions, and avoid spurious conflict warnings
-        #   in non-conflicting cases.
-        # 1) Initialize output state:
-        #    - combined_list starts as a copy of list_1.
-        #    - last_insert_index starts at end of list_1.
-        # 2) Process each path in list_2 from right to left:
-        #    - If path is missing in combined_list, insert it at last_insert_index.
-        #    - If path exists in combined_list:
-        #         * if existing index > last_insert_index, emit
-        #           MediaOrderConflictWarning (reverse pair order).
-        #         * always move last_insert_index to existing index so earlier
-        #           elements from list_2 are forced before this anchor.
-        # 3) Return combined_list as the merged deterministic order.
-        # Start with a copy of list_1.
-        combined_list = list(list_1)
-        last_insert_index = len(list_1)
-        # Walk list_2 in reverse, inserting each element into combined_list if
-        # it doesn't already exist.
-        for path in reversed(list_2):
-            try:
-                # Does path already exist in the list?
-                index = combined_list.index(path)
-            except ValueError:
-                # Add path to combined_list since it doesn't exist.
-                combined_list.insert(last_insert_index, path)
-            else:
-                if index > last_insert_index:
-                    warnings.warn(
-                        'Detected duplicate Media files in an opposite order:\n'
-                        '%s\n%s' % (combined_list[last_insert_index], combined_list[index]),
-                        MediaOrderConflictWarning,
-                    )
-                # path already exists in the list. Update last_insert_index so
-                # that the following elements are inserted in front of this one.
-                last_insert_index = index
-        return combined_list
+        lists = [list(media_list) for media_list in lists if media_list]
+        if not lists:
+            return []
+        if len(lists) == 1:
+            return lists[0][:]
+        if len(lists) == 2:
+            list_1, list_2 = lists
+            # Start with a copy of list_1.
+            combined_list = list(list_1)
+            last_insert_index = len(list_1)
+            # Walk list_2 in reverse, inserting each element into combined_list if
+            # it doesn't already exist.
+            for path in reversed(list_2):
+                try:
+                    # Does path already exist in the list?
+                    index = combined_list.index(path)
+                except ValueError:
+                    # Add path to combined_list since it doesn't exist.
+                    combined_list.insert(last_insert_index, path)
+                else:
+                    if index > last_insert_index:
+                        warnings.warn(
+                            'Detected duplicate Media files in an opposite order:\n'
+                            '%s\n%s' % (
+                                combined_list[last_insert_index],
+                                combined_list[index],
+                            ),
+                            MediaOrderConflictWarning,
+                        )
+                    # path already exists in the list. Update last_insert_index so
+                    # that the following elements are inserted in front of this one.
+                    last_insert_index = index
+            return combined_list
+
+        # For three or more lists, build a dependency graph and compute a stable
+        # topological order so one merge can honor all dependency constraints.
+        graph = {}
+        for media_list in lists:
+            previous = None
+            for path in media_list:
+                graph.setdefault(path, set())
+                if previous is not None and previous != path:
+                    graph.setdefault(previous, set()).add(path)
+                previous = path
+
+        incoming = {path: set() for path in graph}
+        for path, dependents in graph.items():
+            for dependent in dependents:
+                incoming[dependent].add(path)
+
+        ordered = []
+        while len(ordered) < len(graph):
+            next_path = None
+            for path, edges in incoming.items():
+                if path in ordered:
+                    continue
+                if not edges:
+                    next_path = path
+                    break
+            if next_path is None:
+                warnings.warn(
+                    'Detected duplicate Media files in an opposite order: {}'.format(
+                        ', '.join(repr(media_list) for media_list in lists)
+                    ),
+                    MediaOrderConflictWarning,
+                )
+                return list(dict.fromkeys(chain.from_iterable(lists)))
+            ordered.append(next_path)
+            for dependent in graph[next_path]:
+                incoming[dependent].discard(next_path)
+        return ordered
 
     def __add__(self, other):
         combined = Media()
