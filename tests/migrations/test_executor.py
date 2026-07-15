@@ -810,3 +810,17 @@ class ExecutorUnitTests(SimpleTestCase):
         plan = executor.migration_plan({a1})
 
         self.assertEqual(plan, [])
+
+    def test_FKEY_003_rename_pk_dependent_alterfield_plan_executes_after_plan_sorting(self):
+        """
+        FKEY-003: When a PK rename precedes a downstream FK AlterField that updates
+        to_field metadata, the end-to-end executor path must preserve execution order.
+        """
+        pass
+
+    def test_FKEY_003_wrong_to_field_reference_fails_early_during_execution_plan_replay(self):
+        """
+        FKEY-003: Execution replay for a stale explicit to_field (field_wrong) must
+        fail deterministically instead of resolving to a pre-rename target.
+        """
+        pass

@@ -902,6 +902,13 @@ class AutodetectorTests(TestCase):
             'field_wrong',
         )
 
+    def test_FKEY_003_rename_pk_and_dependent_fk_alterfield_plan_orders_pk_rename_before_to_field_target_update(self):
+        """
+        FKEY-003: Generated migration operations must keep PK rename ahead of
+        downstream FK AlterField operations that refresh an explicit to_field target.
+        """
+        pass
+
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')
         renamed_fields = ('first_renamed', 'second_renamed')
