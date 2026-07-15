@@ -6,6 +6,7 @@ ISNULL-003 – apply identical ``__isnull`` non-bool rejection across filter/exc
 
 from django.test import TestCase
 
+from django.db.models import Q
 from tests.lookup.models import Season
 
 
@@ -79,14 +80,90 @@ class IsnullLookupValidationPreSqlTraceabilityTests(TestCase):
     def test_ISNULL_003_filter_exclude_q_entry_points_raise_same_validation_exception(self):
         # ISNULL-003: invalid ``__isnull`` value should fail consistently for
         # filter, exclude, and Q composition paths.
-        pass
+        query = Season.objects.all().query
+        field = query.model._meta.get_field("year")
+
+        with self.assertRaises(ValueError) as build_exc:
+            query.build_lookup(["isnull"], field, "false")
+
+        with self.assertRaises(ValueError) as filter_compile_exc:
+            str(Season.objects.filter(year__isnull="false").query)
+        with self.assertRaises(ValueError) as filter_eval_exc:
+            list(Season.objects.filter(year__isnull="false"))
+
+        with self.assertRaises(ValueError) as exclude_compile_exc:
+            str(Season.objects.exclude(year__isnull="false").query)
+        with self.assertRaises(ValueError) as exclude_eval_exc:
+            list(Season.objects.exclude(year__isnull="false"))
+
+        with self.assertRaises(ValueError) as q_compile_exc:
+            str(Season.objects.filter(Q(year__isnull="false")).query)
+        with self.assertRaises(ValueError) as q_eval_exc:
+            list(Season.objects.filter(Q(year__isnull="false")))
+
+        self.assertEqual(
+            str(build_exc.exception),
+            str(filter_compile_exc.exception),
+        )
+        self.assertEqual(
+            str(build_exc.exception),
+            str(filter_eval_exc.exception),
+        )
+        self.assertEqual(
+            str(build_exc.exception),
+            str(exclude_compile_exc.exception),
+        )
+        self.assertEqual(
+            str(build_exc.exception),
+            str(exclude_eval_exc.exception),
+        )
+        self.assertEqual(
+            str(build_exc.exception),
+            str(q_compile_exc.exception),
+        )
+        self.assertEqual(
+            str(build_exc.exception),
+            str(q_eval_exc.exception),
+        )
 
     def test_ISNULL_003_chained_queryset_rejects_invalid_isnull_rhs_with_same_path(self):
         # ISNULL-003: chaining queryset filters should not defer invalid __isnull
         # rejection to a later unrelated execution stage.
-        pass
+        base_queryset = Season.objects.filter(year__isnull=True)
+
+        with self.assertRaises(ValueError) as chain_compile_exc:
+            str(base_queryset.exclude(year__isnull="false").query)
+        with self.assertRaises(ValueError) as chain_eval_exc:
+            list(base_queryset.exclude(year__isnull="false"))
+
+        with self.assertRaises(ValueError) as filter_compile_exc:
+            str(Season.objects.exclude(year__isnull="false").query)
+
+        self.assertEqual(
+            str(filter_compile_exc.exception),
+            str(chain_compile_exc.exception),
+        )
+        self.assertEqual(
+            str(filter_compile_exc.exception),
+            str(chain_eval_exc.exception),
+        )
 
     def test_ISNULL_003_q_or_composition_preserves_isnull_non_bool_validation_context(self):
         # ISNULL-003: Q composition (including OR) must reject non-bool ``__isnull``
         # via the same validation route.
-        pass
+        with self.assertRaises(ValueError) as filter_compile_exc:
+            str(Season.objects.filter(year__isnull=0).query)
+
+        with self.assertRaises(ValueError) as q_or_compile_exc:
+            str(Season.objects.filter(Q(year__isnull=0) | Q(gt=1)).query)
+        with self.assertRaises(ValueError) as q_or_eval_exc:
+            list(Season.objects.filter(Q(year__isnull=0) | Q(gt=1)))
+
+        self.assertEqual(
+            str(filter_compile_exc.exception),
+            str(q_or_compile_exc.exception),
+        )
+        self.assertEqual(
+            str(filter_compile_exc.exception),
+            str(q_or_eval_exc.exception),
+        )
