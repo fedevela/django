@@ -288,7 +288,28 @@ class RoutePattern(CheckURLMixin):
                         'reason': str(exc),
                     })
                 except ValueError:
+                    # [DJ-RES-004] Converter.to_python ValueError must preserve candidate-miss semantics.
+                    # Inputs:
+                    # - path matched current RoutePattern
+                    # - converter.to_python(value) executed for a captured segment
+                    # - converter raised ValueError
+                    # Decision:
+                    # - classify as local match failure, not internal exception.
+                    # State transition:
+                    # - pattern-match state => MISS (no Resolver404 payload emitted here)
+                    # - caller-level resolver continues through remaining candidate patterns
+                    # Output/Failure path:
+                    # - return None to preserve existing miss behavior and avoid 500
                     return None
+                # [DJ-RES-005] Non-Http404/non-ValueError exceptions must keep internal-failure semantics.
+                # Inputs:
+                # - converter.to_python(value) raised RuntimeError/TypeError/other unexpected exception
+                # Decision:
+                # - do not catch here; do not remap to Routing miss
+                # State transition:
+                # - exception propagates out of RoutePattern.match to enclosing handler
+                # Failure path:
+                # - framework handles it as 500-style internal failure
             return path[match.end():], (), kwargs
         return None
 
@@ -590,6 +611,13 @@ class URLResolver:
                         tried.extend([pattern] + t for t in sub_tried)
                     else:
                         tried.append([pattern])
+                    # [DJ-RES-005] Unexpected matcher exceptions are intentionally unconsumed here.
+                    # Inputs:
+                    # - pattern.resolve(new_path) raised non-Resolver404 exception.
+                    # Decision:
+                    # - allow bubbling; do not convert to routing miss.
+                    # Output:
+                    # - preserve existing Django 500/error handling path for internal exceptions.
                 else:
                     if sub_match:
                         # [DJ-RES-006] Successful match dispatch remains in canonical fast-path.
