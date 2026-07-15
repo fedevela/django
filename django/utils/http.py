@@ -176,10 +176,21 @@ def parse_http_date(date):
     try:
         year = int(m.group('year'))
         if year < 100:
+            # HTTPDATE-001 / HTTPDATE-005:
+            # - Input: two-digit year candidate `year` from RFC850 regex capture.
+            # - Runtime context: C = datetime.date.today().year.
+            # - Compute `century_base = C - (C % 100)` and `candidate = century_base + year`.
+            # - If `(candidate - C) > 50`, set `year = candidate - 100`, else `year = candidate`.
+            # - This removes hardcoded split logic (e.g. 00-69/70-99) and uses runtime year.
+            # - HTTPDATE-002: keep century when offset is exactly 50 (strictly greater-than condition).
             if year < 70:
                 year += 2000
             else:
                 year += 1900
+            # HTTPDATE-001:
+            # - Only the inferred century may be adjusted in the two-digit branch.
+            # - Parsed day/month/hour/minute/second fields remain unchanged for downstream conversion.
+            # - Failure path is unchanged: malformed fields raise exception -> ValueError.
         month = MONTHS.index(m.group('mon').lower()) + 1
         day = int(m.group('day'))
         hour = int(m.group('hour'))
