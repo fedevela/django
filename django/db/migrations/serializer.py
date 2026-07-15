@@ -49,15 +49,12 @@ class BaseSimpleSerializer(BaseSerializer):
 class ChoicesSerializer(BaseSerializer):
     def serialize(self):
         # MIG-300-002 [locale-safe enum defaults]:
-        # When an enum default is based on a locale-dependent value, rendering
-        # the value as-is can hardcode translated text and make migration
-        # imports locale-sensitive.
-        # Emit a stable member-identity form for locale-dependent values.
-        if isinstance(self.value.value, Promise):
-            enum_class = self.value.__class__
-            module = enum_class.__module__
-            return "%s.%s[%s]" % (module, enum_class.__name__, repr(self.value.name)), {"import %s" % module}
-        return serializer_factory(self.value.value).serialize()
+        # MIG-300-003 [enum member identity preservation across locales]:
+        # Emit member-name lookup form for all enum-choices defaults.
+        # This preserves the exact enum singleton across import locales.
+        enum_class = self.value.__class__
+        module = enum_class.__module__
+        return "%s.%s[%s]" % (module, enum_class.__name__, repr(self.value.name)), {"import %s" % module}
 
 
 class DateTimeSerializer(BaseSerializer):
@@ -128,30 +125,10 @@ class DictionarySerializer(BaseSerializer):
 class EnumSerializer(BaseSerializer):
     def serialize(self):
         # MIG-300-002 [locale-safe enum defaults]:
-        # INPUT: enum member `self.value` from model deconstruction.
-        # GOAL: emit a locale-invariant constructor form so migration import/execute
-        #       is valid regardless of active translation context.
-        # BRANCH A: self.value is models.Choices (e.g. TextChoices values may be lazy/translated).
-        #   - Use the enum member name, not runtime value, for serialization.
-        # BRANCH B: self.value is plain enum.Enum.
-        #   - Use module/class member-name form as canonical stable representation.
-        # FAILURE PATH:
-        #   - Emitting translated/raw `value` text couples to locale and can break
-        #     import-time reconstruction.
-        #
         # MIG-300-003 [enum member identity preservation across locales]:
-        # INPUT: locale may change after migration generation.
-        # DECISION: emit "<module>.<EnumClass>[<member_name>]" for both branches.
-        # TRANSITION:
-        #   - serialization branch returns an expression that resolves by enum lookup on import.
-        #   - runtime evaluator gets the member object from the enum class singleton.
-        # POST-CONDITION:
-        #   - object identity equals the source member (`is Status.GOOD`) after import/execution.
-        # FAILURE PATH:
-        #   - if serialization emitted a raw literal or callable value, identity could
-        #     degrade to value-equivalent or recreated members.
-        if isinstance(self.value, models.Choices):
-            return serializer_factory(self.value.value).serialize()
+        # Input enum member `self.value` always serializes to member-name lookup.
+        # That makes generated source locale-invariant and import-time returns the
+        # canonical enum singleton object from the source class.
         enum_class = self.value.__class__
         module = enum_class.__module__
         return "%s.%s[%s]" % (module, enum_class.__name__, repr(self.value.name)), {"import %s" % module}

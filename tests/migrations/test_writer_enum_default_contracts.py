@@ -104,23 +104,41 @@ class MigrationWriterEnumDefaultContractTests(SimpleTestCase):
                 self.assertIs(fields["status"].default, LocaleAwareStatus.GOOD)
 
     def test_mig_300_003_imported_enum_default_preserves_source_member_identity(self):
-        """
-        Placeholder verification obligation for MIG-300-003 / AC1.
+        field = models.CharField(default=PlainStatus.GOOD, max_length=16)
+        migration = type(
+            "Migration", (migrations.Migration,), {
+                "operations": [
+                    migrations.CreateModel(
+                        "StatusModel",
+                        fields=(("status", field),),
+                        bases=(models.Model,),
+                    ),
+                ],
+                "dependencies": [],
+            }
+        )
+        migration_text = MigrationWriter(migration).as_string()
+        self.assertIn("%s.PlainStatus['GOOD']" % PlainStatus.__module__, migration_text)
 
-        Canonical behavior required: deserializing generated migration defaults must
-        return the exact same enum member object as the source default.
-        """
-        with override("en"):
-            _ = self._locale_sensitive_migration_text()
-        self.assertTrue(True)
+        for language in ("en", "fr"):
+            with override(language):
+                namespace = self._load_migration_module(migration_text)
+                migration_instance = namespace["Migration"]("0001", "status")
+                state = ProjectState()
+                for operation in migration_instance.operations:
+                    operation.state_forwards("status", state)
+                fields = dict(state.models["status", "statusmodel"].fields)
+                self.assertIs(fields["status"].default, PlainStatus.GOOD)
 
     def test_mig_300_003_enum_member_identity_survives_locale_change_between_generation_and_import(self):
-        """
-        Placeholder verification obligation for MIG-300-003 / AC2.
-
-        Canonical behavior required: status default identity remains `Status.GOOD`
-        after locale is changed between generation and import/execution.
-        """
-        for language in ["en", "fr", "es"]:
+        with override("en"):
+            migration_text = self._locale_sensitive_migration_text()
+        for language in ["fr", "en"]:
             with override(language):
-                self.assertTrue(language in {"en", "fr", "es"})
+                namespace = self._load_migration_module(migration_text)
+                migration_instance = namespace["Migration"]("0001", "locale_status")
+                state = ProjectState()
+                for operation in migration_instance.operations:
+                    operation.state_forwards("locale_status", state)
+                fields = dict(state.models["locale_status", "statusmodel"].fields)
+                self.assertIs(fields["status"].default, LocaleAwareStatus.GOOD)
