@@ -1763,6 +1763,22 @@ class FilePathField(Field):
                 "FilePathField.path must resolve to a string or path-like object."
             )
 
+        # FPF-007::O1 (model-formfield parity handoff):
+        # Inputs:
+        # - self.path (callable OR string literal)
+        # - self.match, self.recursive, self.allow_files, self.allow_folders
+        # - kwargs (extra form kwargs from callers)
+        # Branch:
+        # - if self.path is callable: resolve once here, assign to local `path`.
+        # - if self.path is string: assign local `path` directly.
+        # Core obligation:
+        # - resolve stage must only affect host-selected directory base, never flag semantics.
+        # - match/recursive/allow_files/allow_folders values are copied verbatim and must be unchanged.
+        # Handoff:
+        # - pass options into forms.FilePathField through super().formfield(...) unchanged.
+        # Failure path:
+        # - maintain existing TypeError on invalid resolved path type; no additional parity-specific failure branches.
+
         # FPF-006::O1 (callable path return type validation contract):
         # Input: stored `self.path`, which may be callable metadata or literal path value.
         # Resolution point:

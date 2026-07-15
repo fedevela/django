@@ -1110,6 +1110,27 @@ class FilePathField(ChoiceField):
         else:
             self.choices = [("", "---------")]
 
+        # FPF-007::O2 (filtering parity core contract):
+        # Input:
+        # - resolved string path
+        # - match, recursive, allow_files, allow_folders
+        # State/decision:
+        # - this constructor must not infer any additional filter behavior from whether path
+        #   originated as callable or literal.
+        # - recursive=True -> enumerate via os.walk(self.path) in sorted depth-first order.
+        # - recursive=False -> enumerate immediate entries via os.scandir(self.path) only.
+        # Common filtering for each emitted candidate in either branch:
+        # - __pycache__ is always excluded.
+        # - candidate type gate:
+        #   - include if allow_files and candidate is file, OR allow_folders and candidate is dir.
+        # - name filter gate:
+        #   - include if match is None or match_re.match(candidate_name) is truthy.
+        # Invariant:
+        # - when called with same resolved path and same match/recursive/allow_* values, choices ordering
+        #   and selection are identical across path forms.
+        # Failure path:
+        # - traversal/IO exceptions propagate as pre-existing behavior, same for both path forms.
+
         if self.match is not None:
             self.match_re = re.compile(self.match)
 
@@ -1152,6 +1173,12 @@ class FilePathField(ChoiceField):
                             f = os.path.join(root, f)
                             self.choices.append((f, f.replace(self.path, "", 1)))
         else:
+            # FPF-007::O3 (edge regression lock for recursive=False):
+            # With recursive=False:
+            # - only os.scandir(self.path) entries at depth=1 are considered.
+            # - with allow_folders=True and allow_files=False:
+            #   - f.is_file branch cannot contribute.
+            #   - only f.is_dir candidates may pass gating.
             choices = []
             for f in os.scandir(self.path):
                 if f.name == '__pycache__':
