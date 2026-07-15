@@ -15,6 +15,14 @@ MEMVIEW_REQUIREMENTS = {
 
 class HttpResponseMemoryviewTraceabilityTests(SimpleTestCase):
     def test_memview_001_constructor_memoryview_initialization_returns_raw_bytes_not_memory_repr(self):
+        # MEMVIEW-005: regression gate
+        # Inputs:
+        #   payload = memoryview(b"My Content")
+        # Decision flow:
+        #   1) response = HttpResponse(payload)
+        #   2) data = response.content
+        #   3) if data begins with b"<memory at": reject legacy stringified representation path
+        #   4) else assert data is bytes and equals source bytes for constructor normalization.
         response = HttpResponse(memoryview(b"My Content"))
 
         self.assertIsInstance(response.content, bytes)
@@ -22,6 +30,14 @@ class HttpResponseMemoryviewTraceabilityTests(SimpleTestCase):
         self.assertFalse(response.content.startswith(b"<memory at"))
 
     def test_memview_005_constructor_memoryview_rejects_legacy_memory_repr(self):
+        # MEMVIEW-005: explicit negative assertion for legacy payload shape
+        # State transition:
+        #   - Constructed state: HttpResponse(memoryview(...))
+        #   - Read state: response.content materialized as immutable bytes
+        # Branches:
+        #   - If content startswith b"<memory at ": fail (legacy repr leaked)
+        #   - If content equals b"<memory at 0x": fail (partial legacy sentinel leak)
+        #   - Else expected bytes payload must be returned.
         response = HttpResponse(memoryview(b"My Content"))
 
         self.assertFalse(response.content.startswith(b"<memory at "))
