@@ -1078,6 +1078,15 @@ class MultiValueField(Field):
 class FilePathField(ChoiceField):
     def __init__(self, path, *, match=None, recursive=False, allow_files=True,
                  allow_folders=False, **kwargs):
+        if callable(path):
+            path = path()
+        try:
+            path = os.fspath(path)
+        except TypeError as exc:
+            raise TypeError(
+                "FilePathField.path must resolve to a string or path-like object."
+            ) from exc
+
         # FPF-006::O2 (enumeration-time type gate):
         # Input: `path` argument received for choice enumeration.
         # Branch:

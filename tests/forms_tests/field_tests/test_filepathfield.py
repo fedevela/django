@@ -21,11 +21,27 @@ class FilePathFieldCallablePathResolutionContractTests(SimpleTestCase):
 
     def test_fpf_006_invalid_callable_path_return_type_raises_deterministic_path_resolution_error(self):
         """FPF-006 Scenario 1: non-string/pathlike return at path-resolution boundary."""
-        pass
+        def bad_path():
+            return 12
+
+        message = "FilePathField.path must resolve to a string or path-like object."
+        with self.assertRaisesMessage(TypeError, message):
+            FilePathField(path=bad_path)
 
     def test_fpf_006_repeated_callable_path_resolution_failures_stable_for_identical_invalid_types(self):
         """FPF-006 Scenario 2: repeated evaluations fail deterministically with stable behavior."""
-        pass
+        calls = []
+
+        def bad_path():
+            calls.append(1)
+            return object()
+
+        message = "FilePathField.path must resolve to a string or path-like object."
+        with self.assertRaisesMessage(TypeError, message):
+            FilePathField(path=bad_path)
+        with self.assertRaisesMessage(TypeError, message):
+            FilePathField(path=bad_path)
+        self.assertEqual(calls, [1, 1])
 
 
 def fix_os_paths(x):

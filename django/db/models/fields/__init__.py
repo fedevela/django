@@ -1,4 +1,5 @@
 import collections.abc
+import os
 import copy
 import datetime
 import decimal
@@ -1751,6 +1752,17 @@ class FilePathField(Field):
         return str(value)
 
     def formfield(self, **kwargs):
+        if callable(self.path):
+            path = self.path()
+        else:
+            path = self.path
+        try:
+            path = os.fspath(path)
+        except TypeError:
+            raise TypeError(
+                "FilePathField.path must resolve to a string or path-like object."
+            )
+
         # FPF-006::O1 (callable path return type validation contract):
         # Input: stored `self.path`, which may be callable metadata or literal path value.
         # Resolution point:
@@ -1762,7 +1774,6 @@ class FilePathField(Field):
         #   with stable TypeError/ValueError semantics and abort formfield creation.
         # Stability obligation:
         # - same invalid return type across repeated formfield() calls must re-surface the same failure mode/message.
-        path = self.path() if callable(self.path) else self.path
         # FPF-004::O2 (string/callable runtime parity):
         # Input: stored path metadata (callable or literal string).
         # Branch:
