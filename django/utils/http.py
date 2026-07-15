@@ -176,6 +176,10 @@ def parse_http_date(date):
     try:
         year = int(m.group('year'))
         if year < 100:
+            # Architecture pressure (HTTPDATE-001/002/005): RFC850 two-digit year inference
+            # is owned by parse_http_date and must remain isolated to this branch.
+            # Downstream fields (weekday, month/day/hour/min/sec) stay in this parser
+            # and are unaffected by century inference.
             # HTTPDATE-001 / HTTPDATE-005:
             # - Input: two-digit year candidate `year` from RFC850 regex capture.
             # - Runtime context: C = datetime.date.today().year.
