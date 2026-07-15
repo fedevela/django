@@ -86,6 +86,17 @@ class SQLCompiler:
         # but any later annotations, extra selects, values calls that
         # refer some column outside of the wanted_cols, order_by, or even
         # filter calls can alter the GROUP BY clause.
+        # DJANGO-11797-001/002 pseudocode:
+        # - Input: query with explicit grouping intent in query.group_by.
+        # - Deterministic behavior:
+        #   1) If group_by is None: no GROUP BY output.
+        #   2) Else start from query.group_by entries; convert string refs via resolve_ref.
+        #   3) Add required grouping expressions from select/order_by/having in a
+        #      second pass only when they are non-aggregate references.
+        #   4) Collapse only for DB compatibility, preserving caller-authored
+        #      group_by keys (e.g., initial values() keys).
+        # - Slice (LIMIT/OFFSET) is not represented in this list and must not
+        #   influence the grouping key set.
 
         # The query.group_by is either None (no GROUP BY at all), True
         # (group by select fields), or a list of expressions to be added
@@ -582,6 +593,10 @@ class SQLCompiler:
                 result.append('ORDER BY %s' % ', '.join(ordering))
 
             if with_limit_offset:
+                # DJANGO-11797-002: slice semantics in SQL assembly.
+                # - Compute WHERE/FROM/GROUP BY/HAVING/ORDER BY first.
+                # - Append limit_offset_sql only as a terminal clause.
+                # - Never trigger any projection or group-by reconstruction here.
                 result.append(self.connection.ops.limit_offset_sql(self.query.low_mark, self.query.high_mark))
 
             if for_update_part and not self.connection.features.for_update_after_from:

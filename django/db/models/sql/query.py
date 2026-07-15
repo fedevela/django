@@ -1770,6 +1770,10 @@ class Query(BaseExpression):
         Apply any limits passed in here to the existing constraints. Add low
         to the current low value and clamp both to any existing high value.
         """
+        # DJANGO-11797-002: Slicing is a row-windowing transition only.
+        # - Mutates low_mark/high_mark exclusively.
+        # - Never mutates select masks, group_by, annotation state, joins, or filters.
+        # - If low==high post-merge, materialize EmptySet but preserve grouping metadata.
         if high is not None:
             if self.high_mark is not None:
                 self.high_mark = min(self.high_mark, self.low_mark + high)
@@ -2082,6 +2086,14 @@ class Query(BaseExpression):
         self.clear_deferred_loading()
         self.clear_select_fields()
 
+        # DJANGO-11797-001: values() after annotate must preserve upstream
+        # grouping contract.
+        # - If the current query has explicit grouping markers (group_by is a tuple),
+        #   never clear/replace them while changing projected columns.
+        # - Only when group_by is True (generic aggregate mode) do we expand to all
+        #   non-annotated select fields first, then freeze them via set_group_by().
+        # - Next, fields are partitioned deterministically into (extra, annotation,
+        #   concrete field) buckets for masks/select fields.
         if self.group_by is True:
             self.add_fields((f.attname for f in self.model._meta.concrete_fields), False)
             self.set_group_by()

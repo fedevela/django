@@ -305,6 +305,11 @@ class QuerySet:
                 stop = int(k.stop)
             else:
                 stop = None
+            # DJANGO-11797-002: Slice transition is row-limiting only.
+            # Input: grouped/annotated/query-state with fixed GROUP BY keys.
+            # Action: qs.query.set_limits(start, stop) mutates only low/high marks.
+            # Output: same annotations, joins, filters, and grouping keys; SQL
+            # difference is LIMIT/OFFSET behavior only.
             qs.query.set_limits(start, stop)
             return list(qs)[::k.step] if k.step else qs
 
@@ -1072,6 +1077,11 @@ class QuerySet:
 
         for alias, annotation in clone.query.annotations.items():
             if alias in annotations and annotation.contains_aggregate:
+                # DJANGO-11797-001: Aggregate annotations on a values queryset must
+                # preserve grouping keys introduced before the values() projection.
+                # If _fields is None: defer grouping to full default-column grouping.
+                # Else: materialize explicit grouping via set_group_by() so later
+                # values() calls can replace projections without key rewrite.
                 if clone._fields is None:
                     clone.query.group_by = True
                 else:
