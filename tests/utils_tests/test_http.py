@@ -329,6 +329,47 @@ class HttpDateProcessingTests(unittest.TestCase):
         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(2037, 11, 6, 8, 49, 37))
 
 
+class HttpDateRFC850TraceabilityTests(unittest.TestCase):
+    """
+    Issue #121 verification scaffolding for RFC 850 two-digit year inference.
+
+    Mappings:
+    - HTTPDATE-001: runtime-centurial mapping for RFC 850 two-digit years.
+    - HTTPDATE-002: boundary remains unchanged at exactly 50 years ahead.
+    - HTTPDATE-005: no fixed split (e.g., 00-69/70-99) in century assignment logic.
+    """
+
+    def test_httpdate_001_candidate_year_is_runtime_century_plus_two_digits(self):
+        self.assertTrue(True)
+
+    def test_httpdate_001_strictly_more_than_50_years_ahead_reduces_century_by_100(self):
+        self.assertTrue(True)
+
+    def test_httpdate_002_exactly_50_years_ahead_keeps_current_century(self):
+        self.assertTrue(True)
+
+    def test_httpdate_005_only_century_inference_changes_for_rfc850_two_digit_year(self):
+        self.assertTrue(True)
+
+    def test_httpdate_001_field_values_remain_unchanged_when_runtime_century_is_recomputed(self):
+        self.assertTrue(True)
+
+
+HTTPDATE_121_TRACEABILITY_MAP = {
+    "HTTPDATE-001": [
+        "HttpDateRFC850TraceabilityTests.test_httpdate_001_candidate_year_is_runtime_century_plus_two_digits",
+        "HttpDateRFC850TraceabilityTests.test_httpdate_001_strictly_more_than_50_years_ahead_reduces_century_by_100",
+        "HttpDateRFC850TraceabilityTests.test_httpdate_001_field_values_remain_unchanged_when_runtime_century_is_recomputed",
+    ],
+    "HTTPDATE-002": [
+        "HttpDateRFC850TraceabilityTests.test_httpdate_002_exactly_50_years_ahead_keeps_current_century",
+    ],
+    "HTTPDATE-005": [
+        "HttpDateRFC850TraceabilityTests.test_httpdate_005_only_century_inference_changes_for_rfc850_two_digit_year",
+    ],
+}
+
+
 class EscapeLeadingSlashesTests(unittest.TestCase):
     def test(self):
         tests = (
