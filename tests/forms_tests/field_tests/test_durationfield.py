@@ -69,10 +69,18 @@ class DurationFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
 class DurationFieldInvalidMessageContractTests(DurationFieldTest):
 
     def test_dur_001_default_invalid_message_uses_correct_pattern_in_form_validation(self):
-        self.assertTrue(True)
+        expected_message = (
+            "Enter a valid duration. It must be in [DD] [[HH:]MM:]ss[.uuuuuu] format."
+        )
+        with self.assertRaisesMessage(ValidationError, expected_message):
+            DurationField().clean('not a datetime')
 
     def test_dur_002_default_invalid_message_does_not_use_legacy_pattern_on_form_submit(self):
-        self.assertTrue(True)
+        expected_legacy_pattern = "[DD] [HH:[MM:]]ss[.uuuuuu]"
+        with self.assertRaises(ValidationError) as cm:
+            DurationField().clean('not a datetime')
+        self.assertNotIn(expected_legacy_pattern, str(cm.exception))
 
     def test_dur_005_form_invalid_message_override_is_authoritative(self):
-        self.assertTrue(True)
+        with self.assertRaisesMessage(ValidationError, "my custom invalid"):
+            DurationField(error_messages={"invalid": "my custom invalid"}).clean('not a datetime')

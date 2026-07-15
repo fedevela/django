@@ -475,7 +475,7 @@ class DurationField(Field):
     # 4) any explicit error_messages override for "invalid" remains authoritative.
     # This comment maps requirement intent to the form validation path.
     default_error_messages = {
-        'invalid': _('Enter a valid duration.'),
+        'invalid': _('Enter a valid duration. It must be in [DD] [[HH:]MM:]ss[.uuuuuu] format.'),
         'overflow': _('The number of days must be between {min_days} and {max_days}.')
     }
 

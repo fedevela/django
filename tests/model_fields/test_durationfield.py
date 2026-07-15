@@ -75,7 +75,7 @@ class TestValidation(SimpleTestCase):
         self.assertEqual(
             cm.exception.message % cm.exception.params,
             "'not a datetime' value has an invalid format. "
-            "It must be in [DD] [HH:[MM:]]ss[.uuuuuu] format."
+            "It must be in [DD] [[HH:]MM:]ss[.uuuuuu] format."
         )
 
 
@@ -97,10 +97,29 @@ class TestFormField(SimpleTestCase):
 class TestDurationFieldInvalidMessageContract(SimpleTestCase):
 
     def test_dur_001_default_invalid_message_uses_correct_pattern_in_model_validation(self):
-        self.assertTrue(True)
+        expected_message = (
+            "'not a datetime' value has an invalid format. "
+            "It must be in [DD] [[HH:]MM:]ss[.uuuuuu] format."
+        )
+        field = models.DurationField()
+        with self.assertRaises(exceptions.ValidationError) as cm:
+            field.clean('not a datetime', None)
+        self.assertEqual(cm.exception.code, 'invalid')
+        self.assertEqual(cm.exception.message % cm.exception.params, expected_message)
 
     def test_dur_002_default_invalid_message_is_preserved_for_model_and_form_path(self):
-        self.assertTrue(True)
+        expected_message = (
+            "'not a datetime' value has an invalid format. "
+            "It must be in [DD] [[HH:]MM:]ss[.uuuuuu] format."
+        )
+        obj = DurationModel(field='not a datetime')
+        with self.assertRaises(exceptions.ValidationError) as cm:
+            obj.full_clean()
+        self.assertEqual(cm.exception.error_dict['field'][0], expected_message)
 
     def test_dur_005_model_invalid_message_override_is_authoritative(self):
-        self.assertTrue(True)
+        field = models.DurationField(error_messages={"invalid": "my custom invalid"})
+        with self.assertRaises(exceptions.ValidationError) as cm:
+            field.clean('not a datetime', None)
+        self.assertEqual(cm.exception.code, 'invalid')
+        self.assertEqual(cm.exception.message % cm.exception.params, "my custom invalid")

@@ -1594,7 +1594,7 @@ class DurationField(Field):
     # - if callers pass error_messages["invalid"], that override must remain authoritative.
     default_error_messages = {
         'invalid': _("'%(value)s' value has an invalid format. It must be in "
-                     "[DD] [HH:[MM:]]ss[.uuuuuu] format.")
+                     "[DD] [[HH:]MM:]ss[.uuuuuu] format.")
     }
     description = _("Duration")
 
