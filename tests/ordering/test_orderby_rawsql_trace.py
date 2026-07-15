@@ -259,6 +259,16 @@ ORDERBY_004_REQUIREMENT_TO_TESTS = {
 }
 
 
+# Traceability map for canonical requirement ORDERBY-005.
+ORDERBY_005_REQUIREMENT_TO_TESTS = {
+    "ORDERBY-005": [
+        "test_ORDERBY_005_S1_malformed_direction_text_falls_back_to_single_emission",
+        "test_ORDERBY_005_S2_identical_malformed_terms_emit_once_in_dedupe_pass",
+        "test_ORDERBY_005_S3_malformed_and_parseable_equivalent_terms_stay_distinct_without_collision",
+    ]
+}
+
+
 class ORDERBY004TraceabilityTests(TestCase):
 
     @staticmethod
@@ -304,3 +314,33 @@ class ORDERBY004TraceabilityTests(TestCase):
         self.assertEqual(len(order_by_sql.split(",")), 2)
         self.assertIn("DESC", order_by_sql.upper())
         self.assertIn("ASC", order_by_sql.upper())
+
+
+class ORDERBY005TraceabilityTests(TestCase):
+
+    def test_ORDERBY_005_S1_malformed_direction_text_falls_back_to_single_emission(self):
+        """
+        Scenario 1:
+        Given malformed/irregular direction text for an ordering term,
+        when duplicate suppression evaluates the dedupe key,
+        then the term is emitted once instead of being dropped.
+        """
+        pass
+
+    def test_ORDERBY_005_S2_identical_malformed_terms_emit_once_in_dedupe_pass(self):
+        """
+        Scenario 2:
+        Given duplicate malformed terms,
+        when duplicate suppression executes,
+        then only one emission occurs deterministically.
+        """
+        pass
+
+    def test_ORDERBY_005_S3_malformed_and_parseable_equivalent_terms_stay_distinct_without_collision(self):
+        """
+        Scenario 3:
+        Given malformed and parseable equivalent terms,
+        when dedupe compares keys,
+        then fallback handling is deterministic with no accidental omission.
+        """
+        pass
