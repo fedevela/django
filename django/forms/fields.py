@@ -1090,6 +1090,20 @@ class FilePathField(ChoiceField):
         if self.match is not None:
             self.match_re = re.compile(self.match)
 
+        # FPF-003::O2 (deterministic runtime enumeration):
+        # - Input: concrete path string produced by model-field formfield() on this call.
+        # - State transitions:
+        #   1) initialize base choices from required/blank setting.
+        #   2) if recursive=True, walk(path) and emit matching files/folders.
+        #   3) else, list directory entries and emit matching entries.
+        #   4) assign final ordered list to field/widget for this instance only.
+        # - Branching:
+        #   - recursive branch maps nested paths as (full_path, relative_suffix).
+        #   - non-recursive branch maps entries as (entry.path, entry.name), sorted by label.
+        # - Failure paths:
+        #   - invalid/missing path or traversal errors surface while building choices.
+        #   - each form construction triggers fresh enumeration, preserving host-local runtime behavior.
+
         if recursive:
             for root, dirs, files in sorted(os.walk(self.path)):
                 if self.allow_files:

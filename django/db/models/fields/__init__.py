@@ -1732,6 +1732,17 @@ class FilePathField(Field):
         # 4) then propagate match/recursive/allow_* metadata unchanged.
         # Failure path:
         # - if callable rejects no-arg invocation, propagate configuration error at this boundary.
+        # FPF-003::O1 (host-runtime invocation for enumeration context):
+        # - Input: self.path metadata on the bound field instance.
+        # - Decision:
+        #   - if callable(self.path): invoke in current host process context now.
+        #   - else: use literal path string.
+        # - Transition:
+        #   - resolved path passed into forms.FilePathField(path=...), then field choices are
+        #     enumerated by the form layer at form construction time.
+        # - Determinism and locality invariants:
+        #   - for fixed callable output and model state, invocation result is stable within one call.
+        #   - same migration/artifact across hosts can still diverge by host-local callable output.
         return super().formfield(**{
             'path': path,
             'match': self.match,
