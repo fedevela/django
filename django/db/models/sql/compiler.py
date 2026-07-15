@@ -388,10 +388,15 @@ class SQLCompiler:
                 #     accidental collision with semantically parsed direction forms.
                 direction_key = "__MALFORMED_ORDERING_DIRECTION__"
             # Step 2: canonicalize line ending and spacing noise before hashing.
-            # - Normalize `\r\n`, `\r`, and `\n` to a single line-break format.
-            # - Normalize indentation/line-break-adjacent spacing noise.
-            # - Preserve SQL token content; avoid rewriting SQL string literals.
-            # - Keep meaningful token ordering and internal token text unchanged.
+            # ORDERBY-006: Unicode payload must be opaque during normalization and keying.
+            # - Input: rendered ORDER BY fragment `without_ordering` and regex direction state.
+            # - Decision: if direction token is recognized, split `{body, direction}`; else mark malformed direction lane.
+            # - Transform path: normalize only newline/whitespace structure in `without_ordering`
+            #   and keep all non-whitespace, non-newline SQL text bytes unchanged.
+            # - Output contract:
+            #   dedupe_key = (normalized_body, direction_key, params_hash)
+            #   where `normalized_body` may only differ via allowed spacing/eol normalization.
+            # - Invariant: do not Unicode-case-fold, transliterate, tokenize, or escape SQL text.
             without_ordering = self._normalize_order_by_fragment_for_dedupe(without_ordering)
             params_hash = make_hashable(params)
             # ORDERBY-005:
@@ -421,9 +426,12 @@ class SQLCompiler:
 
     def _normalize_order_by_fragment_for_dedupe(self, sql):
         # ORDERBY-002: normalize equivalent SQL formatting for dedupe key generation.
-        # The canonical fragment should collapse mixed line-ending formats and
-        # whitespace noise outside SQL string literals while preserving token
-        # content ordering.
+        # ORDERBY-006:
+        # - Canonicalize only line-ending and intra-fragment spacing transitions for dedupe keying.
+        # - Keep full query text opaque except for that whitespace normalization.
+        # - Never mutate non-whitespace SQL payload, including Unicode characters.
+        # - Maintain byte-shape outside the normalization pass: no encoding transforms or
+        #   Unicode case/normalization operations may run on body text.
         sql = sql.replace('\r\n', '\n').replace('\r', '\n')
         normalized = []
         in_single_quote = False
@@ -477,6 +485,10 @@ class SQLCompiler:
                 continue
 
             if ch.isspace():
+                # ORDERBY-006 deterministic whitespace state transition:
+                # - treat contiguous whitespace outside literals as one collapsed space marker.
+                # - whitespace characters are normalized for dedupe key stability,
+                #   while literal text (including Unicode bytes) remains untouched.
                 pending_space = True
                 i += 1
                 continue
