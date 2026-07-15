@@ -344,6 +344,13 @@ class RenameField(FieldOperation):
                         remote_field.model, model_app_label, model_name
                     )
                     if remote_model_tuple == model_tuple:
+                        # DJANGO11910-001: rewrite FK to_field references as part of RenameField state
+                        # propagation when dependency target is the renamed model.
+                        # Transition:
+                        # 1) if remote_field.field_name equals self.old_name, write self.new_name.
+                        # 2) otherwise preserve existing remote field name.
+                        # Error path:
+                        # 3) if field has no explicit to_field, skip without state mutation.
                         if getattr(remote_field, 'field_name', None) == self.old_name:
                             remote_field.field_name = self.new_name
                         to_fields = getattr(field, 'to_fields', None)

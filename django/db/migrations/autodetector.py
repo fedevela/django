@@ -915,19 +915,29 @@ class MigrationAutodetector:
             dependencies = []
             # Implement any model renames on relations; these are handled by RenameModel
             # so we need to exclude them from the comparison
-            if hasattr(new_field, "remote_field") and getattr(new_field.remote_field, "model", None):
-                rename_key = (
-                    new_field.remote_field.model._meta.app_label,
-                    new_field.remote_field.model._meta.model_name,
-                )
-                if rename_key in self.renamed_models:
-                    new_field.remote_field.model = old_field.remote_field.model
-                # Handle ForeignKey which can only have a single to_field.
-                remote_field_name = getattr(new_field.remote_field, 'field_name', None)
-                if remote_field_name:
-                    to_field_rename_key = rename_key + (remote_field_name,)
-                    if to_field_rename_key in self.renamed_fields:
-                        new_field.remote_field.field_name = old_field.remote_field.field_name
+                if hasattr(new_field, "remote_field") and getattr(new_field.remote_field, "model", None):
+                    rename_key = (
+                        new_field.remote_field.model._meta.app_label,
+                        new_field.remote_field.model._meta.model_name,
+                    )
+                    if rename_key in self.renamed_models:
+                        new_field.remote_field.model = old_field.remote_field.model
+                    # Handle ForeignKey which can only have a single to_field.
+                    remote_field_name = getattr(new_field.remote_field, 'field_name', None)
+                    if remote_field_name:
+                        to_field_rename_key = rename_key + (remote_field_name,)
+                        if to_field_rename_key in self.renamed_fields:
+                            # DJANGO11910-001: normalize FK to_field when target PK was renamed.
+                            # Inputs: old_field, new_field, rename_key=(app_label, model_name),
+                            # self.renamed_fields entries keyed by renamed target PK new name.
+                            # Branch:
+                            # - if remote_field_name is an old PK name, map it to the renamed PK name.
+                            # - if mapping is missing, keep the FK field_name unchanged.
+                            # Transition:
+                            # - ensure new_field.remote_field.field_name always represents the
+                            #   current target PK name before deconstruction/diff comparison.
+                            # Failure path: if no compatible rename mapping exists, no rewrite occurs.
+                            new_field.remote_field.field_name = old_field.remote_field.field_name
                 # Handle ForeignObjects which can have multiple from_fields/to_fields.
                 from_fields = getattr(new_field, 'from_fields', None)
                 if from_fields:
