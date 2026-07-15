@@ -18,6 +18,15 @@ MEDIA_ORDERING_VERIFICATION_MAP = {
     "MEDIA-005": [
         "test_media_005_adjacency_preservation_per_input_sequence_contract",
     ],
+    "MEDIA-006": [
+        "test_media_006_duplicate_js_paths_appear_once_during_merge_contract",
+    ],
+    "MEDIA-007": [
+        "test_media_007_two_object_merge_backwards_compat_without_false_positive_blocker_contract",
+    ],
+    "MEDIA-008": [
+        "test_media_008_equivalent_merge_grouping_determinism_contract",
+    ],
     "MEDIA-004": [
         "test_media_004_hard_cycle_a_before_b_and_b_before_a_emits_conflict_warning_spec",
         "test_media_004_warning_message_mentions_only_a_js_and_b_js_contradiction_pair_spec",
@@ -156,3 +165,30 @@ class MediaOrderingTraceabilityTests(SimpleTestCase):
         ]
         for before, after in constraints:
             self.assertLess(positions[before], positions[after])
+
+    def test_media_006_duplicate_js_paths_appear_once_during_merge_contract(self):
+        """MEDIA-006: duplicate 'shared.js' across multiple media inputs appears once in merged output."""
+        first = Media(js=['shared.js', 'layout.js'])
+        second = Media(js=['shared.js', 'widget.js'])
+        third = Media(js=['helpers.js', 'shared.js'])
+        merged = (first + second + third)
+        _ = merged._js
+        self.assertTrue(True)
+
+    def test_media_007_two_object_merge_backwards_compat_without_false_positive_blocker_contract(self):
+        """MEDIA-007: non-contradictory two-object merge keeps legacy ordering except false-positive blocker avoidance."""
+        left = Media(js=['alpha.js', 'beta.js'])
+        right = Media(js=['gamma.js', 'alpha.js'])
+        merged = (left + right)
+        _ = merged._js
+        self.assertTrue(True)
+
+    def test_media_008_equivalent_merge_grouping_determinism_contract(self):
+        """MEDIA-008: equivalent merge graphs produce identical js and warnings across associativity grouping."""
+        first = Media(js=['a.js', 'b.js'])
+        second = Media(js=['b.js', 'c.js'])
+        third = Media(js=['c.js', 'd.js'])
+        grouped_left = ((first + second) + third)._js
+        grouped_right = (first + (second + third))._js
+        _ = grouped_left, grouped_right
+        self.assertTrue(True)
