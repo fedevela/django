@@ -25,7 +25,7 @@ def check_all_models(app_configs=None, **kwargs):
         # - If proxy is True -> ignore for collision bookkeeping (proxy/table-shadowing retains prior semantics).
         # - Else (managed concrete): collect (db_alias, db_table) as the collision key and append model label.
         if model._meta.managed and not model._meta.proxy:
-            db_alias = router.db_for_write(model)
+            db_alias = router.db_for_write(model) or 'default'
             db_table_models[(db_alias, model._meta.db_table)].append(model._meta.label)
         if not inspect.ismethod(model.check):
             errors.append(
@@ -42,7 +42,7 @@ def check_all_models(app_configs=None, **kwargs):
             indexes[model_index.name].append(model._meta.label)
         for model_constraint in model._meta.constraints:
             constraints[model_constraint.name].append(model._meta.label)
-    for (_db_alias, db_table), model_labels in db_table_models.items():
+    for (_db_alias, db_table), model_labels in sorted(db_table_models.items()):
         # DJANGO11630-005 (collision semantics):
         # Inputs: all tracked concrete-managed labels by effective alias + db_table.
         # Transition:
@@ -51,6 +51,7 @@ def check_all_models(app_configs=None, **kwargs):
         # Failure path:
         #   emit models.E028 and list only participating tracked labels for that effective alias/table key.
         if len(model_labels) > 1:
+            model_labels = sorted(model_labels)
             errors.append(
                 Error(
                     "db_table '%s' is used by multiple models: %s."

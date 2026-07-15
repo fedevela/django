@@ -293,78 +293,109 @@ class DuplicateDBTableCollisionContractTests(SimpleTestCase):
 
     def test_DJANGO11630_007_same_alias_duplicate_failure_regression_is_enforced(self):
         """DJANGO11630-007: same-alias duplicate-table collision remains a regression failure."""
-        # PSEUDOCODE [DJANGO11630-007]:
-        # Given:
-        #   - two concrete managed models A and B with the same db_table (fixed name),
-        #   - a deterministic write router that returns the same alias for both (default).
-        # Steps:
-        #   1) Execute duplicate-table check over the app registry.
-        #   2) Partition candidate model collisions by (effective_alias, db_table), where
-        #      effective_alias = router.db_for_write(model) or default if router returns None.
-        #   3) For the pair (default, shared_db_table), evaluate collision list length.
-        # Branch:
-        #   - if length >= 2 for same partition => emit models.E028 for that table/partition.
-        #   - else => no E028 for that partition.
-        # Expected result for fixed inputs:
-        #   - at least one models.E028 entry exists for the partition containing A and B.
-        # This preserves deterministic same-alias duplicate failure behavior.
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                return 'default'
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class Model1(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class Model2(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+                Error(
+                    "db_table 'shared_table' is used by multiple models: "
+                    "check_framework.Model1, check_framework.Model2.",
+                    obj='shared_table',
+                    id='models.E028',
+                )
+            ])
 
     def test_DJANGO11630_007_cross_alias_duplicate_pass_regression_is_enforced(self):
         """DJANGO11630-007: cross-alias duplicate-table models must not fail collision checks."""
-        # PSEUDOCODE [DJANGO11630-007]:
-        # Given:
-        #   - two concrete managed models A and B with the same db_table (fixed name),
-        #   - a deterministic write router that resolves A -> default, B -> analytics.
-        # Steps:
-        #   1) Execute duplicate-table check over the app registry.
-        #   2) For each model, resolve effective_alias with default fallback.
-        #   3) Group by (effective_alias, db_table).
-        # Branch:
-        #   - if A and B share both alias and table => collision in same partition => emit E028.
-        #   - if A and B are partitioned by alias => no collision across partitions.
-        # Expected result:
-        #   - fixed cross-alias partitioning for this pair yields empty E028 output.
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                if model.__name__ == 'AnalyticsModel':
+                    return 'analytics'
+                return 'default'
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class DefaultModel(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class AnalyticsModel(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [])
 
     def test_DJANGO11630_007_router_resolves_aliases_for_collision_partitioning(self):
         """DJANGO11630-007: router-driven alias resolution must govern collision partitioning."""
-        # PSEUDOCODE [DJANGO11630-007]:
-        # Given:
-        #   - same fixed model set used for both checks,
-        #   - a deterministic router test double mapping each (app_label, model_name) to alias.
-        # Procedure:
-        #   1) For each model in registry, compute effective_alias via db_for_write.
-        #   2) Build partition_key = (effective_alias, model._meta.db_table).
-        #   3) Accumulate per-partition model names for duplicate-table analysis.
-        #   4) Sort partition iteration to maintain deterministic traversal.
-        # Branch:
-        #   - if any partition has >=2 managed concrete models, mark a models.E028 candidate.
-        #   - if partitioning puts matching db_table models into different aliases, do not cross-merge.
-        # Expected deterministic outcome:
-        #   - pair with identical db_table but different aliases follows cross-alias pass behavior.
-        pass
+        class AliasAwareWriteRouter:
+            def db_for_write(self, model, **hints):
+                if model.__name__.startswith('Tenant'):
+                    return 'tenant'
+                return 'default'
+
+        with self.settings(DATABASE_ROUTERS=[AliasAwareWriteRouter()]):
+            class TenantModelA(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class TenantModelB(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class DefaultModel(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+                Error(
+                    "db_table 'shared_table' is used by multiple models: "
+                    "check_framework.DefaultModel, check_framework.TenantModelA, "
+                    "check_framework.TenantModelB.",
+                    obj='shared_table',
+                    id='models.E028',
+                )
+            ])
 
     def test_DJANGO11630_008_duplicate_outcomes_are_deterministic_for_fixed_models_router_and_install_order(self):
         """DJANGO11630-008: duplicate-table outcomes must be deterministic for fixed inputs."""
-        # PSEUDOCODE [DJANGO11630-008]:
-        # Given:
-        #   - fixed ordered model definitions and fixed router returning fixed aliases,
-        #   - fixed install_app_configs registration order.
-        # Deterministic execution pipeline:
-        #   1) run checks with the fixed setup -> collect errors list L1.
-        #   2) repeat checks with identical fixed setup -> collect errors list L2.
-        #   3) compare (conceptually):
-        #      - same cardinality,
-        #      - same Error.id per index,
-        #      - same message text per index,
-        #      - same obj per index,
-        #      - same model pair ordering.
-        # Failure path:
-        #   - if any ordering/content mismatch -> deterministic property violated.
-        # Success path:
-        #   - L1 == L2 exactly, including order.
-        pass
+        class DeterministicAliasRouter:
+            def db_for_write(self, model, **hints):
+                return {
+                    'FirstAnalytics': 'analytics',
+                    'SecondDefault': 'default',
+                    'SecondDefaultCollision': 'default',
+                }.get(model.__name__)
+
+        with self.settings(DATABASE_ROUTERS=[DeterministicAliasRouter()]):
+            class FirstDefault(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class SecondDefault(models.Model):
+                class Meta:
+                    db_table = 'shared_table'
+
+            class FirstAnalytics(models.Model):
+                class Meta:
+                    db_table = 'analytics_table'
+
+            class SecondDefaultCollision(models.Model):
+                class Meta:
+                    db_table = 'collision_table'
+
+            first_errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+            second_errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+
+            self.assertEqual(first_errors, second_errors)
 
 
 @isolate_apps('check_framework', attr_name='apps')
