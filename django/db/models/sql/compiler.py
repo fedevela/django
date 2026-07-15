@@ -370,7 +370,7 @@ class SQLCompiler:
             # - Normalize indentation/line-break-adjacent spacing noise.
             # - Preserve SQL token content; avoid rewriting SQL string literals.
             # - Keep meaningful token ordering and internal token text unchanged.
-            without_ordering = re.sub(r"\s+", " ", without_ordering.strip())
+            without_ordering = self._normalize_order_by_fragment_for_dedupe(without_ordering)
             params_hash = make_hashable(params)
             if (without_ordering, params_hash) in seen:
                 # Step 3: duplicate-key branch.
@@ -381,6 +381,79 @@ class SQLCompiler:
             seen.add((without_ordering, params_hash))
             result.append((resolved, (sql, params, is_ref)))
         return result
+
+    def _normalize_order_by_fragment_for_dedupe(self, sql):
+        # ORDERBY-002: normalize equivalent SQL formatting for dedupe key generation.
+        # The canonical fragment should collapse mixed line-ending formats and
+        # whitespace noise outside SQL string literals while preserving token
+        # content ordering.
+        sql = sql.replace('\r\n', '\n').replace('\r', '\n')
+        normalized = []
+        in_single_quote = False
+        in_double_quote = False
+        pending_space = False
+        i = 0
+
+        while i < len(sql):
+            ch = sql[i]
+
+            if in_single_quote:
+                normalized.append(ch)
+                if ch == "'":
+                    if i + 1 < len(sql) and sql[i + 1] == "'":
+                        # SQL string literals escape with doubled single quotes.
+                        normalized.append(sql[i + 1])
+                        i += 1
+                    else:
+                        in_single_quote = False
+                i += 1
+                continue
+
+            if in_double_quote:
+                normalized.append(ch)
+                if ch == '"':
+                    if i + 1 < len(sql) and sql[i + 1] == '"':
+                        # SQL quoted identifiers can also double their quote char.
+                        normalized.append(sql[i + 1])
+                        i += 1
+                    else:
+                        in_double_quote = False
+                i += 1
+                continue
+
+            if ch == "'":
+                if pending_space:
+                    normalized.append(' ')
+                in_single_quote = True
+                normalized.append(ch)
+                pending_space = False
+                i += 1
+                continue
+
+            if ch == '"':
+                if pending_space:
+                    normalized.append(' ')
+                in_double_quote = True
+                normalized.append(ch)
+                pending_space = False
+                i += 1
+                continue
+
+            if ch.isspace():
+                pending_space = True
+                i += 1
+                continue
+
+            if pending_space and normalized:
+                normalized.append(' ')
+            pending_space = False
+            normalized.append(ch)
+            i += 1
+
+        if pending_space and normalized:
+            normalized.append(' ')
+
+        return ''.join(normalized).strip()
 
     def get_extra_select(self, order_by, select):
         extra_select = []

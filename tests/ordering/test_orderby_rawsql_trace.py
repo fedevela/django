@@ -116,19 +116,67 @@ class ORDERBY001TraceabilityTests(TestCase):
 class ORDERBY002TraceabilityTests(TestCase):
 
     def test_ORDERBY_002_S1_identical_multiline_line_endings_normalize_to_same_key(self):
-        # Precondition: two equivalent multiline SQL fragments differ only by line endings.
-        # Action: compute dedupe keys through the order-by rendering pipeline.
-        # Expected outcome: a stable canonical key is produced for both fragments.
-        pass
+        # Given two logically identical multiline fragments differ only by line endings,
+        # deduplication should collapse them to a single ORDER BY term.
+        queryset = Article.objects.order_by(
+            RawSQL(
+                "CASE\n"
+                "    WHEN pub_date IS NOT NULL THEN 1\n"
+                "    ELSE NULL\n"
+                "END",
+                [],
+            ),
+            RawSQL(
+                "CASE\r\n"
+                "    WHEN pub_date IS NOT NULL THEN 1\r\n"
+                "    ELSE NULL\r\n"
+                "END",
+                [],
+            ),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 1)
 
     def test_ORDERBY_002_S2_whitespace_variation_around_line_breaks_normalizes_to_duplicate_key(self):
-        # Precondition: two equivalent multiline SQL fragments differ only by indentation.
-        # Action: compute dedupe keys for the whitespace variants.
-        # Expected outcome: both map to the same duplicate key.
-        pass
+        # Given logically identical multiline fragments differ only in indentation,
+        # deduplication should still normalize them as the same key.
+        queryset = Article.objects.order_by(
+            RawSQL(
+                "CASE\n"
+                "WHEN pub_date IS NOT NULL THEN 1\n"
+                "ELSE NULL\n"
+                "END",
+                [],
+            ),
+            RawSQL(
+                "CASE\n"
+                "  WHEN   pub_date IS   NOT NULL THEN 1\n"
+                "    ELSE   NULL\n"
+                "  END",
+                [],
+            ),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 1)
 
     def test_ORDERBY_002_S3_token_differences_with_whitespace_variants_stay_distinct(self):
-        # Precondition: fragments differ by SQL token content but vary only in whitespace noise.
-        # Action: compare canonical keys after normalization.
-        # Expected outcome: keys differ when token content differs, despite whitespace noise.
-        pass
+        # Given two fragments differ by SQL token content and only by whitespace
+        # around line breaks, dedupe should not collapse them.
+        queryset = Article.objects.order_by(
+            RawSQL(
+                "CASE\n"
+                "  WHEN pub_date IS NOT NULL THEN 1\n"
+                "  ELSE NULL\n"
+                "END",
+                [],
+            ),
+            RawSQL(
+                "CASE\n"
+                "  WHEN pub_date = 1 THEN 1\n"
+                "  ELSE NULL\n"
+                "END",
+                [],
+            ),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 2)
