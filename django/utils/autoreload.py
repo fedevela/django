@@ -419,6 +419,13 @@ class StatReloader(BaseReloader):
         # POSTCONDITION:
         #   - watcher snapshot receives only the canonical absolute real path from
         #     get_manage_py_path.
+        # AUTO-005 pseudocode:
+        # SYNTHETIC-CYCLE GUARD:
+        #   - add manage.py to `self.extra_files` before first snapshot.
+        #   - first snapshot seeds `mtimes` for manage.py like every other baseline
+        #     watched path.
+        #   - unchanged baselines must not satisfy any trigger branch in later
+        #     cycles, so initial inclusion cannot create a restart by itself.
         manage_py = get_manage_py_path()
         if manage_py is not None:
             self.watch_file(manage_py)
@@ -442,6 +449,26 @@ class StatReloader(BaseReloader):
         #   - next run_loop tick repeats diffing against persisted mtimes baseline.
         # FAILURE PATH:
         #   - snapshot read misses/deletions are filtered inside snapshot_files.
+        # AUTO-005 pseudocode:
+        # INPUT: `mtimes` state map persisted across check cycles.
+        # STEP 1: first-cycle bootstrapping:
+        #   - for each (filepath, mtime):
+        #       - if filepath not in mtimes: record mtimes[filepath] = mtime and
+        #         continue (do not notify).
+        # STEP 2: subsequent checks:
+        #   - for each (filepath, mtime):
+        #       - if filepath unseen: record baseline and continue.
+        #       - if mtime == old_time: no state change, no notification.
+        #       - if mtime < old_time: treat as unchanged for this contract, no
+        #         notification.
+        #       - if mtime > old_time: emit notify_file_changed(filepath) and keep
+        #         processing the rest of this snapshot.
+        # STEP 3: cycle conclusion:
+        #   - if STEP 2 had no positive mtime comparisons for any path, then this
+        #     check cycle has no restart path.
+        # FAILURE PATH:
+        #   - any file dropped from `snapshot_files` is already excluded from this
+        #     cycle’s comparison set; this must not be interpreted as a restart.
         mtimes = {}
         while True:
             for filepath, mtime in self.snapshot_files():
