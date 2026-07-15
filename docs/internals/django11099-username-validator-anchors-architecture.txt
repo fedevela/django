@@ -2,7 +2,7 @@ Issue DJANGO11099 — Username validator boundary anchors
 =====================================================
 
 This artifact records where the deterministic logic for
-``DJANGO11099-001`` … ``DJANGO11099-007`` should live at the
+``DJANGO11099-001`` … ``DJANGO11099-008`` should live at the
 architecture level before implementation changes.
 
 Requirement-to-architecture map
@@ -75,6 +75,16 @@ Requirement-to-architecture map
    - **Acceptance impact:** disallowed characters keep raising
      `ValidationError`.
 
+8. ``DJANGO11099-008``
+   - **Obligation type:** patch-surface governance and API/dependency guard
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``ASCIIUsernameValidator.regex`` and ``UnicodeUsernameValidator.regex``
+   - **Placement:** class-level assignments in each validator class.
+   - **Boundary:** changes for this issue must be limited to these two lines and
+     must not alter helper classes, password validators, settings, imports,
+     packaging, or additional test harness dependencies.
+   - **Acceptance impact:** patch shape is limited and API/dependency surfaces are unchanged.
+
 Topology and ownership
 ----------------------
 
@@ -88,6 +98,10 @@ Topology and ownership
 - **Stable contract boundary:** both classes remain subclasses of
   ``django.core.validators.RegexValidator``; callers continue to depend on the
   same public behavior.
+- **Patch-surface boundary for ``DJANGO11099-008``:** only the following sites are
+  allowed to mutate in implementation code:
+  - ``django/contrib/auth/validators.py`` → `ASCIIUsernameValidator.regex`
+  - ``django/contrib/auth/validators.py`` → `UnicodeUsernameValidator.regex`
 
 Dependency-direction notes
 -------------------------
@@ -99,6 +113,9 @@ Dependency-direction notes
 - Validation usage in tests depends on:
   1. ``django.contrib.auth.validators`` public exports.
   2. ``ValidationError`` exception contract from ``django.core.exceptions``.
+- Issue ``DJANGO11099-008`` also constrains dependency/API topology:
+  no new imports, no new exported symbols, and no dependency graph change are
+  permitted for this patch set.
 
 - Requirement tracking path for these obligations:
   1. ``tests/auth_tests/test_validators.py`` owns the traceability map
@@ -115,7 +132,10 @@ Integration-seam skeleton
   with explicit string-boundary anchors.
 - **Behavior-seam verification skeleton:** maintain/extend
   ``tests/auth_tests/test_validators.py`` with issue-specific tests:
-  ``test_django11099_001_*`` through ``test_django11099_007_*``.
+  ``test_django11099_001_*`` through ``test_django11099_008_*``.
+- **Patch-surface verification skeleton:** treat
+  ``test_django11099_008_patch_surface_limited_to_two_username_validator_regex_assignments``
+  as the acceptance seam for edit-boundary governance.
 - **No cross-module changes:** do not route through password validators or other
   auth validation components.
 
@@ -129,11 +149,11 @@ Readiness check (architecture-only phase)
 ----------------------------------------
 
 - Each GUID is mapped to a concrete locus in `django.contrib.auth.validators`.
-- All new GUIDs (005-007) are mapped to the same validator class boundary plus
+- All active GUIDs (001-008) are mapped to the same validator class boundary plus
   the test traceability seam.
 - No ownership changes required outside `django.contrib.auth.validators` and its
   contract-test seam.
-- No dependency inversions introduced; only anchor semantics are changed in the
-  existing validation class contracts.
+- No dependency inversions introduced; only anchor semantics and patch-surface
+  assignments are constrained in the existing validation class contracts.
 - At least one architecture artifact has been added:
   ``docs/internals/django11099-username-validator-anchors-architecture.txt``.
