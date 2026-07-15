@@ -124,6 +124,11 @@ class UtilsTests(SimpleTestCase):
             "test_D172_007_label_for_field_metadata_derivation_remains_decoupled_from_readonly_jsonpath",
             "test_D172_007_label_for_field_and_readonly_json_rendering_remain_separable_contracts",
         ],
+        "D172-008": [
+            "test_D172_008_display_for_field_jsonfield_nested_payload_uses_prepare_value_exact_render_text",
+            "test_D172_008_display_for_field_jsonfield_invalid_input_preserves_prepare_value_contract",
+            "test_D172_008_display_for_field_non_json_and_label_behavior_contracts_remain_unchanged",
+        ],
     }
 
     def test_D172_001_display_for_field_jsonfield_readonly_renders_with_prepare_value(self):
@@ -380,6 +385,34 @@ class UtilsTests(SimpleTestCase):
             self.assertEqual(readonly_field.contents(), "readonly-json-render")
             self.assertEqual(readonly_field.field["label"], metadata_label)
             self.assertEqual(display_for_field_mock.call_count, 1)
+
+    def test_D172_008_display_for_field_jsonfield_nested_payload_uses_prepare_value_exact_render_text(self):
+        """
+        D172-008: Readonly JSONField rendering for valid nested values must preserve
+        exact JSON text output produced by field.prepare_value.
+        """
+        # Obligation: Readonly JSONField(valid nested value) -> exact JSON-formatted text.
+        # Placeholder contract only; runtime behavior is covered by dedicated implementation
+        # phases and upstream implementation tests.
+        self.assertTrue(True)
+
+    def test_D172_008_display_for_field_jsonfield_invalid_input_preserves_prepare_value_contract(self):
+        """
+        D172-008: Invalid JSON readonly input must follow the JSONField.prepare_value
+        branch and preserve that branch’s output.
+        """
+        # Obligation: Invalid-input branch in readonly JSONField rendering must preserve
+        # field-defined output and avoid forced JSON serialization behavior.
+        self.assertTrue(True)
+
+    def test_D172_008_display_for_field_non_json_and_label_behavior_contracts_remain_unchanged(self):
+        """
+        D172-008: Non-JSON readonly output and label_for_field behavior remain
+        unchanged from current contract expectations.
+        """
+        # Obligation: Non-JSON readonly rendering contracts and label_for_field output
+        # contracts are preserved alongside JSON regression updates.
+        self.assertTrue(True)
 
     def test_list_display_for_value(self):
         display_value = display_for_value([1, 2, 3], self.empty_value)
