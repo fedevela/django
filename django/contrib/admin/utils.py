@@ -380,12 +380,23 @@ def help_text_for_field(name, model):
 def display_for_field(value, field, empty_value_display):
     from django.contrib.admin.templatetags.admin_list import _boolean_icon
 
+    # D172-001/D172-004/D172-005/D172-006:
+    # INPUT: readonly admin tuple (value, field, empty_value_display).
+    # OUTPUT: rendered display value (text/markup) with no widget rendering.
+    # ALGORITHM:
+    # 1) Keep existing precedence for flatchoices, BooleanField, null/Date/Number/File branches.
+    # 2) For JSONField only, render through field.prepare_value before text conversion.
+    # 3) Never alter behavior for non-JSONField instances.
+    # 4) Do not force JSON serialization for None/empty values; nulls are handled by the
+    #    existing null branch and continue to empty_value_display behavior.
     if getattr(field, 'flatchoices', None):
         return dict(field.flatchoices).get(value, empty_value_display)
     # BooleanField needs special-case null-handling, so it comes before the
     # general null test.
     elif isinstance(field, models.BooleanField):
         return _boolean_icon(value)
+    # D172-004/D172-005:
+    # Preserve existing null handling first to avoid JSON-formatting an empty value.
     elif value is None:
         return empty_value_display
     elif isinstance(field, models.DateTimeField):
@@ -398,6 +409,11 @@ def display_for_field(value, field, empty_value_display):
         return formats.number_format(value)
     elif isinstance(field, models.FileField) and value:
         return format_html('<a href="{}">{}</a>', value.url, value)
+    # D172-001:
+    # JSON-specific pseudocode (actual implementation in next phase):
+    # if isinstance(field, models.JSONField):
+    #     prepared = field.prepare_value(value)
+    #     return display_for_value(prepared, empty_value_display)
     else:
         return display_for_value(value, empty_value_display)
 
@@ -405,6 +421,10 @@ def display_for_field(value, field, empty_value_display):
 def display_for_value(value, empty_value_display, boolean=False):
     from django.contrib.admin.templatetags.admin_list import _boolean_icon
 
+    # D172-006:
+    # Existing helper formatting contract is stable and reused by display_for_field.
+    # This helper intentionally remains format-agnostic to field type; no JSON-only
+    # path belongs here.
     if boolean:
         return _boolean_icon(value)
     elif value is None:
