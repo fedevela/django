@@ -23,6 +23,10 @@ class LocaleAwareStatus(models.TextChoices):
     GOOD = lazy(_locale_aware_status_value, str)()
 
 
+class LocaleValueAwareStatus(enum.Enum):
+    GOOD = lazy(_locale_aware_status_value, str)()
+
+
 class MigrationWriterEnumDefaultContractTests(SimpleTestCase):
     """Traceability artifact for MIG-300-001, MIG-300-002, and MIG-300-003."""
 
@@ -151,10 +155,53 @@ class MigrationWriterEnumDefaultDeterminismContractsTests(SimpleTestCase):
     # - AC1: repeated autogeneration must stay on member-index form across locale switches.
     # - AC2: enum default deconstruction/reconstruction stays stable on Locale-sensitive enum values.
 
+    def _locale_sensitive_migration_text(self):
+        field = models.CharField(
+            default=LocaleValueAwareStatus.GOOD,
+            max_length=16,
+        )
+        migration = type("Migration", (migrations.Migration,), {
+            "operations": [
+                migrations.CreateModel(
+                    "StatusModel",
+                    fields=(("status", field),),
+                    bases=(models.Model,),
+                ),
+            ],
+            "dependencies": [],
+        })
+        return MigrationWriter(migration, include_header=False).as_string()
+
+    def _expected_enum_default_fragment(self):
+        return "%s.LocaleValueAwareStatus['GOOD']" % LocaleValueAwareStatus.__module__
+
     def test_mig_300_004_locale_round_trip_repeated_autogeneration_keeps_enum_member_index_text(self):
-        # Placeholder: obligation is traceably named and mapped; no behavioral assertion in this phase.
-        assert True
+        expected_fragment = self._expected_enum_default_fragment()
+        generated_text = []
+        for language in ("en", "fr", "en"):
+            with override(language):
+                migration_text = self._locale_sensitive_migration_text()
+            self.assertIn("default=%s" % expected_fragment, migration_text)
+            self.assertNotIn("default='Good'", migration_text)
+            self.assertNotIn("default='Bien'", migration_text)
+            generated_text.append(migration_text)
+
+        self.assertEqual(generated_text[0], generated_text[1], "Locale A->B must not alter enum-default migration text.")
+        self.assertEqual(generated_text[1], generated_text[2], "Locale A->B->A must remain byte-stable for enum-default output.")
 
     def test_mig_300_004_deconstruction_reconstruction_stable_enum_class_member_form(self):
-        # Placeholder: obligation is traceably named and mapped; no behavioral assertion in this phase.
-        assert True
+        expected_fragment = self._expected_enum_default_fragment()
+        serialized_by_locale = []
+        for language in ("en", "fr"):
+            with override(language):
+                field = models.CharField(
+                    default=LocaleValueAwareStatus.GOOD,
+                    max_length=16,
+                )
+                serialized_field = MigrationWriter.serialize(field)[0]
+            self.assertIn("default=%s" % expected_fragment, serialized_field)
+            self.assertNotIn("default='Good'", serialized_field)
+            self.assertNotIn("default='Bien'", serialized_field)
+            serialized_by_locale.append(serialized_field)
+
+        self.assertEqual(serialized_by_locale[0], serialized_by_locale[1], "Deconstruction/reconstruction must remain stable across locale variants.")
