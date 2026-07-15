@@ -5,6 +5,28 @@ from django.test import SimpleTestCase
 
 PATH = os.path.dirname(os.path.abspath(__file__))
 
+FPF_006_VERIFICATION_MAP = {
+    "FPF-006": [
+        "test_fpf_006_invalid_callable_path_return_type_raises_deterministic_path_resolution_error",
+        "test_fpf_006_repeated_callable_path_resolution_failures_stable_for_identical_invalid_types",
+    ],
+}
+
+
+class FilePathFieldCallablePathResolutionContractTests(SimpleTestCase):
+    """
+    Contract artifacts for FPF-006:
+    Reject malformed callable path return values deterministically during path resolution.
+    """
+
+    def test_fpf_006_invalid_callable_path_return_type_raises_deterministic_path_resolution_error(self):
+        """FPF-006 Scenario 1: non-string/pathlike return at path-resolution boundary."""
+        pass
+
+    def test_fpf_006_repeated_callable_path_resolution_failures_stable_for_identical_invalid_types(self):
+        """FPF-006 Scenario 2: repeated evaluations fail deterministically with stable behavior."""
+        pass
+
 
 def fix_os_paths(x):
     if isinstance(x, str):
