@@ -1,0 +1,103 @@
+REQ-138-004 — preserve MRO for inherited `get_<field>_display()` overrides
+=========================================================================
+
+Requirement
+-----------
+- REQ-138-004: For inherited models, normal Python MRO must be preserved for
+  display helper resolution:
+  - base model `get_<field>_display()` is used by subclass when not overridden
+  - subclass `get_<field>_display()` preempts base/custom generated helper
+  - no user helper in class chain falls back to generated helper.
+
+Constraint scope
+---------------
+- Preserve existing inheritance semantics; only alter `get_<field>_display` binding
+  when choices are involved.
+- No changes to class-loading lifecycle outside constructor-time display-helper
+  installation.
+- No changes to value mapping semantics in fallback formatter.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-004 -> `django/db/models/fields/__init__.py` (`Field.contribute_to_class`)
+  - Pressure O1 (inheritance precedence):
+    - If `display_name` exists in base/parent class via MRO, subclass construction
+      must not generate a replacement helper.
+  - Pressure O2 (local precedence):
+    - If `display_name` exists directly in subclass `cls.__dict__`, subclass
+      method must remain bound and dominate any generated helper.
+  - Pressure O3 (fallback activation):
+    - If there is no user-defined method in MRO, generation path remains enabled.
+- REQ-138-004 -> `django/db/models/base.py` (`Model._get_FIELD_display`)
+  - Pressure O3 confirms this remains final fallback implementation for fields
+    without user method anywhere in class chain.
+- REQ-138-004 -> `tests/model_fields/models.py` (new inheritance fixture models)
+  - Pressure O1/O2 requires an explicit base/subclass pair using same choices field
+    to validate inherited and override-aware resolution.
+- REQ-138-004 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - Pressure O1/O2/O3 binds to test obligations in
+    `REQ_138_004_OBLIGATIONS` and `REQ_ID_TO_VERIFICATION`.
+
+Ownership and boundaries
+------------------------
+- Construction boundary (`Field.contribute_to_class`)
+  - Owns display-helper installation decision for each choice field at model class
+    construction.
+  - Receives `self` (field) and `cls` (current class); emits boundary decision:
+    attach helper or preserve MRO-sourced behavior.
+- Inheritance-resolution boundary (Python MRO for class attribute lookup)
+  - Owns cross-class precedence:
+    subclass local method -> base method -> generated fallback.
+  - Serves as policy consumer for the construction boundary and as policy guard.
+- Fallback boundary (`Model._get_FIELD_display`)
+  - Owns deterministic mapping (`field.flatchoices` + raw passthrough) when no user
+    method is present in class chain.
+- Verification boundary
+  - Owns explicit acceptance mapping and scenario names for traceability to all
+    three obligations.
+
+Interface/type contracts
+------------------------
+- Contract C1 (`Field.contribute_to_class` installation gate):
+  - `display_name = f"get_{self.name}_display"`.
+  - If `display_name in cls.__dict__`, do not assign (local override ownership).
+  - Else if `getattr(cls, display_name, None)` is present and user-defined, do not
+    assign (inheritance override ownership).
+  - Else assign `partialmethod(cls._get_FIELD_display, field=self)`.
+- Contract C2 (`Model._get_FIELD_display`):
+  - Input: `(instance, field)` with choice metadata.
+  - Output: `force_str(dict(field.flatchoices).get(value, value), strings_only=True)`.
+  - Invariant: only executed when no class-level user method exists through MRO.
+
+Dependency direction
+--------------------
+1. Field declaration + choices metadata -> `Field.contribute_to_class`.
+2. `Field.contribute_to_class` -> model class namespace (`cls` local attrs and MRO).
+3. Construction decision -> helper attachment or preserve user resolution path.
+4. Runtime call `instance.get_<field>_display` -> Python MRO/attribute dispatch.
+5. If no user method found -> `Model._get_FIELD_display` fallback edge.
+
+Integration seam skeletons
+--------------------------
+- Seam S1 (`inheritance-aware helper gate`):
+  - Upstream: model class constructor contributes fields.
+  - Downstream: helper binding decision must consult class namespace and MRO, not
+    only `cls.__dict__`.
+- Seam S2 (`runtime dispatch contract`):
+  - Upstream: call site invokes `get_<field>_display`.
+  - Downstream: bound method selection follows local method > inherited method > generated
+    helper fallback.
+- Seam S3 (`test scaffold`):
+  - Upstream: obligations declared in test module.
+  - Downstream: concrete model fixtures and tests assert inheritance and override behavior.
+
+Architecture readiness check
+---------------------------
+- All REQ-138-004 obligations are mapped to concrete boundaries.
+- Dependency direction is explicit and confined to:
+  - class-construction ownership in `Field.contribute_to_class`
+  - runtime fallback in `Model._get_FIELD_display`
+  - validation scaffolding in test/model field artifacts.
+- Traceability remains anchored to `REQ-138-004` and obligation names.
+- One concrete architecture artifact created:
+  `docs/internals/req-138-004-inheritance-display-mro-architecture.txt`.
