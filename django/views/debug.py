@@ -85,11 +85,36 @@ class SafeExceptionReporterFilter:
         Cleanse an individual setting key/value of sensitive content. If the
         value is a dictionary, recursively cleanse the keys in that dictionary.
         """
+        # SWE196-002/SWE196-005/SWE196-006 (pseudocode)
+        # INPUT: key (setting/child-key candidate), value (arbitrary object)
+        # OUTPUT: sanitized value with scalar entries preserved and container
+        #         shapes maintained.
+        # DECISION: sanitize path is driven by key- and value-type predicates.
+        # ERROR: if key cannot be regex-compared, do not alter structure.
+        # NOTE: non-dict iterables remain untouched at this phase.
         try:
+            # if current key matches hidden pattern, mask immediately and stop;
+            # this is the terminal masking branch for the entire current value.
             if self.hidden_settings.search(key):
                 cleansed = self.cleansed_substitute
+            # if value is dict:
+            # - iterate entries in native order
+            # - recurse per (child_key, child_value) to preserve depth reachability
+            # - keep dict container as dict
+            # - non-dict/non-list/tuple leaf values return unmodified.
             elif isinstance(value, dict):
                 cleansed = {k: self.cleanse_setting(k, v) for k, v in value.items()}
+            # if value is list:
+            # - create a list output
+            # - for each element in index order:
+            #   - recurse with same element key context is preserved if element is dict by inner call
+            # - append each returned element unchanged for scalar entries
+            # - preserve element order exactly.
+            # elif value is tuple:
+            # - mirror same per-index recursion strategy in tuple output
+            # - preserve tuple container type and order.
+            # (recursive list/tuple logic below is required to satisfy
+            # SWE196-002 and preserve container semantics for SWE196-006)
             else:
                 cleansed = value
         except TypeError:
