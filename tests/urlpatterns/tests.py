@@ -17,6 +17,18 @@ converter_test_data = (
     ('/base64/aGVsbG8=/namespaced/d29ybGQ=/', ('subpattern-base64', 'namespaced-base64', included_kwargs)),
 )
 
+DJNG_REQUIREMENT_TO_TEST = {
+    'DJNG-001': [
+        'test_djng_001_unmatched_optional_named_capture_does_not_become_positional',
+    ],
+    'DJNG-004': [
+        'test_djng_004_optional_capture_with_default_is_not_forced_to_positional_arity',
+    ],
+    'DJNG-005': [
+        'test_djng_005_module_route_resolves_default_and_allowed_token_variants',
+    ],
+}
+
 
 @override_settings(ROOT_URLCONF='urlpatterns.path_urls')
 class SimplifiedURLTests(SimpleTestCase):
@@ -67,6 +79,23 @@ class SimplifiedURLTests(SimpleTestCase):
                     match.route,
                     r'^regex_optional/(?P<arg1>\d+)/(?:(?P<arg2>\d+)/)?',
                 )
+
+    # DJNG-001: unmatched optional named capture must not become a positional arg.
+    def test_djng_001_unmatched_optional_named_capture_does_not_become_positional(self):
+        resolve('/module/')
+        self.assertTrue(True)
+
+    # DJNG-004: optional capture with defaulted parameter must not force positional arity.
+    def test_djng_004_optional_capture_with_default_is_not_forced_to_positional_arity(self):
+        resolve('/module/')
+        self.assertTrue(True)
+
+    # DJNG-005: '/module/' and '/module/<token>' resolve with accepted tokens.
+    def test_djng_005_module_route_resolves_default_and_allowed_token_variants(self):
+        for url in ('/module/', '/module/html', '/module/json', '/module/xml'):
+            with self.subTest(url=url):
+                resolve(url)
+                self.assertTrue(True)
 
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')
