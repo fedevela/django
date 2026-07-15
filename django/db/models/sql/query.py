@@ -510,6 +510,14 @@ class Query(BaseExpression):
         """
         Perform a COUNT() query using the current filter constraints.
         """
+        # DJANGO12908-006.020: count() obligation for compound queries.
+        # - clone current query state
+        # - inject COUNT(*) as summary annotation
+        # - execute aggregation path (which re-enters compiler.as_sql for this query)
+        # - return 0 when backend returns NULL
+        # This keeps count on union/intersection/difference aligned with prior
+        # behavior; only annotated union + distinct(fields) remains guarded by
+        # SQLCompiler.as_sql.
         obj = self.clone()
         obj.add_annotation(Count('*'), alias='__count', is_summary=True)
         number = obj.get_aggregation(using, ['__count'])['__count']

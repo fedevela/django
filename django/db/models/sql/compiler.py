@@ -427,6 +427,20 @@ class SQLCompiler:
         return sql, params
 
     def get_combinator_sql(self, combinator, all):
+        # DJANGO12908-006.010: Deterministic combinator SQL path for union/intersection/difference.
+        # Precondition: self.query.combined_queries contains subquery objects and
+        # combinator is one of the supported operators.
+        # Steps:
+        # 1) Validate compound-slice/ordering support before compilation.
+        # 2) Compile each non-empty subquery; if a subquery is empty:
+        #    - UNION: omit it
+        #    - DIFFERENCE: omit only after a non-empty previous part exists
+        #    - INTERSECTION: propagate EmptyResultSet
+        # 3) Build bracketed/parenthesized SQL parts according to backend features.
+        # 4) Join parts using set operator (ALL only for union+all).
+        # Failure paths:
+        # - DatabaseError when subquery limit/ordering disallowed by backend
+        # - EmptyResultSet re-raised when whole combinator input is semantically empty
         features = self.connection.features
         compilers = [
             query.get_compiler(self.using, self.connection)
@@ -440,10 +454,10 @@ class SQLCompiler:
                     raise DatabaseError('ORDER BY not allowed in subqueries of compound statements.')
         parts = ()
         for compiler in compilers:
-            try:
-                # If the columns list is limited, then all combined queries
-                # must have the same columns list. Set the selects defined on
-                # the query on all combined queries, if not already set.
+                try:
+                    # If the columns list is limited, then all combined queries
+                    # must have the same columns list. Set the selects defined on
+                    # the query on all combined queries, if not already set.
                 if not compiler.query.values_select and self.query.values_select:
                     compiler.query = compiler.query.clone()
                     compiler.query.set_values((
@@ -498,6 +512,12 @@ class SQLCompiler:
             combinator = self.query.combinator
             features = self.connection.features
             if combinator:
+                # DJANGO12908-006.011: compound-query control for non-target behaviors.
+                # Branch by operation:
+                # - For non-annotated union/intersection/difference: continue
+                #   existing SQL-compilation path unchanged.
+                # - For annotated union + explicit distinct(fields): raise
+                #   NotSupportedError (scope-limited guard).
                 # DJANGO12908-001/004/005/008: fail fast for annotated union + explicit
                 # distinct-fields, before SQL compilation mutates/compiles any columns.
                 if (

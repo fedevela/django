@@ -986,6 +986,19 @@ class QuerySet:
             return self._filter_or_exclude(False, **filter_obj)
 
     def _combinator_query(self, combinator, *other_qs, all=False):
+        # DJANGO12908-006.000: Build compound query state without altering execution
+        # semantics for union/intersection/difference.
+        # Inputs:
+        # - combinator in {'union', 'intersection', 'difference'}
+        # - current queryset state and optional companion querysets
+        # State transitions:
+        # - clone current queryset to retain select/setup state
+        # - clear ordering/limits so they are reapplied by caller semantics
+        # - attach combined query list and combinator metadata on Query object
+        # Outputs:
+        # - combinator-aware QuerySet with no behavioral rewrites
+        # Failure path:
+        # - none; EmptyQuerySet normalization is handled before this method.
         # Clone the query to inherit the select list and everything
         clone = self._chain()
         # Clear limits and ordering so they can be reapplied
@@ -997,6 +1010,8 @@ class QuerySet:
         return clone
 
     def union(self, *other_qs, all=False):
+        # DJANGO12908-006.001: Preserve plain union behavior except for the
+        # pre-existing annotated-union + explicit-distinct-fields guard.
         # If the query is an EmptyQuerySet, combine all nonempty querysets.
         if isinstance(self, EmptyQuerySet):
             qs = [q for q in other_qs if not isinstance(q, EmptyQuerySet)]
@@ -1004,6 +1019,7 @@ class QuerySet:
         return self._combinator_query('union', *other_qs, all=all)
 
     def intersection(self, *other_qs):
+        # DJANGO12908-006.002: Intersection fast-paths for empties must remain.
         # If any query is an EmptyQuerySet, return it.
         if isinstance(self, EmptyQuerySet):
             return self
@@ -1013,6 +1029,8 @@ class QuerySet:
         return self._combinator_query('intersection', *other_qs)
 
     def difference(self, *other_qs):
+        # DJANGO12908-006.003: Difference fast-path must remain to preserve
+        # baseline semantics and failure expectations.
         # If the query is an EmptyQuerySet, return it.
         if isinstance(self, EmptyQuerySet):
             return self
@@ -1373,6 +1391,9 @@ class QuerySet:
             )
 
     def _not_support_combined_queries(self, operation_name):
+        # DJANGO12908-006.004: Preserve existing unsupported-operation contract.
+        # Transition: when combinator mode is active, disallow post-combine
+        # mutating/selection APIs and raise the stable NotSupportedError message.
         if self.query.combinator:
             raise NotSupportedError(
                 'Calling QuerySet.%s() after %s() is not supported.'
