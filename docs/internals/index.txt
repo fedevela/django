@@ -16,3 +16,4 @@ you'd like to help improve Django or learn about how Django is managed.
    deprecation
    git
    howto-release-django
+   autoreload-architecture

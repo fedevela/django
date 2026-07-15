@@ -1,0 +1,101 @@
+=============================
+Autoreload startup watch set
+=============================
+
+This document defines where ``AUTORELOAD-001`` logic lives and how it is integrated
+without affecting non-autoreload behavior.
+
+Requirement ID
+==============
+
+``AUTORELOAD-001``:
+
+During ``python manage.py runserver`` startup with ``StatReloader``,
+the invoked entry script must be added as an absolute path to the watched set
+before snapshot construction.
+
+Requirement-to-architecture map
+==============================
+
+* ``AUTORELOAD-001`` → ``django/utils/autoreload.py`` (``run_with_reloader``).
+* ``AUTORELOAD-001`` → ``django/utils/autoreload.py`` (``StatReloader.snapshot_files`` input set).
+* ``AUTORELOAD-001`` → ``django/core/management/commands/runserver.py`` (caller boundary).
+* ``AUTORELOAD-001`` → ``tests/utils_tests/test_autoreload.py`` (traceability map).
+
+Ownership and boundary placement
+===============================
+
+1. **Boundary**: invocation-to-reloader boundary.
+
+   - Entry-point concern: argument vector and process invocation details.
+   - Reuse concern: file watching set and snapshot behavior.
+   - Placement: keep invocation resolution inside ``django/utils/autoreload.py`` so
+     the caller (`runserver`) only delegates to reloader orchestration.
+
+2. **Module ownership**:
+
+   - ``django/core/management/commands/runserver.py`` owns runserver command flow and
+     always delegates startup to ``run_with_reloader`` when ``use_reloader`` is true.
+   - ``django/utils/autoreload.py`` owns reloader selection, bootstrap, and watched-file
+     contract for both startup and reload loops.
+   - ``tests/utils_tests/test_autoreload.py`` owns requirement-level traceability
+     and scenario coverage.
+
+Dependency direction
+====================
+
+* ``runserver`` command -> ``run_with_reloader`` (parent -> child dependency).
+* ``run_with_reloader`` -> ``get_reloader`` -> ``StatReloader``.
+* ``run_with_reloader`` -> ``start_django`` (starts Django only after snapshot inputs are prepared).
+* ``StatReloader`` -> ``watched_files/snapshot_files`` (downstream consumer).
+
+Integration seam and contracts
+==============================
+
+Seam to implement:
+``runserver`` startup args (``sys.argv[0]`` and invocation cwd) are translated into a
+watchable absolute script path before delegating to ``start_django``.
+
+Planned contracts (implementation-ready):
+
+1. ``compute_invocation_script_path(argv0: str, cwd: str) -> Path | None`` (in ``django/utils/autoreload.py``)
+
+   - Input contract:
+     - ``argv0`` from ``sys.argv[0]`` (actual startup token).
+     - ``cwd`` from current process working directory.
+   - Output contract:
+     - Returns resolved absolute ``Path`` representing the invocation target.
+     - Returns ``None`` when input is missing/invalid or cannot be safely resolved.
+
+2. ``augment_watched_files_with_invocation_script(reloader, invocation_path: Path | None) -> None`` (in ``django/utils/autoreload.py``)
+
+   - Input contract:
+     - A reloader object and resolved invocation path.
+   - Output contract:
+     - If ``invocation_path`` is valid and points to a file, inject that absolute path into
+       the initial watched file set before snapshot creation.
+     - If ``invocation_path`` is ``None``, no behavior change.
+   - Failure contract:
+     - No exception on best-effort resolution failure; preserve existing watch behavior.
+
+Scenario mapping
+===============
+
+* Scenario: invoked script is included in watch set
+
+  - Obligation: ensure ``runserver`` invocation script path appears in watched files.
+  - Home: ``run_with_reloader`` path-resolution contract -> ``StatReloader`` snapshot source.
+
+* Scenario: absolute path from actual invocation
+
+  - Obligation: preserve cwd-relative invocation by resolving to absolute path.
+  - Home: ``compute_invocation_script_path`` contract in ``django/utils/autoreload.py``.
+
+Acceptance readiness
+===================
+
+* Structural readiness criterion met when:
+  - All obligations are bound to files above.
+  - No module outside ``django.utils.autoreload`` and ``runserver`` owns the new startup logic.
+  - No new backend selection or lifecycle semantics are introduced by placement.
+  - Traceability is preserved via ``AUTORELOAD_VERIFICATION_MAP`` and this architecture doc.
