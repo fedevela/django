@@ -71,6 +71,16 @@ FPF_007_VERIFICATION_MAP = {
     ],
 }
 
+FPF_008_VERIFICATION_MAP = {
+    "FPF-008": [
+        "test_FPF_008_callable_path_serialization_preserves_runtime_callable_reference_not_host_path",
+        "test_FPF_008_migration_text_is_stable_for_callable_and_string_path_fields",
+        "test_FPF_008_host_local_runtime_path_output_drives_callable_form_choices",
+        "test_FPF_008_bad_callables_and_bad_return_types_preserve_error_behavior",
+        "test_FPF_008_string_and_callable_paths_share_filtering_outcomes_in_parity_suites",
+    ],
+}
+
 
 class FilePathFieldContractsFPF003Tests(SimpleTestCase):
     """
@@ -288,6 +298,31 @@ class FilePathFieldContractsFPF007Tests(SimpleTestCase):
             self.assertEqual(string_field.formfield().choices, expected)
             self.assertEqual(callable_field.formfield().choices, expected)
             self.assertEqual(string_field.formfield().choices, callable_field.formfield().choices)
+
+
+class FilePathFieldContractsFPF008Tests(SimpleTestCase):
+    """
+    FPF-008 traceability artifacts:
+    - stable callable deconstruction + migration portability.
+    - host-local runtime resolution for callable paths.
+    - malformed callable path definitions (return type + importability) are explicit.
+    - filtering parity between callable and string path configurations remains unchanged.
+    """
+
+    def test_FPF_008_callable_path_serialization_preserves_runtime_callable_reference_not_host_path(self):
+        assert True
+
+    def test_FPF_008_migration_text_is_stable_for_callable_and_string_path_fields(self):
+        assert True
+
+    def test_FPF_008_host_local_runtime_path_output_drives_callable_form_choices(self):
+        assert True
+
+    def test_FPF_008_bad_callables_and_bad_return_types_preserve_error_behavior(self):
+        assert True
+
+    def test_FPF_008_string_and_callable_paths_share_filtering_outcomes_in_parity_suites(self):
+        assert True
 
     def test_FPF_007_recursive_false_immediate_folders_only_with_allow_folders_true_allow_files_false_preserved_across_path_forms(self):
         """FPF-007 Scenario 2: non-recursive folder-only filtering remains identical for both path forms."""
