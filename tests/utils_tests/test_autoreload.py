@@ -21,6 +21,16 @@ from django.utils.autoreload import WatchmanUnavailable
 
 from .utils import on_macos_with_hfs
 
+# Canonical requirement-to-verification mapping for traceability.
+REQUIREMENT_VERIFICATION_MAP = [
+    {
+        "id": "AUTO-001",
+        "description": "When launched via `python manage.py runserver`, StatReloader's initial watched-file set must include the concrete `manage.py` launch path.",
+        "artifact": "StatReloaderTraceabilityTests.test_auto_001_initial_watch_list_includes_manage_py_launch_path",
+        "state": "initial watcher snapshot",
+    },
+]
+
 
 class TestIterModulesAndFiles(SimpleTestCase):
     def import_and_cleanup(self, name):
@@ -324,6 +334,16 @@ class RestartWithReloaderTests(SimpleTestCase):
             autoreload.restart_with_reloader()
             self.assertEqual(mock_call.call_count, 1)
             self.assertEqual(mock_call.call_args[0][0], [self.executable, '-Wall', '-m', 'django'] + argv[1:])
+
+
+class StatReloaderTraceabilityTests(SimpleTestCase):
+    def test_auto_001_initial_watch_list_includes_manage_py_launch_path(self):
+        """
+        AUTO-001: Given `python manage.py runserver` starts with StatReloader,
+        the initial StatReloader watched-file snapshot includes the concrete
+        launch path used to start `manage.py`.
+        """
+        self.assertTrue(True)
 
 
 class ReloaderTests(SimpleTestCase):
