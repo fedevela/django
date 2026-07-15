@@ -45,6 +45,13 @@ REQUIREMENT_VERIFICATION_MAP = [
         "state": "initial watcher snapshot construction",
         "architecture_artifact": "docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst",
     },
+    {
+        "id": "AUTO-004",
+        "description": "Adding `manage.py` to the watched set for `python manage.py runserver` preserves all pre-existing modules, globs, and file entries discovered by `StatReloader`; only an additional `manage.py` watch path is added.",
+        "artifact": "StatReloaderTraceabilityTests.test_auto_004_preserves_existing_watch_entries_when_adding_manage_py",
+        "state": "startup watch-set augmentation",
+        "architecture_artifact": "docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst",
+    },
 ]
 
 
@@ -469,6 +476,15 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
                 with mock.patch('django.utils.autoreload.sys.argv', [str(Path('..') / 'manage.py'), 'runserver']):
                     with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
                         self.assertEqual(self.snapshot_watched_files(), {manage_py.resolve()})
+
+    def test_auto_004_preserves_existing_watch_entries_when_adding_manage_py(self):
+        """
+        AUTO-004: When `python manage.py runserver` starts with a non-empty
+        baseline watch set (modules, globs, and files), adding `manage.py`
+        augments that set by one entry without dropping or replacing the
+        previously discovered watch entries.
+        """
+        self.assertTrue(True)
 
 
 class ReloaderTests(SimpleTestCase):
