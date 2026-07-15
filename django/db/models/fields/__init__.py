@@ -1727,6 +1727,7 @@ class FilePathField(Field):
         return str(value)
 
     def formfield(self, **kwargs):
+        path = self.path() if callable(self.path) else self.path
         # FPF-001::O2 (no eager resolution at module import):
         # This method is the defer point; avoid resolving callables during model import.
         # Expected runtime sequence (for implementation phase):
@@ -1737,7 +1738,7 @@ class FilePathField(Field):
         # Failure path:
         # - if callable rejects no-arg invocation, propagate configuration error at this boundary.
         return super().formfield(**{
-            'path': self.path,
+            'path': path,
             'match': self.match,
             'recursive': self.recursive,
             'form_class': forms.FilePathField,
