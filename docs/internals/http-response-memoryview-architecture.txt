@@ -2,7 +2,7 @@ Issue #59 Memoryview normalization in HttpResponse (Architecture artifact)
 =====================================================================
 
 Status: Architecture-ready for implementation (stable boundaries defined, traceability preserved).
-Requirements: MEMVIEW-001, MEMVIEW-002, MEMVIEW-004
+Requirements: MEMVIEW-001, MEMVIEW-002, MEMVIEW-003, MEMVIEW-004
 
 Requirement-to-architecture map
 ------------------------------
@@ -11,6 +11,11 @@ Requirement-to-architecture map
 - MEMVIEW-002 -> [django/http/response.py: HttpResponse.__init__ + HttpResponse.content.setter]
   - Owns handling of bytes-backed memoryview including empty payload as constructor input.
   - Ownership is intentionally constructor-only for this issue.
+- MEMVIEW-003 -> [django/http/response.py: HttpResponse.make_bytes, HttpResponse.__init__, HttpResponse.content]
+  - Owns baseline `str` and `bytes` semantics during ingress and repeated reads.
+  - `make_bytes` must preserve existing byte identity for `bytes` and preserve charset-driven encoding for `str`.
+  - Constructor must not route `str` or `bytes` through memoryview-specific conversion branches.
+  - Getter returns concrete `bytes` output on every access, independent of constructor type.
 - MEMVIEW-004 -> [django/http/response.py: HttpResponse.content getter]
   - Owns repeated read behavior contract for normalized memoryview-origin content.
 
@@ -36,7 +41,12 @@ Ownership and boundaries
   - Owner: `HttpResponse.content` getter.
   - Responsibility: present stable `bytes` on every access by assembling container state
     deterministically.
-- Boundary D: Legacy assignment path boundary (out of scope of this issue)
+- Boundary D: Baseline constructor semantics boundary
+  - Owner: `HttpResponse.make_bytes` + `HttpResponse.__init__`.
+  - Responsibility: keep `str` and `bytes` inputs on the legacy conversion path
+    (`str.encode(self.charset)` then `bytes(...)`, `bytes(value)`) and prevent
+    memoryview-only normalization from being applied to these baseline types.
+- Boundary E: Legacy assignment path boundary (out of scope of this issue)
   - Owner: `HttpResponse.content` setter path and `write()`.
   - Responsibility: unchanged behavior for runtime assignments and streaming-like appends.
 
@@ -46,6 +56,11 @@ Interface / contract artifacts
   - Input: `content` may be `memoryview`.
   - Output: bytes payload for internal container when input is memoryview, including `memoryview(b"")`.
   - Determinism rule: normalized value is a new immutable `bytes` object.
+- Baseline input contract (`MEMVIEW-ARCH-BASE`):
+  - Input: `content` is `str` or `bytes`.
+  - `str` output: `bytes(value.encode(self.charset))` so existing charset behavior is preserved.
+  - `bytes` output: `bytes(value)` so byte semantics are preserved.
+  - Contract says this path is not rewritten to a memoryview conversion branch.
 - Read contract (`MEMVIEW-ARCH-READ`):
   - Input: internal `self._container`.
   - Output: `bytes` value from deterministic join.
@@ -57,8 +72,11 @@ Dependency-direction notes
 -------------------------
 - `HttpResponse.__init__` depends on constructor normalization branch before delegating payload to setter.
 - `HttpResponse.content` getter depends only on `self._container` state and does not re-interpret original constructor input.
-- `HttpResponse.content` setter remains downstream from request-level `__init__` behavior and must not
+  - `HttpResponse.content` setter remains downstream from request-level `__init__` behavior and must not
   absorb constructor-specific branch logic.
+- `HttpResponse.make_bytes` depends on `self.charset` for all non-binary values.
+- Charset and content-type defaults therefore remain in `HttpResponseBase` contract; this prevents any
+  MEMVIEW-003 refactor from bypassing header/encoding source-of-truth.
 
 Integration-seam skeletons
 --------------------------
@@ -68,6 +86,10 @@ Integration-seam skeletons
 - Deterministic read seam:
   - Location: `HttpResponse.content` getter.
   - Purpose: return stable assembled bytes for each access without state mutation.
+- Baseline semantics seam:
+  - Location: `HttpResponse.make_bytes` and constructor comments in `django/http/response.py`.
+  - Purpose: codify that `str` and `bytes` always follow legacy conversion semantics and that no memoryview-specific
+    branch runs for these inbound baseline types.
 - Verification seam:
   - Location: `tests/responses/test_memoryview_traceability.py`.
   - Purpose: ensure each requirement ID has explicit test coverage name.
@@ -80,6 +102,6 @@ Changed architecture artifact paths
 
 Completion status
 ----------------
-- All traced obligations are assigned to explicit owners and seams.
-- Mapping and contracts preserve requirement IDs.
+- All traced obligations are assigned to explicit owners and seams, including `MEMVIEW-003`.
+- Requirement IDs map to owning module/function seams and include explicit baseline-path preservation pressure.
 - Structural artifacts are now present and implementation-safe (clear boundary and dependency direction).
