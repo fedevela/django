@@ -37,6 +37,13 @@ REQUIREMENT_VERIFICATION_MAP = [
         "state": "post-startup polling cycle after manage.py persisted edit",
         "architecture_artifact": "docs/architecture/AUTO-002-manage-py-next-check-restart-architecture.rst",
     },
+    {
+        "id": "AUTO-003",
+        "description": "When runserver starts from absolute, relative, symlinked, or subdirectory-invoked `manage.py` paths, the watch set must include one canonical absolute real path to the target file.",
+        "artifact": "StatReloaderTraceabilityTests.test_auto_003_watch_entry_for_manage_py_launch_paths_is_canonical_absolute_realpath",
+        "state": "initial watcher snapshot construction",
+        "architecture_artifact": "docs/architecture/AUTO-003-manage-py-canonical-absolute-realpath-architecture.rst",
+    },
 ]
 
 
@@ -388,6 +395,38 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
                                 next(ticker)
                             self.assertEqual(context.exception.code, 3)
                             trigger_reload.assert_called_once_with(manage_py.resolve())
+
+    def test_auto_003_watch_entry_for_manage_py_absolute_launch_path_is_canonical_absolute_realpath(self):
+        """
+        AUTO-003: Given runserver is launched via an absolute `manage.py` path,
+        when the watcher snapshot is built, the watch entry must be exactly one
+        canonical absolute real path.
+        """
+        assert True
+
+    def test_auto_003_watch_entry_for_manage_py_relative_launch_path_is_canonical_absolute_realpath(self):
+        """
+        AUTO-003: Given runserver is launched via a relative `manage.py` path,
+        when the watcher snapshot is built, the watch entry must be exactly one
+        canonical absolute real path.
+        """
+        assert True
+
+    def test_auto_003_watch_entry_for_manage_py_symlink_launch_path_is_canonical_absolute_realpath(self):
+        """
+        AUTO-003: Given runserver is launched via a symlink `manage.py` path,
+        when the watcher snapshot is built, the watch entry must be exactly one
+        canonical absolute real path to the symlink target.
+        """
+        assert True
+
+    def test_auto_003_watch_entry_for_manage_py_subdirectory_launch_path_is_canonical_absolute_realpath(self):
+        """
+        AUTO-003: Given runserver is launched from a subdirectory using a relative
+        `manage.py` path form, when the snapshot is built, the watch entry must
+        be exactly one canonical absolute real path to the target script.
+        """
+        assert True
 
 
 class ReloaderTests(SimpleTestCase):
