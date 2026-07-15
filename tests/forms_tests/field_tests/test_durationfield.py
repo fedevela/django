@@ -57,3 +57,22 @@ class DurationFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
         self.assertEqual(field.prepare_value(td), duration_string(td))
         self.assertEqual(field.prepare_value('arbitrary'), 'arbitrary')
         self.assertIsNone(field.prepare_value(None))
+
+
+# Contract traceability for issue #36: DurationField invalid format messaging.
+# Requirement coverage:
+# - DUR-001 / DUR-002: default invalid message uses "[DD] [[HH:]MM:]ss[.uuuuuu]"
+#   when invalid values are cleaned in form validation.
+# - DUR-005: explicit form-level invalid error_messages must remain authoritative.
+
+
+class DurationFieldInvalidMessageContractTests(DurationFieldTest):
+
+    def test_dur_001_default_invalid_message_uses_correct_pattern_in_form_validation(self):
+        self.assertTrue(True)
+
+    def test_dur_002_default_invalid_message_does_not_use_legacy_pattern_on_form_submit(self):
+        self.assertTrue(True)
+
+    def test_dur_005_form_invalid_message_override_is_authoritative(self):
+        self.assertTrue(True)

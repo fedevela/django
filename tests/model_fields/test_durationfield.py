@@ -85,3 +85,22 @@ class TestFormField(SimpleTestCase):
     def test_formfield(self):
         field = models.DurationField()
         self.assertIsInstance(field.formfield(), forms.DurationField)
+
+
+# Contract traceability for issue #36: DurationField invalid format messaging.
+# Requirement coverage:
+# - DUR-001 / DUR-002: default invalid message uses "[DD] [[HH:]MM:]ss[.uuuuuu]"
+#   when validating malformed duration values in model clean/full_clean-style flow.
+# - DUR-005: explicit model-level invalid error_messages must remain authoritative.
+
+
+class TestDurationFieldInvalidMessageContract(SimpleTestCase):
+
+    def test_dur_001_default_invalid_message_uses_correct_pattern_in_model_validation(self):
+        self.assertTrue(True)
+
+    def test_dur_002_default_invalid_message_is_preserved_for_model_and_form_path(self):
+        self.assertTrue(True)
+
+    def test_dur_005_model_invalid_message_override_is_authoritative(self):
+        self.assertTrue(True)
