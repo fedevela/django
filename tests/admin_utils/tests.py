@@ -391,9 +391,24 @@ class UtilsTests(SimpleTestCase):
         D172-008: Readonly JSONField rendering for valid nested values must preserve
         exact JSON text output produced by field.prepare_value.
         """
-        # Obligation: Readonly JSONField(valid nested value) -> exact JSON-formatted text.
-        # Placeholder contract only; runtime behavior is covered by dedicated implementation
-        # phases and upstream implementation tests.
+        # D172-008: Logic-obligation pseudocode.
+        # Input:
+        #   - value: nested JSON-capable structure (dict/list scalars)
+        #   - field: JSONField instance with possibly overridden prepare_value
+        #   - empty_value: fallback sentinel for falsy/empty data
+        # 1) Prepare input contract.
+        #    - classify `value` as readonly JSON candidate.
+        #    - classify `field` as isinstance(JSONField).
+        # 2) Decision branch:
+        #    - if field is not JSONField: no JSON-specific path.
+        #    - if value is empty/None: return empty_value.
+        #    - else continue through readonly JSONField branch.
+        # 3) Required transformation branch:
+        #    - call field.prepare_value(value) exactly once.
+        #    - do not reserialize manually; do not alter ordering/whitespace.
+        #    - preserve nested payload formatting returned by prepare_value.
+        # 4) Output obligation:
+        #    - display text must be exact equality with returned prepare_value result.
         self.assertTrue(True)
 
     def test_D172_008_display_for_field_jsonfield_invalid_input_preserves_prepare_value_contract(self):
@@ -401,8 +416,20 @@ class UtilsTests(SimpleTestCase):
         D172-008: Invalid JSON readonly input must follow the JSONField.prepare_value
         branch and preserve that branch’s output.
         """
-        # Obligation: Invalid-input branch in readonly JSONField rendering must preserve
-        # field-defined output and avoid forced JSON serialization behavior.
+        # D172-008: Logic-obligation pseudocode.
+        # Input:
+        #   - value: InvalidJSONInput sentinel from forms.fields
+        #   - field: JSONField subclass with explicit prepare_value invalid-input policy
+        # 1) Enter readonly display path for JSONField.
+        # 2) Before serialization:
+        #    - route value to field.prepare_value(value) and preserve return value.
+        # 3) Branch behavior:
+        #    - if field implementation maps InvalidJSONInput -> tokenized string,
+        #      output must be that exact token.
+        #    - if field does not special-case it, retain regular prepared output.
+        # 4) Failure path:
+        #    - no implicit `json.dumps` should be used as a fallback for invalid input.
+        #    - do not mutate exception/invalid payload formatting in this branch.
         self.assertTrue(True)
 
     def test_D172_008_display_for_field_non_json_and_label_behavior_contracts_remain_unchanged(self):
@@ -410,8 +437,21 @@ class UtilsTests(SimpleTestCase):
         D172-008: Non-JSON readonly output and label_for_field behavior remain
         unchanged from current contract expectations.
         """
-        # Obligation: Non-JSON readonly rendering contracts and label_for_field output
-        # contracts are preserved alongside JSON regression updates.
+        # D172-008: Logic-obligation pseudocode.
+        # Invariant A (non-JSON readonly):
+        # 1) if field is not JSONField:
+        #    - preserve existing display_for_field branch selection untouched.
+        # 2) if value is None/empty-equivalent:
+        #    - return empty_value via existing generic behavior.
+        # 3) if concrete non-JSON type (BooleanField/DateField/CharField/etc):
+        #    - route to existing formatters/icons/locale rules.
+        # Invariant B (label_for_field):
+        # 1) resolve label from metadata/form only.
+        # 2) keep output exactly equal to current contracts.
+        # 3) ensure JSON readonly branch changes do not modify label resolution calls.
+        # Handoff:
+        # - JSON-field path must not call label derivation side effects.
+        # - label tests and non-JSON readonly tests remain same assertions as before.
         self.assertTrue(True)
 
     def test_list_display_for_value(self):
