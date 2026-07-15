@@ -561,7 +561,38 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         `manage.py` is never injected into the watch scope; scope growth occurs
         only when launch entry is `manage.py`.
         """
-        assert True
+        with tempfile.TemporaryDirectory() as tempdir:
+            tempdir = Path(tempdir)
+            non_manage_entry = tempdir / 'runserver_entry.py'
+            existing_file = tempdir / 'existing.py'
+            glob_dir = tempdir / 'watched'
+            module_file = tempdir / 'app' / 'settings.py'
+            glob_file = glob_dir / 'watched.py'
+            ignored_file = glob_dir / 'ignored.txt'
+
+            non_manage_entry.write_text('')
+            existing_file.write_text('')
+            module_file.parent.mkdir()
+            module_file.write_text('')
+            glob_dir.mkdir()
+            glob_file.write_text('')
+            ignored_file.write_text('')
+
+            expected_module = {module_file.resolve()}
+            expected_files = {existing_file.resolve()}
+            expected_globs = {glob_file.resolve()}
+            expected_scope = expected_module | expected_files | expected_globs
+
+            with mock.patch('django.utils.autoreload.sys.argv', [str(non_manage_entry), 'runserver']):
+                with mock.patch(
+                    'django.utils.autoreload.iter_all_python_module_files',
+                    return_value=frozenset(expected_module),
+                ):
+                    reloader = autoreload.StatReloader()
+                    reloader.watch_file(existing_file)
+                    reloader.watch_dir(glob_dir, '*.py')
+                    watched_files = {path for path, _ in reloader.snapshot_files()}
+                    self.assertEqual(watched_files, expected_scope)
 
 
 class ReloaderTests(SimpleTestCase):
