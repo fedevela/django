@@ -1,5 +1,6 @@
 from types import FunctionType
 
+from django import forms
 from django.test import SimpleTestCase
 from django.template import Context, Engine
 
@@ -14,6 +15,24 @@ from .models import (
     Req138SentinelDisplayModel,
     Whiz,
 )
+
+
+class Req138DisplayOverrideModelForm(forms.ModelForm):
+    class Meta:
+        model = Req138DisplayOverrideModel
+        fields = ('status',)
+
+
+class Req138DisplayGeneratedBaseModelForm(forms.ModelForm):
+    class Meta:
+        model = Req138DisplayGeneratedBaseModel
+        fields = ('status',)
+
+
+class Req138StatefulDisplayOverrideModelForm(forms.ModelForm):
+    class Meta:
+        model = Req138StatefulDisplayOverrideModel
+        fields = ('status', 'is_primary')
 
 
 REQ_138_001 = "REQ-138-001"
@@ -161,10 +180,58 @@ class TestReq138005TemplateAndFormDisplayResolutionParity(SimpleTestCase):
     """Specification traceability artifact for REQ-138-005."""
 
     def test_req_138_005_template_and_form_use_override_first_display_lookup(self):
-        self.assertTrue(True)
+        template = Engine().from_string("{{ obj.get_status_display }}")
+
+        instance = Req138DisplayOverrideModel(status='on')
+        direct_value = instance.get_status_display()
+        template_value = template.render(Context({'obj': instance}))
+
+        self.assertEqual(direct_value, 'required:on')
+        self.assertEqual(template_value, direct_value)
+
+        bound_form = Req138DisplayOverrideModelForm(
+            data={'status': 'off'}, instance=Req138DisplayOverrideModel()
+        )
+        self.assertTrue(bound_form.is_valid())
+        saved_instance = bound_form.save(commit=False)
+        form_value = saved_instance.get_status_display()
+        form_template_value = template.render(Context({'obj': saved_instance}))
+
+        self.assertEqual(form_value, 'required:off')
+        self.assertEqual(form_value, form_template_value)
 
     def test_req_138_005_template_and_form_use_generated_choices_fallback(self):
-        self.assertTrue(True)
+        template = Engine().from_string("{{ obj.get_status_display }}")
+
+        generated_instance = Req138DisplayGeneratedBaseModel(status='off')
+        direct_value = generated_instance.get_status_display()
+        template_value = template.render(Context({'obj': generated_instance}))
+
+        self.assertEqual(direct_value, 'Off')
+        self.assertEqual(template_value, direct_value)
+
+        form = Req138DisplayGeneratedBaseModelForm(
+            data={'status': 'on'}, instance=Req138DisplayGeneratedBaseModel()
+        )
+        self.assertTrue(form.is_valid())
+        saved_instance = form.save(commit=False)
+        form_value = saved_instance.get_status_display()
+        form_template_value = template.render(Context({'obj': saved_instance}))
+
+        self.assertEqual(form_value, 'On')
+        self.assertEqual(form_value, form_template_value)
 
     def test_req_138_005_template_form_and_instance_paths_share_display_for_shared_state(self):
-        self.assertTrue(True)
+        template = Engine().from_string("{{ obj.get_status_display }}")
+
+        for instance_state in (
+            Req138StatefulDisplayOverrideModel(status='on', is_primary=True),
+            Req138StatefulDisplayOverrideModel(status='off', is_primary=False),
+        ):
+            form = Req138StatefulDisplayOverrideModelForm(instance=instance_state)
+
+            expected_display = instance_state.get_status_display()
+            template_display = template.render(Context({'obj': instance_state}))
+
+            self.assertEqual(expected_display, template_display)
+            self.assertEqual(expected_display, form.instance.get_status_display())
