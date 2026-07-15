@@ -1,11 +1,14 @@
+import json
 import copy
 from unittest import mock
 
+from django.contrib.auth.models import Group
+from django.db import IntegrityError
 from django.db import DEFAULT_DB_ALIAS, connection, connections
 from django.db.backends.base.creation import (
     TEST_DATABASE_PREFIX, BaseDatabaseCreation,
 )
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TransactionTestCase
 
 
 def get_connection_copy():
@@ -145,21 +148,102 @@ TXROLLBACK_ARCHITECTURE_MAP = {
 }
 
 
-class TxrollbackDeserializeDbFromStringContractTests(SimpleTestCase):
+class TxrollbackDeserializeDbFromStringContractTests(TransactionTestCase):
     """Traceability tests for TXROLLBACK-001/002/003/008."""
 
     def test_txrollback_001_deserialize_db_from_string_executes_full_save_path_within_alias_local_atomic(self):
-        # TODO(TXROLLBACK-001): assert atomic transaction wrap around save path.
-        self.assertTrue(True)
+        db_connection = connections[DEFAULT_DB_ALIAS]
+        creation = db_connection.creation_class(db_connection)
+        save_depth = {"depth": 0}
+        save_events = []
+        atomic_calls = []
+
+        class TrackingAtomic:
+            def __init__(self, *args, **kwargs):
+                atomic_calls.append((args, kwargs))
+
+            def __enter__(self):
+                save_depth["depth"] += 1
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                save_depth["depth"] -= 1
+                return False
+
+        class TrackingObject:
+            def __init__(self, value):
+                self.value = value
+
+            def save(self):
+                save_events.append((self.value, save_depth["depth"]))
+
+        with mock.patch(
+            "django.db.backends.base.creation.serializers.deserialize",
+            return_value=[TrackingObject(1), TrackingObject(2)],
+        ), mock.patch("django.db.backends.base.creation.transaction.atomic", TrackingAtomic):
+            creation.deserialize_db_from_string("[]")
+
+        self.assertEqual(atomic_calls, [((), {"using": db_connection.alias})])
+        self.assertEqual(save_events, [(1, 1), (2, 1)])
+        self.assertEqual(save_depth["depth"], 0)
 
     def test_txrollback_002_deserialize_db_from_string_rolls_back_partial_state_on_save_time_failure(self):
-        # TODO(TXROLLBACK-002): assert failed restore leaves target alias uncommitted.
-        self.assertTrue(True)
+        db_connection = connections[DEFAULT_DB_ALIAS]
+        creation = db_connection.creation_class(db_connection)
+        payload = json.dumps([
+            {"model": "auth.group", "fields": {"name": "txrollback-rollback"}},
+            {"model": "auth.group", "fields": {"name": "txrollback-rollback"}},
+        ])
+        pre_count = Group.objects.filter(name="txrollback-rollback").count()
+
+        with self.assertRaises(IntegrityError):
+            creation.deserialize_db_from_string(payload)
+
+        self.assertEqual(
+            pre_count,
+            Group.objects.filter(name="txrollback-rollback").count(),
+        )
 
     def test_txrollback_003_alias_local_transaction_boundary_does_not_affect_non_target_alias(self):
-        # TODO(TXROLLBACK-003): assert restore is confined to active alias.
-        self.assertTrue(True)
+        db_connection = connections[DEFAULT_DB_ALIAS]
+        creation = db_connection.creation_class(db_connection)
+        atomic_calls = []
+
+        class TrackingAtomic:
+            def __init__(self, *args, **kwargs):
+                atomic_calls.append(kwargs["using"])
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        with mock.patch(
+            "django.db.backends.base.creation.serializers.deserialize",
+            return_value=[],
+        ), mock.patch("django.db.backends.base.creation.transaction.atomic", TrackingAtomic):
+            creation.deserialize_db_from_string("[]")
+
+        self.assertEqual(atomic_calls, [db_connection.alias])
 
     def test_txrollback_008_non_rollback_fixture_and_transactiontestcase_semantics_preserved_by_scope(self):
-        # TODO(TXROLLBACK-008): assert non-rollback fixture and TransactionTestCase paths unchanged.
-        self.assertTrue(True)
+        class NonRollbackFixtureCase(TransactionTestCase):
+            available_apps = ["auth"]
+            databases = {"default"}
+            fixtures = ["should_not_be_loaded.json"]
+            serialized_rollback = False
+
+        with mock.patch("django.test.testcases.call_command") as call_command, mock.patch(
+            "django.db.backends.base.creation.BaseDatabaseCreation.deserialize_db_from_string",
+            return_value=None,
+        ) as deserialize_db_from_string:
+            test_case = NonRollbackFixtureCase()
+            test_case._fixture_setup()
+            call_command.assert_called_once_with(
+                "loaddata",
+                "should_not_be_loaded.json",
+                verbosity=0,
+                database="default",
+            )
+            deserialize_db_from_string.assert_not_called()
