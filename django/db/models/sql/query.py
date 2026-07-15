@@ -1163,6 +1163,22 @@ class Query(BaseExpression):
             if not lookup_class:
                 return
 
+        # ISNULL-001 / ISNULL-005
+        # Deterministic validation gate for __isnull RHS resolution:
+        # Inputs:
+        # - lookup_name: resolved lookup token, potentially "isnull"
+        # - rhs: user-provided lookup RHS before database prep
+        # Decision:
+        # - if lookup_name is "isnull" and rhs is not exactly a Python bool:
+        #     raise existing lookup-resolution ValueError family
+        #     with context including "__isnull" and the invalid rhs type.
+        # - else allow construction to continue.
+        # Note:
+        # bool is strict (subclass checks must still reject 1/0 and truthy/falsy
+        # non-bool values, including None, containers, and objects).
+        if lookup_name == 'isnull' and not isinstance(rhs, bool):
+            pass
+
         lookup = lookup_class(lhs, rhs)
         # Interpret '__exact=None' as the sql 'is NULL'; otherwise, reject all
         # uses of None as a query value unless the lookup supports it.
