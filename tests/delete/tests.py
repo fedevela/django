@@ -540,21 +540,31 @@ class DeletionTests(TestCase):
         DJ12747-001: Verify the zero-match QuerySet.delete() contract shape:
         returns (0, dict) for models with no matching rows.
         """
-        self.assertTrue(True)
+        deleted_simple, counters_simple = Avatar.objects.filter(pk=0).delete()
+        deleted_fk, counters_fk = R.objects.filter(pk=0).delete()
+        self.assertEqual(deleted_simple, 0)
+        self.assertEqual(deleted_fk, 0)
+        self.assertIsInstance(counters_simple, dict)
+        self.assertIsInstance(counters_fk, dict)
 
     def test_dj12747_002_zero_rows_query_set_delete_unifies_key_presence_policy_fk_vs_non_fk(self):
         """
         DJ12747-002: Verify the same zero-delete Y key-presence policy applies for
         FK-capable and simple models.
         """
-        self.assertTrue(True)
+        _, counters_simple = Avatar.objects.filter(pk=0).delete()
+        _, counters_fk = R.objects.filter(pk=0).delete()
+        self.assertEqual(set(counters_simple.keys()), set(counters_fk.keys()))
 
     def test_dj12747_003_zero_delete_nonempty_dict_uses_meta_label_keys_and_zero_values(self):
         """
         DJ12747-003: Verify any non-empty zero-delete Y dict contains model label keys
         and zero counters for each involved model.
         """
-        self.assertTrue(True)
+        _, counters_simple = Avatar.objects.filter(pk=0).delete()
+        self.assertEqual(counters_simple, {Avatar._meta.label: 0})
+        _, counters_fk = R.objects.filter(pk=0).delete()
+        self.assertEqual(counters_fk, {R._meta.label: 0})
 
     def test_model_delete_returns_num_rows(self):
         """

@@ -240,6 +240,14 @@ class Collector:
         if self.can_fast_delete(objs):
             self.fast_deletes.append(objs)
             return
+        # DJ12747-001/002/003 Trace -> empty, non-fast paths must retain model
+        # context so zero-row deletions can normalize to a consistent counter shape.
+        # Without this, FK-capable models can return {} while others return
+        # {"ModelLabel": 0} when no rows match.
+        if not objs:
+            if hasattr(objs, 'model'):
+                self.data[objs.model]
+            return
         new_objs = self.add(objs, source, nullable,
                             reverse_dependency=reverse_dependency)
         if not new_objs:
@@ -453,4 +461,12 @@ class Collector:
         #   structure for QuerySet.delete().
         # - For zero-deletion results where Y is non-empty:
         #   keys MUST be model _meta.label and values MUST be 0.
-        return sum(deleted_counter.values()), dict(deleted_counter)
+        deleted_counter = dict(deleted_counter)
+        if sum(deleted_counter.values()) == 0:
+            # DJ12747-002 Trace -> normalize zero-delete shape so FK and
+            # non-FK zero paths observe identical policy.
+            # In zero-delete results, any non-empty keys must use model labels and
+            # zero values.
+            for model in self.data:
+                deleted_counter.setdefault(model._meta.label, 0)
+        return sum(deleted_counter.values()), deleted_counter
