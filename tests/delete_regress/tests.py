@@ -495,6 +495,17 @@ class DeletePkResetNoDependencyTests(TestCase):
     requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS + DJ11179_007_VERIFICATION_ARTIFACTS
 
     def test_fast_delete_instance_set_pk_none(self):
+        # [DJ11179-007] No-dependency fast-delete regression contract:
+        # 1) Arrange: create one dependency-free instance.
+        # 2) Capture old_pk before delete.
+        # 3) Act: call instance.delete() and force no-dependency fast-delete path by scope
+        #    (this test does not configure related objects or dependency-managed flows).
+        # 4) Assert in-memory invariant: instance.pk is None after delete.
+        # 5) Assert stale-key invalidation in-process: filter(pk=old_pk).exists() is False.
+        # Failure branches:
+        # - If state branch is not fast-delete/no-dependency, assertions cannot represent the target behavior.
+        # - If in-memory pk is non-None, state reset contract regressed.
+        # - If stale pk resolves to existing row, process cache/invalidation contract regressed.
         instance = DeletionTracebook.objects.create()
         old_pk = instance.pk
         instance.delete()
