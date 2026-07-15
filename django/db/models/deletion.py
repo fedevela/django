@@ -274,6 +274,16 @@ class Collector:
         # Optimize for the case with a single obj and no dependencies
         if len(self.data) == 1 and len(instances) == 1:
             instance = list(instances)[0]
+            # DJ11179-001:
+            # - INPUT: single model + single gathered instance.
+            # - DECISION: if `self.can_fast_delete(instance)` is true, perform
+            #   direct SQL delete via `DeleteQuery.delete_batch()`.
+            # - REQUIRED STATE TRANSITION:
+            #   - on successful return, clear in-memory identity by setting
+            #     `instance` pk through `model._meta.pk.attname` to `None`.
+            # - ERROR PATH:
+            #   - let deletion exceptions propagate; skip identity reset in that case.
+            # - NOTE: this branch exits before the shared post-delete mutation loop.
             if self.can_fast_delete(instance):
                 with transaction.mark_for_rollback_on_error():
                     count = sql.DeleteQuery(model).delete_batch([instance.pk], self.using)
@@ -321,6 +331,9 @@ class Collector:
             for (field, value), instances in instances_for_fieldvalues.items():
                 for obj in instances:
                     setattr(obj, field.attname, value)
+        # DJ11179-001:
+        # - POST-CONDITION (non-fast path): clear in-memory PKs using
+        #   `model._meta.pk.attname` after DB deletions have completed.
         for model, instances in self.data.items():
             for instance in instances:
                 setattr(instance, model._meta.pk.attname, None)
