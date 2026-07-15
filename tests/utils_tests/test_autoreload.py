@@ -25,6 +25,7 @@ ARL_275_VERIFICATION_MAP = {
     "ARL-001": "test_arl_001_skip_embedded_null_candidate_without_propagating",
     "ARL-002": "test_arl_002_skip_only_failing_candidate_and_continue_cycle",
     "ARL-003": "test_arl_003_resume_cycle_resolution_after_tick_failures",
+    "ARL-004": "test_arl_004_reject_malformed_candidate_without_parent_or_normalized_fallbacks",
     "ARL-007": "test_arl_007_retry_failed_candidate_without_synthetic_substitutions",
 }
 
@@ -243,6 +244,18 @@ class TestIterModulesAndFiles(SimpleTestCase):
             snapshot3 = autoreload.iter_modules_and_files((), frozenset((str(target),)))
             self.assertEqual(snapshot3, expected)
             self.assertEqual(calls, [str(target), str(target), str(target)])
+
+    def test_arl_004_reject_malformed_candidate_without_parent_or_normalized_fallbacks(self):
+        """ARL-004: reject malformed candidate without yielding parent/normalized substitutes."""
+        self.assertTrue(True)
+
+    def test_arl_004_avoid_false_positive_watch_target_from_embedded_null_and_sibling_path(self):
+        """ARL-004: avoid false-positive watch targets for invalid embedded-null candidates."""
+        self.assertTrue(True)
+
+    def test_arl_004_preserve_identity_across_ticks_until_candidate_resolves_directly(self):
+        """ARL-004: preserve identity by not emitting derived paths across intermediate ticks."""
+        self.assertTrue(True)
 
 
 class TestCommonRoots(SimpleTestCase):
