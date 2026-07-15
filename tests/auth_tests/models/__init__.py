@@ -6,7 +6,7 @@ from .invalid_models import CustomUserNonUniqueUsername
 from .is_active import IsActiveTestUser1
 from .minimal import MinimalUser
 from .no_password import NoPasswordUser
-from .proxy import Proxy, UserProxy
+from .proxy import Proxy, SharedCodenameProxyA, SharedCodenameProxyB, UserProxy
 from .uuid_pk import UUIDUser
 from .with_foreign_key import CustomUserWithFK, Email
 from .with_integer_username import IntegerUsernameUser
@@ -16,6 +16,7 @@ __all__ = (
     'CustomPermissionsUser', 'CustomUser', 'CustomUserNonUniqueUsername',
     'CustomUserWithFK', 'CustomUserWithoutIsActiveField', 'Email',
     'ExtensionUser', 'IntegerUsernameUser', 'IsActiveTestUser1', 'MinimalUser',
-    'NoPasswordUser', 'Proxy', 'UUIDUser', 'UserProxy',
+    'NoPasswordUser', 'Proxy', 'SharedCodenameProxyA', 'SharedCodenameProxyB',
+    'UUIDUser', 'UserProxy',
     'UserWithDisabledLastLoginField',
 )

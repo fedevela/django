@@ -55,6 +55,14 @@ class ProxyModel(ConcreteModel):
         proxy = True
 
 
+class SharedCodenameProxy(ConcreteModel):
+    class Meta:
+        proxy = True
+        permissions = (
+            ('shared_proxy_permission', 'Can share this proxy permission scope'),
+        )
+
+
 class FooWithoutUrl(models.Model):
     """
     Fake model not defining ``get_absolute_url`` for

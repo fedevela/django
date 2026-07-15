@@ -20,3 +20,19 @@ class UserProxy(User):
         permissions = (
             ('use_different_app_label', 'May use a different app label'),
         )
+
+
+class SharedCodenameProxyA(Concrete):
+    class Meta:
+        proxy = True
+        permissions = (
+            ('shared_proxy_permission', 'Can share this proxy permission scope'),
+        )
+
+
+class SharedCodenameProxyB(Concrete):
+    class Meta:
+        proxy = True
+        permissions = (
+            ('shared_proxy_permission', 'Can share this proxy permission scope'),
+        )
