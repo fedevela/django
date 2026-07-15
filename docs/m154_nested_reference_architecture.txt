@@ -1,0 +1,65 @@
+Issue M154: Preserve nested deconstruction paths and reject unstable nested references
+===================================================================
+
+## Completion target
+- Canonical requirements: M154-001, M154-002, M154-004
+- Scope: nested class object serialization in field deconstruction and migration serialization.
+- Constraint: preserve deterministic structure-only behavior for implementation phase; no runtime policy changes in this artifact.
+
+## Requirement-to-architecture map
+- M154-001
+  - Owning locus: `django/db/models/fields/__init__.py` `Field.deconstruct()`
+  - Boundary: Field model object contract -> migration serialization contract via deconstruct tuple.
+  - Structural pressure: preserve nested class `__qualname__` during path construction.
+- M154-002
+  - Owning locus: `django/db/migrations/serializer.py` `serializer_factory()` + `TypeSerializer.serialize()`
+  - Boundary: field option value contract (class object values) -> class-name serializer.
+  - Structural pressure: model-local class arguments remain full chain path `<module>.<enclosing>.<nested>`.
+- M154-004
+  - Owning locus: `django/db/migrations/serializer.py` `TypeSerializer.serialize()` failure path + default `ValueError` in `serializer_factory()`
+  - Boundary: class-resolution contract -> existing non-serializable error reporting channel.
+  - Structural pressure: never emit invented or shortened paths when stable module/class-chain resolution is not possible.
+
+## Topology and ownership
+- Core deconstruction source:
+  - `Field.deconstruct()` owns the canonical serialized path seed `(module + __qualname__)`.
+  - It is the only module boundary that determines `Field` class identity string.
+- Migration serialization sink:
+  - `serializer.py` owns conversion from deconstructed path/class values to importable migration code.
+  - `_serialize_path()` is the seam for module import prefix handling.
+  - `TypeSerializer.serialize()` is the seam for class object options.
+- Error reporting seam:
+  - unresolved class chains must flow to existing non-serializable/local-scope reporting through serializer dispatch, not to a synthetic path.
+
+## Dependency direction
+- `django/db/models/fields/__init__.py` (Field deconstruction)
+  -> produces deconstruct payload consumed by `django/db/migrations/serializer.py`.
+- `serializer.py` depends on `models.Field`, `models.manager.BaseManager`, and `Operation` via `serializer_factory()`
+  but remains directionally one-way from deconstruct input to emitted migration token strings/imports.
+- `TypeSerializer` must not mutate nested class shape; it depends on class metadata attributes (`__module__`, `__qualname__`)
+  and existing serializer failure behavior.
+
+## Integration seams / stubs
+- Seam S1: `Field.deconstruct()` path string stability
+  - Inputs: `self.__class__`
+  - Outputs: dotted path with preserved nesting.
+  - Invariant: no flattening of inner class segments.
+- Seam S2: `_serialize_path(path)` import formatting
+  - Inputs: dotted path from deconstruct.
+  - Existing shortcut for `django.db.models` remains explicit; nested user-defined suffixes remain untouched.
+- Seam S3: class-object dispatch in `serializer_factory()`
+  - Must continue to dispatch `isinstance(value, type)` before generic deconstructable fallback for nested class arguments.
+- Seam S4: unresolved path reporting
+  - Fail closed through existing `ValueError` reporting path.
+
+## Implementation-ready mapping checklist
+- [x] Assign each requirement to owning module/contract.
+- [x] Pin each required boundary (deconstruct boundary, serializer boundary, failure boundary).
+- [x] Record dependency direction for later code changes.
+- [x] Preserve all mapping with canonical IDs.
+- [ ] Behavioral implementation to be applied in subsequent phases only.
+
+## Artifact cross references
+- Verification traceability: `tests/migrations/test_writer_nested_reference_traceability.py`
+  (`REQUIREMENT_TO_VERIFICATION`)
+- Logic loci: `django/db/models/fields/__init__.py`, `django/db/migrations/serializer.py`
