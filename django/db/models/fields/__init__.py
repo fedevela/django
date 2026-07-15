@@ -1706,6 +1706,17 @@ class FilePathField(Field):
         # Failure path:
         # - no normalization/expansion errors are introduced here; no filesystem touch in deconstruction.
         if callable(self.path):
+            # FPF-005::O1 (migration-time callable importability gate):
+            # Input: callable `path` object intended for migration serialization.
+            # Branch:
+            # - if callable path can be deconstructed into a stable module-level import path:
+            #     - write callable object into kwargs['path'].
+            #     - allow serializer to emit `module.qualname`.
+            # - else (lambda/nested/locals/other non-importable callable):
+            #     - emit deterministic serialization failure before migration rendering continues.
+            # Failure path:
+            # - do not convert non-importable callable to opaque values (repr/string literal/path token),
+            #   ensuring no generated migration can hide an unreconstructable callable.
             # Preserve callable path metadata so migration serialization can emit
             # a stable importable reference.
             kwargs['path'] = self.path
