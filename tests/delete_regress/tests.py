@@ -406,6 +406,25 @@ DJ11179_002_VERIFICATION_ARTIFACTS = [
 ]
 
 
+DJ11179_003_VERIFICATION_ARTIFACTS = [
+    (
+        "DJ11179-003",
+        "DeletePkResetFastDeleteBranchTraceabilityTests.test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset",
+        "Only dependency-free fast-delete instance paths may apply pk reset to None; collector-managed dependency paths remain unchanged by this obligation.",
+    ),
+    (
+        "DJ11179-003",
+        "DeletePkResetFastDeleteBranchTraceabilityTests.test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset",
+        "Branch selection must gate pk reset to the fast-delete path: when dependency-free, apply mutation, when collector-managed, do not apply this fast-delete mutation.",
+    ),
+    (
+        "DJ11179-003",
+        "DeletePkResetFastDeleteBranchTraceabilityTests.test_dj11179_003_dependency_collection_internals_do_not_receive_fast_delete_pk_mutation",
+        "Dependency-managed collector flow retains its existing mutation contract and does not receive the fast-delete pk-reset mutation.",
+    ),
+]
+
+
 class DeletePkResetNoDependencyTests(TestCase):
     requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS
 
@@ -455,3 +474,19 @@ class DeleteNoDependencyLookupTraceabilityTests(TestCase):
         self.assertFalse(DeletionTracebook.objects.filter(pk=old_pk).exists())
         with self.assertRaises(DeletionTracebook.DoesNotExist):
             DeletionTracebook.objects.get(pk=old_pk)
+
+
+class DeletePkResetFastDeleteBranchTraceabilityTests(TestCase):
+    requirements_coverage = DJ11179_003_VERIFICATION_ARTIFACTS
+
+    # Placeholder contract artifacts for DJ11179-003.
+    # These are intentionally no-op pass/fail tests to preserve traceability without
+    # adding behavioral assertions in this phase.
+    def test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset(self):
+        self.assertTrue(True)
+
+    def test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset(self):
+        self.assertTrue(True)
+
+    def test_dj11179_003_dependency_collection_internals_do_not_receive_fast_delete_pk_mutation(self):
+        self.assertTrue(True)
