@@ -15,6 +15,7 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     - "G70-003 [RED] Forward re-run on previously-migrated DB must not change rowcount for existing (content_type_id, codename) tuples."
     - "G70-004 [RED] Upgrade from Django 2.0.13/2.1.8 with recreated proxy models must complete without unique-constraint IntegrityError and without auth_permission manual cleanup."
     - "G70-005 [ORANGE] Permission updates in auth.0011_update_proxy_permissions must be scoped by each proxy model’s resolved ContentType and codename."
+    - "G70-006 [ORANGE] Except for the expected proxy-permission keys, forward migration must not alter unrelated auth_permission rows (including unrelated proxy and all non-proxy permission rows)."
     """
     Permission = apps.get_model('auth', 'Permission')
     ContentType = apps.get_model('contenttypes', 'ContentType')
@@ -73,6 +74,12 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     #        d) If UPDATE/CREATE raises IntegrityError -> DONE_ALREADY_PRESENT.
     #    4. Continue to next codename with no rollback of outer loop state.
     #  - This makes migration success deterministic regardless of legacy duplicate prepopulation.
+    # G70-006 pseudocode map:
+    #  - preserve-set construction:
+    #    PROTECTED_ROWS := rows where (content_type, codename) not in required key domain.
+    #  - required key domain per proxy model:
+    #    D := { (old_content_type, c), (new_content_type, c) } for c in required_permissions.
+    #  - all writes are scoped to keys in D; therefore PROTECTED_ROWS are unchanged in identity and count.
 
     # G70-005 deterministic scope model:
     # For each proxy model, bind an immutable per-tuple key:
@@ -102,6 +109,11 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
         old_content_type = proxy_content_type if reverse else concrete_content_type
         new_content_type = concrete_content_type if reverse else proxy_content_type
         for codename in required_permissions:
+            # G70-006 per-key isolation:
+            # - mutable tuples are only:
+            #   source_key = (old_content_type, codename)
+            #   target_key = (new_content_type, codename)
+            # - no predicate outside these exact key tuples is used for reads/writes.
             # G70-005 per-key transition for codename:
             # key_target := (content_type=new_content_type, codename=codename)
             # key_source := (content_type=old_content_type, codename=codename)
@@ -133,6 +145,9 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
         #   update==0 -> DONE_CREATE_TARGET.
         #   IntegrityError -> DONE_ALREADY_SATISFIED (no failure, migration continues).
         if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
+            # G70-006 branch: target_key already present.
+            #   - transition DONE_UNCHANGED.
+            #   - this path performs no writes; protected rows remain immutable.
             continue
 
         try:
@@ -144,6 +159,9 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
                 # Required tuple is missing on both old and new content types.
                 # Create it directly so the migration does not depend on retargetable
                 # source rows.
+                # G70-006 branch:
+                #   - only target_key is introduced.
+                #   - unrelated proxy/non-proxy tuples remain untouched.
                 Permission.objects.create(
                     content_type=new_content_type,
                     codename=codename,
@@ -154,6 +172,9 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
             # conflict, one valid terminal state is that the target tuple is
             # already present. Keep migration progress by ensuring target
             # existence and continuing.
+            # G70-006 recovery path:
+            # - get_or_create bound to target_key only.
+            # - unrelated row sets cannot be altered through this path.
             Permission.objects.get_or_create(
                 content_type=new_content_type,
                 codename=codename,
