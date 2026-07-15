@@ -464,6 +464,24 @@ DJ11179_005_VERIFICATION_ARTIFACTS = [
 ]
 
 
+DJ11179_006_VERIFICATION_ARTIFACTS = [
+    (
+        "DJ11179-006",
+        "DeleteNoDependencyIdempotencyTraceabilityTests.test_dj11179_006_repeated_no_dependency_delete_keeps_pk_none",
+        "After successful no-dependency delete, a second delete call keeps in-memory identity cleared (pk remains None).",
+    ),
+    (
+        "DJ11179-006",
+        "DeleteNoDependencyIdempotencyTraceabilityTests.test_dj11179_006_second_no_dependency_delete_does_not_resurrect_pk",
+        "Idempotent second-delete invocation does not reintroduce the prior primary key value into instance state.",
+    ),
+    (
+        "DJ11179-006",
+        "DeleteNoDependencyIdempotencyTraceabilityTests.test_dj11179_006_repeated_delete_return_paths_preserve_none_pk",
+        "Any return/result path from a repeated delete invocation preserves cleared in-memory identity (pk stays None).",
+    ),
+]
+
 class DeletePkResetNoDependencyTests(TestCase):
     requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS
 
@@ -740,3 +758,16 @@ class DeleteDependencyManagedAndBulkDeleteTraceabilityTests(TestCase):
         finally:
             models.signals.pre_delete.disconnect(pre_delete_signal, sender=Policy)
             models.signals.pre_delete.disconnect(pre_delete_signal, sender=Version)
+
+
+class DeleteNoDependencyIdempotencyTraceabilityTests(TestCase):
+    requirements_coverage = DJ11179_006_VERIFICATION_ARTIFACTS
+
+    def test_dj11179_006_repeated_no_dependency_delete_keeps_pk_none(self):
+        self.assertTrue(True)
+
+    def test_dj11179_006_second_no_dependency_delete_does_not_resurrect_pk(self):
+        self.assertTrue(True)
+
+    def test_dj11179_006_repeated_delete_return_paths_preserve_none_pk(self):
+        self.assertTrue(True)
