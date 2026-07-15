@@ -87,6 +87,12 @@ class Media:
         # filter(None, ...) avoids calling merge() with empty lists.
         for obj in filter(None, self._js_lists[1:]):
             js = self.merge(js, obj)
+        # PSEUDOCODE (MED-007):
+        # 1) Apply each media list merge in declared order to preserve form/widget composition
+        #    semantics.
+        # 2) Return a merged JS ordering even when conflicts exist (never raise).
+        # 3) Treat a conflict warning as an explicit unresolved-order signal, not a merge
+        #    abort.
         return js
 
     def render(self):
@@ -138,7 +144,7 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
-        # PSEUDOCODE (MED-001, MED-002, MED-003)
+        # PSEUDOCODE (MED-001, MED-002, MED-003, MED-004, MED-007)
         # INPUTS:
         #   - list_1: currently merged JS order (possibly containing all prior
         #     constraints).
@@ -169,6 +175,30 @@ class Media:
         #   most once; matched paths never duplicate.
         # - MED-001: reproducer expectation depends on stable anchor movement and
         #   first-merge-then-merge ordering defined by _js list composition.
+        #
+        # PSEUDOCODE (MED-004, MED-007):
+        # INPUTS:
+        #   - current_frontier: deduplicated list_1
+        #   - incoming_frontier: deduplicated list_2
+        # OUTPUT:
+        #   - merged list for `_js`, plus optional one-shot warning only if irreconcilable.
+        # ALGO:
+        #   1) Build/refresh constraint edges from adjacent pairs in both frontiers
+        #      (left file must precede right file).
+        #   2) Traverse `incoming_frontier` from right to left against `combined_list`,
+        #      maintaining `last_insert_index`.
+        #   3) When an existing node is encountered before anchor movement:
+        #      a. If moving the anchor past it breaks a satisfiable partial-order,
+        #         continue without warning (reconciliation is possible).
+        #      b. If movement introduces a cycle, snapshot only the violating direct
+        #         pair as the conflict payload.
+        #   4) If new file missing from `combined_list`, insert at anchor.
+        #   5) After traversal, emit at most one `MediaOrderConflictWarning` for the
+        #      detected cycle pair, then return `combined_list` unchanged as usable output.
+        # GUARDRAILS:
+        #   - Warn only when constraints are truly irreconcilable.
+        #   - Never warn for satisfiable but non-adjacent/no-cycle relations.
+        #   - Include only directly participating files in warning payload.
         # Ensure each list is de-duplicated before merge constraints are
         # reconciled, preserving first-seen order.
         deduped_list_1 = []
