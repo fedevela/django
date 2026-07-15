@@ -3,6 +3,7 @@ from django.db.utils import IntegrityError
 
 
 def update_proxy_model_permissions(apps, schema_editor, reverse=False):
+    # G70-007 [ORANGE] Reversal of auth.0011_update_proxy_permissions must preserve proxy permission row coherence and existing user/group permission relationships for same-app-label and different-app-label paths, without duplicate-related failures.
     """
     Update the content_type of proxy model permissions to use the ContentType
     of the proxy model.
@@ -20,6 +21,27 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     Permission = apps.get_model('auth', 'Permission')
     ContentType = apps.get_model('contenttypes', 'ContentType')
 
+    # G70-007 reverse-coherence pseudocode:
+    # For each required codename per proxy model:
+    # INPUTS: Model, required_permissions, reverse flag, reverse=True during rollback.
+    # DERIVED:
+    #   concrete_content_type := CT(Model, for_concrete_model=True)
+    #   proxy_content_type := CT(Model, for_concrete_model=False)
+    #   source_key := (old_content_type, codename)
+    #   target_key := (new_content_type, codename)
+    #   mode_label := "same-app-label" if source_key app_label == target_key app_label else "different-app-label"
+    # STEP:
+    #   if target_key exists -> DONE_NOOP
+    #   else try to retarget source_key -> target_key
+    #   if retarget updates 0 rows -> create target_key
+    #   if IntegrityError -> DONE_ALREADY_SATISFIED, continue
+    # INVARIANTS:
+    #   - only keys in source_key/target_key are ever read/updated/created
+    #   - no duplicate-related failures halt migration
+    #   - user/group M2M edge preservation:
+    #      * UPDATE path preserves permission row identity (one-row content_type change)
+    #      * create/get_or_create path handles pre-existing target/coincident legacy rows safely
+    #      * NOOP path preserves existing source-target relationship state
     # G70-002 pseudocode map:
     # O1: missing required key (new_content_type, codename) -> create one row exactly once.
     # O2: batch processing is tuple-local; each missing key increases rowcount by one, no cross-tuple coupling.
@@ -108,6 +130,9 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
         proxy_content_type = ContentType.objects.get_for_model(Model, for_concrete_model=False)
         old_content_type = proxy_content_type if reverse else concrete_content_type
         new_content_type = concrete_content_type if reverse else proxy_content_type
+        # G70-007 mode-specific state:
+        # - Reverse migration flips source/target compared with forward.
+        # - branch_label is derived from content-type metadata; control-flow is unchanged.
         for codename in required_permissions:
             # G70-006 per-key isolation:
             # - mutable tuples are only:
@@ -134,6 +159,15 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
             #   NOOP must leave rowcount unchanged for that tuple.
             # - Duplicate-path prevention:
             #   any IntegrityError while retarget/create is treated as "already satisfied" and loop continues.
+            # G70-007 reverse branch behavior:
+            # state_pre:
+            #   exists_target := Permission(target_key)
+            #   exists_source := Permission(source_key)
+            # state_transitions:
+            #   1) if exists_target -> DONE_NOOP (keep m2m edges)
+            #   2) if update(source->target) updates 1 -> DONE_MOVED
+            #   3) if update updates 0 -> DONE_CREATED
+            #   4) if IntegrityError in 2/3 -> DONE_ALREADY_SATISFIED
         # G70-004 per-key upgrade resilience:
         # - Legacy data can include either:
         #   (a) target already present due previous forward pass/recreated proxy state,
