@@ -83,6 +83,11 @@ class Media:
 
         * ``Media.__add__()`` owns collection of source declarations and must
           pass them here without first flattening them (MEDIA-001, MEDIA-002).
+        * This seam owns reconciliation of the provided three-widget
+          declarations into their required JavaScript order (MEDIA-003).
+        * The cyclic-precedence boundary below exclusively owns emission of
+          ``MediaOrderConflictWarning``; compatible declarations must not
+          cross it (MEDIA-004).
         * This seam owns JavaScript uniqueness and compatible declared-order
           resolution (MEDIA-005, MEDIA-006).
         * Ordering and warnings emitted below this seam must be deterministic
