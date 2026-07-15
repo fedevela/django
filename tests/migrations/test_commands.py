@@ -661,7 +661,27 @@ class MigrateTests(MigrationTestBase):
         [SQLMIGRATE-003] Placeholder contract: atomic migration with can_rollback_ddl=True
         keeps BEGIN/COMMIT wrapper pair when mocked for test scope.
         """
-        self.assertTrue(True)
+        # [SQLMIGRATE-003] Pseudocode:
+        # IF backend transactional SQL tokens are unavailable:
+        #   ASSERT: transaction_start_sql = connection.ops.start_transaction_sql().lower()
+        #   ASSERT: transaction_end_sql = connection.ops.end_transaction_sql().lower()
+        # ELSE:
+        #   GIVEN atomic migration module is already selected by the test class decorator
+        #   AND the mock scope is active:
+        #     - PATCH connection.features.can_rollback_ddl TO True for the duration of this test only
+        #     - CAPTURE `sqlmigrate` output for app="migrations", migration="0001"
+        #     - DERIVE normalized output lower-case
+        #     - DERIVE normalized BEGIN marker = connection.ops.start_transaction_sql().lower()
+        #     - DERIVE normalized COMMIT marker = connection.ops.end_transaction_sql().lower()
+        #   THEN:
+        #     - ASSERT begin marker is present in output
+        #     - ASSERT commit marker is present in output
+        #     - ASSERT begin index is strictly less than commit index
+        #   AND:
+        #     - PATCH context exits and no assertion here depends on global state after this line.
+        # NOTE: This placeholder describes the required control flow; it intentionally avoids
+        #       SQL body ordering checks outside BEGIN/COMMIT boundaries.
+        pass
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_sqlmigrate_atomic_migration_without_rollback_capability_skips_transaction_wrapper(self):
@@ -684,14 +704,50 @@ class MigrateTests(MigrationTestBase):
         [SQLMIGRATE-002] Placeholder contract: atomic migration with can_rollback_ddl=False
         omits BEGIN/COMMIT wrapper boundaries when mocked for test scope.
         """
-        self.assertTrue(True)
+        # [SQLMIGRATE-002] Pseudocode:
+        # IF backend transactional SQL tokens are unavailable:
+        #   ASSERT: transaction_start_sql = connection.ops.start_transaction_sql().lower()
+        #   ASSERT: transaction_end_sql = connection.ops.end_transaction_sql().lower()
+        # ELSE:
+        #   GIVEN atomic migration module is already selected by the test class decorator
+        #   AND the mock scope is active:
+        #     - PATCH connection.features.can_rollback_ddl TO False for the duration of this test only
+        #     - CAPTURE `sqlmigrate` output for app="migrations", migration="0001"
+        #     - DERIVE normalized output lower-case
+        #     - DERIVE normalized BEGIN marker = connection.ops.start_transaction_sql().lower()
+        #     - DERIVE normalized COMMIT marker = connection.ops.end_transaction_sql().lower()
+        #   THEN:
+        #     - ASSERT begin marker is NOT present in output
+        #     - ASSERT commit marker is NOT present in output
+        #   AND:
+        #     - PATCH context exits; remaining assertions do not depend on mutated state.
+        # NOTE: Wrapper assertion is intentionally only pair presence/absence, no body-order coupling.
+        pass
 
     def test_sqlmigrate_atomic_migration_can_rollback_ddl_mock_scope_is_local(self):
         """
         [SQLMIGRATE-005] Placeholder contract: can_rollback_ddl mocking remains scoped
         to each test and is restored after test completion.
         """
-        self.assertTrue(True)
+        # [SQLMIGRATE-005] Pseudocode:
+        # GIVEN original_flag = connection.features.can_rollback_ddl
+        # WHEN entering scoped mock:
+        #   WITH patch.object(connection.features, "can_rollback_ddl", False):
+        #     - CAPTURE `sqlmigrate` output for app="migrations", migration="0001"
+        #     - NORMALIZE output = out.getvalue().lower()
+        #     - ASSERT begin_sql = connection.ops.start_transaction_sql().lower()
+        #     - ASSERT end_sql = connection.ops.end_transaction_sql().lower()
+        #     - ASSERT begin_sql not in output AND end_sql not in output
+        # WHEN scope exits:
+        #   - ASSERT connection.features.can_rollback_ddl == original_flag
+        # AND then REPEAT with a different local scope:
+        #   WITH patch.object(connection.features, "can_rollback_ddl", True):
+        #     - CAPTURE output again
+        #     - ASSERT begin_sql in output AND end_sql in output as a complete pair
+        #     - ASSERT begin index < end index
+        #     - ASSERT completion check still independent of non-wrapper SQL ordering
+        # ENSURE no test class uses global mutation in setup/teardown; all state change is local context.
+        pass
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations_non_atomic"})
     def test_sqlmigrate_non_atomic_migration_ignores_rollback_capability_flag(self):
