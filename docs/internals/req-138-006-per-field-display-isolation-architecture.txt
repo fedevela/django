@@ -1,0 +1,108 @@
+REQ-138-006 — per-field-only custom `get_<field>_display()` activation
+====================================================================
+
+Requirement
+-----------
+- REQ-138-006: In models with multiple choice fields, only fields with a
+  custom `get_<field>_display()` may emit custom output; other fields must keep
+  standard `choices` mapping behavior.
+
+Constraint scope
+----------------
+- Preserve direct instance call semantics for mapped choice fields.
+- No global override registry.
+- No dynamic per-instance override dispatch for non-choice or sibling fields.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-006 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - `REQ_138_006_OBLIGATIONS[0..2]` and
+    `REQ_ID_TO_VERIFICATION["REQ-138-006"]` define acceptance intent and
+    per-field observable outcomes.
+  - This file is the canonical verification frontier for architecture-to-test
+    traceability.
+- REQ-138-006 -> `django/db/models/fields/__init__.py`
+  - `Field.contribute_to_class()` is the ownership boundary for accessor
+    installation.
+  - Placement pressure O1: each choice field must be evaluated in isolation and
+    only its own `display_name` is considered when deciding injection.
+  - Placement pressure O2: an explicit `get_<field>_display` on this class or via
+    MRO must prevent generation only for that same field.
+  - Placement pressure O3: absence of this field-level override must still allow
+    generated helper installation for that field.
+- REQ-138-006 -> `django/db/models/base.py`
+  - `Model._get_FIELD_display(self, field)` is the fallback boundary.
+  - Placement pressure O1/O2: resolve using `field.attname` and `field.flatchoices`
+    for the selected field only.
+  - Placement pressure O2: no sibling-field state or method lookup in this path.
+  - Placement pressure O3: return raw value on mapping miss to preserve generated
+    helper behavior.
+
+File/module placement decisions
+-------------------------------
+- Canonical logic location: model field class-construction stays in
+  `django/db/models/fields/__init__.py`.
+- Canonical fallback logic location: instance display fallback stays in
+  `django/db/models/base.py`.
+- Verification boundary: requirement articulation and pending acceptance hooks stay
+  in `tests/model_fields/test_req138_001_display_overrides.py`.
+
+Ownership-boundary artifacts
+---------------------------
+- Boundary B1 (construction ownership)
+  - Owner: `Field.contribute_to_class`.
+  - Responsibility: method-name selection, namespace/MRO override detection, and
+    optional `partialmethod` attachment for this field only.
+- Boundary B2 (fallback ownership)
+  - Owner: `Model._get_FIELD_display`.
+  - Responsibility: deterministic value-to-label conversion for unmapped path.
+- Boundary B3 (verification ownership)
+  - Owner: `tests/model_fields/test_req138_001_display_overrides.py`.
+  - Responsibility: maintain per-obligation contract names and executable targets.
+
+Interface/type/contract skeletons
+-------------------------------
+- Contract C1 (per-field installation)
+  - `display_name = "get_%s_display" % self.name`.
+  - `if display_name in cls.__dict__`: do not install, because class-local override
+    already owns this field.
+  - `elif hasattr(cls, display_name)`: do not install, because inherited override
+    for this field already exists.
+  - `else`: attach `partialmethod(cls._get_FIELD_display, field=self)` for this field.
+- Contract C2 (`_get_FIELD_display` fallback)
+  - Input: `(instance, field)` where `field` corresponds to requested accessor.
+  - Output: `force_str(dict(field.flatchoices).get(value, value), strings_only=True)`
+    with `value = getattr(instance, field.attname)`.
+  - Constraint: this contract is field-local and does not inspect sibling field
+    metadata or override symbols.
+
+Dependency-direction notes
+-------------------------
+1. `Field` metadata (`name`, `choices`) -> `Field.contribute_to_class`.
+2. `Field.contribute_to_class` -> model class namespace (`cls`) with
+   field-local install-or-skip decision.
+3. Runtime dispatch on `instance.get_<field>_display` -> helper found on class
+   namespace (local/inherited/user-defined).
+4. If generated helper is used -> `_get_FIELD_display(field=this_field)` -> `field.flatchoices`.
+5. Output -> direct call, `__str__`, template variable resolution, or form-driven
+   instance paths.
+
+Integration-seam skeletons
+--------------------------
+- Seam S1 (class-construction helper gate)
+  - Upstream: concrete `Field` instance being contributed.
+  - Downstream: per-field method-binding decision in class namespace.
+- Seam S2 (field-local fallback seam)
+  - Upstream: generated accessor invocation with injected `field` descriptor.
+  - Downstream: mapping contract in `_get_FIELD_display` over that descriptor only.
+- Seam S3 (verification seam)
+  - Upstream: obligations in `REQ_138_006_OBLIGATIONS`.
+  - Downstream: `REQ_ID_TO_VERIFICATION` test identifiers for implementation verification.
+
+Completion status
+----------------
+- One architecture artifact created at
+  `docs/internals/req-138-006-per-field-display-isolation-architecture.txt`.
+- Every obligation from `REQ-138-006` is mapped to an owning/structural boundary.
+- Dependency direction and per-field ownership are explicit and do not cross
+  sibling field boundaries.
