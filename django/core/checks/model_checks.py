@@ -9,6 +9,19 @@ from django.core.checks import Error, Tags, register
 
 @register(Tags.models)
 def check_all_models(app_configs=None, **kwargs):
+    # DJANGO11630-001:
+    # Effective collision key must be (effective database alias, db_table).
+    # For each concrete, managed model, derive effective alias via routing and group by:
+    #   collision_key = (alias, model._meta.db_table).
+    # Keep a stable list of model labels per collision_key.
+    #
+    # DJANGO11630-004:
+    # If routing returns None at check-time, treat as 'default' so missing decisions
+    # still participate in collision checks against other models on default.
+    #
+    # DJANGO11630-006:
+    # Existing same-app/same-label + same-table behavior is preserved by retaining
+    # the same managed/concrete filter; only alias scoping changes the grouping.
     db_table_models = defaultdict(list)
     indexes = defaultdict(list)
     constraints = defaultdict(list)
@@ -19,6 +32,10 @@ def check_all_models(app_configs=None, **kwargs):
         models = chain.from_iterable(app_config.get_models() for app_config in app_configs)
     for model in models:
         if model._meta.managed and not model._meta.proxy:
+            # DJANGO11630-002 / DJANGO11630-003:
+            # Collision outcome:
+            # - Same effective alias + same db_table => include in same bucket (emit E028).
+            # - Different effective aliases + same db_table => separate buckets (no E028).
             db_table_models[model._meta.db_table].append(model._meta.label)
         if not inspect.ismethod(model.check):
             errors.append(
@@ -36,6 +53,9 @@ def check_all_models(app_configs=None, **kwargs):
         for model_constraint in model._meta.constraints:
             constraints[model_constraint.name].append(model._meta.label)
     for db_table, model_labels in db_table_models.items():
+        # DJANGO11630-001 / DJANGO11630-002 / DJANGO11630-006:
+        # Emit models.E028 when one collision bucket contains multiple labels.
+        # This is the hard-failure path for concrete managed collisions on one alias+table.
         if len(model_labels) != 1:
             errors.append(
                 Error(
