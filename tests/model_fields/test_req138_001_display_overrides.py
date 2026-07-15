@@ -1,3 +1,4 @@
+from functools import partialmethod
 from types import FunctionType
 
 from django import forms
@@ -301,9 +302,35 @@ class TestReq138007DisplayResolutionDeterminism(SimpleTestCase):
     """Specification traceability artifact for REQ-138-007."""
 
     def test_req_138_007_override_defined_resolution_is_stable_over_repeated_calls(self):
-        # Repeated calls must route through a stable helper implementation.
-        self.assertTrue(True)
+        instance = Req138DisplayOverrideModel(status='on')
+        expected = 'required:on'
+        local_override = Req138DisplayOverrideModel.__dict__['get_status_display']
+        self.assertIsInstance(local_override, FunctionType)
+
+        previous_impl = None
+        for _ in range(4):
+            display_value = instance.get_status_display()
+            current_impl = instance.get_status_display.__func__
+
+            self.assertEqual(display_value, expected)
+            self.assertIs(current_impl, local_override)
+            if previous_impl is not None:
+                self.assertIs(previous_impl, current_impl)
+            previous_impl = current_impl
 
     def test_req_138_007_generated_helper_resolution_is_stable_over_repeated_calls(self):
-        # Repeated calls must not alternate between helper strategies.
-        self.assertTrue(True)
+        instance = Req138DisplayGeneratedBaseModel(status='off')
+        expected = 'Off'
+        generated_helper = Req138DisplayGeneratedBaseModel.__dict__['get_status_display']
+        self.assertIsInstance(generated_helper, partialmethod)
+
+        previous_impl = None
+        for _ in range(4):
+            display_value = instance.get_status_display()
+            current_impl = instance.get_status_display.__func__
+
+            self.assertEqual(display_value, expected)
+            self.assertIs(current_impl, generated_helper.func)
+            if previous_impl is not None:
+                self.assertIs(previous_impl, current_impl)
+            previous_impl = current_impl
