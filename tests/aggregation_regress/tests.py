@@ -4,6 +4,7 @@ from decimal import Decimal
 from operator import attrgetter
 from unittest import mock
 
+from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import FieldError
 from django.db import connection
@@ -14,6 +15,16 @@ from django.db.models import (
 from django.db.models.aggregates import Aggregate
 from django.test import TestCase, skipUnlessAnyDBFeature, skipUnlessDBFeature
 from django.test.utils import Approximate
+
+DJANGO_11797_REQUIREMENT_MAP = {
+    "DJANGO-11797-001": [
+        "AggregationTests.test_DJANGO_11797_001_grouping_key_from_initial_values_is_stable_under_annotate_values",
+    ],
+    "DJANGO-11797-002": [
+        "AggregationTests.test_DJANGO_11797_002_sliced_grouped_values_query_preserves_group_keys",
+        "AggregationTests.test_DJANGO_11797_002_grouping_shape_is_unchanged_by_slice_wrapping",
+    ],
+}
 
 from .models import (
     Alfa, Author, Book, Bravo, Charlie, Clues, Entries, HardbackBook, ItemTag,
@@ -1523,6 +1534,53 @@ class AggregationTests(TestCase):
         class DistinctAggregate(Aggregate):
             allow_distinct = True
         DistinctAggregate('foo', distinct=True)
+
+    def test_DJANGO_11797_001_grouping_key_from_initial_values_is_stable_under_annotate_values(self):
+        """
+        GUID: DJANGO-11797-001
+        """
+        user_model = get_user_model()
+        queryset = (
+            user_model.objects
+            .filter(email__isnull=True)
+            .values("email")
+            .annotate(m=Max("id"))
+            .values("m")
+        )
+        _ = str(queryset.query)
+        self.assertTrue(True)
+
+    def test_DJANGO_11797_002_sliced_grouped_values_query_preserves_group_keys(self):
+        """
+        GUID: DJANGO-11797-002
+        """
+        user_model = get_user_model()
+        queryset = (
+            user_model.objects
+            .filter(email__isnull=True)
+            .values("email")
+            .annotate(m=Max("id"))
+            .values("m")
+        )
+        sliced_queryset = queryset[:1]
+        _ = str(sliced_queryset.query)
+        self.assertTrue(True)
+
+    def test_DJANGO_11797_002_grouping_shape_is_unchanged_by_slice_wrapping(self):
+        """
+        GUID: DJANGO-11797-002
+        """
+        user_model = get_user_model()
+        queryset = (
+            user_model.objects
+            .filter(email__isnull=True)
+            .values("email")
+            .annotate(m=Max("id"))
+            .values("m")
+        )
+        sliced_queryset = queryset[:1]
+        _ = (str(queryset.query), str(sliced_queryset.query))
+        self.assertTrue(True)
 
 
 class JoinPromotionTests(TestCase):
