@@ -37,6 +37,12 @@ class StringShapedPayload(str):
     pass
 
 
+class NonPlainIterableTextEnum(str, enum.Enum):
+    """Non-plain enum-like value used to ensure enum-guard fallback stays non-enum."""
+
+    GOOD = "GOOD"
+
+
 class MigrationWriterEnumDefaultContractTests(SimpleTestCase):
     """Traceability artifact for MIG-300-001, MIG-300-002, and MIG-300-003."""
 
@@ -425,7 +431,18 @@ class MigrationWriterNonPlainDefaultSerializationContractsTests(SimpleTestCase):
     #   enum-member rendering syntax in emitted migration output.
 
     def test_mig_300_007_non_plain_enum_like_default_uses_existing_non_enum_serializer_path(self):
-        self.assertTrue(True)
+        string = MigrationWriter.serialize(NonPlainIterableTextEnum.GOOD)[0]
+        self.assertNotIn("NonPlainIterableTextEnum['GOOD']", string)
+        self.assertEqual(string, "'GOOD'")
+        self.assertNotIn("default=", string)
 
     def test_mig_300_007_repeated_autogeneration_keeps_non_enum_route_for_non_plain_defaults(self):
-        self.assertTrue(True)
+        expected_fragment = "'GOOD'"
+        emitted = []
+        for language in ("en", "fr", "en"):
+            with override(language):
+                emitted.append(MigrationWriter.serialize(NonPlainIterableTextEnum.GOOD)[0])
+            self.assertIn(expected_fragment, emitted[-1])
+
+        self.assertEqual(emitted[0], emitted[1], "Locale changes must not alter non-plain enum-like default serialization text.")
+        self.assertEqual(emitted[1], emitted[2], "Locale round-trip should keep non-enum serialization syntax stable.")

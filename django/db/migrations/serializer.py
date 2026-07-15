@@ -383,6 +383,20 @@ class Serializer:
         cls._registry.pop(type_)
 
 
+def _is_plain_enum_member(value):
+    if not isinstance(value, enum.Enum):
+        return False
+
+    allowed_enum_parents = [
+        enum.Enum,
+        getattr(enum, "IntEnum", None),
+        getattr(enum, "Flag", None),
+        getattr(enum, "IntFlag", None),
+        getattr(enum, "StrEnum", None),
+    ]
+    return value.__class__.__mro__[1] in tuple(enum_cls for enum_cls in allowed_enum_parents if enum_cls is not None)
+
+
 def serializer_factory(value):
     # MIG-300-004 [AC2 reconstruction compatibility]:
     # STATE: candidate value enters serialization dispatch.
@@ -459,6 +473,8 @@ def serializer_factory(value):
         return DeconstructableSerializer(value)
     for type_, serializer_cls in Serializer._registry.items():
         if isinstance(value, type_):
+            if type_ is enum.Enum and not _is_plain_enum_member(value):
+                continue
             return serializer_cls(value)
     raise ValueError(
         "Cannot serialize: %r\nThere are some values Django cannot serialize into "
