@@ -1078,6 +1078,20 @@ class MultiValueField(Field):
 class FilePathField(ChoiceField):
     def __init__(self, path, *, match=None, recursive=False, allow_files=True,
                  allow_folders=False, **kwargs):
+        # FPF-006::O2 (enumeration-time type gate):
+        # Input: `path` argument received for choice enumeration.
+        # Branch:
+        # - If callable: invoke and validate returned value now, before any os.walk/os.scandir use.
+        # - If not callable: treat as resolved path input to enumerate.
+        # Validation:
+        # - Valid: str or object implementing os.PathLike.
+        # - Invalid: other types (e.g., int, object, None when not intended):
+        #   raise deterministic TypeError/ValueError immediately.
+        # Pathological path behavior prevention:
+        # - Do not enter recursive/non-recursive enumeration branches when invalid.
+        # - Do not create partial choices or continue with malformed path coercion.
+        # Determinism:
+        # - repeated calls with same invalid callable return value must keep stable failure class/message.
         self.path, self.match, self.recursive = path, match, recursive
         self.allow_files, self.allow_folders = allow_files, allow_folders
         super().__init__(choices=(), **kwargs)

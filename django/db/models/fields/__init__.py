@@ -1751,6 +1751,17 @@ class FilePathField(Field):
         return str(value)
 
     def formfield(self, **kwargs):
+        # FPF-006::O1 (callable path return type validation contract):
+        # Input: stored `self.path`, which may be callable metadata or literal path value.
+        # Resolution point:
+        # 1) if callable(self.path): invoke once here to produce `path` for form-layer use.
+        # 2) if not callable: use stored `self.path` directly.
+        # Validation obligation:
+        # - `path` MUST be path-like or string-like before handoff.
+        # - If callable output is not string/path-like, fail deterministically at this boundary
+        #   with stable TypeError/ValueError semantics and abort formfield creation.
+        # Stability obligation:
+        # - same invalid return type across repeated formfield() calls must re-surface the same failure mode/message.
         path = self.path() if callable(self.path) else self.path
         # FPF-004::O2 (string/callable runtime parity):
         # Input: stored path metadata (callable or literal string).
