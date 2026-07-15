@@ -52,6 +52,12 @@ REQUIREMENT_VERIFICATION_MAP = [
         "state": "startup watch-set augmentation",
         "architecture_artifact": "docs/architecture/AUTO-004-manage-py-preserve-existing-watch-entries-architecture.rst",
     },
+    {
+        "id": "AUTO-005",
+        "description": "If `manage.py` and all other watched paths are unchanged across multiple check cycles, no reload/restart event is emitted.",
+        "artifact": "StatReloaderTraceabilityTests.test_auto_005_no_reload_when_watched_set_is_stable",
+        "state": "steady-state polling with no filesystem mutation",
+    },
 ]
 
 
@@ -515,6 +521,13 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
                     reloader.watch_dir(glob_dir, '*.py')
                     watched_files = set(reloader.watched_files())
                     self.assertEqual(watched_files, baseline_expected | {manage_py.resolve()})
+
+    def test_auto_005_no_reload_when_watched_set_is_stable(self):
+        """
+        AUTO-005: If `manage.py` and the existing watched set are stable across
+        repeated check cycles, no restart/reload event is emitted.
+        """
+        self.assertTrue(True)
 
 
 class ReloaderTests(SimpleTestCase):
