@@ -1,7 +1,7 @@
-Issue #241 Media.__add__ ordering architecture
-=============================================
+Issue #241 + #242 Media.__add__ and conflict reporting architecture
+===============================================================
 
-Issue: MEDIA-001, MEDIA-002, MEDIA-003, MEDIA-005
+Issue: MEDIA-001, MEDIA-002, MEDIA-003, MEDIA-004, MEDIA-005
 Scope: Global JavaScript media ordering for ``Media.__add__`` merges in
 ``django.forms.widgets``.
 
@@ -21,6 +21,14 @@ implementation. No API surface changes are introduced in this phase.
 - ``MEDIA-003``
   - Home: ``django/forms/widgets.py`` ``Media.__add__``, ``Media._js``
   - Pressure: ensure multi-way merges share a single source of precedence truth.
+- ``MEDIA-004``
+  - Home: ``django/forms/widgets.py`` ``Media._js``
+  - Pressure: warning should be emitted only for true contradictions in the merged constraint graph, and payload should include only files in that contradiction cycle.
+  - Observation points:
+    - ``tests/forms_tests/tests/test_media_ordering_traceability.py``:
+      - ``test_media_004_hard_cycle_a_before_b_and_b_before_a_emits_conflict_warning_spec``
+      - ``test_media_004_warning_message_mentions_only_a_js_and_b_js_contradiction_pair_spec``
+      - ``test_media_004_cycle_a_before_b_before_c_reports_only_contradictory_files_spec``
 - ``MEDIA-005``
   - Home: ``django/forms/widgets.py`` ``Media.merge``, ``Media._js``
   - Pressure: preserve adjacency of each input chunk whenever satisfiable globally.
@@ -34,6 +42,12 @@ implementation. No API surface changes are introduced in this phase.
   - ordering state: ``_js_lists`` (chunk-provenance list)
   - public materialization points: ``_js`` property and ``__getitem__``
 - **Verification surface**: ``tests/forms_tests/tests/test_media_ordering_traceability.py`` remains canonical for scenario IDs and acceptance mapping.
+- **Architecture helper seams (future implementation scaffold):**
+  - private boundary in ``Media``:
+    - ``_build_js_constraint_graph(self, chunks)``
+    - ``_resolve_js_order(nodes, edges, node_position)``
+    - ``_discover_js_cycle(unresolved_nodes, edges, node_position)``
+  - These helpers are contract points for deterministic extraction and cycle-only payload selection.
 
 
 3) Boundaries and ownership
@@ -47,11 +61,13 @@ implementation. No API surface changes are introduced in this phase.
   - Ownership: local candidate merge operations between two lists.
   - Responsibility: build/merge adjacency edges without concluding conflict decisions.
   - Constraint behavior: should emit local edges for each adjacent pair; conflict state is deferred.
+  - MEDIA-004 pressure: do not construct warning payload from this local path.
 
 - ``Media._js``
   - Ownership: final global constraint resolution.
   - Responsibility: collect all chunk constraints from ``_js_lists`` and solve global ordering.
   - Responsibility boundary: this is the single place to emit ``MediaOrderConflictWarning``.
+  - MEDIA-004 pressure: warning payload must be derived from contradiction cycle extracted from the merged graph; exclude transient intermediate pairwise artifacts.
 
 - ``media_property``
   - Boundary: stable external seam that combines class/widget media trees via ``Media`` arithmetic.
@@ -64,15 +80,21 @@ implementation. No API surface changes are introduced in this phase.
 - ``MediaOrderConflictWarning``
   - Input contract: raised when global adjacency graph is cyclic.
   - Output contract: one warning per unresolved object materialization path where total order is impossible.
+  - MEDIA-004 extension:
+    - include file refs from a real contradiction cycle only,
+    - avoid listing unrelated or pairwise-intermediate nodes.
 
 - ``Media._js`` contract (deterministic)
   - Input: ordered chunk list ``self._js_lists``.
   - Invariant: each input chunk preserves adjacency edges ``x_i -> x_{i+1}``.
   - Output: total list that is topologically valid for all edges, or conflict fallback path with warning.
+  - Conflict contract for MEDIA-004:
+    - on unresolved nodes, extract one concrete cycle subgraph and emit cycle-participant files only.
 
 - ``Media.merge(list_1, list_2)``
   - Input: two ordered media lists.
   - Invariant: no early contradiction finalization; adjacency edges can be suggested/accumulated but only used by ``_js`` for global evaluation.
+  - Output contract for MEDIA-004: emits deterministic order-only merge result when used as local fallback.
 
 - ``Media.__add__(self, other)``
   - Input: two ``Media`` objects.
