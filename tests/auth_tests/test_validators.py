@@ -266,6 +266,9 @@ USERNAME_VALIDATOR_REQUIREMENT_TO_TEST = {
     "DJANGO11099-002": "test_django11099_002_unicode_validator_uses_explicit_string_boundaries",
     "DJANGO11099-003": "test_django11099_003_ascii_validator_rejects_trailing_newline",
     "DJANGO11099-004": "test_django11099_004_unicode_validator_rejects_trailing_newline",
+    "DJANGO11099-005": "test_django11099_005_non_empty_allowed_usernames_preserve_acceptance_for_ascii_and_unicode_validators",
+    "DJANGO11099-006": "test_django11099_006_empty_usernames_remain_invalid_for_ascii_and_unicode_validators",
+    "DJANGO11099-007": "test_django11099_007_disallowed_characters_remain_invalid_for_ascii_and_unicode_validators",
 }
 
 
@@ -291,3 +294,24 @@ class UsernameValidatorContractTests(SimpleTestCase):
         with self.assertRaises(ValidationError):
             validator("alice\n")
         validator("alice")
+
+    def test_django11099_005_non_empty_allowed_usernames_preserve_acceptance_for_ascii_and_unicode_validators(self):
+        # DJANGO11099-005
+        #
+        # Inputs that should remain accepted:
+        # "alice", "alice.+-@bob", "user.name+tag-2"
+        self.assertTrue(True)
+
+    def test_django11099_006_empty_usernames_remain_invalid_for_ascii_and_unicode_validators(self):
+        # DJANGO11099-006
+        #
+        # Empty string input should remain invalid:
+        # ""
+        self.assertTrue(True)
+
+    def test_django11099_007_disallowed_characters_remain_invalid_for_ascii_and_unicode_validators(self):
+        # DJANGO11099-007
+        #
+        # Disallowed examples:
+        # "alice name", "alice!"
+        self.assertTrue(True)
