@@ -171,24 +171,60 @@ class MediaOrderingTraceabilityTests(SimpleTestCase):
         first = Media(js=['shared.js', 'layout.js'])
         second = Media(js=['shared.js', 'widget.js'])
         third = Media(js=['helpers.js', 'shared.js'])
-        merged = (first + second + third)
-        _ = merged._js
-        self.assertTrue(True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            js = (first + second + third)._js
+
+        self.assertEqual(
+            js,
+            ['helpers.js', 'shared.js', 'layout.js', 'widget.js'],
+        )
+        self.assertEqual(len([path for path in js if path == 'shared.js']), 1)
+        self.assertEqual(
+            [item for item in caught if issubclass(item.category, MediaOrderConflictWarning)],
+            [],
+        )
 
     def test_media_007_two_object_merge_backwards_compat_without_false_positive_blocker_contract(self):
         """MEDIA-007: non-contradictory two-object merge keeps legacy ordering except false-positive blocker avoidance."""
         left = Media(js=['alpha.js', 'beta.js'])
         right = Media(js=['gamma.js', 'alpha.js'])
-        merged = (left + right)
-        _ = merged._js
-        self.assertTrue(True)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            js = (left + right)._js
+
+        self.assertEqual(js, ['gamma.js', 'alpha.js', 'beta.js'])
+        self.assertEqual(
+            [item for item in caught if issubclass(item.category, MediaOrderConflictWarning)],
+            [],
+        )
 
     def test_media_008_equivalent_merge_grouping_determinism_contract(self):
         """MEDIA-008: equivalent merge graphs produce identical js and warnings across associativity grouping."""
         first = Media(js=['a.js', 'b.js'])
         second = Media(js=['b.js', 'c.js'])
         third = Media(js=['c.js', 'd.js'])
-        grouped_left = ((first + second) + third)._js
-        grouped_right = (first + (second + third))._js
-        _ = grouped_left, grouped_right
-        self.assertTrue(True)
+
+        def evaluate():
+            left = (first + second) + third
+            right = first + (second + third)
+            with warnings.catch_warnings(record=True) as left_caught:
+                warnings.simplefilter('always')
+                left_js = left._js
+            with warnings.catch_warnings(record=True) as right_caught:
+                warnings.simplefilter('always')
+                right_js = right._js
+
+            left_messages = [str(item.message) for item in left_caught if issubclass(item.category, MediaOrderConflictWarning)]
+            right_messages = [str(item.message) for item in right_caught if issubclass(item.category, MediaOrderConflictWarning)]
+            return left_js, right_js, left_messages, right_messages
+
+        first_run = evaluate()
+        second_run = evaluate()
+
+        self.assertEqual(first_run[0], ['a.js', 'b.js', 'c.js', 'd.js'])
+        self.assertEqual(first_run[0], first_run[1])
+        self.assertEqual(first_run[1], second_run[1])
+        self.assertEqual(first_run[2], first_run[3])
+        self.assertEqual(first_run[2], second_run[2])
+        self.assertEqual(first_run[3], second_run[3])
