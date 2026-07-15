@@ -371,17 +371,17 @@ class DeleteTests(TestCase):
 DJ11179_001_VERIFICATION_ARTIFACTS = [
     (
         "DJ11179-001",
-        "DeleteTests.test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete",
+        "DeletePkResetNoDependencyTests.test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete",
         "Persisted default-PK instance cleared to None after successful no-dependency delete.",
     ),
     (
         "DJ11179-001",
-        "DeleteTests.test_dj11179_001_uuid_pk_is_none_after_no_dependency_instance_delete",
+        "DeletePkResetNoDependencyTests.test_dj11179_001_uuid_pk_is_none_after_no_dependency_instance_delete",
         "Persisted UUID-PK instance cleared to None after successful no-dependency delete.",
     ),
     (
         "DJ11179-001",
-        "DeleteTests.test_dj11179_001_inmemory_identity_state_after_single_instance_delete",
+        "DeletePkResetNoDependencyTests.test_dj11179_001_inmemory_identity_state_after_single_instance_delete",
         "In-memory instance identity is maintained and pk is None after successful delete return.",
     ),
 ]
@@ -392,15 +392,21 @@ class DeletePkResetNoDependencyTests(TestCase):
 
     def test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete(self):
         instance = DeletionTracebook.objects.create()
+        instance_pk = instance.pk
         instance.delete()
-        self.assertTrue(True)
+        self.assertIsNone(instance.pk)
+        self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
 
     def test_dj11179_001_uuid_pk_is_none_after_no_dependency_instance_delete(self):
         instance = DeletionTraceUUID.objects.create()
+        instance_pk = instance.pk
         instance.delete()
-        self.assertTrue(True)
+        self.assertIsNone(instance.pk)
+        self.assertFalse(DeletionTraceUUID.objects.filter(pk=instance_pk).exists())
 
     def test_dj11179_001_inmemory_identity_state_after_single_instance_delete(self):
         instance = DeletionTracebook.objects.create()
+        instance_pk = instance.pk
         instance.delete()
-        self.assertTrue(True)
+        self.assertIsNone(instance.pk)
+        self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
