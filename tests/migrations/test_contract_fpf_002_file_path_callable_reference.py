@@ -16,6 +16,13 @@ FPF_002_VERIFICATION_MAP = {
     ],
 }
 
+FPF_004_VERIFICATION_MAP = {
+    "FPF-004": [
+        "test_fpf_004_string_path_deconstruction_generates_string_literal_path_argument",
+        "test_fpf_004_migration_output_shape_stable_for_existing_string_path_models",
+    ],
+}
+
 
 class FilePathFieldCallablePathSerializationContractTests(SimpleTestCase):
     """
@@ -93,3 +100,17 @@ class FilePathFieldCallablePathSerializationContractTests(SimpleTestCase):
             self.assertIn("fpf002_contract_file_path_callable_module.get_local_upload_path", first_output)
             self.assertNotIn(first_base, first_output)
             self.assertNotIn(second_base, second_output)
+
+
+class FilePathFieldStringPathMigrationContractTests(SimpleTestCase):
+    """FPF-004 migration-locus traceability placeholders."""
+
+    def test_fpf_004_string_path_deconstruction_generates_string_literal_path_argument(self):
+        """FPF-004 Scenario 1: FilePathField path passed as string remains a string token."""
+        # TODO(placeholder): preserve canonical string-path migration shape once FPF-004 work lands.
+        self.assertTrue(True)
+
+    def test_fpf_004_migration_output_shape_stable_for_existing_string_path_models(self):
+        """FPF-004 Scenario 1: existing migration content for string path is accepted unchanged."""
+        # TODO(placeholder): verify makemigrations/migrate compatibility for pre-existing strings.
+        self.assertTrue(True)

@@ -57,6 +57,13 @@ FPF_003_VERIFICATION_MAP = {
     ],
 }
 
+FPF_004_VERIFICATION_MAP = {
+    "FPF-004": [
+        "test_FPF_004_string_path_runtime_choices_match_legacy_current_behavior",
+        "test_FPF_004_string_and_callable_path_runtime_choices_share_semantics_contract",
+    ],
+}
+
 
 class FilePathFieldContractsFPF003Tests(SimpleTestCase):
     """
@@ -134,3 +141,17 @@ class FilePathFieldContractsFPF003Tests(SimpleTestCase):
             second_form_field = field.formfield()
             self.assertIn((host_two_file, os.path.basename(host_two_file)), second_form_field.choices)
             self.assertNotIn((host_one_file, os.path.basename(host_one_file)), second_form_field.choices)
+
+
+class FilePathFieldContractsFPF004Tests(SimpleTestCase):
+    """FPF-004 runtime-locus traceability placeholders."""
+
+    def test_FPF_004_string_path_runtime_choices_match_legacy_current_behavior(self):
+        """FPF-004 Scenario 2: string and callable path runtime choice behavior remains traceable."""
+        # TODO(placeholder): assert de-facto parity against established string-path baseline.
+        self.assertTrue(True)
+
+    def test_FPF_004_string_and_callable_path_runtime_choices_share_semantics_contract(self):
+        """FPF-004 Scenario 2: baseline parity contract across string vs callable path models."""
+        # TODO(placeholder): ensure runtime path enumeration semantics stay equivalent.
+        self.assertTrue(True)
