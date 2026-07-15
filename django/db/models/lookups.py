@@ -463,18 +463,8 @@ class IsNull(BuiltinLookup):
     prepare_rhs = False
 
     def as_sql(self, compiler, connection):
-        # ISNULL-002-s1/s2: boolean-preserving render mapping.
-        # Precondition: upstream validation only allows bool RHS for isnull.
-        # Inputs:
-        # - sql, params from compiled lhs expression (already includes direct/related path).
-        # - rhs from IsNull lookup constructor.
-        # Deterministic decision:
-        # 1) if rhs is True  -> emit `<lhs> IS NULL`
-        # 2) if rhs is False -> emit `<lhs> IS NOT NULL`
-        # Failure path:
-        # - non-bool rhs must never reach this method; it is rejected before lookup creation.
         sql, params = compiler.compile(self.lhs)
-        if self.rhs:
+        if self.rhs is True:
             return "%s IS NULL" % sql, params
         else:
             return "%s IS NOT NULL" % sql, params

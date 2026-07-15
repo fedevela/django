@@ -64,5 +64,18 @@ class NullQueriesTests(TestCase):
         self.assertSequenceEqual(OuterB.objects.exclude(inner__isnull=False), [outerb])
 
     def test_isnull_002_related_field_lookup_preserves_true_false_semantics(self):
-        # Placeholder traceability artifact for ISNULL-002-s2.
-        self.assertTrue(True)
+        outer_with_no_inner = OuterA.objects.create()
+        outer_with_null_third = OuterA.objects.create()
+        outer_with_non_null_third = OuterA.objects.create()
+        outer_b_third = OuterB.objects.create(data='third-non-null')
+        Inner.objects.create(first=outer_with_null_third, third=None)
+        Inner.objects.create(first=outer_with_non_null_third, third=outer_b_third)
+
+        self.assertCountEqual(
+            OuterA.objects.filter(inner__third__isnull=True),
+            [outer_with_no_inner, outer_with_null_third],
+        )
+        self.assertCountEqual(
+            OuterA.objects.filter(inner__third__isnull=False),
+            [outer_with_non_null_third],
+        )

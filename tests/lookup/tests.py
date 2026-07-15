@@ -1000,8 +1000,17 @@ class LookupTests(TestCase):
             Article.objects.exclude(pub_date__isnull=123)
 
     def test_isnull_002_direct_nullable_field_preserves_true_false_semantics(self):
-        # Placeholder traceability artifact for ISNULL-002-s1.
-        self.assertTrue(True)
+        season_null = Season.objects.create(year=2010, nulled_text_field=None, gt=1)
+        season_with_value = Season.objects.create(
+            year=2011,
+            gt=2,
+            nulled_text_field='non-null',
+        )
+        null_seasons = Season.objects.filter(nulled_text_field__isnull=True)
+        self.assertCountEqual(null_seasons, [season_null])
+
+        non_null_seasons = Season.objects.filter(nulled_text_field__isnull=False)
+        self.assertCountEqual(non_null_seasons, [season_with_value])
 
     def test_exact_exists(self):
         qs = Article.objects.filter(pk=OuterRef('pk'))
