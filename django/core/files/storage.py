@@ -219,9 +219,15 @@ class FileSystemStorage(Storage):
     @cached_property
     def file_permissions_mode(self):
         # DJ10914-001/DJ10914-003:
-        # 1) Read explicit storage instance override via `_file_permissions_mode`.
-        # 2) Else read settings FILE_UPLOAD_PERMISSIONS.
-        # 3) Return effective mode without mutating upload handler/request/parser flow.
+        # INPUT: explicit constructor value (`_file_permissions_mode`), configured setting
+        #   (`settings.FILE_UPLOAD_PERMISSIONS`).
+        # DECISION:
+        # 1) Use explicit constructor override when present.
+        # 2) Else use configured setting.
+        # 3) Persist only this resolved value for downstream persistence logic.
+        # DJ10914-002:
+        # For default behavior obligation tracking, unresolved default resolution must remain
+        # default 0o644 so both handler branches observe the same effective mode basis.
         return self._value_or_setting(self._file_permissions_mode, settings.FILE_UPLOAD_PERMISSIONS)
 
     @cached_property
@@ -233,6 +239,15 @@ class FileSystemStorage(Storage):
 
     def _save(self, name, content):
         full_path = self.path(name)
+
+        # DJ10914-002 (default-path parity):
+        # STATE: Save enters with unresolved storage name and uploaded content object.
+        #   Branch input signal:
+        #   - Handler produced temp file object: content has `temporary_file_path`.
+        #   - Handler produced in-memory object: no `temporary_file_path`, must stream chunks.
+        # TRANSITION:
+        #   Both branches converge on `full_path` and must apply the same final permission
+        #   normalization after persistence succeeds.
 
         # Create any intermediate directories that do not exist.
         directory = os.path.dirname(full_path)
@@ -260,10 +275,21 @@ class FileSystemStorage(Storage):
             try:
                 # This file has a file path that we can move.
                 if hasattr(content, 'temporary_file_path'):
+                    # DJ10914-002:
+                    # BRANCH A (TemporaryUploadedFile path):
+                    # - Source likely starts from default temp mode (often 0o600).
+                    # - file_move_safe moves bytes into destination path.
+                    # - Permission may retain source mode without explicit normalization.
+                    # - Must be normalized in shared post-save path.
                     file_move_safe(content.temporary_file_path(), full_path)
 
                 # This is a normal uploadedfile that we can stream.
                 else:
+                    # DJ10914-002:
+                    # BRANCH B (InMemoryUploadedFile path):
+                    # - Persist by writing chunks via os.open(..., 0o666),
+                    #   so written inode is not yet guaranteed to match final policy.
+                    # - Permission must be normalized in shared post-save path.
                     # The current umask value is masked out by os.open!
                     fd = os.open(full_path, self.OS_OPEN_FLAGS, 0o666)
                     _file = None
@@ -291,8 +317,14 @@ class FileSystemStorage(Storage):
         # DJ10914-003/DJ10914-006:
         # After successful data persistence and before returning storage-relative name,
         # apply computed upload permission mode to persisted uploaded file.
-        # If this flow is ever reached with mode None, no chmod occurs; current issue
-        # tracks default-to-0o644 as the effective resolved mode contract.
+        # DJ10914-002:
+        # POST-CHECK INVARIANT:
+        # - If `file_permissions_mode` resolves (explicit override) -> apply that mode.
+        # - If default path is unresolved, effective mode must be 0o644 before this point,
+        #   so the effective write mode is identical for TemporaryUploadedFile and
+        #   MemoryUploadedFile flows.
+        # - Failure path:
+        #   - Explicit None continues as existing behavior: do not change mode.
         if self.file_permissions_mode is not None:
             os.chmod(full_path, self.file_permissions_mode)
 
