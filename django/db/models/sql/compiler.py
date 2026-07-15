@@ -353,18 +353,42 @@ class SQLCompiler:
             # Deterministic-duplicate-key obligation:
             # input: rendered ORDER BY SQL fragment `sql` plus `params`.
             # output: canonical tuple key `(canonical_sql, params_hash)` used in `seen`.
-            # Step 1: remove final ORDER BY direction token (ASC/DESC) so direction
-            # does not affect duplicate-equivalence checks for this path.
-            # Don't add the same column twice, but the order direction is
-            # not taken into account so we strip it. When this entire method
-            # is refactored into expressions, then we can check each part as we
-            # generate it.
-            # ORDERBY-001: Dedupe keys use the full expression, excluding final
-            # direction tokens only.
+            # Don't add the same column twice, but preserve source token order and
+            # meaning while normalizing whitespace.
+            # When this entire method is refactored into expressions, we can
+            # preserve semantic checks at expression granularity.
             without_ordering = sql.rstrip()
             direction_match = re.search(r"\s+(ASC|DESC)\s*$", without_ordering, flags=re.IGNORECASE)
             if direction_match:
-                without_ordering = without_ordering[:direction_match.start()]
+                # ORDERBY-003:
+                # Logic obligation: preserve semantically distinct directions for
+                # dedup when body is equal.
+                # Input state:
+                #   - `without_ordering`: rendered term, whitespace-collapsed on ends.
+                #   - `params`: bound parameter tuple/list.
+                #   - `seen`: dedupe set of canonical keys.
+                #   - `result`: emitted ORDER BY terms.
+                # Decision state:
+                #   - if explicit direction token is present (ASC/DESC), capture it
+                #     as `direction_key`.
+                #   - if absent, capture default direction key as "ASC"
+                #     (explicit ASC and implicit default remain duplicate-aligned).
+                #
+                # Body state:
+                #   - `without_ordering` must keep full SQL body and should not
+                #     drop direction token before keying for this requirement.
+                #   - `params_hash` must include this term's parameter identity.
+                # Key state:
+                #   - derive `dedupe_key = (body_for_dedupe, direction_key, params_hash)`.
+                # Branches:
+                #   - if `dedupe_key` in `seen`, skip emission.
+                #   - else add `dedupe_key` to `seen` and append `(resolved, (sql, params, is_ref))` to `result`.
+                # Failure path:
+                #   - preserve current behavior (skip emit) whenever required key
+                #     collision indicates duplicate; no exception is raised here.
+                #
+                # Note: this pseudocode captures target behavior for ORDERBY-003 and
+                # supersedes the direction-stripping path.
             # Step 2: canonicalize line ending and spacing noise before hashing.
             # - Normalize `\r\n`, `\r`, and `\n` to a single line-break format.
             # - Normalize indentation/line-break-adjacent spacing noise.
