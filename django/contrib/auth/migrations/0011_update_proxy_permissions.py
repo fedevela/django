@@ -14,6 +14,7 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     - "G70-002 [RED] Missing required tuple must materialize exactly once during forward migration."
     - "G70-003 [RED] Forward re-run on previously-migrated DB must not change rowcount for existing (content_type_id, codename) tuples."
     - "G70-004 [RED] Upgrade from Django 2.0.13/2.1.8 with recreated proxy models must complete without unique-constraint IntegrityError and without auth_permission manual cleanup."
+    - "G70-005 [ORANGE] Permission updates in auth.0011_update_proxy_permissions must be scoped by each proxy model’s resolved ContentType and codename."
     """
     Permission = apps.get_model('auth', 'Permission')
     ContentType = apps.get_model('contenttypes', 'ContentType')
@@ -73,11 +74,22 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     #    4. Continue to next codename with no rollback of outer loop state.
     #  - This makes migration success deterministic regardless of legacy duplicate prepopulation.
 
+    # G70-005 deterministic scope model:
+    # For each proxy model, bind an immutable per-tuple key:
+    # (proxy_content_type_id, codename). All reads and writes must be done
+    # against that key and only that key’s source tuple:
+    # (concrete_content_type_id, codename). This prevents same-app-label and
+    # different-app-label proxy models from sharing tuple state.
     for Model in apps.get_models():
         opts = Model._meta
         if not opts.proxy:
             continue
 
+        # G70-005 per-model key derivation:
+        # - resolved_model_name := opts.model_name
+        # - resolved_concrete_type := CT(Model, for_concrete_model=True)
+        # - resolved_proxy_type := CT(Model, for_concrete_model=False)
+        # - required_codes := default_permissions union opts.permissions
         required_permissions = {
             '%s_%s' % (action, opts.model_name)
             for action in opts.default_permissions
@@ -90,6 +102,15 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
         old_content_type = proxy_content_type if reverse else concrete_content_type
         new_content_type = concrete_content_type if reverse else proxy_content_type
         for codename in required_permissions:
+            # G70-005 per-key transition for codename:
+            # key_target := (content_type=new_content_type, codename=codename)
+            # key_source := (content_type=old_content_type, codename=codename)
+            # Branching by key state:
+            # 1) if target exists -> state=NOOP, continue.
+            # 2) if update(source->target) affects 1 row -> state=MOVED.
+            # 3) if update affects 0 rows -> create(target); if created -> CREATED.
+            # 4) if IntegrityError in move/create -> state=SATISFIED_ELSEWHERE, continue.
+            # Isolation rule: every lookup/update/create includes both content_type and codename.
             # G70-002 per-key transition:
             # - if target tuple already exists => SKIP.
             # - else attempt source retarget.
