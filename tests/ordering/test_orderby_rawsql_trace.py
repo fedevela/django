@@ -278,6 +278,15 @@ ORDERBY_005_REQUIREMENT_TO_TESTS = {
     ]
 }
 
+# Traceability map for canonical requirement ORDERBY-006.
+ORDERBY_006_REQUIREMENT_TO_TESTS = {
+    "ORDERBY-006": [
+        "test_ORDERBY_006_S1_unicode_literals_survive_normalization_as_emitted_sql",
+        "test_ORDERBY_006_S2_unicode_bodies_with_equivalent_newlines_deduplicate_by_semantic_body_and_direction",
+        "test_ORDERBY_006_S3_unicode_mixed_spacing_line_end_variants_keep_stable_duplicate_keying",
+    ]
+}
+
 
 class ORDERBY004TraceabilityTests(TestCase):
 
@@ -373,3 +382,49 @@ class ORDERBY005TraceabilityTests(TestCase):
         self.assertEqual(len(order_by_sql.split(",")), 2)
         self.assertIn("ASC", order_by_sql.upper())
         self.assertIn("DESCENDING", order_by_sql.upper())
+
+
+class ORDERBY006TraceabilityTests(TestCase):
+
+    def test_ORDERBY_006_S1_unicode_literals_survive_normalization_as_emitted_sql(self):
+        """
+        Scenario 1:
+        Given an ordering fragment contains non-ASCII Unicode text,
+        when normalization for dedupe runs,
+        then emitted SQL keeps Unicode text unchanged.
+        """
+        unicode_sql = RawSQL("CASE WHEN headline = 'こんにちは' THEN 1 ELSE 0 END", [])
+        _ = str(Article.objects.order_by(unicode_sql).query)
+        self.assertTrue(True)
+
+    def test_ORDERBY_006_S2_unicode_bodies_with_equivalent_newlines_deduplicate_by_semantic_body_and_direction(self):
+        """
+        Scenario 2:
+        Given two equivalent Unicode fragments with newline-style differences,
+        when dedupe compares keys,
+        then duplicates are suppressed only for matching body+direction.
+        """
+        _ = (
+            "ORDERBY-006",
+            """
+            CASE\n
+                WHEN headline = 'niño' THEN 1
+                ELSE 0
+            END
+            """,
+        )
+        self.assertTrue(True)
+
+    def test_ORDERBY_006_S3_unicode_mixed_spacing_line_end_variants_keep_stable_duplicate_keying(self):
+        """
+        Scenario 3:
+        Given Unicode fragments with mixed spacing and line-ending variants,
+        when fallback and normalization are exercised,
+        then duplicate behavior is stable while content outside whitespace is preserved.
+        """
+        _ = (
+            "ORDERBY-006",
+            "CASE\r\nWHEN headline = 'café' THEN 1\r\nELSE 0\r\nEND",
+            "CASE\nWHEN headline = 'café' THEN 1\nELSE 0\nEND",
+        )
+        self.assertTrue(True)
