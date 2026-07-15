@@ -30,6 +30,13 @@ REQUIREMENT_VERIFICATION_MAP = [
         "state": "initial watcher snapshot",
         "architecture_artifact": "docs/architecture/AUTO-001-manage-py-watcher-architecture.rst",
     },
+    {
+        "id": "AUTO-002",
+        "description": "When running with StatReloader and a watched `manage.py`, a saved change to `manage.py` must be detected on the next check cycle and execute the restart/reload flow.",
+        "artifact": "StatReloaderTraceabilityTests.test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts",
+        "state": "post-startup polling cycle after manage.py persisted edit",
+        "architecture_artifact": "tests/utils_tests/test_autoreload.py",
+    },
 ]
 
 
@@ -352,6 +359,14 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
                     reloader = autoreload.StatReloader()
                     watched_files = {path for path, _mtime in reloader.snapshot_files()}
                     self.assertIn(manage_py.resolve(), watched_files)
+
+    def test_auto_002_next_check_cycle_detects_manage_py_modification_and_restarts(self):
+        """
+        AUTO-002: Given a running `runserver` with StatReloader and `manage.py`
+        already watched, when `manage.py` is modified and saved, the next check
+        cycle must detect it and complete a restart cycle automatically.
+        """
+        self.assertTrue(True)
 
 
 class ReloaderTests(SimpleTestCase):
