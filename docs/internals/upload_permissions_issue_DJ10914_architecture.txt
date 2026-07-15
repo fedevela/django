@@ -23,11 +23,36 @@ Requirement-to-architecture map
     `django/core/files/storage.py` (`get_storage_class`).
   - Enforcement seam: explicit invariants that no new branches or API paths are introduced in this issue.
 
+Requirement-to-logic pressure map
+-------------------------------
+- DJ10914-002: resolve default permission policy at storage boundary
+  - Pressure: ownership + contract.
+  - Locus: `django/core/files/storage.py` (`FileSystemStorage.file_permissions_mode`, `_save`).
+  - Structural need: persist-time `chmod` must execute after both branch writes and consume a single resolved
+    permission value so both handlers share one policy source.
+- DJ10914-002: temporary-file branch normalization
+  - Pressure: integration seam + dependency direction.
+  - Locus: `django/core/files/storage.py` (`_save`, `hasattr(content, "temporary_file_path")` branch).
+  - Structural need: do not trust source temp-file mode; enforce normalization through the same boundary used by
+    `InMemoryUploadedFile` path.
+- DJ10914-002: in-memory branch normalization
+  - Pressure: interface contract + boundary.
+  - Locus: `django/core/files/storage.py` (`_save`, else-chunk-write branch).
+  - Structural need: keep open/write path unchanged and apply mode through the storage permission seam after data write.
+- DJ10914-002: handler parity
+  - Pressure: topology + deterministic output contract.
+  - Locus: `django/core/files/storage.py` (`file_permissions_mode` cache) with tests at
+    `tests/file_storage/test_upload_permissions_contract.py`.
+  - Structural need: output contract requires same resolved mode path for both handler branches.
+
 Boundary and ownership placement
 -------------------------------
 - Settings boundary (`django/conf/global_settings.py`)
   - Owns declarative default declarations for upload behavior configuration.
   - Owns the contract source-of-truth for "what defaults exist".
+- Source-of-truth for default value:
+  - `FILE_UPLOAD_PERMISSIONS` defined here with value `0o644`; changing this value changes only default
+    configuration policy, not storage internals.
 - Settings-to-storage boundary (`django/conf/__init__.py` via `settings`, then `FileSystemStorage`)
   - Owns concrete resolution into runtime effective values.
   - Must remain one-way: settings values only feed storage defaults.
@@ -53,6 +78,20 @@ Structural contracts and seams
   and settings path override fallback, and must be applied before persistence.
 - Contract-006 (flow invariance): handler list creation order and parser invocation order in request handling,
   plus backend import through `DEFAULT_FILE_STORAGE`, remain unchanged by this issue.
+- Contract-002-Memory (write-path normalization): `FileSystemStorage._save` must apply effective
+  permission to persisted files that originate from non-temporary upload content.
+- Contract-002-Temporary (write-path normalization): `FileSystemStorage._save` must apply effective
+  permission to persisted files that originate from temporary upload content.
+- Contract-002-Parity (mode identity): both `_save` branches must observe the same permission policy artifact
+  (`file_permissions_mode`) and persist equivalent mode under default conditions.
+
+Dependency-direction notes
+--------------------------
+- `global_settings.FILE_UPLOAD_PERMISSIONS` -> `settings.FILE_UPLOAD_PERMISSIONS` ->
+  `FileSystemStorage.file_permissions_mode` (resolved value) -> `FileSystemStorage._save` (single
+  post-write normalization point) -> filesystem inode mode.
+- Upload content source (request handler choice) -> branch in `_save` -> shared persistence post-step:
+  no direct mode coupling to `TemporaryUploadedFile` source permissions.
 
 Integration seam annotations (existing and unmodified)
 -----------------------------------------------------
@@ -64,6 +103,14 @@ Integration seam annotations (existing and unmodified)
   - Entry points and order preserved in `django/http/request.py`:
     `_initialize_handlers` and `parse_file_upload`.
   - Backend seam preserved in `django/core/files/storage.py` via `get_storage_class`.
+
+Integration-seam skeletons (next implementation touch points)
+-------------------------------------------------------------
+- Keep existing storage boundaries intact.
+- Introduce a `PermissionPolicy` review point only in architecture docs and tests:
+  - Locus: `tests/file_storage/test_upload_permissions_contract.py`
+    (`DJ10914_002_*` methods) drives end-to-end assertions for each branch.
+- No new upload-handler classes or storage adapters are introduced for this issue.
 
 Changed architecture artifacts
 -----------------------------
