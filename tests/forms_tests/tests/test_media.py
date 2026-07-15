@@ -717,18 +717,65 @@ class FormsMediaMergeContractTests(SimpleTestCase):
         # - Precondition: merge result is satisfiable after all constraints are applied.
         # - Action: emit warnings only from final graph evaluation.
         # - Outcome: no warning artifact is permitted for intermediate deduplication-only conflicts.
-        self.assertTrue(True)
+        base = Media(js=['alpha.js', 'core.js', 'util.js'])
+        plugin = Media(js=['plugin.js', 'util.js'])
+        extension = Media(js=['alpha.js', 'plugin.js', 'theme.js'])
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter('always')
+            merged = Media.merge(base._js, plugin._js, extension._js)
+
+        self.assertEqual(
+            merged,
+            ['alpha.js', 'core.js', 'plugin.js', 'theme.js', 'util.js']
+        )
+        self.assertFalse(
+            any(issubclass(w.category, MediaOrderConflictWarning) for w in captured)
+        )
 
     def test_med_003_scenario_2_boundary_duplicate_warning_emission_removed_when_only_intermediate_artifact(self):
         # Canonical requirement: MED-003 Scenario 2.
         # - Precondition: existing behavior emits warning from intermediate boundary-only logic only.
         # - Action: evaluate merge with boundary artifact excluded from final constraint graph.
         # - Outcome: no warning is emitted and no pair is reported.
-        self.assertTrue(True)
+        base = Media(js=['init.js', 'bootstrap.js'])
+        plugin = Media(js=['bootstrap.js', 'component.js', 'vendor.js'])
+        extension = Media(js=['init.js', 'vendor.js'])
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter('always')
+            merged = (base + plugin + extension)._js
+
+        self.assertEqual(
+            merged,
+            ['init.js', 'bootstrap.js', 'component.js', 'vendor.js']
+        )
+        self.assertFalse(
+            any(issubclass(w.category, MediaOrderConflictWarning) for w in captured)
+        )
 
     def test_med_003_scenario_3_warn_only_for_real_unsatisfiable_final_ordering_conflict(self):
         # Canonical requirement: MED-003 Scenario 3.
         # - Precondition: final merged ordering constraints are truly unsatisfiable.
         # - Action: evaluate merge and select conflict pair from final graph.
         # - Outcome: warning is emitted and reported pair is a real contradictory pair.
-        self.assertTrue(True)
+        list_a = ['a.js', 'b.js']
+        list_b = ['c.js', 'd.js']
+        list_c = ['b.js', 'a.js']
+
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter('always')
+            merged = Media.merge(list_a, list_b, list_c)
+
+        self.assertEqual(merged, ['a.js', 'b.js', 'c.js', 'd.js'])
+        self.assertEqual(len(captured), 1)
+        self.assertTrue(issubclass(captured[0].category, MediaOrderConflictWarning))
+        message = str(captured[0].message)
+        lines = message.splitlines()
+        self.assertEqual(lines[0], 'Detected duplicate Media files in an opposite order:')
+        reported = (lines[-2], lines[-1])
+        self.assertIn(reported, [('a.js', 'b.js'), ('b.js', 'a.js')])
+        self.assertIn(
+            reported,
+            {('a.js', 'b.js'), ('b.js', 'a.js')}
+        )

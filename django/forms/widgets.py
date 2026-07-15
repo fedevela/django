@@ -211,12 +211,14 @@ class Media:
         # Step 5: success path:
         #   - return ordered when all paths have been placed.
         graph = {}
+        edge_order = []
         for media_list in lists:
             previous = None
             for path in media_list:
                 graph.setdefault(path, set())
                 if previous is not None and previous != path:
                     graph.setdefault(previous, set()).add(path)
+                    edge_order.append((previous, path))
                 previous = path
 
         incoming = {path: set() for path in graph}
@@ -239,9 +241,63 @@ class Media:
                     next_path = path
                     break
             if next_path is None:
+                remaining_graph_nodes = [path for path in graph if path not in ordered]
+                remaining_node_set = set(remaining_graph_nodes)
+                contradictory_pair = None
+
+                # Prefer a directly contradictory pair from the final graph
+                # if one exists; this keeps the warning anchored to real
+                # conflicting edges in the resolved graph.
+                for left, right in edge_order:
+                    if left in ordered or right in ordered:
+                        continue
+                    if right in graph.get(left, ()) and left in graph.get(right, ()):
+                        contradictory_pair = (left, right)
+                        break
+
+                if contradictory_pair is None:
+                    # Deterministic fallback: choose one cycle back-edge from the
+                    # unresolved subgraph and report that edge as the
+                    # representative contradiction.
+                    state = {path: 0 for path in remaining_graph_nodes}
+
+                    def successors(node):
+                        return [
+                            dependent for _, dependent in edge_order
+                            if _ == node and dependent in remaining_node_set
+                        ]
+
+                    def visit(node):
+                        state[node] = 1
+                        for dependent in successors(node):
+                            if state[dependent] == 0:
+                                found = visit(dependent)
+                                if found is not None:
+                                    return found
+                            elif state[dependent] == 1:
+                                return (node, dependent)
+                        state[node] = 2
+                        return None
+
+                    for path in remaining_graph_nodes:
+                        if state[path] == 0:
+                            contradictory_pair = visit(path)
+                            if contradictory_pair is not None:
+                                break
+
+                    if contradictory_pair is None and remaining_graph_nodes:
+                        first_path = remaining_graph_nodes[0]
+                        second_path = (
+                            remaining_graph_nodes[1]
+                            if len(remaining_graph_nodes) > 1 else first_path
+                        )
+                        contradictory_pair = (first_path, second_path)
+
                 warnings.warn(
-                    'Detected duplicate Media files in an opposite order: {}'.format(
-                        ', '.join(repr(media_list) for media_list in lists)
+                    'Detected duplicate Media files in an opposite order:\n'
+                    '%s\n%s' % (
+                        contradictory_pair[0],
+                        contradictory_pair[1],
                     ),
                     MediaOrderConflictWarning,
                 )
