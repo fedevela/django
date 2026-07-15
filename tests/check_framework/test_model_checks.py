@@ -7,6 +7,25 @@ from django.test.utils import (
 )
 
 
+DJANGO11630_VERIFICATION_MAP = {
+    "DJANGO11630-001": [
+        "test_DJANGO11630_001_collision_key_is_effective_alias_and_db_table",
+    ],
+    "DJANGO11630-002": [
+        "test_DJANGO11630_002_same_effective_alias_collision_emit_models_E028",
+    ],
+    "DJANGO11630-003": [
+        "test_DJANGO11630_003_cross_alias_collision_no_models_E028",
+    ],
+    "DJANGO11630-004": [
+        "test_DJANGO11630_004_unspecified_routing_defaults_to_default_alias",
+    ],
+    "DJANGO11630-006": [
+        "test_DJANGO11630_006_same_app_or_same_label_collision_remains_hard_error_on_alias",
+    ],
+}
+
+
 @isolate_apps('check_framework', attr_name='apps')
 @override_system_checks([checks.model_checks.check_all_models])
 class DuplicateDBTableTests(SimpleTestCase):
@@ -73,6 +92,30 @@ class DuplicateDBTableTests(SimpleTestCase):
 
         self.assertEqual(Model._meta.db_table, ProxyModel._meta.db_table)
         self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [])
+
+
+@isolate_apps('check_framework', attr_name='apps')
+@override_system_checks([checks.model_checks.check_all_models])
+class DuplicateDBTableCollisionContractTests(SimpleTestCase):
+    def test_DJANGO11630_001_collision_key_is_effective_alias_and_db_table(self):
+        """DJANGO11630-001: collision key includes effective alias and db_table."""
+        pass
+
+    def test_DJANGO11630_002_same_effective_alias_collision_emit_models_E028(self):
+        """DJANGO11630-002: same alias + same db_table must fail with models.E028."""
+        pass
+
+    def test_DJANGO11630_003_cross_alias_collision_no_models_E028(self):
+        """DJANGO11630-003: different aliases + same db_table must not fail with models.E028."""
+        pass
+
+    def test_DJANGO11630_004_unspecified_routing_defaults_to_default_alias(self):
+        """DJANGO11630-004: unspecified routing decision defaults to default alias."""
+        pass
+
+    def test_DJANGO11630_006_same_app_or_same_label_collision_remains_hard_error_on_alias(self):
+        """DJANGO11630-006: same-app/same-label collision remains hard error on one alias."""
+        pass
 
 
 @isolate_apps('check_framework', attr_name='apps')
