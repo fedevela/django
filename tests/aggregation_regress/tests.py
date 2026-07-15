@@ -1626,9 +1626,20 @@ class AggregationTests(TestCase):
             .values("m")
         )
         a1 = a[:1]
-        sql = str(user_model.objects.filter(id=a1).query)
-        _ = sql
-        self.assertTrue(True)
+        rhs_sql = str(a1.query)
+        outer_sql = str(user_model.objects.filter(id=a1).query)
+
+        # Outer filter uses the aggregated projection from `a`, not a rewritten pk projection.
+        self.assertIn('"m"', rhs_sql)
+        self.assertIn('"m"', outer_sql)
+        self.assertIn('GROUP BY', outer_sql.upper())
+        self.assertIn('email', self._extract_group_by(outer_sql))
+
+        # The grouping contract from `a` must remain stable through RHS-to-outer-lookup mutation.
+        self.assertEqual(
+            self._normalize_group_by_clause(rhs_sql),
+            self._normalize_group_by_clause(str(a1.query)),
+        )
 
     def test_DJANGO_11797_003_outer_filter_does_not_rewrite_rhs_group_by_to_id(self):
         """
@@ -1644,10 +1655,12 @@ class AggregationTests(TestCase):
             .values("m")
         )
         a1 = a[:1]
-        sql = str(user_model.objects.filter(id=a1).query)
-        _ = a1
-        _ = sql
-        self.assertTrue(True)
+        outer_sql = str(user_model.objects.filter(id=a1).query)
+        outer_group_by = self._extract_group_by(outer_sql)
+
+        self.assertIn('email', outer_group_by)
+        self.assertNotIn('"id"', outer_group_by)
+        self.assertNotRegex(outer_group_by, r'(^|,)\s*([\"`]?\\w+[\"`]\\.)?\"?id\"?(\\s|,|$)')
 
     def test_DJANGO_11797_003_outer_filter_uses_rhs_subquery_as_scalar_comparison_source(self):
         """
@@ -1663,10 +1676,14 @@ class AggregationTests(TestCase):
             .values("m")
         )
         a1 = a[:1]
-        sql = str(user_model.objects.filter(id=a1).query)
-        _ = a1
-        _ = sql
-        self.assertTrue(True)
+        outer_qs = user_model.objects.filter(id=a1)
+        outer_sql = str(outer_qs.query).replace("\n", " ")
+
+        self.assertRegex(outer_sql, r'=\s*\(SELECT')
+        self.assertIn('LIMIT 1', outer_sql.upper())
+        self.assertNotIn(' IN (SELECT', outer_sql.upper())
+        # Exercise SQL execution path to ensure scalar subquery comparison compiles.
+        self.assertIsInstance(outer_qs.count(), int)
 
 
 class JoinPromotionTests(TestCase):
