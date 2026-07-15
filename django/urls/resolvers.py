@@ -260,6 +260,15 @@ class RoutePattern(CheckURLMixin):
                 try:
                     kwargs[key] = converter.to_python(value)
                 except Http404 as exc:
+                    # [DJ-RES-002] Candidate-local miss mapping for converter rejection.
+                    # Inputs:
+                    # - route match succeeded and converter key/value is bound.
+                    # - converter.to_python(value) raises Http404.
+                    # Decision:
+                    # - this candidate is a miss, not an internal failure; keep reason for 404 diagnostics.
+                    # Transition:
+                    # - abort only this RoutePattern evaluation and raise Resolver404.
+                    # - parent resolver will evaluate remaining candidates if any exist.
                     # [DJ-RES-003] Convert converter-level Http404 to a route-miss event.
                     # Inputs:
                     # - key: captured parameter name
@@ -562,6 +571,15 @@ class URLResolver:
                 try:
                     sub_match = pattern.resolve(new_path)
                 except Resolver404 as e:
+                    # [DJ-RES-002] Candidate miss handling with continue-over-stop policy.
+                    # Inputs:
+                    # - one candidate pattern from self.url_patterns
+                    # - subpattern resolution raised Resolver404 (including converter Http404 miss payload).
+                    # Decision:
+                    # - consume candidate miss and continue iterating candidates.
+                    # - accumulate failure breadcrumbs for final diagnostic payload.
+                    # Loop state:
+                    # - append pattern/tried information to preserve resolver traversal context.
                     e_payload = e.args[0] if e.args else {}
                     if reason is None and isinstance(e_payload, dict):
                         reason = e_payload.get('reason')
@@ -574,6 +592,15 @@ class URLResolver:
                         tried.append([pattern])
                 else:
                     if sub_match:
+                        # [DJ-RES-006] Successful match dispatch remains in canonical fast-path.
+                        # Inputs:
+                        # - sub_match returned and is truthy.
+                        # - converter.to_python() completed successfully for all captured vars.
+                        # Decision:
+                        # - immediately return merged ResolverMatch for this candidate.
+                        # - do not evaluate later candidates on first-success.
+                        # Output:
+                        # - sub_match.func + merged args/kwargs + route metadata for view dispatch.
                         # Merge captured arguments in match with submatch
                         sub_match_dict = {**kwargs, **self.default_kwargs}
                         # Update the sub_match_dict with the kwargs from the sub_match.
