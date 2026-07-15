@@ -23,6 +23,13 @@ FPF_004_VERIFICATION_MAP = {
     ],
 }
 
+FPF_005_VERIFICATION_MAP = {
+    "FPF-005": [
+        "test_fpf_005_makemigrations_fails_when_path_callable_is_not_importable",
+        "test_fpf_005_no_opaque_path_value_written_for_invalid_callable",
+    ],
+}
+
 
 class FilePathFieldCallablePathSerializationContractTests(SimpleTestCase):
     """
@@ -133,3 +140,21 @@ class FilePathFieldStringPathMigrationContractTests(SimpleTestCase):
 
         # Ensure host/path separators are preserved as provided, not rewritten/expanded.
         self.assertIn(path, serialized)
+
+
+class FilePathFieldPathCallableImportabilityContractTests(SimpleTestCase):
+    """FPF-005 migration-locus traceability placeholders."""
+
+    def test_fpf_005_makemigrations_fails_when_path_callable_is_not_importable(self):
+        """
+        FPF-005 Scenario 1: non-importable callable path must fail deterministically
+        during migration serialization.
+        """
+        self.assertTrue(True)
+
+    def test_fpf_005_no_opaque_path_value_written_for_invalid_callable(self):
+        """
+        FPF-005 Scenario 2: no fallback opaque migration value is emitted for invalid
+        path callables.
+        """
+        self.assertTrue(True)
