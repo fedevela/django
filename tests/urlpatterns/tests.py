@@ -1,6 +1,7 @@
 import uuid
 
 from django.core.exceptions import ImproperlyConfigured
+from django.http import Http404
 from django.test import SimpleTestCase
 from django.test.utils import override_settings
 from django.urls import Resolver404, path, resolve, reverse
@@ -208,20 +209,50 @@ class ConversionExceptionTests(SimpleTestCase):
     # - DJ-RES-001: converter to_python Http404 must route to normal 404/not-found flow.
     # - DJ-RES-007: converter-originated technical-404 should preserve Http404 message.
 
+    def _set_dynamic_converter_to_python(self, callback):
+        original_converter = DynamicConverter._dynamic_to_python
+        DynamicConverter.register_to_python(callback)
+        self.addCleanup(setattr, DynamicConverter, '_dynamic_to_python', original_converter)
+
     def test_DJ_RES_001_converter_to_python_http404_transitions_to_resolver_not_found_flow(self):
         """[DJ-RES-001] When converter.to_python raises Http404, resolver treats it as 404 route-miss."""
-        # TODO: verify response status 404 and Resolver404-equivalent behavior in request path.
-        self.assertTrue(True)
+        def raises_http404(value):
+            raise Http404('user not found')
 
+        self._set_dynamic_converter_to_python(raises_http404)
+        with self.assertRaises(Resolver404) as exc_info:
+            resolve('/dynamic/usernotfound/')
+
+        payload = exc_info.exception.args[0]
+        self.assertEqual(payload['reason'], 'user not found')
+        self.assertEqual(payload['path'], '')
+        self.assertIsInstance(payload['tried'], list)
+        self.assertEqual(len(payload['tried']), 1)
+        self.assertEqual(len(payload['tried'][0]), 1)
+
+    @override_settings(DEBUG=True)
     def test_DJ_RES_007_converter_to_python_http404_includes_message_in_technical_404(self):
         """[DJ-RES-007] Converter-originated Http404 message is visible in technical 404 diagnostics."""
-        # TODO: verify technical_404 output includes original Http404 message when DEBUG=True.
-        self.assertTrue(True)
+        def raises_http404(value):
+            raise Http404('user not found')
 
+        self._set_dynamic_converter_to_python(raises_http404)
+        response = self.client.get('/dynamic/usernotfound/')
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, 'user not found')
+
+    @override_settings(DEBUG=True)
     def test_DJ_RES_001_DJ_RES_007_converter_to_python_http404_maps_to_technical_404_lifecycle(self):
         """[DJ-RES-001][DJ-RES-007] Converter Http404 follows routing miss technical-404 lifecycle."""
-        # TODO: verify lifecycle matches existing routing misses, including debug diagnostics.
-        self.assertTrue(True)
+        def raises_http404(value):
+            raise Http404('user not found')
+
+        self._set_dynamic_converter_to_python(raises_http404)
+        response = self.client.get('/dynamic/usernotfound/')
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, 'Django tried these URL patterns', status_code=404)
+        self.assertContains(response, 'dynamic/<dynamic:value>/', status_code=404)
+        self.assertContains(response, 'user not found', status_code=404)
 
     def test_resolve_value_error_means_no_match(self):
         @DynamicConverter.register_to_python

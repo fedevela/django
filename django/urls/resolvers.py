@@ -17,6 +17,7 @@ from django.conf import settings
 from django.core.checks import Error, Warning
 from django.core.checks.urls import check_resolver
 from django.core.exceptions import ImproperlyConfigured, ViewDoesNotExist
+from django.http import Http404
 from django.utils.datastructures import MultiValueDict
 from django.utils.functional import cached_property
 from django.utils.http import RFC3986_SUBDELIMS, escape_leading_slashes
@@ -258,32 +259,13 @@ class RoutePattern(CheckURLMixin):
                 converter = self.converters[key]
                 try:
                     kwargs[key] = converter.to_python(value)
+                except Http404 as exc:
+                    raise Resolver404({
+                        'path': path[match.end():],
+                        'reason': str(exc),
+                    })
                 except ValueError:
                     return None
-                # Architecture boundary [DJ-RES-001]:
-                # Owner: RoutePattern.match() owns per-parameter converter coercion.
-                # Contract: ValueError => immediate route mismatch (None); Http404 => converter-level miss
-                # candidate that must not flow as server error.
-                # DJ-RES-001:
-                # - When converter.to_python() raises Http404, the path is a route
-                #   miss, not a server-error condition.
-                # - Convert this into resolver-miss semantics so sibling patterns
-                #   can still be evaluated and no 500 path is triggered.
-                # DJ-RES-007:
-                # - Preserve converter exception message for technical-404 output.
-                # Pseudocode:
-                #   except Http404 as exc:
-                #       # Architecture seam S-1 (resolvers.py):
-                #       # - emit routing miss payload with:
-                #       #   path: path[match.end():]
-                #       #   tried: [[self]]
-                #       #   reason: str(exc) (diagnostic channel)
-                #       reason = str(exc)
-                #       raise Resolver404({
-                #           'path': path[match.end():],
-                #           'tried': [[self]],
-                #           'reason': reason,
-                #       })
             return path[match.end():], (), kwargs
         return None
 
@@ -559,33 +541,23 @@ class URLResolver:
         path = str(path)  # path may be a reverse_lazy object
         tried = []
         match = self.pattern.match(path)
+        reason = None
         if match:
             new_path, args, kwargs = match
             for pattern in self.url_patterns:
                 try:
                     sub_match = pattern.resolve(new_path)
                 except Resolver404 as e:
-                    sub_tried = e.args[0].get('tried')
-                    # Architecture boundary [DJ-RES-007]:
-                    # Owner: URLResolver.resolve() owns multi-pattern probe trace assembly.
-                    # Contract: any child miss (Resolver404 or Http404 converter miss) must be captured
-                    # in tried and can contribute a diagnostic reason payload.
+                    e_payload = e.args[0] if e.args else {}
+                    if reason is None and isinstance(e_payload, dict):
+                        reason = e_payload.get('reason')
+                        sub_tried = e_payload.get('tried')
+                    else:
+                        sub_tried = None
                     if sub_tried is not None:
                         tried.extend([pattern] + t for t in sub_tried)
                     else:
                         tried.append([pattern])
-                # DJ-RES-001:
-                # - If a child resolve raises Http404 from converter logic:
-                #   1) treat it as a candidate miss equivalent to Resolver404.
-                #   2) record the probing path with [pattern] for normal debug 404 trace.
-                #   3) persist any converter reason (e.g., message) for later
-                #      technical-404 surfacing.
-                # Pseudocode:
-                #   except Http404 as e:
-                #       converter_reason = str(e)
-                #       reason_for_debug_404 = converter_reason
-                #       tried.append([pattern])
-                #       continue
                 else:
                     if sub_match:
                         # Merge captured arguments in match with submatch
@@ -608,7 +580,10 @@ class URLResolver:
                             self._join_route(current_route, sub_match.route),
                         )
                     tried.append([pattern])
-            raise Resolver404({'tried': tried, 'path': new_path})
+            payload = {'tried': tried, 'path': new_path}
+            if reason is not None:
+                payload['reason'] = reason
+            raise Resolver404(payload)
         raise Resolver404({'path': path})
 
     @cached_property

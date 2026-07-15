@@ -43,6 +43,9 @@
     </table>
   </div>
   <div id="info">
+    {% if reason %}
+      <p>{{ reason }}</p>
+    {% endif %}
     {% if urlpatterns %}
       <p>
       Using the URLconf defined in <code>{{ urlconf }}</code>,
