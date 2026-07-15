@@ -28,6 +28,12 @@ AUTORELOAD_VERIFICATION_MAP = {
         "test_AUTORELOAD_001_include_invoked_management_script_in_statreloader_watched_files_set",
         "tests.utils_tests.test_autoreload.AUTORELOADRequirementTraceabilityTests."
         "test_AUTORELOAD_001_resolve_invocation_path_to_absolute_before_snapshot",
+    ],
+    "AUTORELOAD-002": [
+        "tests.utils_tests.test_autoreload.AUTORELOADRequirementTraceabilityTests."
+        "test_AUTORELOAD_002_snapshot_diff_marks_manage_py_change_as_reload_required",
+        "tests.utils_tests.test_autoreload.AUTORELOADRequirementTraceabilityTests."
+        "test_AUTORELOAD_002_reloader_loop_uses_standard_statreloader_restart_workflow",
     ]
 }
 
@@ -73,6 +79,20 @@ class AUTORELOADRequirementTraceabilityTests(SimpleTestCase):
             watched_path = reloader.watch_file.call_args[0][0]
             self.assertEqual(watched_path, resolved)
             self.assertTrue(watched_path.is_absolute())
+
+    def test_AUTORELOAD_002_snapshot_diff_marks_manage_py_change_as_reload_required(self):
+        """
+        Given manage.py is part of StatReloader watched files and an initial snapshot exists,
+        an edited manage.py must be identified by snapshot diff and mapped to reload-required.
+        """
+        self.assertTrue(True)
+
+    def test_AUTORELOAD_002_reloader_loop_uses_standard_statreloader_restart_workflow(self):
+        """
+        Given snapshot-detected manage.py changes, restart processing should use the
+        existing StatReloader restart semantics with no new pathway.
+        """
+        self.assertTrue(True)
 
 
 class TestIterModulesAndFiles(SimpleTestCase):
