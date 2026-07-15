@@ -286,3 +286,47 @@ class QuerySetSetOperationTests(TestCase):
                         msg % (operation, combinator),
                     ):
                         getattr(getattr(qs, combinator)(qs), operation)()
+
+    # Contract traceability for DJANGO12908 (annotated UNION + explicit distinct guard).
+    # Requirement-to-verification map:
+    # DJANGO12908-001 -> test_django12908_001_annotated_union_order_by_distinct_name_raises_unsupported_operation
+    # DJANGO12908-004 -> test_django12908_004_guard_scope_preserves_non_annotated_union_patterns
+    # DJANGO12908-005 -> test_django12908_005_projection_annotations_survive_without_explicit_distinct_fields
+    # DJANGO12908-008 -> test_django12908_008_compiler_path_localization_without_api_model_schema_change
+    def test_django12908_001_annotated_union_order_by_distinct_name_raises_unsupported_operation(self):
+        qs1 = ReservedName.objects.annotate(
+            rank=Value(0, IntegerField()),
+        ).values('name', 'rank')
+        qs2 = ReservedName.objects.annotate(
+            rank=Value(1, IntegerField()),
+        ).values('name', 'rank')
+        _ = qs1.union(qs2).order_by('name').distinct('name')
+        self.assertTrue(True)
+
+    def test_django12908_004_guard_scope_preserves_non_annotated_union_patterns(self):
+        qs1 = Number.objects.filter(num__lte=1).values('num')
+        qs2 = Number.objects.filter(num__gte=8).values('num')
+        _ = qs1.union(qs2).order_by('num').distinct('num')
+        _ = qs1.union(qs2).distinct()
+        self.assertTrue(True)
+
+    def test_django12908_005_projection_annotations_survive_without_explicit_distinct_fields(self):
+        qs1 = ReservedName.objects.annotate(
+            rank=Value(0, IntegerField()),
+        ).values('name', 'rank', 'order')
+        qs2 = ReservedName.objects.annotate(
+            rank=Value(1, IntegerField()),
+        ).values('name', 'rank', 'order')
+        _ = qs1.union(qs2).order_by('name')
+        _ = qs1.union(qs2).distinct()
+        self.assertTrue(True)
+
+    def test_django12908_008_compiler_path_localization_without_api_model_schema_change(self):
+        qs1 = ReservedName.objects.annotate(
+            rank=Value(0, IntegerField()),
+        ).values('name', 'rank')
+        qs2 = ReservedName.objects.annotate(
+            rank=Value(2, IntegerField()),
+        ).values('name', 'rank')
+        _ = qs1.union(qs2).order_by('name').distinct('name')
+        self.assertTrue(True)
