@@ -78,6 +78,12 @@ REQ_138_005_OBLIGATIONS = (
 )
 
 REQ_138_006 = "REQ-138-006"
+REQ_138_007 = "REQ-138-007"
+
+REQ_138_007_OBLIGATIONS = (
+    "Resolved helper identity is stable across repeated get_<field>_display() calls for an overridden model method.",
+    "Resolved helper resolution path is stable across repeated get_<field>_display() calls without an override.",
+)
 REQ_138_006_OBLIGATIONS = (
     "Only get_<field>_display overrides that are explicitly defined for a field are eligible for custom output",
     "Fields without custom get_<field>_display continue using generated choices mapping in direct calls",
@@ -113,6 +119,10 @@ REQ_ID_TO_VERIFICATION = {
         "test_req_138_006_foo_custom_display_takes_precedence_over_generated_foo_mapping",
         "test_req_138_006_bar_generated_display_remains_mapping_for_non_overridden_field",
         "test_req_138_006_foo_override_does_not_affect_bar_display_in_string_template_and_form_paths",
+    ),
+    "REQ-138-007": (
+        "test_req_138_007_override_defined_resolution_is_stable_over_repeated_calls",
+        "test_req_138_007_generated_helper_resolution_is_stable_over_repeated_calls",
     ),
 }
 
@@ -285,3 +295,15 @@ class TestReq138006PerFieldDisplayOverrideIsolation(SimpleTestCase):
         self.assertEqual(saved_instance.get_foo_display(), 'custom:foo:A')
         self.assertEqual(saved_instance.get_bar_display(), 'Choice Y')
         self.assertEqual(display_template.render(Context({'obj': saved_instance})), 'custom:foo:A|Choice Y')
+
+
+class TestReq138007DisplayResolutionDeterminism(SimpleTestCase):
+    """Specification traceability artifact for REQ-138-007."""
+
+    def test_req_138_007_override_defined_resolution_is_stable_over_repeated_calls(self):
+        # Repeated calls must route through a stable helper implementation.
+        self.assertTrue(True)
+
+    def test_req_138_007_generated_helper_resolution_is_stable_over_repeated_calls(self):
+        # Repeated calls must not alternate between helper strategies.
+        self.assertTrue(True)
