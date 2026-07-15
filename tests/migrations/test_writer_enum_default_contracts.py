@@ -27,6 +27,16 @@ class LocaleValueAwareStatus(enum.Enum):
     GOOD = lazy(_locale_aware_status_value, str)()
 
 
+def _mixed_default_callable():
+    return "mixed-defaults-callable"
+
+
+class StringShapedPayload(str):
+    """Serializable non-enum value that mimics enum-name-shaped payloads."""
+
+    pass
+
+
 class MigrationWriterEnumDefaultContractTests(SimpleTestCase):
     """Traceability artifact for MIG-300-001, MIG-300-002, and MIG-300-003."""
 
@@ -208,7 +218,7 @@ class MigrationWriterEnumDefaultDeterminismContractsTests(SimpleTestCase):
 
 
 class MigrationWriterEnumDefaultMixedDefaultsContractsTests(SimpleTestCase):
-    """Traceability placeholders for MIG-300-005."""
+    """Executable verification for MIG-300-005 mixed default serialization."""
 
     # MIG-300-005 obligations:
     # - In mixed-default migrations, only plain enum.Enum defaults may use
@@ -219,10 +229,90 @@ class MigrationWriterEnumDefaultMixedDefaultsContractsTests(SimpleTestCase):
     #   into enum member indexing.
 
     def test_mig_300_005_mixed_defaults_only_plain_enums_use_member_name_serialization(self):
-        self.assertTrue(True)
+        migration_text = MigrationWriter(
+            type(
+                "Migration",
+                (migrations.Migration,),
+                {
+                    "operations": [
+                        migrations.CreateModel(
+                            "StatusModel",
+                            fields=(
+                                ("status", models.CharField(default=PlainStatus.GOOD, max_length=16)),
+                                ("status_text", models.CharField(default="x", max_length=16)),
+                                ("status_code", models.IntegerField(default=42)),
+                                ("status_callable", models.CharField(default=_mixed_default_callable, max_length=16)),
+                            ),
+                            bases=(models.Model,),
+                        ),
+                    ],
+                    "dependencies": [],
+                },
+            ),
+            include_header=False,
+        ).as_string()
+
+        expected_enum_fragment = "%s.PlainStatus['GOOD']" % PlainStatus.__module__
+        expected_callable_fragment = "%s._mixed_default_callable" % __name__
+        self.assertIn("default=%s" % expected_enum_fragment, migration_text)
+        self.assertIn("default='x'", migration_text)
+        self.assertIn("default=42", migration_text)
+        self.assertIn("default=%s" % expected_callable_fragment, migration_text)
+        self.assertNotIn("default=\"x\"", migration_text)
+        self.assertNotIn("default=PlainStatus('Good')", migration_text)
 
     def test_mig_300_005_non_enum_defaults_in_mixed_payloads_keep_original_form(self):
-        self.assertTrue(True)
+        migration_text = MigrationWriter(
+            type(
+                "Migration",
+                (migrations.Migration,),
+                {
+                    "operations": [
+                        migrations.CreateModel(
+                            "StatusModel",
+                            fields=(
+                                ("status", models.CharField(default=PlainStatus.GOOD, max_length=16)),
+                                ("status_text", models.CharField(default="x", max_length=16)),
+                                ("status_code", models.IntegerField(default=42)),
+                                ("status_callable", models.CharField(default=_mixed_default_callable, max_length=16)),
+                            ),
+                            bases=(models.Model,),
+                        ),
+                    ],
+                    "dependencies": [],
+                },
+            ),
+            include_header=False,
+        ).as_string()
+
+        self.assertIn("default=%s.PlainStatus['GOOD']" % PlainStatus.__module__, migration_text)
+        self.assertIn("default='x'", migration_text)
+        self.assertIn("default=42", migration_text)
+        self.assertIn("default=%s._mixed_default_callable" % __name__, migration_text)
 
     def test_mig_300_005_non_enum_object_matching_string_shape_avoids_enum_syntax_rewrite(self):
-        self.assertTrue(True)
+        migration_text = MigrationWriter(
+            type(
+                "Migration",
+                (migrations.Migration,),
+                {
+                    "operations": [
+                        migrations.CreateModel(
+                            "StatusModel",
+                            fields=(
+                                ("status", models.CharField(default=PlainStatus.GOOD, max_length=16)),
+                                ("status_text", models.CharField(default=StringShapedPayload("GOOD"), max_length=16)),
+                            ),
+                            bases=(models.Model,),
+                        ),
+                    ],
+                    "dependencies": [],
+                },
+            ),
+            include_header=False,
+        ).as_string()
+
+        self.assertIn("status=models.CharField(default=%s.PlainStatus['GOOD'], max_length=16)" % PlainStatus.__module__, migration_text)
+        self.assertIn("default=%s.PlainStatus['GOOD']" % PlainStatus.__module__, migration_text)
+        self.assertIn("default='GOOD'", migration_text)
+        self.assertNotIn("status_text=models.CharField(default=%s.PlainStatus['GOOD']" % PlainStatus.__module__, migration_text)
