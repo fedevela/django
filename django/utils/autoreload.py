@@ -260,6 +260,7 @@ def restart_with_reloader():
 class BaseReloader:
     def __init__(self):
         self.extra_files = set()
+        self._watched_file_real_paths = set()
         self.directory_globs = defaultdict(set)
         self._stop_condition = threading.Event()
 
@@ -270,21 +271,16 @@ class BaseReloader:
         logger.debug('Watching dir %s with glob %s.', path, glob)
         self.directory_globs[path].add(glob)
 
-def watch_file(self, path):
+    def watch_file(self, path):
         path = Path(path)
         if not path.is_absolute():
             raise ValueError('%s must be absolute.' % path)
-        # AUTORELOAD-003
-        # [Duplicate-safe watch insertion obligation]
-        # INPUT: a candidate absolute path already normalized for watch registration.
-        # DECISION:
-        # - if candidate resolves to a real-path already represented in extra_files,
-        #   skip insertion to keep the watch set single-entry for the same file.
-        # - otherwise add to extra_files.
-        # STATE TRANSITION: extra_files remains a deduped collection keyed by real path
-        # representation, not by launch-string variant.
+        canonical_path = path.resolve()
+        if canonical_path in self._watched_file_real_paths:
+            return
         logger.debug('Watching file %s.', path)
-        self.extra_files.add(path)
+        self.extra_files.add(canonical_path)
+        self._watched_file_real_paths.add(canonical_path)
 
     def watched_files(self, include_globs=True):
         """
@@ -651,7 +647,7 @@ def start_django(reloader, main_func, *args, **kwargs):
 def run_with_reloader(main_func, *args, **kwargs):
     signal.signal(signal.SIGTERM, lambda *args: sys.exit(0))
     try:
-    if os.environ.get(DJANGO_AUTORELOAD_ENV) == 'true':
+        if os.environ.get(DJANGO_AUTORELOAD_ENV) == 'true':
             reloader = get_reloader()
             if isinstance(reloader, StatReloader):
                 # AUTORELOAD-003

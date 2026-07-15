@@ -127,12 +127,59 @@ class AUTORELOADRequirementTraceabilityTests(SimpleTestCase):
         self.assertEqual(mocked_call.call_count, 2)
 
     def test_AUTORELOAD_003_compute_invocation_script_path_is_stable_absolute_path(self):
-        """Coverage placeholder for AUTORELOAD-003: deterministic script path resolution."""
-        pass
+        """
+        Different launch forms that target the same manage.py resolve to one stable
+        absolute Path value.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            workspace = Path(temp_dir)
+            project_dir = workspace / 'project'
+            app_dir = project_dir / 'app'
+            manage_script = project_dir / 'manage.py'
+            project_dir.mkdir(parents=True)
+            app_dir.mkdir(parents=True)
+            manage_script.touch()
+
+            expected = manage_script.resolve()
+            observed = []
+
+            with mock.patch('django.utils.autoreload.Path.cwd', return_value=project_dir):
+                with mock.patch.object(autoreload.sys, 'argv', ['manage.py', 'runserver']):
+                    observed.append(autoreload.compute_invocation_script_path())
+
+            with mock.patch('django.utils.autoreload.Path.cwd', return_value=app_dir):
+                with mock.patch.object(autoreload.sys, 'argv', ['../project/manage.py', 'runserver']):
+                    observed.append(autoreload.compute_invocation_script_path())
+
+            with mock.patch.object(autoreload.sys, 'argv', [str(expected), 'runserver']):
+                observed.append(autoreload.compute_invocation_script_path())
+
+            self.assertIsNotNone(expected)
+            self.assertTrue(expected.is_absolute())
+            self.assertEqual(len(observed), 3)
+            for path in observed:
+                self.assertEqual(path, expected)
+            self.assertEqual(len(set(observed)), 1)
 
     def test_AUTORELOAD_003_watch_file_avoids_manage_py_duplicates_by_real_path(self):
-        """Coverage placeholder for AUTORELOAD-003: deduped manage.py watch entries."""
-        pass
+        """
+        Multiple derived paths to the same management script resolve to one watch entry.
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project_dir = Path(temp_dir) / 'project'
+            manage_script = project_dir / 'manage.py'
+            alt_variant = project_dir / 'nested' / '../manage.py'
+
+            project_dir.mkdir()
+            (project_dir / 'nested').mkdir()
+            manage_script.touch()
+            reloader = autoreload.StatReloader()
+
+            reloader.watch_file(manage_script)
+            reloader.watch_file(alt_variant)
+
+            self.assertEqual(len(reloader.extra_files), 1)
+            self.assertIn(manage_script.resolve(), reloader.extra_files)
 
 
 class TestIterModulesAndFiles(SimpleTestCase):
