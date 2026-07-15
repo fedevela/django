@@ -247,15 +247,97 @@ class TestIterModulesAndFiles(SimpleTestCase):
 
     def test_arl_004_reject_malformed_candidate_without_parent_or_normalized_fallbacks(self):
         """ARL-004: reject malformed candidate without yielding parent/normalized substitutes."""
-        self.assertTrue(True)
+        malformed = 'bad\x00candidate.py'
+        calls = []
+        original_resolve = Path.resolve
+
+        def resolve_with_probe(self, *args, **kwargs):
+            path = str(self)
+            calls.append(path)
+            if '\x00' in path:
+                raise ValueError('embedded null byte')
+            return original_resolve(self, *args, **kwargs)
+
+        self.clear_autoreload_caches()
+        with mock.patch.object(Path, 'resolve', side_effect=resolve_with_probe):
+            self.assertEqual(
+                autoreload.iter_modules_and_files((), frozenset((malformed,))),
+                frozenset(),
+            )
+
+        self.assertEqual(calls, [malformed])
 
     def test_arl_004_avoid_false_positive_watch_target_from_embedded_null_and_sibling_path(self):
         """ARL-004: avoid false-positive watch targets for invalid embedded-null candidates."""
-        self.assertTrue(True)
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory)
+        malformed = directory / 'bad\x00candidate.py'
+        sibling = directory / 'badcandidate.py'
+        sibling.touch()
+
+        calls = []
+        original_resolve = Path.resolve
+
+        def resolve_with_probe(self, *args, **kwargs):
+            path = str(self)
+            calls.append(path)
+            if '\x00' in path:
+                raise ValueError('embedded null byte')
+            return original_resolve(self, *args, **kwargs)
+
+        self.clear_autoreload_caches()
+        with mock.patch.object(Path, 'resolve', side_effect=resolve_with_probe):
+            self.assertEqual(
+                autoreload.iter_modules_and_files((), frozenset((str(malformed),))),
+                frozenset(),
+            )
+
+        self.assertEqual(set(calls), {str(malformed)})
+        self.assertNotIn(str(sibling), calls)
 
     def test_arl_004_preserve_identity_across_ticks_until_candidate_resolves_directly(self):
         """ARL-004: preserve identity by not emitting derived paths across intermediate ticks."""
-        self.assertTrue(True)
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory)
+        raw_candidate = str(directory / 'intermittent.py\x00')
+        resolved_candidate = directory / 'intermittent.py'
+        resolved_candidate.touch()
+
+        calls = []
+        original_resolve = Path.resolve
+        attempts = 0
+
+        def resolve_with_recovery(self, *args, **kwargs):
+            path = str(self)
+            calls.append(path)
+            nonlocal attempts
+            attempts += 1
+            if path == raw_candidate and attempts < 3:
+                raise ValueError('embedded null byte')
+            if path == raw_candidate:
+                return original_resolve(resolved_candidate, *args, **kwargs)
+            return original_resolve(self, *args, **kwargs)
+
+        expected = frozenset((original_resolve(resolved_candidate, strict=True).absolute(),))
+
+        self.clear_autoreload_caches()
+        with mock.patch.object(Path, 'resolve', side_effect=resolve_with_recovery):
+            self.assertEqual(
+                autoreload.iter_modules_and_files((), frozenset((raw_candidate,))),
+                frozenset(),
+            )
+            self.clear_autoreload_caches()
+            self.assertEqual(
+                autoreload.iter_modules_and_files((), frozenset((raw_candidate,))),
+                frozenset(),
+            )
+            self.clear_autoreload_caches()
+            self.assertEqual(
+                autoreload.iter_modules_and_files((), frozenset((raw_candidate,))),
+                expected,
+            )
+
+        self.assertEqual(calls, [raw_candidate, raw_candidate, raw_candidate])
 
 
 class TestCommonRoots(SimpleTestCase):
