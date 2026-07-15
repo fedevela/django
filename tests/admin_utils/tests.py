@@ -320,11 +320,66 @@ class UtilsTests(SimpleTestCase):
 
     def test_D172_007_label_for_field_metadata_derivation_remains_decoupled_from_readonly_jsonpath(self):
         """D172-007: label_for_field remains metadata-driven regardless of JSON readonly behavior."""
-        pass
+        class ArticleAdminLabelForm(forms.ModelForm):
+            class Meta:
+                model = Article
+                fields = ("hist",)
+
+        metadata_label = label_for_field("hist", Article)
+        form_label = label_for_field("hist", Article, form=ArticleAdminLabelForm())
+        related_label = label_for_field("event", Location)
+
+        self.assertEqual(metadata_label, "History")
+        self.assertEqual(form_label, "History")
+        self.assertEqual(related_label, "awesome event")
+
+        # Keep label resolution strictly metadata-driven and untouched by JSON
+        # readonly rendering behavior.
+        with patch("django.contrib.admin.utils.display_for_field") as display_for_field_mock:
+            self.assertEqual(label_for_field("hist", Article), "History")
+            self.assertEqual(label_for_field("hist", Article, form=ArticleAdminLabelForm()), "History")
+            self.assertEqual(label_for_field("event", Location), "awesome event")
+            self.assertEqual(display_for_field_mock.call_count, 0)
 
     def test_D172_007_label_for_field_and_readonly_json_rendering_remain_separable_contracts(self):
         """D172-007: label resolution and readonly JSON formatting should be separately testable."""
-        pass
+        class ArticleReadonlyForm(forms.ModelForm):
+            class Meta:
+                model = Article
+                fields = ("hist",)
+
+        class MockModelAdmin:
+            def __init__(self, empty_value_display):
+                self.empty_value_display = empty_value_display
+
+            def get_empty_value_display(self):
+                return self.empty_value_display
+
+        metadata_label = label_for_field("hist", Article)
+        article = Article(site=Site(domain="example.com"), title="Title", hist="History text")
+        form = ArticleReadonlyForm(instance=article)
+
+        with patch("django.contrib.admin.helpers.lookup_field") as lookup_field_mock, patch(
+            "django.contrib.admin.helpers.display_for_field"
+        ) as display_for_field_mock:
+            readonly_field = helpers.AdminReadonlyField(
+                form=form,
+                field="hist",
+                is_first=True,
+                model_admin=MockModelAdmin("-empty-"),
+            )
+            self.assertEqual(readonly_field.field["label"], metadata_label)
+
+            lookup_field_mock.return_value = (
+                models.JSONField(verbose_name="readonly-json"),
+                None,
+                {"a": 1, "b": 2},
+            )
+            display_for_field_mock.return_value = "readonly-json-render"
+
+            self.assertEqual(readonly_field.contents(), "readonly-json-render")
+            self.assertEqual(readonly_field.field["label"], metadata_label)
+            self.assertEqual(display_for_field_mock.call_count, 1)
 
     def test_list_display_for_value(self):
         display_value = display_for_value([1, 2, 3], self.empty_value)
