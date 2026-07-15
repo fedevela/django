@@ -1705,15 +1705,42 @@ class AggregationTests(TestCase):
             .annotate(m=Max("id"))
             .values("m")[:1]
         )
-        _ = str(Publisher.objects.filter(pk=grouped_rhs).query)
-        self.assertTrue(True)
+        outer_sql = str(Publisher.objects.filter(pk=grouped_rhs).query)
+        grouped_rhs_sql = str(grouped_rhs.query)
+        outer_group_by = self._extract_group_by(outer_sql)
+        rhs_group_by = self._extract_group_by(grouped_rhs_sql)
+        self.assertIn('name', rhs_group_by)
+        self.assertEqual(
+            self._normalize_group_by_clause(outer_group_by),
+            self._normalize_group_by_clause(rhs_group_by),
+        )
+        self.assertNotRegex(outer_group_by, r'(^|,)\s*([\"`]?\\w+[\"`]\\.)?\"?id\"?(\\s|,|$)')
+        self.assertNotRegex(rhs_group_by, r'(^|,)\s*([\"`]?\\w+[\"`]\\.)?\"?id\"?(\\s|,|$)')
 
     def test_DJANGO_11797_006_regression_guard_preserves_unrelated_query_shapes(self):
         """
         GUID: DJANGO-11797-006
         Obligation: Regression guard remains explicit for non-targeted lookups and non-annotated filters.
         """
-        self.assertTrue(True)
+        # Direct-value IN path should not be routed through the query-shape
+        # mutation used for subquery RHS handling.
+        direct_in_sql = str(
+            Publisher.objects.filter(pk__in=[self.p1.pk, self.p2.pk]).query
+        )
+        self.assertIn('IN', direct_in_sql.upper())
+        self.assertNotIn('GROUP BY', direct_in_sql.upper())
+
+        # Scalar RHS without grouping should keep its non-grouped behavior.
+        simple_rhs = (
+            Publisher.objects
+            .filter(name__isnull=False)
+            .order_by('id')
+            .values("id")[:1]
+        )
+        simple_outer_sql = str(Publisher.objects.filter(pk=simple_rhs).query)
+        self.assertIn('= (SELECT', simple_outer_sql.replace('\n', ' ').upper())
+        self.assertNotIn('GROUP BY', simple_outer_sql.upper())
+        self.assertIn('LIMIT 1', simple_outer_sql.upper())
 
     def test_DJANGO_11797_006_contract_surface_excludes_public_api_migration_schema_doc_contracts(self):
         """
@@ -1721,7 +1748,14 @@ class AggregationTests(TestCase):
         Obligation: The ticket change set is constrained to compiler behavior and leaves
         public API, migration, schema, and documentation contract files untouched.
         """
-        self.assertTrue(True)
+        from django.db.models.lookups import Exact, In
+
+        self.assertEqual(Exact.process_rhs.__code__.co_argcount, 3)
+        self.assertEqual(In.process_rhs.__code__.co_argcount, 3)
+        self.assertEqual(
+            Exact.process_rhs.__code__.co_varnames[:3],
+            ('self', 'compiler', 'connection'),
+        )
 
 
 class JoinPromotionTests(TestCase):

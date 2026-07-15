@@ -261,43 +261,9 @@ class Exact(FieldGetDbPrepValueMixin, BuiltinLookup):
     def process_rhs(self, compiler, connection):
         from django.db.models.sql.query import Query
         if isinstance(self.rhs, Query):
-            # DJANGO-11797-003: Scalar equality against a queryset RHS must preserve
-            # aggregate subquery SQL shape when that shape is already grouped/annotated.
-            #
-            # Inputs:
-            # - self.rhs: Query object contributed by a RHS queryset.
-            # - self.rhs.has_limit_one(): indicates scalar subquery intent (e.g. `a[:1]`).
-            #
-            # Decision:
-            # - if self.rhs.has_limit_one() is True:
-            #   - If rhs.group_by is not None, its projection/grouping is already
-            #     defined (e.g. group by email and select m in DJANGO-11797-003).
-            #     DO NOT clear/rewrite select columns; keep current rhs SQL shape.
-            #   - Otherwise, keep legacy scalar-subquery behavior and rewrite RHS
-            #     projection to the primary key via add_fields(['pk']).
-            # - if self.rhs.has_limit_one() is False: emit ValueError.
-            #
-            # State/error transitions:
-            # - Keep rhs.select/annotation_select/group_by untouched for grouped RHS.
-            # - Keep existing aliases/joins and filters intact in the grouped path.
-            # - In the non-grouped path, existing side effects are clear_select_clause()
-            #   then add_fields(['pk']).
-            # DJANGO-11797-004 [ORANGE]:
-            # Shared-path obligation for grouped annotated RHS lookups:
-            # - Input: rhs is a Query for RHS scalar comparison (`filter(pk=rhs)` etc).
-            # - Decision:
-            #   1. If rhs.has_limit_one() is False -> raise ValueError.
-            #   2. If rhs.group_by is None -> clear_select_clause() and add_fields(['pk']).
-            #   3. Else -> keep rhs.select / group_by / annotation_select as-is.
-            # - Failure handling:
-            #   - Never mutate joins/filters; only select-shape adjustment is allowed.
-            # - Handoff:
-            #   - Both branches continue to BuiltinLookup.process_rhs unchanged.
             if self.rhs.has_limit_one():
                 if self.rhs.group_by is None:
-                    # The subquery has no grouping contract, so retain legacy
-                    # pk-only normalization to satisfy scalar cardinality checks.
-                    # The subquery must select only the pk.
+                    # Preserve legacy behavior when scalar RHS has no grouping.
                     self.rhs.clear_select_clause()
                     self.rhs.add_fields(['pk'])
             else:
@@ -373,17 +339,6 @@ class In(FieldGetDbPrepValueIterableMixin, BuiltinLookup):
                 "the inner query to be evaluated using `list(inner_query)`."
             )
 
-        # DJANGO-11797-004/006 [ORANGE/GREEN]:
-        # Shared logic guard for RHS shape handling:
-        # - Direct value rhs path remains unchanged (OrderedSet batching, placeholders).
-        # - Query-like rhs path:
-        #   - If rhs.has_select_fields is False -> normalize via clear_select_clause()
-        #     and add_fields(['pk']) as legacy fallback.
-        #   - If rhs.has_select_fields is True -> preserve existing RHS projection
-        #     (grouped/annotated RHS must compile unchanged).
-        # - Failure handling unchanged: db alias mismatch, empty direct iterable.
-        # - Scope guard:
-        #   - Do not alter unrelated lookup branches; this block is only for IN RHS.
         if self.rhs_is_direct_value():
             try:
                 rhs = OrderedSet(self.rhs)
