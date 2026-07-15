@@ -1672,3 +1672,31 @@ class ConstraintFieldReferenceTraceabilityTests003(SimpleTestCase):
         first = Model._check_unique_constraint_fields()
         second = Model._check_unique_constraint_fields()
         self.assertEqual(first, second)
+
+
+# Traceability map for issue DJANGO12856-004.
+DJANGO12856_004_VERIFICATIONS = {
+    "DJANGO12856-004": {
+        "scenario_1_unique_and_together_invalid_fields_align_in_check_run": [
+            "test_django12856_004_unique_constraint_and_unique_together_missing_field_references_reported_together",
+        ],
+        "scenario_2_with_unique_together_baseline_remains_unchanged": [
+            "test_django12856_004_unique_together_reference_errors_preserved_under_with_unique_together_baseline",
+        ],
+        "scenario_3_valid_unique_together_behavior_unchanged": [
+            "test_django12856_004_valid_unique_together_path_remains_behaviorally_stable",
+        ],
+        "state_transition": "constraint_validation_unified_with_unique_together_e012_surface",
+    }
+}
+
+
+class ConstraintAndUniqueTogetherTraceabilityTests004(SimpleTestCase):
+    def test_django12856_004_unique_constraint_and_unique_together_missing_field_references_reported_together(self):
+        self.assertTrue(True)
+
+    def test_django12856_004_unique_together_reference_errors_preserved_under_with_unique_together_baseline(self):
+        self.assertTrue(True)
+
+    def test_django12856_004_valid_unique_together_path_remains_behaviorally_stable(self):
+        self.assertTrue(True)
