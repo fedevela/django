@@ -319,25 +319,15 @@ class ConversionExceptionTests(SimpleTestCase):
     @override_settings(DEBUG=True)
     def test_DJ_RES_008_debug_true_converter_to_python_http404_surfaces_technical_404_message(self):
         """[DJ-RES-008] Debug-true regression: Http404 reason from converter is visible in technical 404 output."""
-        # Pseudocode (DJ-RES-008, Scenario 1: DEBUG=True technical-404):
-        # 1) Arrange converter callback => raise Http404("custom 404 reason").
-        # 2) Register callback through DynamicConverter.register_to_python.
-        # 3) Issue client GET for a dynamic-matched path ("/dynamic/usernotfound/").
-        # 4) Resolve contract decision:
-        #    - to_python raises Http404
-        #    - DEBUG is true
-        #    - system should return technical 404 response.
-        # 5) Expected outcomes:
-        #    status_code == 404
-        #    response includes "custom 404 reason"
-        #    debug diagnostic content remains visible.
-        # 6) Failure path:
-        #    If response is production-style 404 or hides reason -> regression.
-        #
-        # Architecture pressure:
-        # - Dependency seam: test-controlled converter callback into Django URL resolver.
-        # - Boundary: production-response selection controlled by DEBUG flag.
-        pass
+        def raises_http404(value):
+            raise Http404('custom 404 reason')
+
+        self._set_dynamic_converter_to_python(raises_http404)
+        response = self.client.get('/dynamic/usernotfound/')
+
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, 'custom 404 reason')
+        self.assertContains(response, 'Django tried these URL patterns', status_code=404)
 
     @override_settings(DEBUG=True)
     def test_DJ_RES_001_DJ_RES_007_converter_to_python_http404_maps_to_technical_404_lifecycle(self):
@@ -375,25 +365,22 @@ class ConversionExceptionTests(SimpleTestCase):
     @override_settings(DEBUG=False)
     def test_DJ_RES_008_debug_false_converter_to_python_http404_yields_production_safe_404(self):
         """[DJ-RES-008] Debug-false regression: converter Http404 remains production-safe with no debug traceback."""
-        # Pseudocode (DJ-RES-008, Scenario 2: DEBUG=False production-safe 404):
-        # 1) Arrange converter callback => raise Http404("custom 404 reason").
-        # 2) Register callback through DynamicConverter.register_to_python.
-        # 3) Issue client GET for same dynamic path used in Scenario 1.
-        # 4) Resolve contract decision:
-        #    - to_python raises Http404
-        #    - DEBUG is false
-        #    - system should return generic 404 response.
-        # 5) Expected outcomes:
-        #    status_code == 404
-        #    response contains generic Not Found content
-        #    response omits Django diagnostic block and "custom 404 reason".
-        # 6) Failure path:
-        #    If debug internals or raw message leak -> regression.
-        #
-        # Architecture pressure:
-        # - Deployment boundary: debug-mode switch must not leak resolver internals upstream.
-        # - Interface contract: same converter fault must map to production-safe output envelope.
-        pass
+        def raises_http404(value):
+            raise Http404('custom 404 reason')
+
+        self._set_dynamic_converter_to_python(raises_http404)
+        response = self.client.get('/dynamic/usernotfound/')
+
+        self.assertEqual(response.status_code, 404)
+        self.assertContains(response, '<h1>Not Found</h1>', status_code=404)
+        self.assertContains(
+            response,
+            'The requested resource was not found on this server.',
+            status_code=404,
+        )
+        self.assertNotContains(response, 'Django tried these URL patterns', status_code=404)
+        self.assertNotContains(response, 'custom 404 reason', status_code=404)
+        self.assertNotContains(response, 'Request Method:', status_code=404)
 
     @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_002_candidate_http404_marks_candidate_as_miss_and_allows_later_match(self):
@@ -413,28 +400,17 @@ class ConversionExceptionTests(SimpleTestCase):
     @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_008_candidate_http404_then_fallback_candidate_dispatches_successfully(self):
         """[DJ-RES-008] Candidate fallback regression: first candidate Http404 does not block later resolver matches."""
-        # Pseudocode (DJ-RES-008, Scenario 3: candidate fallback):
-        # 1) Arrange converter callback => raise Http404("custom 404 reason").
-        # 2) Register callback through DynamicConverter.register_to_python.
-        # 3) In URLConf with candidates:
-        #    - candidate 1: dynamic pattern using the raising converter
-        #    - candidate 2: fallback pattern that matches same segment as slug.
-        # 4) Issue client GET for "/candidate-miss/abc/".
-        # 5) Candidate loop transition:
-        #    - candidate 1 converted value raises Http404 -> mark miss and continue.
-        #    - candidate 2 attempted -> match found.
-        # 6) Expected outcomes:
-        #    status_code == 200
-        #    resolved match indicates fallback candidate ("candidate-miss-fallback")
-        #    kwargs == {"value": "abc"}
-        #    route == "candidate-miss/<slug:value>/"
-        # 7) Failure path:
-        #    if loop aborts on first Http404 and returns 404 -> regression.
-        #
-        # Architecture pressure:
-        # - Topology pressure: candidate traversal must preserve non-terminating semantics for Http404 faults.
-        # - Integration seam: resolver's pattern iteration contracts must continue into later candidates.
-        pass
+        def raises_http404(value):
+            raise Http404('custom 404 reason')
+
+        self._set_dynamic_converter_to_python(raises_http404)
+        response = self.client.get('/candidate-miss/abc/')
+        self.assertEqual(response.status_code, 200)
+
+        match = resolve('/candidate-miss/abc/')
+        self.assertEqual(match.url_name, 'candidate-miss-fallback')
+        self.assertEqual(match.kwargs, {'value': 'abc'})
+        self.assertEqual(match.route, 'candidate-miss/<slug:value>/')
 
     @override_settings(ROOT_URLCONF='urlpatterns.converter_http404_candidates')
     def test_DJ_RES_002_candidate_http404_when_no_candidates_match_results_in_not_found(self):
