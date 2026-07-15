@@ -1,9 +1,13 @@
 import enum
-
+import io
+import os
 import re
+import tempfile
 
 from django.db import migrations, models
+from django.core.management import call_command
 from django.db.migrations.writer import MigrationWriter
+from django.test.utils import extend_sys_path
 from django.test import SimpleTestCase
 
 
@@ -137,31 +141,63 @@ class NestedReferenceTraceabilityTests(SimpleTestCase):
         )
 
     def test_m154_006_second_makemigrations_run_with_unchanged_nested_model_references_has_no_migration_changes(self):
-        # M154-006 SCENARIO 1:
-        # INPUT:
-        # - committed migration file already contains nested-class serialized forms
-        # - subsequent makemigrations run observes unchanged model graph
-        # FLOW:
-        # 1) autodetector.collect_changes() yields empty changes for the target app.
-        # 2) handle() follows the `if not changes` branch.
-        # 3) write_migration_files() is intentionally not invoked.
-        # 4) command exits after reporting no-change status.
-        # OUTPUT/INVARIANT:
-        # - No filesystem write for that migration file.
-        # - No new operations are printed or materialized in output.
-        self.assertTrue(True)
+        class NestedReferenceModel(models.Model):
+            enum_field = EnumField(enum=Thing.State)
+            char_field = Outer.Inner(max_length=24)
+
+            class Meta:
+                app_label = "migrations"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            module_name = "m154_nested_reference_migrations"
+            package_dir = os.path.join(temp_dir, module_name)
+            migration_dir = os.path.join(package_dir, "migrations")
+            os.makedirs(migration_dir)
+            open(os.path.join(package_dir, "__init__.py"), "w").close()
+            open(os.path.join(migration_dir, "__init__.py"), "w").close()
+
+            with extend_sys_path(temp_dir):
+                with self.settings(MIGRATION_MODULES={"migrations": "%s.migrations" % module_name}):
+                    call_command("makemigrations", "migrations", stdout=io.StringIO())
+                    migration_file = os.path.join(migration_dir, "0001_initial.py")
+                    with open(migration_file, encoding="utf-8") as fp:
+                        first_contents = fp.read()
+
+                    second_output = io.StringIO()
+                    call_command("makemigrations", "migrations", stdout=second_output)
+
+                    self.assertIn("No changes detected in app 'migrations'", second_output.getvalue())
+                    self.assertIn("%s.Thing.State" % __name__, first_contents)
+                    self.assertIn("%s.Outer.Inner" % __name__, first_contents)
+                    with open(migration_file, encoding="utf-8") as fp:
+                        second_contents = fp.read()
+                    self.assertEqual(first_contents, second_contents)
 
     def test_m154_006_second_generation_of_nested_reference_migrations_is_byte_for_byte_stable(self):
-        # M154-006 SCENARIO 2:
-        # INPUT:
-        # - fixed migration object with nested deconstructible references
-        # - same project/app/model/environment ordering
-        # FLOW:
-        # 1) serialize each operation in fixed operation order.
-        # 2) collect imports emitted from serialized tokens.
-        # 3) sort imports by deterministic key before rendering.
-        # 4) render template with the exact same interpolation keys each run.
-        # OUTPUT/INVARIANT:
-        # - generated migration file text is byte-identical across runs
-        # - nested dotted reference tokens and import lines remain unchanged.
-        self.assertTrue(True)
+        migration = migrations.Migration("0001_initial", "migrations")
+        migration.operations = [
+            migrations.CreateModel(
+                "ReferenceModel",
+                [
+                    ("id", models.AutoField(primary_key=True)),
+                    ("state", EnumField(enum=Thing.State)),
+                ],
+                {"ordering": ["state"]},
+                (models.Model,),
+            ),
+            migrations.CreateModel(
+                "OuterInnerModel",
+                [("name", Outer.Inner(max_length=24))],
+                {"ordering": ["name"]},
+                (models.Model,),
+            ),
+        ]
+        migration.dependencies = [("migrations", "0001_initial")]
+
+        first_generation = MigrationWriter(migration, include_header=False).as_string()
+        second_generation = MigrationWriter(migration, include_header=False).as_string()
+        self.assertEqual(first_generation, second_generation)
+        self.assertIn("from django.db import migrations, models", first_generation)
+        self.assertIn("import %s" % __name__, first_generation)
+        self.assertIn("%s.Thing.State" % __name__, first_generation)
+        self.assertIn("%s.Outer.Inner" % __name__, first_generation)
