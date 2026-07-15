@@ -68,6 +68,25 @@ class WhizIterEmpty(models.Model):
     c = models.CharField(choices=iter(()), blank=True, max_length=1)
 
 
+class Req138DisplayOverrideModel(models.Model):
+    status = models.CharField(max_length=8, choices=(('on', 'On'), ('off', 'Off')))
+
+    def __str__(self):
+        return self.get_status_display()
+
+    def get_status_display(self):
+        return 'required:' + self.status
+
+
+class Req138StatefulDisplayOverrideModel(models.Model):
+    status = models.CharField(max_length=8, choices=(('on', 'On'), ('off', 'Off')))
+    is_primary = models.BooleanField(default=False)
+
+    def get_status_display(self):
+        state_label = 'primary' if self.is_primary else 'secondary'
+        return f'{state_label}:{self.status}'
+
+
 class Choiceful(models.Model):
     no_choices = models.IntegerField(null=True)
     empty_choices = models.IntegerField(choices=(), null=True)

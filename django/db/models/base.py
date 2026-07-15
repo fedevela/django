@@ -939,19 +939,7 @@ class Model(metaclass=ModelBase):
     delete.alters_data = True
 
     def _get_FIELD_display(self, field):
-        # REQ-138-001 pseudocode fallback contract:
-        # FUNCTION _get_FIELD_display(field):
-        #   INPUT: model instance and concrete field descriptor
-        #   OUTPUT: resolved display string for current stored value
-        #   PRECONDITION: called only when model has no own get_<field>_display method
-        #   STEPS:
-        #     value <- getattr(self, field.attname)
-        #     label <- dict(field.flatchoices).get(value, value)
-        #     RETURN force_str(label, strings_only=True)
-        #   FAILSAFE:
-        #     if no explicit mapping exists, return raw value after force_str coercion.
         value = getattr(self, field.attname)
-        # force_str() to coerce lazy strings.
         return force_str(dict(field.flatchoices).get(value, value), strings_only=True)
 
     def _get_next_or_previous_by_FIELD(self, field, is_next, **kwargs):
