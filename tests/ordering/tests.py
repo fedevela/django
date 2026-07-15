@@ -1,7 +1,7 @@
 from datetime import datetime
 from operator import attrgetter
 
-from django.db.models import Count, DateTimeField, F, Max, OuterRef, Subquery
+from django.db.models import Count, DateTimeField, F, Max, OuterRef, RawSQL, Subquery
 from django.db.models.functions import Upper
 from django.test import TestCase
 from django.utils.deprecation import RemovedInDjango31Warning
@@ -377,6 +377,45 @@ class OrderingTests(TestCase):
             ],
             attrgetter("headline")
         )
+
+    def test_order_by_multiline_sql(self):
+        """
+        Multiline SQL fragments should be compared by complete normalized form.
+        """
+        queryset = Article.objects.order_by(
+            RawSQL(
+                """
+                CASE
+                    WHEN headline LIKE 'Article %' THEN 1
+                    ELSE 0
+                END
+                """,
+                [],
+            ),
+            RawSQL(
+                """
+                CASE
+                    WHEN pub_date IS NOT NULL THEN 1
+                    ELSE 0
+                END
+                """,
+                [],
+            ),
+            RawSQL(
+                """
+                CASE
+                    WHEN pub_date IS NULL THEN 1
+                    ELSE 0
+                END
+                """,
+                [],
+            ),
+        )
+        order_by_sql = str(queryset.query).upper().split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 3)
+        self.assertIn("WHEN HEADLINE LIKE 'ARTICLE %' THEN 1", order_by_sql)
+        self.assertIn("WHEN PUB_DATE IS NOT NULL THEN 1", order_by_sql)
+        self.assertIn("WHEN PUB_DATE IS NULL THEN 1", order_by_sql)
 
     def test_related_ordering_duplicate_table_reference(self):
         """
