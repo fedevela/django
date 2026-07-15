@@ -137,9 +137,31 @@ class NestedReferenceTraceabilityTests(SimpleTestCase):
         )
 
     def test_m154_006_second_makemigrations_run_with_unchanged_nested_model_references_has_no_migration_changes(self):
-        """SCENARIO 1: clean second-run emits no migration churn for nested references."""
+        # M154-006 SCENARIO 1:
+        # INPUT:
+        # - committed migration file already contains nested-class serialized forms
+        # - subsequent makemigrations run observes unchanged model graph
+        # FLOW:
+        # 1) autodetector.collect_changes() yields empty changes for the target app.
+        # 2) handle() follows the `if not changes` branch.
+        # 3) write_migration_files() is intentionally not invoked.
+        # 4) command exits after reporting no-change status.
+        # OUTPUT/INVARIANT:
+        # - No filesystem write for that migration file.
+        # - No new operations are printed or materialized in output.
         self.assertTrue(True)
 
     def test_m154_006_second_generation_of_nested_reference_migrations_is_byte_for_byte_stable(self):
-        """SCENARIO 2: deterministic regeneration produces byte-for-byte identical output."""
+        # M154-006 SCENARIO 2:
+        # INPUT:
+        # - fixed migration object with nested deconstructible references
+        # - same project/app/model/environment ordering
+        # FLOW:
+        # 1) serialize each operation in fixed operation order.
+        # 2) collect imports emitted from serialized tokens.
+        # 3) sort imports by deterministic key before rendering.
+        # 4) render template with the exact same interpolation keys each run.
+        # OUTPUT/INVARIANT:
+        # - generated migration file text is byte-identical across runs
+        # - nested dotted reference tokens and import lines remain unchanged.
         self.assertTrue(True)

@@ -136,6 +136,18 @@ class MigrationWriter:
         imports = set()
 
         # Deconstruct operations
+        # M154-006 / Scenario 2: byte-for-byte stability for regenerated nested-reference migrations.
+        # INPUT:
+        # - fixed migration object with ordered self.migration.operations
+        # - deterministic nested-path serialization for each operation argument.
+        # DATA FLOW:
+        # 1) iterate operations in sequence and serialize each one once.
+        # 2) accumulate every emitted import into a set (dedupe, no mutation order).
+        # 3) join operation text with a fixed newline delimiter.
+        # 4) sort imports by deterministic key before rendering.
+        # 5) interpolate exactly the same template keys each invocation.
+        # OUTPUT:
+        # - if inputs are stable, output bytes are stable, including imports and nested dotted refs.
         operations = []
         for operation in self.migration.operations:
             operation_string, operation_imports = OperationWriter(operation).serialize()

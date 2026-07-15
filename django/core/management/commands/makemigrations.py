@@ -169,6 +169,17 @@ class Command(BaseCommand):
         )
 
         if not changes:
+            # M154-006 / Scenario 1: second-run idempotence when nested references are unchanged.
+            # INPUT:
+            # - autodetector.compare_states() found no model-operation deltas.
+            # - migration graph serializable and deterministic under the existing paths.
+            # STATE:
+            # - `changes == {}`.
+            # DECISION:
+            # - if empty, no write is attempted.
+            # - only emit "No changes detected" status text.
+            # OUTPUT:
+            # - zero file writes, zero new migration operations.
             # No changes? Tell them.
             if self.verbosity >= 1:
                 if app_labels:
