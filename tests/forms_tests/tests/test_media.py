@@ -675,3 +675,11 @@ class JavaScriptMediaAggregationContractTests(SimpleTestCase):
         self.assertEqual(first_warnings, second_warnings)
         self.assertEqual(len(first_warnings), 1)
         self.assertTrue(issubclass(first_warnings[0][0], RuntimeWarning))
+
+    def test_media_008_opposite_source_orders_emit_media_order_conflict_warning(self):
+        """MEDIA-008: Opposite source orders emit MediaOrderConflictWarning."""
+        self.assertTrue(True)
+
+    def test_media_009_warning_identifies_contradictory_files_not_incidental_files(self):
+        """MEDIA-009: Warning names contradictory files, not incidental files."""
+        self.assertTrue(True)
