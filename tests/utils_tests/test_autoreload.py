@@ -366,21 +366,28 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         already watched, when `manage.py` is modified and saved, the next check
         cycle must detect it and complete a restart cycle automatically.
         """
-        # AUTO-002 pseudocode locus (traceability anchor):
-        # PRECONDITION:
-        #   - runserver launched with `sys.argv[0] == manage.py`, `sys.argv[1] == runserver`.
-        #   - StatReloader.__init__ has already added resolve(manage.py) into watched files.
-        #   - first tick has established base mtimes in StatReloader.tick().
-        # INPUT ACTION:
-        #   - persist mtime update to watched manage.py while process remains running.
-        # CONTROL TRANSITION:
-        #   - next StatReloader.tick() receives managed snapshot from snapshot_files().
-        #   - existing mtime map entry exists; new mtime > old causes notify_file_changed(manage.py).
-        #   - notify_file_changed executes trigger_reload(manage.py) when no custom signal receiver claims it.
-        #   - trigger_reload emits the reload/restart exit path.
-        # EXPECTED OUTCOME:
-        #   - automatic restart cycle begins on that next check without manual action.
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as tempdir:
+            manage_py = Path(tempdir) / 'manage.py'
+            manage_py.write_text('')
+            with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
+                    with mock.patch('django.utils.autoreload.time.sleep'):
+                        with mock.patch(
+                            'django.utils.autoreload.trigger_reload',
+                            side_effect=SystemExit(3),
+                        ) as trigger_reload:
+                            reloader = autoreload.StatReloader()
+                            # First cycle should seed the baseline mtime and not restart.
+                            ticker = reloader.tick()
+                            next(ticker)
+                            # Simulate a persisted edit to manage.py between polling cycles.
+                            new_mtime = manage_py.stat().st_mtime + 1
+                            os.utime(manage_py, (new_mtime, new_mtime))
+
+                            with self.assertRaises(SystemExit) as context:
+                                next(ticker)
+                            self.assertEqual(context.exception.code, 3)
+                            trigger_reload.assert_called_once_with(manage_py.resolve())
 
 
 class ReloaderTests(SimpleTestCase):
