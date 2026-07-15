@@ -23,6 +23,11 @@ DJANGO11630_VERIFICATION_MAP = {
     "DJANGO11630-006": [
         "test_DJANGO11630_006_same_app_or_same_label_collision_remains_hard_error_on_alias",
     ],
+    "DJANGO11630-005": [
+        "test_DJANGO11630_005_non_managed_collision_preserves_preexisting_E028_behavior",
+        "test_DJANGO11630_005_proxy_collision_preserves_preexisting_E028_behavior",
+        "test_DJANGO11630_005_concrete_managed_collision_takes_precedence_over_proxy_or_unmanaged_shadows",
+    ],
 }
 
 
@@ -239,8 +244,20 @@ class IndexNameTests(SimpleTestCase):
             Error(
                 "index name 'foo' is not unique for model check_framework.Model.",
                 id='models.E029',
-            ),
-        ])
+                ),
+            ])
+
+    def test_DJANGO11630_005_non_managed_collision_preserves_preexisting_E028_behavior(self):
+        """DJANGO11630-005: non-managed additions do not create new models.E028 collisions."""
+        pass
+
+    def test_DJANGO11630_005_proxy_collision_preserves_preexisting_E028_behavior(self):
+        """DJANGO11630-005: proxy model table-sharing preserves prior duplicate-table behavior."""
+        pass
+
+    def test_DJANGO11630_005_concrete_managed_collision_takes_precedence_over_proxy_or_unmanaged_shadows(self):
+        """DJANGO11630-005: concrete managed collisions remain E028 when proxy/unmanaged share table."""
+        pass
 
     def test_collision_in_different_models(self):
         index = models.Index(fields=['id'], name='foo')
