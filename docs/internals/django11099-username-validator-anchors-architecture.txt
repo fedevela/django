@@ -1,0 +1,92 @@
+Issue DJANGO11099 — Username validator boundary anchors
+=====================================================
+
+This artifact records where the deterministic logic for
+``DJANGO11099-001`` … ``DJANGO11099-004`` should live at the
+architecture level before implementation changes.
+
+Requirement-to-architecture map
+------------------------------
+
+1. ``DJANGO11099-001``
+   - **Obligation type:** boundary/canonical contract enforcement
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``ASCIIUsernameValidator.regex``
+   - **Placement:** class-level attribute in ``ASCIIUsernameValidator``
+   - **Boundary:** class boundary to downstream ``RegexValidator`` match
+     semantics.
+   - **Acceptance impact:** value must fail when not an exact-string match.
+
+2. ``DJANGO11099-002``
+   - **Obligation type:** boundary/canonical contract enforcement
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``UnicodeUsernameValidator.regex``
+   - **Placement:** class-level attribute in ``UnicodeUsernameValidator``
+   - **Boundary:** class boundary to downstream ``RegexValidator`` match
+     semantics.
+   - **Acceptance impact:** value must fail when not an exact-string match.
+
+3. ``DJANGO11099-003``
+   - **Obligation type:** behavior-seam: boundary rejection path
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``ASCIIUsernameValidator`` invocation chain
+   - **Placement:** runtime boundary is the `ASCIIUsernameValidator` class
+     configured for string-only matching.
+   - **Boundary:** input-validation seam at ``v("alice\\n")`` call.
+   - **Acceptance impact:** explicit failing path for trailing newline.
+
+4. ``DJANGO11099-004``
+   - **Obligation type:** behavior-seam: boundary rejection path
+   - **Owner:** ``django/contrib/auth/validators.py`` →
+     ``UnicodeUsernameValidator`` invocation chain
+   - **Placement:** runtime boundary is the `UnicodeUsernameValidator` class
+     configured for string-only matching.
+   - **Boundary:** input-validation seam at ``v("alice\\n")`` call.
+   - **Acceptance impact:** explicit failing path for trailing newline.
+
+Topology and ownership
+----------------------
+
+- **Domain boundary:** `django.contrib.auth.validators` owns username input
+  validation shape for both ASCII and Unicode variants.
+- **Class boundary:** each class expresses a specific contract through three
+  class attributes:
+  - ``regex``
+  - ``message``
+  - ``flags``
+- **Stable contract boundary:** both classes remain subclasses of
+  ``django.core.validators.RegexValidator``; callers continue to depend on the
+  same public behavior.
+
+Dependency-direction notes
+-------------------------
+
+- ``validators.py`` depends on:
+  1. ``re`` (local regex pattern flags).
+  2. ``django.core.validators`` (base validation flow).
+  3. ``django.utils.translation.gettext_lazy`` (error message i18n).
+- Validation usage in tests depends on:
+  1. ``django.contrib.auth.validators`` public exports.
+  2. ``ValidationError`` exception contract from ``django.core.exceptions``.
+
+Integration-seam skeleton
+-------------------------
+
+- **Regex-anchor seam:** replace boundary tokens in
+  ``ASCIIUsernameValidator.regex`` and ``UnicodeUsernameValidator.regex``
+  with explicit string-boundary anchors.
+- **Behavior-seam verification skeleton:** maintain/extend
+  ``tests/auth_tests/test_validators.py`` with issue-specific tests:
+  ``test_django11099_001_*`` through ``test_django11099_004_*``.
+- **No cross-module changes:** do not route through password validators or other
+  auth validation components.
+
+Readiness check (architecture-only phase)
+----------------------------------------
+
+- Each GUID is mapped to a concrete locus in `django.contrib.auth.validators`.
+- No ownership changes required outside this module and its tests seam.
+- No dependency inversions introduced; only anchor semantics are changed in the
+  existing validation class contracts.
+- At least one architecture artifact has been added:
+  ``docs/internals/django11099-username-validator-anchors-architecture.txt``.
