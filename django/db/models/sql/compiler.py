@@ -498,18 +498,14 @@ class SQLCompiler:
             combinator = self.query.combinator
             features = self.connection.features
             if combinator:
-                # DJANGO12908-001/004/005/008:
-                # Ownership + seam:
-                #   - Owner: SQLCompiler.as_sql() compound-query branch.
-                #   - Boundary: compiler-local rejection before combinator SQL generation.
-                #   - Dependency direction:
-                #         Query state -> compiler preflight -> SQL generation only.
-                #   - Scope contract:
-                #       - require combinator == 'union'
-                #       - require distinct_fields is non-empty (explicit distinct(...))
-                #       - require annotation_select is non-empty
-                #     before raising NotSupportedError.
-                #   - This path must not reshape projection columns.
+                # DJANGO12908-001/004/005/008: fail fast for annotated union + explicit
+                # distinct-fields, before SQL compilation mutates/compiles any columns.
+                if (
+                    combinator == 'union'
+                    and self.query.distinct_fields
+                    and self.query.annotation_select
+                ):
+                    raise NotSupportedError('annotate() + union() + distinct(fields) is not supported.')
                 if not getattr(features, 'supports_select_{}'.format(combinator)):
                     raise NotSupportedError('{} is not supported on this database backend.'.format(combinator))
                 result, params = self.get_combinator_sql(combinator, self.query.combinator_all)

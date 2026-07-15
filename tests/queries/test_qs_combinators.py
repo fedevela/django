@@ -300,26 +300,46 @@ class QuerySetSetOperationTests(TestCase):
         qs2 = ReservedName.objects.annotate(
             rank=Value(1, IntegerField()),
         ).values('name', 'rank')
-        _ = qs1.union(qs2).order_by('name').distinct('name')
-        self.assertTrue(True)
+        msg = 'annotate() + union() + distinct(fields) is not supported.'
+        compound = qs1.union(qs2).order_by('name').distinct('name')
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            list(compound)
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            compound.count()
 
     def test_django12908_004_guard_scope_preserves_non_annotated_union_patterns(self):
-        qs1 = Number.objects.filter(num__lte=1).values('num')
-        qs2 = Number.objects.filter(num__gte=8).values('num')
-        _ = qs1.union(qs2).order_by('num').distinct('num')
-        _ = qs1.union(qs2).distinct()
-        self.assertTrue(True)
+        qs1 = Number.objects.filter(num__lte=1).values_list('num', flat=True)
+        qs2 = Number.objects.filter(num__gte=8).values_list('num', flat=True)
+        expected = [0, 1, 8, 9]
+        self.assertCountEqual(
+            list(qs1.union(qs2).order_by('num').distinct('num')),
+            expected,
+        )
+        self.assertCountEqual(
+            list(qs1.union(qs2).distinct()),
+            expected,
+        )
 
     def test_django12908_005_projection_annotations_survive_without_explicit_distinct_fields(self):
+        ReservedName.objects.bulk_create([
+            ReservedName(name='a', order=1),
+            ReservedName(name='b', order=2),
+        ])
         qs1 = ReservedName.objects.annotate(
             rank=Value(0, IntegerField()),
         ).values('name', 'rank', 'order')
         qs2 = ReservedName.objects.annotate(
             rank=Value(1, IntegerField()),
         ).values('name', 'rank', 'order')
-        _ = qs1.union(qs2).order_by('name')
-        _ = qs1.union(qs2).distinct()
-        self.assertTrue(True)
+        unioned = qs1.union(qs2).values_list('name', 'rank', 'order').order_by('name', 'rank')
+        self.assertCountEqual(
+            list(unioned),
+            [('a', 0, 1), ('a', 1, 1), ('b', 0, 2), ('b', 1, 2)],
+        )
+        self.assertCountEqual(
+            list(qs1.union(qs2).distinct().values_list('name', 'rank', 'order')),
+            [('a', 0, 1), ('a', 1, 1), ('b', 0, 2), ('b', 1, 2)],
+        )
 
     def test_django12908_008_compiler_path_localization_without_api_model_schema_change(self):
         qs1 = ReservedName.objects.annotate(
@@ -328,5 +348,6 @@ class QuerySetSetOperationTests(TestCase):
         qs2 = ReservedName.objects.annotate(
             rank=Value(2, IntegerField()),
         ).values('name', 'rank')
-        _ = qs1.union(qs2).order_by('name').distinct('name')
-        self.assertTrue(True)
+        msg = 'annotate() + union() + distinct(fields) is not supported.'
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            list(qs1.union(qs2).order_by('name').distinct('name'))
