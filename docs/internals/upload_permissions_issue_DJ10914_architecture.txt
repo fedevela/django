@@ -8,6 +8,11 @@ Scope:
 
 Requirement-to-architecture map
 -------------------------------
+- DJ10914-004
+  - Contract locus: documented default for `FILE_UPLOAD_PERMISSIONS` when no project setting is supplied.
+  - Architectural home: documentation boundary in `docs/ref/settings.txt` under the `FILE_UPLOAD_PERMISSIONS` section.
+  - Enforcement seam: contract placeholder in `tests/file_storage/test_upload_permissions_contract.py`
+    (`test_DJ10914_004_file_upload_permissions_default_is_0o644_documented`).
 - DJ10914-001
   - Contract locus: canonical setting default resolution.
   - Architectural home: configuration boundary in `django/conf/global_settings.py` and storage consumption
@@ -17,6 +22,12 @@ Requirement-to-architecture map
   - Contract locus: precedence rule where per-instance or settings value dominates fallback.
   - Architectural home: `FileSystemStorage._value_or_setting` and `FileSystemStorage.file_permissions_mode`.
   - Enforcement seam: `FileSystemStorage._save` chmod path.
+- DJ10914-005
+  - Contract locus: warning and deterministic configuration guidance when no explicit upload permission is set.
+  - Architectural home: documentation boundary in `docs/ref/settings.txt` within the `FILE_UPLOAD_PERMISSIONS` warning block
+    and pseudocode marker.
+  - Enforcement seam: contract placeholder in `tests/file_storage/test_upload_permissions_contract.py`
+    (`test_DJ10914_005_file_upload_permissions_handler_dependent_warning_is_documented`).
 - DJ10914-006
   - Contract locus: unchanged upload flow for handler selection, parsing, and storage backend choice.
   - Architectural home: `django/http/request.py` (`_initialize_handlers`, `parse_file_upload`) and
@@ -25,6 +36,10 @@ Requirement-to-architecture map
 
 Requirement-to-logic pressure map
 -------------------------------
+- DJ10914-004: documentation determinism contract
+  - Pressure: ownership + boundary.
+  - Locus: `docs/ref/settings.txt` (`FILE_UPLOAD_PERMISSIONS` section).
+  - Structural need: docs must state both default literal and effective-default sentence ("Django applies ``0o644``").
 - DJ10914-002: resolve default permission policy at storage boundary
   - Pressure: ownership + contract.
   - Locus: `django/core/files/storage.py` (`FileSystemStorage.file_permissions_mode`, `_save`).
@@ -44,6 +59,11 @@ Requirement-to-logic pressure map
   - Locus: `django/core/files/storage.py` (`file_permissions_mode` cache) with tests at
     `tests/file_storage/test_upload_permissions_contract.py`.
   - Structural need: output contract requires same resolved mode path for both handler branches.
+- DJ10914-005: documented risk + deterministic recommendation
+  - Pressure: boundary + contract.
+  - Locus: `docs/ref/settings.txt` warning paragraph and pseudocode block `.. pseudocode:: DJ10914-005`.
+  - Structural need: docs include explicit handler-path caveat (`MemoryUploadedFile` vs `TemporaryUploadedFile`) and
+    explicit `FILE_UPLOAD_PERMISSIONS` recommendation for deterministic behavior.
 
 Boundary and ownership placement
 -------------------------------
@@ -61,7 +81,10 @@ Boundary and ownership placement
   - Must not consume permission semantics directly.
 - Storage boundary (`django/core/files/storage.py`)
   - Owns persistence and permission application to saved files.
-  - Is the only boundary applying file mode to bytes on disk.
+  - Is the only boundary applying file mode to saved files.
+- Documentation boundary (`docs/ref/settings.txt`)
+  - Owns normative behavior statements for default/implicit semantics and deterministic configuration guidance.
+  - Keeps reader-facing requirements 004/005 synchronized with placeholder contract checks.
 
 Dependency direction (required)
 -------------------------------
@@ -72,6 +95,10 @@ Dependency direction (required)
 
 Structural contracts and seams
 ------------------------------
+- Contract-004 (documented default): docs must explicitly document default effective value for
+  `FILE_UPLOAD_PERMISSIONS`.
+- Contract-005 (documented handler variance): docs must warn about handler-dependent outcomes without explicit setting
+  and require explicit `FILE_UPLOAD_PERMISSIONS` for deterministic behavior.
 - Contract-001 (effective default): if `FILE_UPLOAD_PERMISSIONS` is unset/undefined in project settings,
   the effective mode used by `FileSystemStorage.file_permissions_mode` is `0o644`.
 - Contract-003 (precedence): explicit configuration path (`FileSystemStorage(file_permissions_mode=...)`)
@@ -103,6 +130,10 @@ Integration seam annotations (existing and unmodified)
   - Entry points and order preserved in `django/http/request.py`:
     `_initialize_handlers` and `parse_file_upload`.
   - Backend seam preserved in `django/core/files/storage.py` via `get_storage_class`.
+- Documentation/contract seam:
+  - Input: normative artifact (`docs/ref/settings.txt`) and trace markers.
+  - Decision point: whether explicit default and handler-dependent warning are present and aligned.
+  - Output gate: placeholder contract tests in `tests/file_storage/test_upload_permissions_contract.py`.
 
 Integration-seam skeletons (next implementation touch points)
 -------------------------------------------------------------
@@ -118,7 +149,7 @@ Changed architecture artifacts
 
 Completion status
 -----------------
-- All three traced obligations are represented in concrete structural locations.
+- All five traced obligations are represented in concrete structural locations.
 - No new APIs, upload-policy framework, or flow branches are introduced in this step.
 - Repository now has an explicit architecture artifact defining ownership boundaries and integration seams for
   Issue DJ10914.
