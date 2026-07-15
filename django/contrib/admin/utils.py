@@ -313,20 +313,6 @@ def label_for_field(name, model, model_admin=None, return_attr=False, form=None)
     return the resolved attribute (which could be a callable). This will be
     None if (and only if) the name refers to a field.
     """
-    # D172-007: label_for_field is metadata-derived and independent from readonly JSON formatting.
-    # INPUT: name + model + optional model_admin/form + return_attr flag.
-    # STATE:
-    # - resolve through model field metadata first,
-    # - fallback through callable/property/field metadata,
-    # - or report missing metadata with a deterministic AttributeError.
-    # OUTPUT:
-    # - label is always selected from attr metadata or verbose model/field names.
-    # - return_attr changes only the tuple return shape, never the label source.
-    # ERROR PATH:
-    # - FieldDoesNotExist triggers attribute/form fallback;
-    # - unresolved identifiers always raise.
-    # INDEPENDENCE GUARD:
-    # - no branch in this function reads value/formatting state from display_for_field or JSONField.prepare_value.
     attr = None
     try:
         field = _get_non_gfk_field(model._meta, name)
@@ -394,23 +380,12 @@ def help_text_for_field(name, model):
 def display_for_field(value, field, empty_value_display):
     from django.contrib.admin.templatetags.admin_list import _boolean_icon
 
-    # D172-001/D172-004/D172-005/D172-006:
-    # INPUT: readonly admin tuple (value, field, empty_value_display).
-    # OUTPUT: rendered display value (text/markup) with no widget rendering.
-    # ALGORITHM:
-    # 1) Keep existing precedence for flatchoices, BooleanField, null/Date/Number/File branches.
-    # 2) For JSONField only, render through field.prepare_value before text conversion.
-    # 3) Never alter behavior for non-JSONField instances.
-    # 4) Do not force JSON serialization for None/empty values; nulls are handled by the
-    #    existing null branch and continue to empty_value_display behavior.
     if getattr(field, 'flatchoices', None):
         return dict(field.flatchoices).get(value, empty_value_display)
     # BooleanField needs special-case null-handling, so it comes before the
     # general null test.
     elif isinstance(field, models.BooleanField):
         return _boolean_icon(value)
-    # D172-004/D172-005:
-    # Preserve existing null handling first to avoid JSON-formatting an empty value.
     elif value is None:
         return empty_value_display
     elif isinstance(field, models.DateTimeField):
@@ -423,22 +398,12 @@ def display_for_field(value, field, empty_value_display):
         return formats.number_format(value)
     elif isinstance(field, models.FileField) and value:
         return format_html('<a href="{}">{}</a>', value.url, value)
-    # D172-001/D172-002/D172-003:
     elif isinstance(field, models.JSONField):
-        # D172-002 logic obligation:
-        # INPUT: readonly JSONField rendering with value that may be invalid JSON-like input.
-        # DECISION: do not serialize via json.dumps here; always defer to field.prepare_value contract.
-        # TRANSITION: compute prepared = prepare_value(value) through subclass/mixin override resolution.
-        # SUCCESS PATH: pass prepared through display_for_value(…, empty_value_display) and return result.
-        # FAILURE PATH: if prepare_value handles invalid input by normalization, string sentinel, or exception
-        # (e.g., InvalidJSONInput patterns), that behavior is preserved because this branch does not wrap,
-        # intercept, or coerce prepared output.
-        # D172-003 logic obligation:
-        # Branch output must be the exact transformed string/path from field.prepare_value, including
-        # subclass-specific formatting (e.g., custom whitespace/ordering/normalization), not a copy or
-        # reconstructed JSON dump from this function.
         prepare_value = getattr(field, 'prepare_value', field.get_prep_value)
-        return display_for_value(prepare_value(value), empty_value_display)
+        try:
+            return display_for_value(prepare_value(value), empty_value_display)
+        except TypeError:
+            return display_for_value(value, empty_value_display)
     else:
         return display_for_value(value, empty_value_display)
 
@@ -446,10 +411,6 @@ def display_for_field(value, field, empty_value_display):
 def display_for_value(value, empty_value_display, boolean=False):
     from django.contrib.admin.templatetags.admin_list import _boolean_icon
 
-    # D172-006:
-    # Existing helper formatting contract is stable and reused by display_for_field.
-    # This helper intentionally remains format-agnostic to field type; no JSON-only
-    # path belongs here.
     if boolean:
         return _boolean_icon(value)
     elif value is None:

@@ -1,0 +1,563 @@
+2026-07-15 08:04:05,622 - INFO - Creating container for django__django-12308...
+2026-07-15 08:04:06,534 - INFO - Container for django__django-12308 created: cff57d1a834f9cc9789844cae82d4a80767c134b381f3ca4c386d7ed2e90833d
+2026-07-15 08:04:06,650 - INFO - Container for django__django-12308 started: cff57d1a834f9cc9789844cae82d4a80767c134b381f3ca4c386d7ed2e90833d
+2026-07-15 08:04:06,650 - INFO - Intermediate patch for django__django-12308 written to logs/run_evaluation/atlas-final-issue-172-attempt-0/atlas-agentic-platform/django__django-12308/patch.diff, now applying to container...
+2026-07-15 08:04:06,751 - INFO - >>>>> Applied Patch:
+Checking patch django/contrib/admin/helpers.py...
+Checking patch django/contrib/admin/utils.py...
+Checking patch docs/architecture/issue-173-jsonfield-display-for-field.rst...
+Checking patch docs/architecture/issue-175-label-for-field-metadata-decoupling.rst...
+Checking patch docs/architecture/issue-176-admin-utils-regression-readonly-jsonfield-label.rst...
+Checking patch tests/admin_utils/display_for_field_jsonfield_architecture.md...
+Checking patch tests/admin_utils/tests.py...
+Applied patch django/contrib/admin/helpers.py cleanly.
+Applied patch django/contrib/admin/utils.py cleanly.
+Applied patch docs/architecture/issue-173-jsonfield-display-for-field.rst cleanly.
+Applied patch docs/architecture/issue-175-label-for-field-metadata-decoupling.rst cleanly.
+Applied patch docs/architecture/issue-176-admin-utils-regression-readonly-jsonfield-label.rst cleanly.
+Applied patch tests/admin_utils/display_for_field_jsonfield_architecture.md cleanly.
+Applied patch tests/admin_utils/tests.py cleanly.
+
+2026-07-15 08:04:07,265 - INFO - Git diff before:
+diff --git a/django/contrib/admin/helpers.py b/django/contrib/admin/helpers.py
+index 09dbd090fc..5a0bfed568 100644
+--- a/django/contrib/admin/helpers.py
++++ b/django/contrib/admin/helpers.py
+@@ -162,6 +162,12 @@ class AdminReadonlyField:
+         if form._meta.labels and class_name in form._meta.labels:
+             label = form._meta.labels[class_name]
+         else:
++            # D172-007:
++            # DECISION: label source is form/meta metadata via label_for_field.
++            # LABEL STATE: resolved before value rendering.
++            # STATE INDEPENDENCE:
++            # - This phase never inspects field values or JSON formatting.
++            # - It must remain stable even if display_for_field JSON behavior changes.
+             label = label_for_field(field, form._meta.model, model_admin, form=form)
+ 
+         if form._meta.help_texts and class_name in form._meta.help_texts:
+@@ -215,6 +221,10 @@ class AdminReadonlyField:
+                 if isinstance(f.remote_field, ManyToManyRel) and value is not None:
+                     result_repr = ", ".join(map(str, value.all()))
+                 else:
++                    # D172-007:
++                    # VALUE PATH:
++                    # - display value rendering is delegated to display_for_field.
++                    # - this is intentionally separate from label resolution.
+                     result_repr = display_for_field(value, f, self.empty_value_display)
+                 result_repr = linebreaksbr(result_repr)
+         return conditional_escape(result_repr)
+@@ -280,6 +290,10 @@ class InlineAdminFormSet:
+             if not self.has_change_permission or field_name in self.readonly_fields:
+                 yield {
+                     'name': field_name,
++                    # D172-007:
++                    # LABEL CONTRACT:
++                    # - label resolution is metadata-first (meta_labels, fallback label_for_field).
++                    # - value formatting remains elsewhere in rendering; never mixed in this branch.
+                     'label': meta_labels.get(field_name) or label_for_field(
+                         field_name,
+                         self.opts.model,
+diff --git a/django/contrib/admin/utils.py b/django/contrib/admin/utils.py
+index e4ddc8f017..c7e455d324 100644
+--- a/django/contrib/admin/utils.py
++++ b/django/contrib/admin/utils.py
+@@ -313,6 +313,20 @@ def label_for_field(name, model, model_admin=None, return_attr=False, form=None)
+     return the resolved attribute (which could be a callable). This will be
+     None if (and only if) the name refers to a field.
+     """
++    # D172-007: label_for_field is metadata-derived and independent from readonly JSON formatting.
++    # INPUT: name + model + optional model_admin/form + return_attr flag.
++    # STATE:
++    # - resolve through model field metadata first,
++    # - fallback through callable/property/field metadata,
++    # - or report missing metadata with a deterministic AttributeError.
++    # OUTPUT:
++    # - label is always selected from attr metadata or verbose model/field names.
++    # - return_attr changes only the tuple return shape, never the label source.
++    # ERROR PATH:
++    # - FieldDoesNotExist triggers attribute/form fallback;
++    # - unresolved identifiers always raise.
++    # INDEPENDENCE GUARD:
++    # - no branch in this function reads value/formatting state from display_for_field or JSONField.prepare_value.
+     attr = None
+     try:
+         field = _get_non_gfk_field(model._meta, name)
+@@ -380,12 +394,23 @@ def help_text_for_field(name, model):
+ def display_for_field(value, field, empty_value_display):
+     from django.contrib.admin.templatetags.admin_list import _boolean_icon
+ 
++    # D172-001/D172-004/D172-005/D172-006:
++    # INPUT: readonly admin tuple (value, field, empty_value_display).
++    # OUTPUT: rendered display value (text/markup) with no widget rendering.
++    # ALGORITHM:
++    # 1) Keep existing precedence for flatchoices, BooleanField, null/Date/Number/File branches.
++    # 2) For JSONField only, render through field.prepare_value before text conversion.
++    # 3) Never alter behavior for non-JSONField instances.
++    # 4) Do not force JSON serialization for None/empty values; nulls are handled by the
++    #    existing null branch and continue to empty_value_display behavior.
+     if getattr(field, 'flatchoices', None):
+         return dict(field.flatchoices).get(value, empty_value_display)
+     # BooleanField needs special-case null-handling, so it comes before the
+     # general null test.
+     elif isinstance(field, models.BooleanField):
+         return _boolean_icon(value)
++    # D172-004/D172-005:
++    # Preserve existing null handling first to avoid JSON-formatting an empty value.
+     elif value is None:
+         return empty_value_display
+     elif isinstance(field, models.DateTimeField):
+@@ -398,6 +423,22 @@ def display_for_field(value, field, empty_value_display):
+         return formats.number_format(value)
+     elif isinstance(field, models.FileField) and value:
+         return format_html('<a href="{}">{}</a>', value.url, value)
++    # D172-001/D172-002/D172-003:
++    elif isinstance(field, models.JSONField):
++        # D172-002 logic obligation:
++        # INPUT: readonly JSONField rendering with value that may be invalid JSON-like input.
++        # DECISION: do not serialize via json.dumps here; always defer to field.prepare_value contract.
++        # TRANSITION: compute prepared = prepare_value(value) through subclass/mixin override resolution.
++        # SUCCESS PATH: pass prepared through display_for_value(…, empty_value_display) and return result.
++        # FAILURE PATH: if prepare_value handles invalid input by normalization, string sentinel, or exception
++        # (e.g., InvalidJSONInput patterns), that behavior is preserved because this branch does not wrap,
++        # intercept, or coerce prepared output.
++        # D172-003 logic obligation:
++        # Branch output must be the exact transformed string/path from field.prepare_value, including
++        # subclass-specific formatting (e.g., custom whitespace/ordering/normalization), not a copy or
++        # reconstructed JSON dump from this function.
++        prepare_value = getattr(field, 'prepare_value', field.get_prep_value)
++        return display_for_value(prepare_value(value), empty_value_display)
+     else:
+         return display_for_value(value, empty_value_display)
+ 
+@@ -405,6 +446,10 @@ def display_for_field(value, field, empty_value_display):
+ def display_for_value(value, empty_value_display, boolean=False):
+     from django.contrib.admin.templatetags.admin_list import _boolean_icon
+ 
++    # D172-006:
++    # Existing helper formatting contract is stable and reused by display_for_field.
++    # This helper intentionally remains format-agnostic to field type; no JSON-only
++    # path belongs here.
+     if boolean:
+         return _boolean_icon(value)
+     elif value is None:
+diff --git a/tests/admin_utils/tests.py b/tests/admin_utils/tests.py
+index 463ba9556d..7488c88c7c 100644
+--- a/tests/admin_utils/tests.py
++++ b/tests/admin_utils/tests.py
+@@ -1,5 +1,7 @@
+ from datetime import datetime
+ from decimal import Decimal
++import json
++from unittest.mock import patch
+ 
+ from django import forms
+ from django.conf import settings
+@@ -94,6 +96,108 @@ class UtilsTests(SimpleTestCase):
+ 
+     empty_value = '-empty-'
+ 
++    requirement_to_verification_map = {
++        "D172-001": [
++            "test_D172_001_display_for_field_jsonfield_readonly_renders_with_prepare_value"
++        ],
++        "D172-002": [
++            "test_D172_002_display_for_field_jsonfield_invalid_input_uses_prepare_value"
++        ],
++        "D172-003": [
++            "test_D172_003_display_for_field_jsonfield_subclass_prepare_value_exact_readonly_render_output"
++        ],
++        "D172-004": [
++            "test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display",
++            "test_null_display_for_field",
++        ],
++        "D172-005": [
++            "test_D172_005_display_for_field_jsonfield_logic_only_for_jsonfield_instance"
++        ],
++        "D172-006": [
++            "test_D172_006_display_for_field_non_json_fields_keep_existing_formatting",
++            "test_number_formats_display_for_field",
++            "test_number_formats_with_thousand_separator_display_for_field",
++            "test_null_display_for_field",
++            "test_list_display_for_value",
++        ],
++        "D172-007": [
++            "test_D172_007_label_for_field_metadata_derivation_remains_decoupled_from_readonly_jsonpath",
++            "test_D172_007_label_for_field_and_readonly_json_rendering_remain_separable_contracts",
++        ],
++        "D172-008": [
++            "test_D172_008_display_for_field_jsonfield_nested_payload_uses_prepare_value_exact_render_text",
++            "test_D172_008_display_for_field_jsonfield_invalid_input_preserves_prepare_value_contract",
++            "test_D172_008_display_for_field_non_json_and_label_behavior_contracts_remain_unchanged",
++        ],
++    }
++
++    def test_D172_001_display_for_field_jsonfield_readonly_renders_with_prepare_value(self):
++        """
++        D172-001: Read-only JSONField rendering should use field.prepare_value in
++        display_for_field.
++        """
++        class PreparedJSONField(models.JSONField):
++            def prepare_value(self, value):
++                return json.dumps(value, sort_keys=True, separators=(',', ':'))
++
++        field = PreparedJSONField()
++        value = {"b": 1, "a": 2}
++
++        display_value = display_for_field(value, field, self.empty_value)
++        self.assertEqual(display_value, field.prepare_value(value))
++
++    def test_D172_002_display_for_field_jsonfield_invalid_input_uses_prepare_value(self):
++        """
++        D172-002: Invalid JSON input for readonly JSONField rendering must follow
++        the JSONField.prepare_value contract path and not bypass it with direct
++        json.dumps output.
++        """
++        class InvalidAwareJSONField(models.JSONField):
++            def prepare_value(self, value):
++                if isinstance(value, forms.fields.InvalidJSONInput):
++                    return "invalid-json-input"
++                return json.dumps(value, sort_keys=True, separators=(",", ":"))
++
++        value = forms.fields.InvalidJSONInput('{"trailing": "comma",}')
++        field = InvalidAwareJSONField()
++        with patch("django.db.models.fields.json.json.dumps") as dumps_mock:
++            display_value = display_for_field(value, field, self.empty_value)
++        self.assertEqual(display_value, "invalid-json-input")
++        dumps_mock.assert_not_called()
++
++    def test_D172_003_display_for_field_jsonfield_subclass_prepare_value_exact_readonly_render_output(self):
++        """
++        D172-003: Subclassed JSONField readonly rendering must return the exact
++        prepare_value output, including subclass-specific formatting/normalization.
++        """
++        class NormalizingJSONField(models.JSONField):
++            def prepare_value(self, value):
++                return "normalized::" + json.dumps(value, sort_keys=True, separators=(",", ":"))
++
++        field = NormalizingJSONField()
++        value = {"b": 2, "a": 1}
++        expected = field.prepare_value(value)
++
++        display_value = display_for_field(value, field, self.empty_value)
++        self.assertEqual(display_value, expected)
++
++    def test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display(self):
++        """
++        D172-004: JSONField readonly rendering should preserve None/empty display
++        semantics and not force serialization.
++        """
++        display_value = display_for_field(None, models.JSONField(), self.empty_value)
++        self.assertEqual(display_value, self.empty_value)
++
++    def test_D172_005_display_for_field_jsonfield_logic_only_for_jsonfield_instance(self):
++        """
++        D172-005: JSON-specific rendering logic in display_for_field must not affect
++        non-JSON fields.
++        """
++        value = {"foo": "bar"}
++        display_value = display_for_field(value, models.CharField(), self.empty_value)
++        self.assertEqual(display_value, "{'foo': 'bar'}")
++
+     def test_values_from_lookup_field(self):
+         """
+         Regression test for #12654: lookup_field
+@@ -197,6 +301,163 @@ class UtilsTests(SimpleTestCase):
+         display_value = display_for_field(12345, models.IntegerField(), self.empty_value)
+         self.assertEqual(display_value, '12,345')
+ 
++    def test_D172_006_display_for_field_non_json_fields_keep_existing_formatting(self):
++        """
++        D172-006: Non-JSON fields in readonly output must keep existing numeric/date/
++        boolean/text formatting behavior.
++        """
++        self.assertEqual(
++            display_for_field(True, models.BooleanField(), self.empty_value),
++            '<img src="%sadmin/img/icon-yes.svg" alt="True">' % settings.STATIC_URL,
++        )
++        self.assertEqual(
++            display_for_field(False, models.BooleanField(), self.empty_value),
++            '<img src="%sadmin/img/icon-no.svg" alt="False">' % settings.STATIC_URL,
++        )
++        self.assertEqual(
++            display_for_field('hello', models.CharField(), self.empty_value),
++            'hello',
++        )
++        self.assertEqual(
++            display_for_field(datetime(2025, 1, 2).date(), models.DateField(), self.empty_value),
++            localize(datetime(2025, 1, 2).date()),
++        )
++
++    def test_D172_007_label_for_field_metadata_derivation_remains_decoupled_from_readonly_jsonpath(self):
++        """D172-007: label_for_field remains metadata-driven regardless of JSON readonly behavior."""
++        class ArticleAdminLabelForm(forms.ModelForm):
++            class Meta:
++                model = Article
++                fields = ("hist",)
++
++        metadata_label = label_for_field("hist", Article)
++        form_label = label_for_field("hist", Article, form=ArticleAdminLabelForm())
++        related_label = label_for_field("event", Location)
++
++        self.assertEqual(metadata_label, "History")
++        self.assertEqual(form_label, "History")
++        self.assertEqual(related_label, "awesome event")
++
++        # Keep label resolution strictly metadata-driven and untouched by JSON
++        # readonly rendering behavior.
++        with patch("django.contrib.admin.utils.display_for_field") as display_for_field_mock:
++            self.assertEqual(label_for_field("hist", Article), "History")
++            self.assertEqual(label_for_field("hist", Article, form=ArticleAdminLabelForm()), "History")
++            self.assertEqual(label_for_field("event", Location), "awesome event")
++            self.assertEqual(display_for_field_mock.call_count, 0)
++
++    def test_D172_007_label_for_field_and_readonly_json_rendering_remain_separable_contracts(self):
++        """D172-007: label resolution and readonly JSON formatting should be separately testable."""
++        class ArticleReadonlyForm(forms.ModelForm):
++            class Meta:
++                model = Article
++                fields = ("hist",)
++
++        class MockModelAdmin:
++            def __init__(self, empty_value_display):
++                self.empty_value_display = empty_value_display
++
++            def get_empty_value_display(self):
++                return self.empty_value_display
++
++        metadata_label = label_for_field("hist", Article)
++        article = Article(site=Site(domain="example.com"), title="Title", hist="History text")
++        form = ArticleReadonlyForm(instance=article)
++
++        with patch("django.contrib.admin.helpers.lookup_field") as lookup_field_mock, patch(
++            "django.contrib.admin.helpers.display_for_field"
++        ) as display_for_field_mock:
++            readonly_field = helpers.AdminReadonlyField(
++                form=form,
++                field="hist",
++                is_first=True,
++                model_admin=MockModelAdmin("-empty-"),
++            )
++            self.assertEqual(readonly_field.field["label"], metadata_label)
++
++            lookup_field_mock.return_value = (
++                models.JSONField(verbose_name="readonly-json"),
++                None,
++                {"a": 1, "b": 2},
++            )
++            display_for_field_mock.return_value = "readonly-json-render"
++
++            self.assertEqual(readonly_field.contents(), "readonly-json-render")
++            self.assertEqual(readonly_field.field["label"], metadata_label)
++            self.assertEqual(display_for_field_mock.call_count, 1)
++
++    def test_D172_008_display_for_field_jsonfield_nested_payload_uses_prepare_value_exact_render_text(self):
++        """
++        D172-008: Readonly JSONField rendering for valid nested values must preserve
++        exact JSON text output produced by field.prepare_value.
++        """
++        class NestedPreparedJSONField(models.JSONField):
++            def prepare_value(self, value):
++                return json.dumps(value, indent=2, sort_keys=True, separators=(",", ": "))
++
++        value = {"a": [{"b": [3, {"c": "D172-008"}]}, "z", {"d": {"e": 1}}]
++        field = NestedPreparedJSONField()
++        expected = field.prepare_value(value)
++
++        display_value = display_for_field(value, field, self.empty_value)
++        self.assertEqual(display_value, expected)
++
++    def test_D172_008_display_for_field_jsonfield_invalid_input_preserves_prepare_value_contract(self):
++        """
++        D172-008: Invalid JSON readonly input must follow the JSONField.prepare_value
++        branch and preserve that branch’s output.
++        """
++        class InvalidAwareJSONField(models.JSONField):
++            def prepare_value(self, value):
++                if isinstance(value, forms.fields.InvalidJSONInput):
++                    return "invalid-json-input"
++                return super().prepare_value(value)
++
++        value = forms.fields.InvalidJSONInput('{"trailing": "comma",}')
++        field = InvalidAwareJSONField()
++
++        with patch("django.db.models.fields.json.json.dumps") as dumps_mock:
++            display_value = display_for_field(value, field, self.empty_value)
++        self.assertEqual(display_value, "invalid-json-input")
++        dumps_mock.assert_not_called()
++
++    def test_D172_008_display_for_field_non_json_and_label_behavior_contracts_remain_unchanged(self):
++        """
++        D172-008: Non-JSON readonly output and label_for_field behavior remain
++        unchanged from current contract expectations.
++        """
++        self.assertEqual(
++            display_for_field(True, models.BooleanField(), self.empty_value),
++            '<img src="%sadmin/img/icon-yes.svg" alt="True">' % settings.STATIC_URL,
++        )
++        self.assertEqual(
++            display_for_field(False, models.BooleanField(), self.empty_value),
++            '<img src="%sadmin/img/icon-no.svg" alt="False">' % settings.STATIC_URL,
++        )
++        self.assertEqual(
++            display_for_field("hello", models.CharField(), self.empty_value),
++            "hello",
++        )
++        self.assertEqual(
++            display_for_field(datetime(2025, 1, 2).date(), models.DateField(), self.empty_value),
++            localize(datetime(2025, 1, 2).date()),
++        )
++
++        class ArticleLabelForm(forms.ModelForm):
++            class Meta:
++                model = Article
++                fields = ("hist",)
++
++        self.assertEqual(label_for_field("hist", Article), "History")
++        self.assertEqual(label_for_field("hist", Article, form=ArticleLabelForm()), "History")
++        self.assertEqual(label_for_field("event", Location), "awesome event")
++
++        with patch("django.contrib.admin.utils.display_for_field") as display_for_field_mock:
++            self.assertEqual(label_for_field("hist", Article), "History")
++            self.assertEqual(label_for_field("hist", Article, form=ArticleLabelForm()), "History")
++            self.assertEqual(label_for_field("event", Location), "awesome event")
++            self.assertEqual(display_for_field_mock.call_count, 0)
++
+     def test_list_display_for_value(self):
+         display_value = display_for_value([1, 2, 3], self.empty_value)
+         self.assertEqual(display_value, '1, 2, 3')
+2026-07-15 08:04:07,265 - INFO - Eval script for django__django-12308 written to logs/run_evaluation/atlas-final-issue-172-attempt-0/atlas-agentic-platform/django__django-12308/eval.sh; copying to container...
+2026-07-15 08:04:14,734 - INFO - Test runtime: 7.43 seconds
+2026-07-15 08:04:14,734 - INFO - Test output for django__django-12308 written to logs/run_evaluation/atlas-final-issue-172-attempt-0/atlas-agentic-platform/django__django-12308/test_output.txt
+2026-07-15 08:04:14,785 - INFO - Git diff after:
+diff --git a/django/contrib/admin/helpers.py b/django/contrib/admin/helpers.py
+index 09dbd090fc..5a0bfed568 100644
+--- a/django/contrib/admin/helpers.py
++++ b/django/contrib/admin/helpers.py
+@@ -162,6 +162,12 @@ class AdminReadonlyField:
+         if form._meta.labels and class_name in form._meta.labels:
+             label = form._meta.labels[class_name]
+         else:
++            # D172-007:
++            # DECISION: label source is form/meta metadata via label_for_field.
++            # LABEL STATE: resolved before value rendering.
++            # STATE INDEPENDENCE:
++            # - This phase never inspects field values or JSON formatting.
++            # - It must remain stable even if display_for_field JSON behavior changes.
+             label = label_for_field(field, form._meta.model, model_admin, form=form)
+ 
+         if form._meta.help_texts and class_name in form._meta.help_texts:
+@@ -215,6 +221,10 @@ class AdminReadonlyField:
+                 if isinstance(f.remote_field, ManyToManyRel) and value is not None:
+                     result_repr = ", ".join(map(str, value.all()))
+                 else:
++                    # D172-007:
++                    # VALUE PATH:
++                    # - display value rendering is delegated to display_for_field.
++                    # - this is intentionally separate from label resolution.
+                     result_repr = display_for_field(value, f, self.empty_value_display)
+                 result_repr = linebreaksbr(result_repr)
+         return conditional_escape(result_repr)
+@@ -280,6 +290,10 @@ class InlineAdminFormSet:
+             if not self.has_change_permission or field_name in self.readonly_fields:
+                 yield {
+                     'name': field_name,
++                    # D172-007:
++                    # LABEL CONTRACT:
++                    # - label resolution is metadata-first (meta_labels, fallback label_for_field).
++                    # - value formatting remains elsewhere in rendering; never mixed in this branch.
+                     'label': meta_labels.get(field_name) or label_for_field(
+                         field_name,
+                         self.opts.model,
+diff --git a/django/contrib/admin/utils.py b/django/contrib/admin/utils.py
+index e4ddc8f017..c7e455d324 100644
+--- a/django/contrib/admin/utils.py
++++ b/django/contrib/admin/utils.py
+@@ -313,6 +313,20 @@ def label_for_field(name, model, model_admin=None, return_attr=False, form=None)
+     return the resolved attribute (which could be a callable). This will be
+     None if (and only if) the name refers to a field.
+     """
++    # D172-007: label_for_field is metadata-derived and independent from readonly JSON formatting.
++    # INPUT: name + model + optional model_admin/form + return_attr flag.
++    # STATE:
++    # - resolve through model field metadata first,
++    # - fallback through callable/property/field metadata,
++    # - or report missing metadata with a deterministic AttributeError.
++    # OUTPUT:
++    # - label is always selected from attr metadata or verbose model/field names.
++    # - return_attr changes only the tuple return shape, never the label source.
++    # ERROR PATH:
++    # - FieldDoesNotExist triggers attribute/form fallback;
++    # - unresolved identifiers always raise.
++    # INDEPENDENCE GUARD:
++    # - no branch in this function reads value/formatting state from display_for_field or JSONField.prepare_value.
+     attr = None
+     try:
+         field = _get_non_gfk_field(model._meta, name)
+@@ -380,12 +394,23 @@ def help_text_for_field(name, model):
+ def display_for_field(value, field, empty_value_display):
+     from django.contrib.admin.templatetags.admin_list import _boolean_icon
+ 
++    # D172-001/D172-004/D172-005/D172-006:
++    # INPUT: readonly admin tuple (value, field, empty_value_display).
++    # OUTPUT: rendered display value (text/markup) with no widget rendering.
++    # ALGORITHM:
++    # 1) Keep existing precedence for flatchoices, BooleanField, null/Date/Number/File branches.
++    # 2) For JSONField only, render through field.prepare_value before text conversion.
++    # 3) Never alter behavior for non-JSONField instances.
++    # 4) Do not force JSON serialization for None/empty values; nulls are handled by the
++    #    existing null branch and continue to empty_value_display behavior.
+     if getattr(field, 'flatchoices', None):
+         return dict(field.flatchoices).get(value, empty_value_display)
+     # BooleanField needs special-case null-handling, so it comes before the
+     # general null test.
+     elif isinstance(field, models.BooleanField):
+         return _boolean_icon(value)
++    # D172-004/D172-005:
++    # Preserve existing null handling first to avoid JSON-formatting an empty value.
+     elif value is None:
+         return empty_value_display
+     elif isinstance(field, models.DateTimeField):
+@@ -398,6 +423,22 @@ def display_for_field(value, field, empty_value_display):
+         return formats.number_format(value)
+     elif isinstance(field, models.FileField) and value:
+         return format_html('<a href="{}">{}</a>', value.url, value)
++    # D172-001/D172-002/D172-003:
++    elif isinstance(field, models.JSONField):
++        # D172-002 logic obligation:
++        # INPUT: readonly JSONField rendering with value that may be invalid JSON-like input.
++        # DECISION: do not serialize via json.dumps here; always defer to field.prepare_value contract.
++        # TRANSITION: compute prepared = prepare_value(value) through subclass/mixin override resolution.
++        # SUCCESS PATH: pass prepared through display_for_value(…, empty_value_display) and return result.
++        # FAILURE PATH: if prepare_value handles invalid input by normalization, string sentinel, or exception
++        # (e.g., InvalidJSONInput patterns), that behavior is preserved because this branch does not wrap,
++        # intercept, or coerce prepared output.
++        # D172-003 logic obligation:
++        # Branch output must be the exact transformed string/path from field.prepare_value, including
++        # subclass-specific formatting (e.g., custom whitespace/ordering/normalization), not a copy or
++        # reconstructed JSON dump from this function.
++        prepare_value = getattr(field, 'prepare_value', field.get_prep_value)
++        return display_for_value(prepare_value(value), empty_value_display)
+     else:
+         return display_for_value(value, empty_value_display)
+ 
+@@ -405,6 +446,10 @@ def display_for_field(value, field, empty_value_display):
+ def display_for_value(value, empty_value_display, boolean=False):
+     from django.contrib.admin.templatetags.admin_list import _boolean_icon
+ 
++    # D172-006:
++    # Existing helper formatting contract is stable and reused by display_for_field.
++    # This helper intentionally remains format-agnostic to field type; no JSON-only
++    # path belongs here.
+     if boolean:
+         return _boolean_icon(value)
+     elif value is None:
+2026-07-15 08:04:14,785 - INFO - Git diff changed after running eval script
+2026-07-15 08:04:14,785 - INFO - Grading answer for django__django-12308...
+2026-07-15 08:04:14,786 - INFO - report: {'django__django-12308': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['test_json_display_for_field (admin_utils.tests.UtilsTests)', 'test_label_for_field (admin_utils.tests.UtilsTests)']}, 'PASS_TO_PASS': {'success': ['test_cyclic (admin_utils.tests.NestedObjectsTests)', 'test_non_added_parent (admin_utils.tests.NestedObjectsTests)', 'test_on_delete_do_nothing (admin_utils.tests.NestedObjectsTests)', 'test_queries (admin_utils.tests.NestedObjectsTests)', 'test_relation_on_abstract (admin_utils.tests.NestedObjectsTests)', 'test_siblings (admin_utils.tests.NestedObjectsTests)', 'test_unrelated_roots (admin_utils.tests.NestedObjectsTests)', 'test_flatten (admin_utils.tests.UtilsTests)', 'test_flatten_fieldsets (admin_utils.tests.UtilsTests)', 'test_label_for_field_form_argument (admin_utils.tests.UtilsTests)', 'test_label_for_property (admin_utils.tests.UtilsTests)', 'test_list_display_for_value (admin_utils.tests.UtilsTests)', 'test_list_display_for_value_boolean (admin_utils.tests.UtilsTests)', 'test_null_display_for_field (admin_utils.tests.UtilsTests)', 'test_number_formats_display_for_field (admin_utils.tests.UtilsTests)', 'test_number_formats_with_thousand_separator_display_for_field (admin_utils.tests.UtilsTests)', 'test_quote (admin_utils.tests.UtilsTests)', 'test_related_name (admin_utils.tests.UtilsTests)', 'test_safestring_in_field_label (admin_utils.tests.UtilsTests)', 'test_values_from_lookup_field (admin_utils.tests.UtilsTests)'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for django__django-12308: resolved: False
+2026-07-15 08:04:14,786 - INFO - Attempting to stop container sweb.eval.django__django-12308.atlas-final-issue-172-attempt-0...
+2026-07-15 08:04:29,919 - INFO - Attempting to remove container sweb.eval.django__django-12308.atlas-final-issue-172-attempt-0...
+2026-07-15 08:04:29,934 - INFO - Container sweb.eval.django__django-12308.atlas-final-issue-172-attempt-0 removed.
+2026-07-15 08:04:29,934 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.django_1776_django-12308:latest...
+2026-07-15 08:04:30,274 - INFO - Image swebench/sweb.eval.x86_64.django_1776_django-12308:latest removed.
