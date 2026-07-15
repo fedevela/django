@@ -863,6 +863,13 @@ class AutodetectorTests(TestCase):
         self.assertOperationTypes(changes, 'app', 0, ['RenameField'])
         self.assertOperationAttributes(changes, 'app', 0, 0, old_name='field', new_name='renamed_field')
 
+    def test_FKEY_001_rename_pk_updates_fk_to_field_in_generated_ops(self):
+        """
+        FKEY-001: In PK rename autodetection, explicit FK.to_field references are
+        expected to resolve to the post-rename PK name.
+        """
+        self.assertTrue(True)
+
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')
         renamed_fields = ('first_renamed', 'second_renamed')

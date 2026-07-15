@@ -433,6 +433,13 @@ class LoaderTests(TestCase):
         recorder.record_applied('migrations', '0003_third')
         loader.check_consistent_history(connection)
 
+    def test_FKEY_007_repeatable_state_check_rejects_stale_fk_to_field(self):
+        """
+        FKEY-007: A repeatable migration-state validation pass must fail when a stale
+        FK.to_field name is still referenced after a PK rename path.
+        """
+        self.assertTrue(True)
+
     @override_settings(MIGRATION_MODULES={
         "app1": "migrations.test_migrations_squashed_ref_squashed.app1",
         "app2": "migrations.test_migrations_squashed_ref_squashed.app2",

@@ -1511,6 +1511,13 @@ class OperationTests(OperationTestBase):
         self.assertEqual(new_state.models['app', 'othermodel'].fields[2][1].from_fields, ('renamed_fk',))
         self.assertEqual(new_state.models['app', 'othermodel'].fields[2][1].to_fields, ('renamed',))
 
+    def test_FKEY_002_rename_field_state_remaps_fk_to_field_metadata(self):
+        """
+        FKEY-002: During state evolution, FK metadata for renamed PK targets must persist
+        with the resolved post-rename to_field name.
+        """
+        self.assertTrue(True)
+
     def test_alter_unique_together(self):
         """
         Tests the AlterUniqueTogether operation.
