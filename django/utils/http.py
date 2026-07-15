@@ -165,6 +165,22 @@ def parse_http_date(date):
 
     Return an integer expressed in seconds since the epoch, in UTC.
     """
+    # HTTPDATE-004 [PSEUDOCODE]: malformed input must stay non-parsing.
+    # 1) Normalize input is accepted as-is; no normalization/repair is added.
+    # 2) Branch selection:
+    #    - Evaluate RFC1123_DATE, RFC850_DATE, ASCTIME_DATE in that order.
+    #    - Accept the first full-pattern match only.
+    # 3) Failure path:
+    #    - If no branch matches exactly, emit parse failure immediately.
+    #    - Do not attempt alternate parsers or century-corrected recovery after this point.
+    # 4) Parsing path:
+    #    - Extract year/month/day/hour/min/sec tokens from the matched groups.
+    #    - Only when RFC850 branch matched and year token has 2 digits,
+    #      perform century remap.
+    #    - Convert numeric tokens and construct UTC datetime.
+    # 5) Final failure path:
+    #    - Any conversion/value error raises a parse failure.
+    #    - No fallback path must reinterpret a value-invalid RFC850-like input.
     # HTTPDATE-003: Determine parser branch before field parsing.
     # - RFC1123_DATE handles RFC1123 (four-digit year).
     # - RFC850_DATE handles RFC850 (two- or four-digit year form).
@@ -188,7 +204,7 @@ def parse_http_date(date):
         # alter year semantics.
         year_text = m.group("year")
         if is_rfc850 and len(year_text) == 2:
-            year = int(year_text)
+        year = int(year_text)
             # HTTPDATE-001/002/005: RFC850 two-digit year inference.
             # HTTPDATE-003 gate: only execute this block in the RFC850
             # two-digit-year path; all other parser formats bypass it.
@@ -210,6 +226,9 @@ def parse_http_date(date):
         result = datetime.datetime(year, month, day, hour, min, sec)
         return calendar.timegm(result.utctimetuple())
     except Exception as exc:
+        # HTTPDATE-004 [PSEUDOCODE]: failure is terminal.
+        # Do not retry through RFC850-two-digit-year remap when field parsing fails.
+        # Propagate parse failure so callers (e.g., parse_http_date_safe) can return None.
         raise ValueError("%r is not a valid date" % date) from exc
 
 
@@ -217,6 +236,10 @@ def parse_http_date_safe(date):
     """
     Same as parse_http_date, but return None if the input is invalid.
     """
+    # HTTPDATE-004 [PSEUDOCODE]: preserve invalid-input contract.
+    # 1) If parse_http_date succeeds, return converted timestamp.
+    # 2) If parse_http_date raises any parse failure, return None.
+    # 3) No alternate parsing or correction path may be invoked here.
     try:
         return parse_http_date(date)
     except Exception:
