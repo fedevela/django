@@ -352,7 +352,7 @@ class SQLCompiler:
             # ORDERBY-002:
             # Deterministic-duplicate-key obligation:
             # input: rendered ORDER BY SQL fragment `sql` plus `params`.
-            # output: canonical tuple key `(canonical_sql, params_hash)` used in `seen`.
+            # output: canonical tuple key `(canonical_sql, direction_key, params_hash)` used in `seen`.
             # Don't add the same column twice, but preserve source token order and
             # meaning while normalizing whitespace.
             # When this entire method is refactored into expressions, we can
@@ -360,35 +360,10 @@ class SQLCompiler:
             without_ordering = sql.rstrip()
             direction_match = re.search(r"\s+(ASC|DESC)\s*$", without_ordering, flags=re.IGNORECASE)
             if direction_match:
-                # ORDERBY-003:
-                # Logic obligation: preserve semantically distinct directions for
-                # dedup when body is equal.
-                # Input state:
-                #   - `without_ordering`: rendered term, whitespace-collapsed on ends.
-                #   - `params`: bound parameter tuple/list.
-                #   - `seen`: dedupe set of canonical keys.
-                #   - `result`: emitted ORDER BY terms.
-                # Decision state:
-                #   - if explicit direction token is present (ASC/DESC), capture it
-                #     as `direction_key`.
-                #   - if absent, capture default direction key as "ASC"
-                #     (explicit ASC and implicit default remain duplicate-aligned).
-                #
-                # Body state:
-                #   - `without_ordering` must keep full SQL body and should not
-                #     drop direction token before keying for this requirement.
-                #   - `params_hash` must include this term's parameter identity.
-                # Key state:
-                #   - derive `dedupe_key = (body_for_dedupe, direction_key, params_hash)`.
-                # Branches:
-                #   - if `dedupe_key` in `seen`, skip emission.
-                #   - else add `dedupe_key` to `seen` and append `(resolved, (sql, params, is_ref))` to `result`.
-                # Failure path:
-                #   - preserve current behavior (skip emit) whenever required key
-                #     collision indicates duplicate; no exception is raised here.
-                #
-                # Note: this pseudocode captures target behavior for ORDERBY-003 and
-                # supersedes the direction-stripping path.
+                direction_key = direction_match.group(1).upper()
+                without_ordering = without_ordering[:direction_match.start()].rstrip()
+            else:
+                direction_key = "ASC"
             # Step 2: canonicalize line ending and spacing noise before hashing.
             # - Normalize `\r\n`, `\r`, and `\n` to a single line-break format.
             # - Normalize indentation/line-break-adjacent spacing noise.
@@ -396,13 +371,14 @@ class SQLCompiler:
             # - Keep meaningful token ordering and internal token text unchanged.
             without_ordering = self._normalize_order_by_fragment_for_dedupe(without_ordering)
             params_hash = make_hashable(params)
-            if (without_ordering, params_hash) in seen:
+            dedupe_key = (without_ordering, direction_key, params_hash)
+            if dedupe_key in seen:
                 # Step 3: duplicate-key branch.
                 # If normalized key already exists, skip append and continue loop.
                 continue
             # Step 4: first-seen branch.
             # Emit normalized key into `seen` and keep `sql` in final ORDER BY list.
-            seen.add((without_ordering, params_hash))
+            seen.add(dedupe_key)
             result.append((resolved, (sql, params, is_ref)))
         return result
 

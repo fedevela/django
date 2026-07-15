@@ -197,16 +197,52 @@ class ORDERBY003TraceabilityTests(TestCase):
         # Scenario 1:
         # Given two ordering fragments with the same SQL body and opposite directions,
         # when dedup runs, both terms are retained.
-        self.assertTrue(True)
+        fragment = """
+            CASE
+                WHEN pub_date IS NOT NULL THEN 1
+                ELSE NULL
+            END
+        """
+        queryset = Article.objects.order_by(
+            RawSQL(fragment, []).asc(),
+            RawSQL(fragment, []).desc(),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 2)
+        self.assertIn("ASC", order_by_sql.upper())
+        self.assertIn("DESC", order_by_sql.upper())
 
     def test_ORDERBY_003_S2_identical_bodies_same_direction_deduplicates_to_one_term(self):
         # Scenario 2:
         # Given two identical ordering fragments with the same body and direction,
         # when dedupe runs, one term is emitted.
-        self.assertTrue(True)
+        fragment = """
+            CASE
+                WHEN pub_date IS NOT NULL THEN 1
+                ELSE NULL
+            END
+        """
+        queryset = Article.objects.order_by(
+            RawSQL(fragment, []).desc(),
+            RawSQL(fragment, []).desc(),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 1)
+        self.assertIn("DESC", order_by_sql.upper())
 
     def test_ORDERBY_003_S3_explicit_asc_and_default_direction_remain_semantically_aligned(self):
         # Scenario 3:
         # Given explicit ASC and implicit/default direction for equivalent fragments,
         # when compared for duplicates, behavior matches existing direction semantics.
-        self.assertTrue(True)
+        fragment = """
+            CASE
+                WHEN pub_date IS NOT NULL THEN 1
+                ELSE NULL
+            END
+        """
+        queryset = Article.objects.order_by(
+            RawSQL(fragment, []).asc(),
+            RawSQL(fragment, []),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 1)
