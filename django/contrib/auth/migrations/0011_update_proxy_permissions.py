@@ -101,37 +101,45 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
             #   NOOP must leave rowcount unchanged for that tuple.
             # - Duplicate-path prevention:
             #   any IntegrityError while retarget/create is treated as "already satisfied" and loop continues.
-            # G70-004 per-key upgrade resilience:
-            # - Legacy data can include either:
-            #   (a) target already present due previous forward pass/recreated proxy state,
-            #   (b) both target and source present with conflicting uniqueness expectations,
-            #   (c) neither present after schema transitions.
-            # - Branching:
-            #   target_exists -> DONE_NOOP.
-            #   update>0 -> DONE_MOVED_FROM_SOURCE.
-            #   update==0 -> DONE_CREATE_TARGET.
-            #   IntegrityError -> DONE_ALREADY_SATISFIED (no failure, migration continues).
-            if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
-                continue
+        # G70-004 per-key upgrade resilience:
+        # - Legacy data can include either:
+        #   (a) target already present due previous forward pass/recreated proxy state,
+        #   (b) both target and source present with conflicting uniqueness expectations,
+        #   (c) neither present after schema transitions.
+        # - Branching:
+        #   target_exists -> DONE_NOOP.
+        #   update>0 -> DONE_MOVED_FROM_SOURCE.
+        #   update==0 -> DONE_CREATE_TARGET.
+        #   IntegrityError -> DONE_ALREADY_SATISFIED (no failure, migration continues).
+        if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
+            continue
 
-            try:
-                updated = Permission.objects.filter(
-                    content_type=old_content_type,
+        try:
+            updated = Permission.objects.filter(
+                content_type=old_content_type,
+                codename=codename,
+            ).update(content_type=new_content_type)
+            if updated == 0:
+                # Required tuple is missing on both old and new content types.
+                # Create it directly so the migration does not depend on retargetable
+                # source rows.
+                Permission.objects.create(
+                    content_type=new_content_type,
                     codename=codename,
-                ).update(content_type=new_content_type)
-                if updated == 0:
-                    # Required tuple is missing on both old and new content types.
-                    # Create it directly so the migration does not depend on retargetable
-                    # source rows.
-                    Permission.objects.create(
-                        content_type=new_content_type,
-                        codename=codename,
-                        name='Proxy permission for %s' % opts.model_name,
-                    )
-            except IntegrityError:
-                # Treat an unexpected integrity collision as a proxy of
-                # an already-existing target tuple, and continue.
-                continue
+                    name='Proxy permission for %s' % opts.model_name,
+                )
+        except IntegrityError:
+            # If either retargeting or creation raises a unique constraint
+            # conflict, one valid terminal state is that the target tuple is
+            # already present. Keep migration progress by ensuring target
+            # existence and continuing.
+            Permission.objects.get_or_create(
+                content_type=new_content_type,
+                codename=codename,
+                defaults={
+                    'name': 'Proxy permission for %s' % opts.model_name,
+                },
+            )
 
 
 def revert_proxy_model_permissions(apps, schema_editor):
