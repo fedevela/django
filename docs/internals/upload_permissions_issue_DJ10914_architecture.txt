@@ -1,0 +1,77 @@
+Upload permissions architecture (Issue DJ10914)
+=============================================
+
+Scope:
+- Apply deterministic `FILE_UPLOAD_PERMISSIONS` default/precedence behavior (`0o644` fallback and
+  explicit-setting precedence) without altering upload handler selection, request parsing, or backend
+  selection flow.
+
+Requirement-to-architecture map
+-------------------------------
+- DJ10914-001
+  - Contract locus: canonical setting default resolution.
+  - Architectural home: configuration boundary in `django/conf/global_settings.py` and storage consumption
+    boundary in `django/core/files/storage.py` (`FileSystemStorage.file_permissions_mode`).
+  - Enforcement seam: effective-mode resolution before `FileSystemStorage._save` writes persistently.
+- DJ10914-003
+  - Contract locus: precedence rule where per-instance or settings value dominates fallback.
+  - Architectural home: `FileSystemStorage._value_or_setting` and `FileSystemStorage.file_permissions_mode`.
+  - Enforcement seam: `FileSystemStorage._save` chmod path.
+- DJ10914-006
+  - Contract locus: unchanged upload flow for handler selection, parsing, and storage backend choice.
+  - Architectural home: `django/http/request.py` (`_initialize_handlers`, `parse_file_upload`) and
+    `django/core/files/storage.py` (`get_storage_class`).
+  - Enforcement seam: explicit invariants that no new branches or API paths are introduced in this issue.
+
+Boundary and ownership placement
+-------------------------------
+- Settings boundary (`django/conf/global_settings.py`)
+  - Owns declarative default declarations for upload behavior configuration.
+  - Owns the contract source-of-truth for "what defaults exist".
+- Settings-to-storage boundary (`django/conf/__init__.py` via `settings`, then `FileSystemStorage`)
+  - Owns concrete resolution into runtime effective values.
+  - Must remain one-way: settings values only feed storage defaults.
+- Request boundary (`django/http/request.py`)
+  - Owns request upload parsing choreography.
+  - Must not consume permission semantics directly.
+- Storage boundary (`django/core/files/storage.py`)
+  - Owns persistence and permission application to saved files.
+  - Is the only boundary applying file mode to bytes on disk.
+
+Dependency direction (required)
+-------------------------------
+- `global_settings -> settings -> FileSystemStorage.file_permissions_mode -> FileSystemStorage._save`
+- `FILE_UPLOAD_HANDLERS -> _initialize_handlers -> parse_file_upload -> MultipartParser -> file objects`
+  -> model field / form field `save()` -> `FileSystemStorage._save`.
+- `DEFAULT_FILE_STORAGE -> get_storage_class -> DefaultStorage._setup -> storage instance`.
+
+Structural contracts and seams
+------------------------------
+- Contract-001 (effective default): if `FILE_UPLOAD_PERMISSIONS` is unset/undefined in project settings,
+  the effective mode used by `FileSystemStorage.file_permissions_mode` is `0o644`.
+- Contract-003 (precedence): explicit configuration path (`FileSystemStorage(file_permissions_mode=...)`)
+  and settings path override fallback, and must be applied before persistence.
+- Contract-006 (flow invariance): handler list creation order and parser invocation order in request handling,
+  plus backend import through `DEFAULT_FILE_STORAGE`, remain unchanged by this issue.
+
+Integration seam annotations (existing and unmodified)
+-----------------------------------------------------
+- Permission resolution seam:
+  - Input: constructor override (`_file_permissions_mode`) and `settings.FILE_UPLOAD_PERMISSIONS`.
+  - Decision point: explicit override beats setting value, which then beats issue-defined default fallback.
+  - Current artifact location: `django/core/files/storage.py`.
+- Upload flow invariance seam:
+  - Entry points and order preserved in `django/http/request.py`:
+    `_initialize_handlers` and `parse_file_upload`.
+  - Backend seam preserved in `django/core/files/storage.py` via `get_storage_class`.
+
+Changed architecture artifacts
+-----------------------------
+- Added: `docs/internals/upload_permissions_issue_DJ10914_architecture.txt`
+
+Completion status
+-----------------
+- All three traced obligations are represented in concrete structural locations.
+- No new APIs, upload-policy framework, or flow branches are introduced in this step.
+- Repository now has an explicit architecture artifact defining ownership boundaries and integration seams for
+  Issue DJ10914.
