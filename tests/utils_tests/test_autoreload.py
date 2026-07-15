@@ -28,6 +28,7 @@ REQUIREMENT_VERIFICATION_MAP = [
         "description": "When launched via `python manage.py runserver`, StatReloader's initial watched-file set must include the concrete `manage.py` launch path.",
         "artifact": "StatReloaderTraceabilityTests.test_auto_001_initial_watch_list_includes_manage_py_launch_path",
         "state": "initial watcher snapshot",
+        "architecture_artifact": "docs/architecture/AUTO-001-manage-py-watcher-architecture.rst",
     },
 ]
 
