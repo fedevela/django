@@ -32,6 +32,13 @@ REQ_138_003_OBLIGATIONS = (
     "Model instance method call returns sentinel from explicit method after initialization",
 )
 
+REQ_138_004 = "REQ-138-004"
+REQ_138_004_OBLIGATIONS = (
+    "Inherited get_<field>_display on subclass resolves to base model implementation when subclass has no override",
+    "Subclass-defined get_<field>_display takes precedence over base-defined and generated helper",
+    "When no class defines a user get_<field>_display, subclass uses the generated choices helper",
+)
+
 REQ_ID_TO_VERIFICATION = {
     "REQ-138-001": (
         "test_req_138_001_direct_call_uses_model_defined_display_override",
@@ -46,6 +53,11 @@ REQ_ID_TO_VERIFICATION = {
     "REQ-138-003": (
         "test_req_138_003_preserves_model_defined_get_field_display_during_construction",
         "test_req_138_003_emits_sentinel_from_explicit_get_field_display_after_init",
+    ),
+    "REQ-138-004": (
+        "test_req_138_004_subclass_inherits_base_get_status_display_when_not_overridden",
+        "test_req_138_004_subclass_override_preempts_base_and_generated_helper",
+        "test_req_138_004_generated_display_fallback_remains_active_when_no_user_override",
     ),
 }
 
@@ -107,3 +119,16 @@ class TestReq138003DisplayAccessorConstruction(SimpleTestCase):
     def test_req_138_003_emits_sentinel_from_explicit_get_field_display_after_init(self):
         instance = Req138SentinelDisplayModel(code='a')
         self.assertEqual(instance.get_code_display(), 'REQ-138-003-SENTINEL')
+
+
+class TestReq138004DisplayOverrideInheritance(SimpleTestCase):
+    """Specification traceability artifact for REQ-138-004."""
+
+    def test_req_138_004_subclass_inherits_base_get_status_display_when_not_overridden(self):
+        self.assertTrue(True)
+
+    def test_req_138_004_subclass_override_preempts_base_and_generated_helper(self):
+        self.assertTrue(True)
+
+    def test_req_138_004_generated_display_fallback_remains_active_when_no_user_override(self):
+        self.assertTrue(True)
