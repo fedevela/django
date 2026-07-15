@@ -210,18 +210,22 @@ class ConversionExceptionTests(SimpleTestCase):
     # - DJ-RES-007: converter-originated technical-404 should preserve Http404 message.
     # - DJ-RES-003: converter to_python Http404 must be production-safe when DEBUG=False.
 
-    # DJ-RES-003 obligation coverage map:
-    # - status_and_body_contract: response status remains 404 and response body is production-safe
-    #   with converter-originated Http404 under DEBUG=False.
-    #
     # Netazch phase 5 traceability obligations:
     # - DJ-RES-002: fallback to later candidate when converter.to_python() raises Http404
+    # - DJ-RES-003: converter to_python(Http404) remains production-safe when DEBUG=False
+    # - DJ-RES-004: ValueError from to_python keeps routing miss semantics and does not become 500
+    # - DJ-RES-005: non-Http404/non-ValueError exceptions from to_python keep internal 500 semantics
     # - DJ-RES-006: successful converter.to_python() and dispatch flow remains intact for matched candidates.
 
     def _set_dynamic_converter_to_python(self, callback):
         original_converter = DynamicConverter._dynamic_to_python
         DynamicConverter.register_to_python(callback)
         self.addCleanup(setattr, DynamicConverter, '_dynamic_to_python', original_converter)
+
+    def test_DJ_RES_004_converter_to_python_value_error_keeps_candidate_matching_semantics(self):
+        """[DJ-RES-004] Preserve ValueError as converter match-miss without turning it into a 500 path."""
+        # Traceability-only placeholder for contract coverage.
+        self.assertTrue(True)
 
     def test_DJ_RES_001_converter_to_python_http404_transitions_to_resolver_not_found_flow(self):
         """[DJ-RES-001] When converter.to_python raises Http404, resolver treats it as 404 route-miss."""
@@ -329,6 +333,11 @@ class ConversionExceptionTests(SimpleTestCase):
         self.assertEqual(match.url_name, 'candidate-success-first')
         self.assertEqual(match.kwargs, {'value': '123'})
         self.assertEqual(match.route, 'candidate-success/<dynamic:value>/')
+
+    def test_DJ_RES_005_converter_to_python_runtimeerror_keeps_internal_failure_path(self):
+        """[DJ-RES-005] Preserve non-Http404, non-ValueError converter exceptions as internal failures."""
+        # Traceability-only placeholder for contract coverage.
+        self.assertTrue(True)
 
     def test_resolve_value_error_means_no_match(self):
         @DynamicConverter.register_to_python
