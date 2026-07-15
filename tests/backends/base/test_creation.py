@@ -2,9 +2,12 @@ import json
 import copy
 from unittest import mock
 
+from django.core.management import call_command
 from django.contrib.auth.models import Group
+from django.contrib.contenttypes.models import ContentType
 from django.db import IntegrityError
 from django.db import DEFAULT_DB_ALIAS, connection, connections
+from django.db.backends.base import creation as creation_module
 from django.db.backends.base.creation import (
     TEST_DATABASE_PREFIX, BaseDatabaseCreation,
 )
@@ -337,38 +340,87 @@ class TxrollbackDeserializeDbFromStringContractTests(TransactionTestCase):
             deserialize_db_from_string.assert_not_called()
 
     def test_txrollback_004_deserialize_db_from_string_preserves_existing_serialize_db_to_string_payload_compatibility(self):
-        # TXROLLBACK-004 logic obligation:
-        # 1) INPUT: obtain a serialized payload produced by the existing
-        #    serialize_db_to_string pipeline for a known deterministic fixture set.
-        # 2) PRECONDITION: target alias is clean and test state is isolated.
-        # 3) ACTION: invoke BaseDatabaseCreation.deserialize_db_from_string(payload).
-        # 4) EXPECTATION: deserializer resolves each item to the original model class
-        #    (model label resolution path unchanged) and assigns restored fields
-        #    matching the payload (`fields` entries -> concrete field assignments).
-        # 5) VALIDATION PATH:
-        #    a) restored rows exist for each serialized object.
-        #    b) PK-bearing semantics remain aligned to fixture expectations.
-        #    c) TransactionTestCase fixture semantics are preserved for this restore
-        #       operation (compatibility surface unchanged, only atomicity behavior
-        #       changed in scope).
-        # 6) FAILURE PATHS:
-        #    - any decode/deserialize mismatch raises, or any resolved object type/field
-        #      mismatch, indicates payload compatibility regression.
-        pass
+        db_connection = connections[DEFAULT_DB_ALIAS]
+        creation = db_connection.creation_class(db_connection)
+
+        sentinel_group_name = "txrollback-004-group"
+        sentinel_content_type = {
+            "app_label": "txrollback_004",
+            "model": "payloadcompat",
+            "name": "Payload Compatibility",
+        }
+
+        source_group = Group.objects.create(name=sentinel_group_name)
+        source_content_type = ContentType.objects.create(**sentinel_content_type)
+
+        payload = json.loads(creation.serialize_db_to_string())
+
+        def find_payload_entry(model, predicate):
+            for entry in payload:
+                if entry["model"] == model and predicate(entry):
+                    return entry
+            self.fail(f"Expected {model} entry missing from serialized payload.")
+
+        expected_group = find_payload_entry(
+            "auth.group",
+            lambda entry: entry["fields"]["name"] == source_group.name,
+        )
+        expected_content_type = find_payload_entry(
+            "contenttypes.contenttype",
+            lambda entry: entry["fields"]["app_label"] == sentinel_content_type["app_label"]
+            and entry["fields"]["model"] == sentinel_content_type["model"],
+        )
+
+        call_command("flush", verbosity=0, interactive=False, database=db_connection.alias)
+
+        creation.deserialize_db_from_string(json.dumps(payload))
+
+        restored_group = Group.objects.get(pk=expected_group["pk"])
+        restored_content_type = ContentType.objects.get(pk=expected_content_type["pk"])
+
+        self.assertEqual(restored_group.pk, expected_group["pk"])
+        self.assertEqual(restored_group.name, expected_group["fields"]["name"])
+        self.assertEqual(restored_content_type.pk, expected_content_type["pk"])
+        self.assertEqual(
+            restored_content_type.app_label,
+            expected_content_type["fields"]["app_label"],
+        )
+        self.assertEqual(restored_content_type.model, expected_content_type["fields"]["model"])
+        self.assertEqual(
+            restored_content_type.name,
+            expected_content_type["fields"]["name"],
+        )
+        self.assertIsInstance(restored_group, Group)
+        self.assertIsInstance(restored_content_type, ContentType)
 
     def test_txrollback_005_deserialize_db_from_string_consumes_payload_order_without_additional_reordering(self):
-        # TXROLLBACK-005 logic obligation:
-        # 1) INPUT: capture a deterministic payload list in the exact emission order
-        #    produced by current serialize_db_to_string output.
-        # 2) PRECONDITION: no intermediate re-sort/normalization step is expected
-        #    in the restore entrypoint.
-        # 3) ACTION: invoke deserialize_db_from_string(payload_json).
-        # 4) OBSERVATION: record consumption sequence as objects are iterated by the
-        #    current restore loop in the same order as emitted by the payload stream.
-        # 5) EXPECTATION:
-        #    - consumed_order == payload_order (exact sequence equivalence).
-        #    - the implementation must not introduce new sorting/comparator logic.
-        # 6) FAILURE PATH:
-        #    - any divergence between emitted order and consumed order means additional
-        #      reordering was introduced and this requirement regresses.
-        pass
+        db_connection = connections[DEFAULT_DB_ALIAS]
+        creation = db_connection.creation_class(db_connection)
+
+        payload = json.loads(creation.serialize_db_to_string())
+        expected_consumption_order = [
+            (entry["model"], entry["pk"])
+            for entry in payload
+        ]
+
+        save_events = []
+        original_deserialize = creation_module.serializers.deserialize
+
+        def tracking_deserialize(format, stream, **kwargs):
+            for obj in original_deserialize(format, stream, **kwargs):
+                model_label = obj.object._meta.label_lower
+                pk = obj.object.pk
+
+                def tracking_save(*args, **kwargs):
+                    save_events.append((model_label, pk))
+
+                obj.save = tracking_save
+                yield obj
+
+        with mock.patch(
+            "django.db.backends.base.creation.serializers.deserialize",
+            side_effect=tracking_deserialize,
+        ):
+            creation.deserialize_db_from_string(json.dumps(payload))
+
+        self.assertEqual(save_events, expected_consumption_order)
