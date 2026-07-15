@@ -114,7 +114,17 @@ def iter_modules_and_files(modules, extra_files):
         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
         # are added to sys.modules, however they are types not modules and so
         # cause issues here.
-        if not isinstance(module, ModuleType) or getattr(module, '__spec__', None) is None:
+        if not isinstance(module, ModuleType):
+            continue
+        if module.__name__ == '__main__':
+            # __main__ is often launched without a module spec, so include the
+            # script path directly when available. This keeps the module reload
+            # set aligned with what is actually executing.
+            main_file = getattr(module, '__file__', None)
+            if main_file:
+                sys_file_paths.append(main_file)
+            continue
+        if getattr(module, '__spec__', None) is None:
             continue
         spec = module.__spec__
         # Modules could be loaded from places without a concrete location. If
