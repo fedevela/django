@@ -1640,6 +1640,20 @@ class Model(metaclass=ModelBase):
     def _check_local_fields(cls, fields, option):
         from django.db import models
 
+        # [DJANGO12856-001]
+        # Input:
+        #   fields: iterable[str] field names referenced by a uniqueness option/constraint.
+        #   option: label to include in diagnostics for traceability.
+        # Required obligation: field-reference resolution must be deterministic and
+        # report local/non-local/ManyToMany violations through an E012-family path
+        # for UniqueConstraint validation.
+        # Transition:
+        #   for each field_name -> resolve from forward local field map -> classify missing/non-local/m2m.
+        # Failure path:
+        #   missing -> E012
+        #   inherited/non-local -> E016 (treated as invalid-field-reference in constraint context)
+        #   m2m -> E013 (treated as invalid-field-reference in constraint context)
+
         # In order to avoid hitting the relation tree prematurely, we use our
         # own fields_map instead of using get_field()
         forward_fields_map = {}
@@ -1865,6 +1879,28 @@ class Model(metaclass=ModelBase):
 
     @classmethod
     def _check_constraints(cls, databases):
+        # [DJANGO12856-001]
+        # Goal: validate UniqueConstraint.fields for local model existence before or as part
+        # of constraint-level checks.
+        # State machine (per constraint):
+        #   START -> FIELD_REFERENCE_CHECK -> (INVALID -> SKIP_CONSTRAINT_CHECKS)
+        #   or (VALID -> FEATURE_CHECKS)
+        #   OUTPUT: append checks errors for invalid field references and continue model check flow.
+        # Inputs:
+        #   databases: configured DB aliases from Model.check().
+        #   cls._meta.constraints: includes UniqueConstraint entries.
+        # Deterministic flow:
+        #   for each constraint in cls._meta.constraints:
+        #     if not UniqueConstraint: continue
+        #     ref_errors = cls._check_local_fields(constraint.fields, "constraints")
+        #     if ref_errors:
+        #         append ref_errors; transition to SKIP_CONSTRAINT_CHECKS for this constraint.
+        #     else:
+        #         transition to FEATURE_CHECKS (existing W027/W036/W038 branches).
+        # Failure outcome requirement:
+        #   at least one DJANGO12856-001 scenario must emit non-empty DJANGO12856-001
+        #   invalid-reference error list; model check should not treat the constrained model as valid.
+
         errors = []
         for db in databases:
             if not router.allow_migrate_model(db, cls):
