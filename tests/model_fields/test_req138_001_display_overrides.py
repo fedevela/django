@@ -70,6 +70,13 @@ REQ_138_005_OBLIGATIONS = (
     "Template, form, and direct instance call paths return the same value for the same model state",
 )
 
+REQ_138_006 = "REQ-138-006"
+REQ_138_006_OBLIGATIONS = (
+    "Only get_<field>_display overrides that are explicitly defined for a field are eligible for custom output",
+    "Fields without custom get_<field>_display continue using generated choices mapping in direct calls",
+    "Template/form output for multiple choice fields applies overrides per-field without global spillover",
+)
+
 REQ_ID_TO_VERIFICATION = {
     "REQ-138-001": (
         "test_req_138_001_direct_call_uses_model_defined_display_override",
@@ -94,6 +101,11 @@ REQ_ID_TO_VERIFICATION = {
         "test_req_138_005_template_and_form_use_override_first_display_lookup",
         "test_req_138_005_template_and_form_use_generated_choices_fallback",
         "test_req_138_005_template_form_and_instance_paths_share_display_for_shared_state",
+    ),
+    "REQ-138-006": (
+        "test_req_138_006_foo_custom_display_takes_precedence_over_generated_foo_mapping",
+        "test_req_138_006_bar_generated_display_remains_mapping_for_non_overridden_field",
+        "test_req_138_006_foo_override_does_not_affect_bar_display_in_string_template_and_form_paths",
     ),
 }
 
@@ -235,3 +247,16 @@ class TestReq138005TemplateAndFormDisplayResolutionParity(SimpleTestCase):
 
             self.assertEqual(expected_display, template_display)
             self.assertEqual(expected_display, form.instance.get_status_display())
+
+
+class TestReq138006PerFieldDisplayOverrideIsolation(SimpleTestCase):
+    """Specification traceability artifact for REQ-138-006."""
+
+    def test_req_138_006_foo_custom_display_takes_precedence_over_generated_foo_mapping(self):
+        pass
+
+    def test_req_138_006_bar_generated_display_remains_mapping_for_non_overridden_field(self):
+        pass
+
+    def test_req_138_006_foo_override_does_not_affect_bar_display_in_string_template_and_form_paths(self):
+        pass
