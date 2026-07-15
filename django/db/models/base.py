@@ -939,6 +939,25 @@ class Model(metaclass=ModelBase):
     delete.alters_data = True
 
     def _get_FIELD_display(self, field):
+        # REQ-138-008: baseline non-overridden fallback semantics must not change.
+        # INPUT CONTRACT:
+        # - called only when effective instance method is generated fallback.
+        # - `self` is model instance; `field` is the chosen choice field descriptor.
+        # TRANSITION:
+        # 1) read raw stored value via `getattr(self, field.attname)`;
+        # 2) attempt exact lookup in `field.flatchoices` (flattened pair map).
+        # 3) if no hit, preserve raw value as fallback.
+        # 4) coerce returned scalar with `force_str(..., strings_only=True)`.
+        # OUTPUT:
+        # - mapped label when a choice exists (including translated/lazy labels as stored),
+        # - otherwise original value, preserving historical coercion and unknown-value behavior.
+        # CALLSITE STABILITY:
+        # - instance.call / template rendering / form-bound instance path all execute this
+        #   same generated function object (for non-overridden fields), so output type
+        #   and value remain stable for equivalent field state.
+        # FAILURE PATH:
+        # - if `field.flatchoices` is unchanged but value is absent, function must not
+        #   route to override machinery; must return the raw value verbatim and coerce.
         # REQ-138-006: this fallback is field-local and only reached for the
         # accessor that was installed for one concrete field.
         # - Input: single `field` argument from the generated accessor for that field.

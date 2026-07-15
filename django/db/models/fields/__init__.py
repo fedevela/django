@@ -763,6 +763,25 @@ class Field(RegisterLookupMixin):
             if not getattr(cls, self.attname, None):
                 setattr(cls, self.attname, self.descriptor_class(self))
         if self.choices is not None:
+            # REQ-138-008: non-overridden display semantics remain generated-only.
+            # - INPUT:
+            #   - field with choices on model class construction.
+            #   - `display_name = "get_<field>_display"`.
+            # - DECISION (resolved once, class-build time):
+            #   1) IF `display_name in cls.__dict__`:
+            #      - explicit user override exists on current class;
+            #      - leave method resolution untouched.
+            #   2) ELIF `hasattr(cls, display_name)`:
+            #      - inherited user override exists via MRO;
+            #      - keep inherited callable.
+            #   3) ELSE:
+            #      - install `partialmethod(cls._get_FIELD_display, field=self)`.
+            #        This is the non-overridden path used by every direct/template/form
+            #        call site that asks for this accessor.
+            # - FAILURE / PRESERVATION PATH:
+            #   - If branch 1 or 2 is taken, custom behavior stays active and no
+            #     generated lookup path is introduced.
+            #   - If branch 3 is taken, generated behavior is active and stable for all call sites.
             # REQ-138-003: preserve model-defined display helpers during class
             # construction when generating field accessors.
             # OB 1 (REQ_138_003_OBLIGATIONS[0]):
