@@ -220,6 +220,20 @@ def get_child_arguments():
     return args
 
 
+def get_manage_py_path():
+    """Return the resolved `manage.py` path when starting `runserver`."""
+    if len(sys.argv) < 2:
+        return None
+    if sys.argv[1] != 'runserver':
+        return None
+    if not sys.argv[0]:
+        return None
+    script = Path(sys.argv[0]).resolve()
+    if script.name != 'manage.py' or not script.exists():
+        return None
+    return script
+
+
 def trigger_reload(filename):
     logger.info('%s changed, reloading.', filename)
     sys.exit(3)
@@ -348,6 +362,12 @@ def watched_files(self, include_globs=True):
 
 class StatReloader(BaseReloader):
     SLEEP_TIME = 1  # Check for changes once per second.
+
+    def __init__(self):
+        super().__init__()
+        manage_py = get_manage_py_path()
+        if manage_py is not None:
+            self.watch_file(manage_py)
 
     def tick(self):
         mtimes = {}

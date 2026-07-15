@@ -344,7 +344,14 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         the initial StatReloader watched-file snapshot includes the concrete
         launch path used to start `manage.py`.
         """
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as tempdir:
+            manage_py = Path(tempdir) / 'manage.py'
+            manage_py.write_text('')
+            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
+                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                    reloader = autoreload.StatReloader()
+                    watched_files = {path for path, _mtime in reloader.snapshot_files()}
+                    self.assertIn(manage_py.resolve(), watched_files)
 
 
 class ReloaderTests(SimpleTestCase):
