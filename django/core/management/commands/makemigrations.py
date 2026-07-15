@@ -67,24 +67,16 @@ class Command(BaseCommand):
         return apps.get_app_configs()
 
     def _find_invalid_unique_constraint_fields(self, app_labels):
-        # DJANGO12856-004: unified validation gate for makemigrations.
-        # INPUTS:
-        #   - app_labels requested by user (or all apps),
-        #   - deterministic app and model ordering from app registry.
-        # STATE TRANSITION:
-        #   - START: errors = []
-        #   - FOR each model: gather constraint-field failures and (legacy path)
-        #     continue via existing model check surface in the same run ordering.
-        #   - END: return accumulated errors without early return.
-        # ERROR POLICY:
-        #   - accumulate all `models.E012`/`models.E013`/`models.E016` findings
-        #     from this pass; command-level failure is handled by caller.
+        # DJANGO12856-004: preflight gate now aligns `UniqueConstraint` and
+        # legacy `unique_together` reference validation by collecting both
+        # pathways in one deterministic pass.
         errors = []
         for app_config in self._iter_app_configs_for_constraints(app_labels):
             for model in sorted(
                 app_config.get_models(),
                 key=lambda model: model._meta.label,
             ):
+                errors.extend(model._check_unique_together())
                 errors.extend(model._check_unique_constraint_fields())
         return errors
 

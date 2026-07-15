@@ -1,5 +1,6 @@
 import unittest
 
+from django.core.management.commands.makemigrations import Command
 from django.core.checks import Error, Warning
 from django.core.checks.model_checks import _check_lazy_references
 from django.db import connection, connections, models
@@ -1693,10 +1694,64 @@ DJANGO12856_004_VERIFICATIONS = {
 
 class ConstraintAndUniqueTogetherTraceabilityTests004(SimpleTestCase):
     def test_django12856_004_unique_constraint_and_unique_together_missing_field_references_reported_together(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            existing = models.IntegerField()
+
+            class Meta:
+                unique_together = [['missing_together_field']]
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing_constraint_field'],
+                        name='missing_constraint_unique',
+                    ),
+                ]
+
+        errors = Command()._find_invalid_unique_constraint_fields([Model._meta.app_label])
+        self.assertEqual(errors, [
+            Error(
+                "'unique_together' refers to the nonexistent field "
+                "'missing_together_field'.",
+                obj=Model,
+                id='models.E012',
+            ),
+            Error(
+                "'constraints 'missing_constraint_unique' on model 'Model' refers to "
+                "the nonexistent field 'missing_constraint_field'.",
+                obj=Model,
+                id='models.E012',
+            ),
+        ])
 
     def test_django12856_004_unique_together_reference_errors_preserved_under_with_unique_together_baseline(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            class Meta:
+                unique_together = [['missing_together_field']]
+
+        legacy = Model._check_unique_together()
+        command_errors = Command()._find_invalid_unique_constraint_fields([Model._meta.app_label])
+        self.assertEqual(legacy, [
+            Error(
+                "'unique_together' refers to the nonexistent field "
+                "'missing_together_field'.",
+                obj=Model,
+                id='models.E012',
+            ),
+        ])
+        self.assertEqual(legacy, command_errors)
 
     def test_django12856_004_valid_unique_together_path_remains_behaviorally_stable(self):
-        self.assertTrue(True)
+        class Model(models.Model):
+            existing_one = models.IntegerField()
+            existing_two = models.IntegerField()
+
+            class Meta:
+                unique_together = [['existing_one', 'existing_two']]
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['existing_one'],
+                        name='existing_unique_constraint',
+                    ),
+                ]
+
+        self.assertEqual(Model._check_unique_together(), [])
+        self.assertEqual(Command()._find_invalid_unique_constraint_fields([Model._meta.app_label]), [])
