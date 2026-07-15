@@ -1,4 +1,5 @@
 import datetime
+from unittest import mock
 
 from django.db import connection, models, transaction
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
@@ -545,10 +546,43 @@ class DeletePkResetNoDependencyRollbackTraceabilityTests(TestCase):
     requirements_coverage = DJ11179_004_VERIFICATION_ARTIFACTS
 
     def test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        instance_pk = instance.pk
+
+        with mock.patch("django.db.models.deletion.sql.DeleteQuery.delete_batch") as delete_batch:
+            delete_batch.side_effect = RuntimeError("forced failure before successful delete")
+            with self.assertRaises(RuntimeError):
+                instance.delete()
+
+        self.assertEqual(instance.pk, instance_pk)
+        self.assertTrue(DeletionTracebook.objects.filter(pk=instance_pk).exists())
 
     def test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        instance_pk = instance.pk
+
+        with mock.patch("django.db.models.deletion.sql.DeleteQuery.delete_batch") as delete_batch:
+            delete_batch.side_effect = transaction.TransactionManagementError(
+                "forced savepoint-level failure"
+            )
+            with self.assertRaises(transaction.TransactionManagementError):
+                instance.delete()
+
+        self.assertEqual(instance.pk, instance_pk)
+        self.assertTrue(DeletionTracebook.objects.filter(pk=instance_pk).exists())
 
     def test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        instance_pk = instance.pk
+
+        with mock.patch("django.db.models.deletion.sql.DeleteQuery.delete_batch") as delete_batch:
+            delete_batch.side_effect = RuntimeError("forced failure before successful delete")
+            with self.assertRaises(RuntimeError):
+                instance.delete()
+
+        self.assertEqual(instance.pk, instance_pk)
+        self.assertTrue(DeletionTracebook.objects.filter(pk=instance_pk).exists())
+
+        instance.delete()
+        self.assertIsNone(instance.pk)
+        self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
