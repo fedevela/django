@@ -156,6 +156,17 @@ TXROLLBACK_ARCHITECTURE_MAP = {
         "owner": "BaseDatabaseCreation.deserialize_db_from_string + fixture serializer stack",
         "locus": "django/db/backends/base/creation.py:BaseDatabaseCreation.deserialize_db_from_string",
         "contract": "deserialize_db_from_string consumes output from existing serialize_db_to_string payloads without changing fixture object/type/field restoration shape",
+        "boundary": "public fixture restoration API -> model deserializer -> model save pipeline",
+        "seams": [
+            "serialize_db_to_string payload -> creation.deserialize_db_from_string input",
+            "serializer object stream -> model instance reconstruction",
+            "TransactionTestCase._fixture_setup -> creation.deserialize_db_from_string",
+        ],
+        "dependencies": [
+            "django/core/management/commands/serialize",
+            "django/core/serializers",
+            "django/db/backends/base/creation.py",
+        ],
         "invariants": [
             "serialize_db_to_string output remains a valid input for deserialize_db_from_string",
             "restored rows preserve model class selection and field mapping semantics",
@@ -167,6 +178,16 @@ TXROLLBACK_ARCHITECTURE_MAP = {
         "owner": "BaseDatabaseCreation.deserialize_db_from_string",
         "locus": "django/db/backends/base/creation.py:BaseDatabaseCreation.deserialize_db_from_string",
         "contract": "object creation path consumes serialized objects in the exact payload order emitted by the existing serialization pipeline",
+        "boundary": "deserialization loop internal iteration contract (input stream order as single source of truth)",
+        "seams": [
+            "serialized JSON array order -> deserialize() object iterator",
+            "deserialize() iterator -> save() dispatch loop",
+        ],
+        "dependencies": [
+            "django/core/serializers",
+            "django/db/backends/base/creation.py",
+            "django/db/transaction",
+        ],
         "invariants": [
             "deserialize_db_from_string does not pre-sort or re-order emitted object sequences",
             "no new ordering pass is introduced around restored payload input",
@@ -175,9 +196,48 @@ TXROLLBACK_ARCHITECTURE_MAP = {
     },
 }
 
+TXROLLBACK_ARCHITECTURE_SCHEMATA = {
+    "TXROLLBACK-004": {
+        "component": "fixture-restoration pipeline",
+        "owner_module": "django/db/backends/base/creation.py",
+        "entry_contract": {
+            "incoming": "serialize_db_to_string(payload:str)",
+            "entrypoint": "deserialize_db_from_string(payload:str) -> None",
+            "output": "model rows restored into alias-local database",
+        },
+        "integration_assertions": {
+            "type": "compatible_model_type_resolution",
+            "field_shape": "fixture field mapping preserved",
+            "semantic_surface": "TransactionTestCase._fixture_setup flow unchanged",
+        },
+    },
+    "TXROLLBACK-005": {
+        "component": "deterministic restore order conduit",
+        "owner_module": "django/db/backends/base/creation.py",
+        "entry_contract": {
+            "incoming": "serialized objects in emitted array order",
+            "entrypoint": "deserialize_db_from_string(payload:str) -> None",
+            "flow": "for obj in deserialize(payload): obj.save()",
+        },
+        "integration_assertions": {
+            "sequence_contract": "consumption sequence == payload sequence",
+            "no_transform": "no pre-sort/no reorder step between payload parse and save",
+            "alias_scope": "atomic boundary remains alias-local only",
+        },
+    },
+}
+
 
 class TxrollbackDeserializeDbFromStringContractTests(TransactionTestCase):
     """Traceability tests for TXROLLBACK-001/002/003/004/005/008."""
+
+    # Architecture placeholder: boundary owner for TXROLLBACK-004/005.
+    # - Boundary: BaseDatabaseCreation.deserialize_db_from_string owns the restore
+    #   interaction contract and must keep model/field/ordering semantics from the
+    #   existing serialized payload.
+    # - Adapter seam: serializer payload stream -> object instance iterator -> obj.save().
+    # - Dependency direction: fixture serialization inputs and TransactionTestCase setup
+    #   remain upstream; no ordering or shape transforms are introduced here.
 
     def test_txrollback_001_deserialize_db_from_string_executes_full_save_path_within_alias_local_atomic(self):
         db_connection = connections[DEFAULT_DB_ALIAS]
