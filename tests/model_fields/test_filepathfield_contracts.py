@@ -81,6 +81,74 @@ FPF_008_VERIFICATION_MAP = {
     ],
 }
 
+FPF_008_ARCHITECTURE_MAP = {
+    "FPF-008-R1": {
+        "logic_pressure": "ownership+contract",
+        "owner": "django.db.models.fields.files.FilePathField.deconstruct",
+        "boundary": "field metadata -> migration serialization contract",
+        "integration_seam": "Field.deconstruct() kwargs serialization input for migrations",
+        "test_obligation": "test_FPF_008_callable_path_serialization_preserves_runtime_callable_reference_not_host_path",
+    },
+    "FPF-008-R2": {
+        "logic_pressure": "dependency+determinism",
+        "owner": "django.db.migrations.writer.MigrationWriter.serialize",
+        "boundary": "runtime field object -> generated migration text artifact",
+        "integration_seam": "deconstruct() output -> writer import string formatting",
+        "test_obligation": "test_FPF_008_migration_text_is_stable_for_callable_and_string_path_fields",
+    },
+    "FPF-008-R3": {
+        "logic_pressure": "boundary+runtime-locality",
+        "owner": "django.db.models.fields.files.FilePathField.formfield",
+        "boundary": "callable path invocation during choice enumeration",
+        "integration_seam": "runtime callables -> os.listdir-based choice materialization",
+        "test_obligation": "test_FPF_008_host_local_runtime_path_output_drives_callable_form_choices",
+    },
+    "FPF-008-R4": {
+        "logic_pressure": "contract+error-path",
+        "owner": "django.db.models.fields.files.FilePathField + migration deconstructor/serializer",
+        "boundary": "invalid callable identity or return values -> explicit exception propagation",
+        "integration_seam": "callable importability/return-type validation before filesystem traversal",
+        "test_obligation": "test_FPF_008_bad_callables_and_bad_return_types_preserve_error_behavior",
+    },
+    "FPF-008-R5": {
+        "logic_pressure": "parity+topology",
+        "owner": "django.db.models.fields.files.FilePathField.formfield choice filter pipeline",
+        "boundary": "string vs callable path sources share a single filtering contract",
+        "integration_seam": "shared allow_files/allow_folders/recursive/match settings -> deterministic ordering",
+        "test_obligation": "test_FPF_008_string_and_callable_paths_share_filtering_outcomes_in_parity_suites",
+    },
+}
+
+
+FPF_008_REPO_LOCUS_BY_PRESSURE = {
+    "FPF-008-R1": [
+        "tests/model_fields/test_filepathfield_contracts.py:test_FPF_008_callable_path_serialization_preserves_runtime_callable_reference_not_host_path",
+        "tests/model_fields/models.py:FilePathFieldCallablePathModel",
+    ],
+    "FPF-008-R2": [
+        "tests/model_fields/test_filepathfield_contracts.py:test_FPF_008_migration_text_is_stable_for_callable_and_string_path_fields",
+    ],
+    "FPF-008-R3": [
+        "tests/model_fields/test_filepathfield_contracts.py:test_FPF_008_host_local_runtime_path_output_drives_callable_form_choices",
+        "django/db/models/fields/files.py::FilePathField.formfield",
+    ],
+    "FPF-008-R4": [
+        "tests/model_fields/test_filepathfield_contracts.py:test_FPF_008_bad_callables_and_bad_return_types_preserve_error_behavior",
+    ],
+    "FPF-008-R5": [
+        "tests/model_fields/test_filepathfield_contracts.py:test_FPF_008_string_and_callable_paths_share_filtering_outcomes_in_parity_suites",
+        "tests/model_fields/test_filepathfield_contracts.py:test_FPF_007_parity_between_string_and_callable_paths_for_match_recursive_allow_files_and_allow_folders",
+    ],
+}
+
+FPF_008_DEPENDENCY_DIRECTION = [
+    "callable path definition -> field.deconstruct -> migration deconstruction contract",
+    "deconstruct kwargs -> MigrationWriter.serialize -> stable migration text fixture",
+    "runtime host state -> callable path() -> formfield choice set",
+    "formfield filtering policy -> shared selection contract (string/callable)",
+    "invalid callable metadata -> deconstruct/usage-time exception propagation",
+]
+
 
 class FilePathFieldContractsFPF003Tests(SimpleTestCase):
     """
