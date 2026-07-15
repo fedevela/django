@@ -432,7 +432,6 @@ class SQLCompiler:
         # - Never mutate non-whitespace SQL payload, including Unicode characters.
         # - Maintain byte-shape outside the normalization pass: no encoding transforms or
         #   Unicode case/normalization operations may run on body text.
-        sql = sql.replace('\r\n', '\n').replace('\r', '\n')
         normalized = []
         in_single_quote = False
         in_double_quote = False
@@ -484,7 +483,12 @@ class SQLCompiler:
                 i += 1
                 continue
 
-            if ch.isspace():
+            if ch == '\r':
+                if i + 1 < len(sql) and sql[i + 1] == '\n':
+                    i += 1
+                ch = '\n'
+
+            if ch in (' ', '\t', '\n'):
                 # ORDERBY-006 deterministic whitespace state transition:
                 # - treat contiguous whitespace outside literals as one collapsed space marker.
                 # - whitespace characters are normalized for dedupe key stability,

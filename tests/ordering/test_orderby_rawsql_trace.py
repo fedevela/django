@@ -393,9 +393,12 @@ class ORDERBY006TraceabilityTests(TestCase):
         when normalization for dedupe runs,
         then emitted SQL keeps Unicode text unchanged.
         """
-        unicode_sql = RawSQL("CASE WHEN headline = 'こんにちは' THEN 1 ELSE 0 END", [])
-        _ = str(Article.objects.order_by(unicode_sql).query)
-        self.assertTrue(True)
+        first_fragment = RawSQL("CASE WHEN headline = 'naïve' THEN '你好' ELSE headline END", [])
+        second_fragment = RawSQL("CASE WHEN headline = 'naïve' THEN '你好' ELSE headline END", [])
+        order_by_sql = str(Article.objects.order_by(first_fragment, second_fragment).query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 1)
+        self.assertIn("naïve", order_by_sql)
+        self.assertIn("你好", order_by_sql)
 
     def test_ORDERBY_006_S2_unicode_bodies_with_equivalent_newlines_deduplicate_by_semantic_body_and_direction(self):
         """
@@ -404,16 +407,26 @@ class ORDERBY006TraceabilityTests(TestCase):
         when dedupe compares keys,
         then duplicates are suppressed only for matching body+direction.
         """
-        _ = (
-            "ORDERBY-006",
-            """
-            CASE\n
-                WHEN headline = 'niño' THEN 1
-                ELSE 0
-            END
-            """,
+        unix_fragment = (
+            "CASE\n"
+            "    WHEN headline = 'niño' THEN 1\n"
+            "    ELSE 0\n"
+            "END"
         )
-        self.assertTrue(True)
+        windows_fragment = (
+            "CASE\r\n"
+            "      WHEN headline = 'niño' THEN 1\r\n"
+            "  ELSE 0\r\n"
+            "END"
+        )
+        queryset = Article.objects.order_by(
+            RawSQL(unix_fragment, []).desc(),
+            RawSQL(windows_fragment, []).desc(),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.count("CASE"), 1)
+        self.assertIn("DESC", order_by_sql.upper())
+        self.assertIn("niño", order_by_sql)
 
     def test_ORDERBY_006_S3_unicode_mixed_spacing_line_end_variants_keep_stable_duplicate_keying(self):
         """
@@ -422,9 +435,23 @@ class ORDERBY006TraceabilityTests(TestCase):
         when fallback and normalization are exercised,
         then duplicate behavior is stable while content outside whitespace is preserved.
         """
-        _ = (
-            "ORDERBY-006",
-            "CASE\r\nWHEN headline = 'café' THEN 1\r\nELSE 0\r\nEND",
-            "CASE\nWHEN headline = 'café' THEN 1\nELSE 0\nEND",
+        first_fragment = (
+            "CASE\r\n"
+            " WHEN headline = 'café' THEN 1\r\n"
+            " ELSE 0\r\n"
+            "END"
         )
-        self.assertTrue(True)
+        second_fragment = (
+            "CASE\n"
+            "  WHEN     headline    =   'café' THEN   1\n"
+            "   ELSE   0\n"
+            "END"
+        )
+        queryset = Article.objects.order_by(
+            _MalformedDirectionOrderBy(RawSQL(first_fragment, []), "  DESCENDING"),
+            _MalformedDirectionOrderBy(RawSQL(second_fragment, []), " DESCENDING"),
+        )
+        order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
+        self.assertEqual(order_by_sql.upper().count("DESCENDING"), 1)
+        self.assertEqual(order_by_sql.count("CASE"), 1)
+        self.assertIn("café", order_by_sql)
