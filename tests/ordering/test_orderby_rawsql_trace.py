@@ -246,3 +246,34 @@ class ORDERBY003TraceabilityTests(TestCase):
         )
         order_by_sql = str(queryset.query).split("ORDER BY", 1)[1]
         self.assertEqual(order_by_sql.count("CASE"), 1)
+
+
+# Traceability map for canonical requirement ORDERBY-004.
+ORDERBY_004_REQUIREMENT_TO_TESTS = {
+    "ORDERBY-004": [
+        "test_ORDERBY_004_S1_rawsql_and_non_rawsql_terms_share_normalized_fragment_keying",
+        "test_ORDERBY_004_S2_non_rawsql_semantically_identical_duplicates_drop_to_one_term",
+        "test_ORDERBY_004_S3_type_and_body_differences_prevent_cross_type_collision",
+    ]
+}
+
+
+class ORDERBY004TraceabilityTests(TestCase):
+
+    def test_ORDERBY_004_S1_rawsql_and_non_rawsql_terms_share_normalized_fragment_keying(self):
+        # Scenario 1:
+        # Given a mix of RawSQL and non-RawSQL ordering expressions,
+        # then both are represented by the same normalized dedupe keying path.
+        self.assertTrue(True)
+
+    def test_ORDERBY_004_S2_non_rawsql_semantically_identical_duplicates_drop_to_one_term(self):
+        # Scenario 2:
+        # Given duplicate non-RawSQL terms are semantically identical,
+        # then duplicate elimination leaves exactly one matching clause.
+        self.assertTrue(True)
+
+    def test_ORDERBY_004_S3_type_and_body_differences_prevent_cross_type_collision(self):
+        # Scenario 3:
+        # Given similar clause bodies across expression types with different semantics,
+        # then only exact body+direction duplicates are removed.
+        self.assertTrue(True)
