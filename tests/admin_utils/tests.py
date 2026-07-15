@@ -391,68 +391,72 @@ class UtilsTests(SimpleTestCase):
         D172-008: Readonly JSONField rendering for valid nested values must preserve
         exact JSON text output produced by field.prepare_value.
         """
-        # D172-008: Logic-obligation pseudocode.
-        # Input:
-        #   - value: nested JSON-capable structure (dict/list scalars)
-        #   - field: JSONField instance with possibly overridden prepare_value
-        #   - empty_value: fallback sentinel for falsy/empty data
-        # 1) Prepare input contract.
-        #    - classify `value` as readonly JSON candidate.
-        #    - classify `field` as isinstance(JSONField).
-        # 2) Decision branch:
-        #    - if field is not JSONField: no JSON-specific path.
-        #    - if value is empty/None: return empty_value.
-        #    - else continue through readonly JSONField branch.
-        # 3) Required transformation branch:
-        #    - call field.prepare_value(value) exactly once.
-        #    - do not reserialize manually; do not alter ordering/whitespace.
-        #    - preserve nested payload formatting returned by prepare_value.
-        # 4) Output obligation:
-        #    - display text must be exact equality with returned prepare_value result.
-        self.assertTrue(True)
+        class NestedPreparedJSONField(models.JSONField):
+            def prepare_value(self, value):
+                return json.dumps(value, indent=2, sort_keys=True, separators=(",", ": "))
+
+        value = {"a": [{"b": [3, {"c": "D172-008"}]}, "z", {"d": {"e": 1}}]
+        field = NestedPreparedJSONField()
+        expected = field.prepare_value(value)
+
+        display_value = display_for_field(value, field, self.empty_value)
+        self.assertEqual(display_value, expected)
 
     def test_D172_008_display_for_field_jsonfield_invalid_input_preserves_prepare_value_contract(self):
         """
         D172-008: Invalid JSON readonly input must follow the JSONField.prepare_value
         branch and preserve that branch’s output.
         """
-        # D172-008: Logic-obligation pseudocode.
-        # Input:
-        #   - value: InvalidJSONInput sentinel from forms.fields
-        #   - field: JSONField subclass with explicit prepare_value invalid-input policy
-        # 1) Enter readonly display path for JSONField.
-        # 2) Before serialization:
-        #    - route value to field.prepare_value(value) and preserve return value.
-        # 3) Branch behavior:
-        #    - if field implementation maps InvalidJSONInput -> tokenized string,
-        #      output must be that exact token.
-        #    - if field does not special-case it, retain regular prepared output.
-        # 4) Failure path:
-        #    - no implicit `json.dumps` should be used as a fallback for invalid input.
-        #    - do not mutate exception/invalid payload formatting in this branch.
-        self.assertTrue(True)
+        class InvalidAwareJSONField(models.JSONField):
+            def prepare_value(self, value):
+                if isinstance(value, forms.fields.InvalidJSONInput):
+                    return "invalid-json-input"
+                return super().prepare_value(value)
+
+        value = forms.fields.InvalidJSONInput('{"trailing": "comma",}')
+        field = InvalidAwareJSONField()
+
+        with patch("django.db.models.fields.json.json.dumps") as dumps_mock:
+            display_value = display_for_field(value, field, self.empty_value)
+        self.assertEqual(display_value, "invalid-json-input")
+        dumps_mock.assert_not_called()
 
     def test_D172_008_display_for_field_non_json_and_label_behavior_contracts_remain_unchanged(self):
         """
         D172-008: Non-JSON readonly output and label_for_field behavior remain
         unchanged from current contract expectations.
         """
-        # D172-008: Logic-obligation pseudocode.
-        # Invariant A (non-JSON readonly):
-        # 1) if field is not JSONField:
-        #    - preserve existing display_for_field branch selection untouched.
-        # 2) if value is None/empty-equivalent:
-        #    - return empty_value via existing generic behavior.
-        # 3) if concrete non-JSON type (BooleanField/DateField/CharField/etc):
-        #    - route to existing formatters/icons/locale rules.
-        # Invariant B (label_for_field):
-        # 1) resolve label from metadata/form only.
-        # 2) keep output exactly equal to current contracts.
-        # 3) ensure JSON readonly branch changes do not modify label resolution calls.
-        # Handoff:
-        # - JSON-field path must not call label derivation side effects.
-        # - label tests and non-JSON readonly tests remain same assertions as before.
-        self.assertTrue(True)
+        self.assertEqual(
+            display_for_field(True, models.BooleanField(), self.empty_value),
+            '<img src="%sadmin/img/icon-yes.svg" alt="True">' % settings.STATIC_URL,
+        )
+        self.assertEqual(
+            display_for_field(False, models.BooleanField(), self.empty_value),
+            '<img src="%sadmin/img/icon-no.svg" alt="False">' % settings.STATIC_URL,
+        )
+        self.assertEqual(
+            display_for_field("hello", models.CharField(), self.empty_value),
+            "hello",
+        )
+        self.assertEqual(
+            display_for_field(datetime(2025, 1, 2).date(), models.DateField(), self.empty_value),
+            localize(datetime(2025, 1, 2).date()),
+        )
+
+        class ArticleLabelForm(forms.ModelForm):
+            class Meta:
+                model = Article
+                fields = ("hist",)
+
+        self.assertEqual(label_for_field("hist", Article), "History")
+        self.assertEqual(label_for_field("hist", Article, form=ArticleLabelForm()), "History")
+        self.assertEqual(label_for_field("event", Location), "awesome event")
+
+        with patch("django.contrib.admin.utils.display_for_field") as display_for_field_mock:
+            self.assertEqual(label_for_field("hist", Article), "History")
+            self.assertEqual(label_for_field("hist", Article, form=ArticleLabelForm()), "History")
+            self.assertEqual(label_for_field("event", Location), "awesome event")
+            self.assertEqual(display_for_field_mock.call_count, 0)
 
     def test_list_display_for_value(self):
         display_value = display_for_value([1, 2, 3], self.empty_value)
