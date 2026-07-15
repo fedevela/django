@@ -295,116 +295,11 @@ class Collector:
             instance = list(instances)[0]
             if instance.pk is None and not instance._state.adding:
                 return 0, {}
-            # DJ11179-006:
-            # - INPUT: collected singleton instance may already be marked as identity-cleared
-            #   from an earlier successful fast delete (`instance.pk is None`).
-            # - DECISION:
-            #   1) if `instance.pk is None`:
-            #      - treat as second+ invocation of no-dependency delete on same object.
-            #      - return zero/empty deletion outcome without SQL mutation.
-            #   2) else continue with normal fast-delete decision branch.
-            # - REQUIRED POST-CONDITION:
-            #   - in-memory identity remains `None`.
-            #   - no stale pk reintroduced before or after return.
-            # - COVERAGE TRACE:
-            #   - maps to all DJ11179-006 acceptance checks for repeated no-dependency delete.
-            # DJ11179-001:
-            # - INPUT: single model + single gathered instance.
-            # - DECISION: if `self.can_fast_delete(instance)` is true, perform
-            #   direct SQL delete via `DeleteQuery.delete_batch()`.
-            # - REQUIRED STATE TRANSITION:
-            #   - on successful return, clear in-memory identity by setting
-            #     `instance` pk through `model._meta.pk.attname` to `None`.
-            # - ERROR PATH:
-            #   - let deletion exceptions propagate; skip identity reset in that case.
-            # - NOTE: this branch exits before the shared post-delete mutation loop.
-            # DJ11179-002:
-            # - LOGIC OBLIGATION (stale PK invalidation):
-            #   - INPUTS: instance.old_pk := instance.pk captured before mutation,
-            #     no cascades/signals/dependencies for the model in this execution.
-            #   - DECISION: choose direct path iff `self.can_fast_delete(instance)`
-            #     remains true and this object remains the only candidate.
-            #   - ACTION SEQUENCE (success path):
-            #     1) execute `DeleteQuery(model).delete_batch([instance.old_pk], self.using)`.
-            #     2) treat the resulting row-count as authoritative persistence evidence for
-            #        `instance.old_pk`.
-            #     3) clear in-memory identity via `setattr(instance, pk_attr, None)`.
-            # - INTEGRATION SEAM:
-            #   - collector fast-delete branch owns the stale-PK unresolvability contract
-            #     for this requirement.
-            #   - OBSERVATION REQUIREMENTS:
-            #     - `Model.objects.filter(pk=instance.old_pk).exists()` must be false
-            #       after successful return from this function.
-            #     - `Model.objects.get(pk=instance.old_pk)` must raise DoesNotExist.
-            #     - this remains true when stale in-process object still exists with
-            #       its stale pk snapshot.
-            #   - FAILURE PATH:
-            #     - if SQL delete raises, propagate the error and do not mutate pk.
-            # DJ11179-003:
-            # - LOGIC OBLIGATION (branch-gated mutation):
-            #   - INPUT:
-            #     - execution has only one concrete model bucket and one in-memory instance candidate.
-            #     - branch decision point is `self.can_fast_delete(instance)`.
-            #   - DECISION:
-            #     - if branch is dependency-free fast-delete, apply in-memory pk reset here.
-            #     - if branch is dependency-managed collector flow, do not apply fast-delete pk-reset here.
-            #   - REQUIRED SEQUENCE:
-            #     1) call `transaction.mark_for_rollback_on_error()`;
-            #     2) execute `sql.DeleteQuery(model).delete_batch([instance.pk], self.using)`;
-            #     3) set `instance.pk` to `None` for this dependency-free path;
-            #     4) return collector result tuple immediately.
-            #   - TRACEABILITY:
-            #     - maps to
-            #       `test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset`
-            #       and
-            #       `test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset`.
-            # DJ11179-004:
-            # - LOGIC OBLIGATION (no-dependency rollback safety):
-            #   - INPUT:
-            #     - single-instance fast-delete candidate selected by `can_fast_delete(instance)`.
-            #     - captured original PK must remain stable until a success boundary is crossed.
-            #   - PATH CONTROL:
-            #     1) execute the database delete through
-            #        `sql.DeleteQuery(model).delete_batch([instance.pk], self.using)`
-            #        inside `transaction.mark_for_rollback_on_error()`.
-            #     2) only after that operation returns successfully, clear in-memory PK.
-            #   - FAILURE PATH:
-            #     - if delete_batch raises (including savepoint-level exceptions), do not mutate
-            #       `instance.pk`; propagate the exception.
-            #     - this preserves pre-delete identity across rollback/failed-delete attempts.
-            #   - RETRY PROPERTY:
-            #     - because failure path leaves PK untouched, a subsequent call can still execute
-            #       with the original PK value and clear it on eventual success.
-            #   - TEST MAPPING:
-            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal`
-            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk`
-            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk`
             if self.can_fast_delete(instance):
                 with transaction.mark_for_rollback_on_error():
                     count = sql.DeleteQuery(model).delete_batch([instance.pk], self.using)
-                # Keep pk untouched unless the delete statement executed
-                # successfully and the transaction boundary exits cleanly.
                 setattr(instance, model._meta.pk.attname, None)
                 return count, {model._meta.label: count}
-
-        # DJ11179-005:
-        # - INPUT: branch not fully satisfied by dependency-free fast delete.
-        # - PATH SELECTION:
-        #   - dependency-managed instances, non-fast candidate querysets, and
-        #     any graph with required cascade/null/protect handling enter here.
-        # - TRANSITIONS:
-        #   1) pre_delete signals for materialized instances.
-        #   2) execute `fast_deletes` SQL batches (queryset-level bulk).
-        #   3) apply any field updates for null/default/nullify operations.
-        #   4) delete remaining per-model instances via SQL batch delete.
-        #   5) post_delete signals for non-auto_created models.
-        #   6) clear field values on in-memory objects only for scheduled updates.
-        # - ERROR PATH:
-        #   - any collector exception bubbles; no additional mutation is performed
-        #     in this method to satisfy an in-memory pk contract.
-        # - PRESERVED SEMANTICS:
-        #   - behavior remains anchored to database outcomes and existing signal
-        #     emissions for dependency-managed and bulk paths.
 
         with transaction.atomic(using=self.using, savepoint=False):
             # send pre_delete signals
@@ -448,23 +343,8 @@ class Collector:
             for (field, value), instances in instances_for_fieldvalues.items():
                 for obj in instances:
                     setattr(obj, field.attname, value)
-        # DJ11179-001:
-        # - POST-CONDITION (non-fast path): clear in-memory PKs using
-        #   `model._meta.pk.attname` after DB deletions have completed.
-        # DJ11179-002:
-        # - INTEGRATION SEAM:
-        #   - non-fast path state-settlement loop is the fallback boundary for stale-PK
-        #     contract after all collector-owned SQL delete operations.
-        # - ASSERTION MAPPING:
-        #   - For both fast and non-fast no-dependency delete outcomes, stale
-        #     captured pk values must resolve to no row post-return.
-        #   - If object identity is still referenced in memory after `delete()`,
-        #     stale lookups must still be false/DoesNotExist because rows are removed
-        #     from DB by collector-owned SQL deletion paths.
-        # DJ11179-003:
-        # - BRANCH SEMANTICS:
-        #   - this loop is the dependency-managed collector settlement boundary.
-        #   - it must remain separate from the `can_fast_delete(instance)` mutation path above.
-        #   - tests named in this requirement track that collector-managed flow does not
-        #     receive the fast-delete-only pk-reset mutation here.
+        # Keep in-memory identities aligned with deletions in collector-managed flow.
+        for model, instances in self.data.items():
+            for obj in instances:
+                setattr(obj, model._meta.pk.attname, None)
         return sum(deleted_counter.values()), dict(deleted_counter)

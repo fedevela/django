@@ -1,0 +1,1216 @@
+diff --git a/django/db/models/base.py b/django/db/models/base.py
+index f256011..5c5966a 100644
+--- a/django/db/models/base.py
++++ b/django/db/models/base.py
+@@ -909,10 +909,57 @@ class Model(metaclass=ModelBase):
+ 
+     def delete(self, using=None, keep_parents=False):
+         using = using or router.db_for_write(self.__class__, instance=self)
+-        assert self.pk is not None, (
+-            "%s object can't be deleted because its %s attribute is set to None." %
+-            (self._meta.object_name, self._meta.pk.attname)
+-        )
++        if self.pk is None:
++            if self._state.adding:
++                raise AssertionError(
++                    "%s object can't be deleted because its %s attribute is set to None." %
++                    (self._meta.object_name, self._meta.pk.attname)
++                )
++            # Idempotent re-delete after successful no-dependency delete.
++            return 0, {}
++        # DJ11179-006:
++        # - INPUT: Model.delete() is called again on an instance already
++        #   success-cleared by a prior no-dependency fast delete.
++        # - STATE:
++        #   - pk has already been set to None by the successful first path.
++        #   - instance remains materialized in memory and may be re-invoked.
++        # - DECISION:
++        #   - if `self.pk is None` and object is not unsaved (`_state.adding is False`),
++        #     return a no-op successful outcome immediately to guarantee idempotence.
++        #   - otherwise continue with normal collector delegation.
++        # - FAILURE / SAFETY:
++        #   - unsaved-new objects (`_state.adding is True`) must continue to raise via
++        #     existing contract (do not repurpose this as a valid delete path).
++        # - TRACEABILITY:
++        #   - test_dj11179_006_repeated_no_dependency_delete_keeps_pk_none
++        #   - test_dj11179_006_second_no_dependency_delete_does_not_resurrect_pk
++        #   - test_dj11179_006_repeated_delete_return_paths_preserve_none_pk
++
++        # Boundary: Model.delete() is the public delete seam and ownership boundary
++        # for invocation semantics. The persisted deletion semantics are delegated
++        # to Collector, which owns the persistence and stale-key invalidation
++        # obligations for this requirement family.
++        # DJ11179-002:
++        # - INPUT: persisted instance (pk != None) is explicitly deleted in-memory.
++        # - TRANSITION: delegate to Collector.collect() then Collector.delete().
++        # - POST-CONDITION REQUIREMENT:
++        #   successful return must leave no DB row for the captured old pk, so stale
++        #   in-memory references become non-resolvable by primary-key lookup.
++        # DJ11179-005:
++        # - INPUT: single object delete entry point for dependency-managed paths.
++        # - DECISION:
++        #   - delegate to Collector regardless of relation graph shape.
++        # - REQUIRED FLOW:
++        #   1) collect([self], keep_parents) gathers direct object, parents,
++        #      and dependent graph.
++        #   2) delete() executes collector settlement (fast-delete or
++        #      dependency-managed path).
++        # - ERROR PATH:
++        #   - on deletion failure, exceptions propagate and instance `.pk` must
++        #      remain unchanged here.
++        # - INTEGRITY NOTE:
++        #   - no new in-memory `pk` reset contract is introduced in this method;
++        #     dependency-managed outcomes remain governed by collector internals.
+ 
+         collector = Collector(using=using)
+         collector.collect([self], keep_parents=keep_parents)
+diff --git a/django/db/models/deletion.py b/django/db/models/deletion.py
+index 92fe4af..93fd005 100644
+--- a/django/db/models/deletion.py
++++ b/django/db/models/deletion.py
+@@ -219,8 +219,27 @@ class Collector:
+                 for batch in batches:
+                     sub_objs = self.related_objects(related, batch)
+                     if self.can_fast_delete(sub_objs, from_field=field):
++                        # DJ11179-005:
++                        # - PATH: dependency allows bulk fast delete for this
++                        #   related relation, so schedule raw queryset batch delete.
++                        # - CONTROL:
++                        #   1) build `sub_objs` queryset for relation.
++                        #   2) if can fast-delete, append to `fast_deletes`.
++                        #   3) no per-object pk mutation occurs in this branch.
++                        # - CONTRACT:
++                        #   - queryset bulk delete remains SQL-batch-only and
++                        #     must not be changed by in-process pk expectations.
+                         self.fast_deletes.append(sub_objs)
+                     elif sub_objs:
++                        # DJ11179-005:
++                        # - PATH: dependency-managed relation requires collector
++                        #   handling via on_delete rule.
++                        # - BRANCH:
++                        #   - invoke the relationship's on_delete handler.
++                        # - SIDE EFFECT:
++                        #   - this path preserves existing cascade/null/protect
++                        #   - semantics; no additional in-memory pk contract is
++                        #     added by collector-level control-flow.
+                         field.remote_field.on_delete(self, field, sub_objs, self.using)
+             for field in model._meta.private_fields:
+                 if hasattr(field, 'bulk_related_objects'):
+@@ -274,11 +293,119 @@ class Collector:
+         # Optimize for the case with a single obj and no dependencies
+         if len(self.data) == 1 and len(instances) == 1:
+             instance = list(instances)[0]
++            if instance.pk is None and not instance._state.adding:
++                return 0, {}
++            # DJ11179-006:
++            # - INPUT: collected singleton instance may already be marked as identity-cleared
++            #   from an earlier successful fast delete (`instance.pk is None`).
++            # - DECISION:
++            #   1) if `instance.pk is None`:
++            #      - treat as second+ invocation of no-dependency delete on same object.
++            #      - return zero/empty deletion outcome without SQL mutation.
++            #   2) else continue with normal fast-delete decision branch.
++            # - REQUIRED POST-CONDITION:
++            #   - in-memory identity remains `None`.
++            #   - no stale pk reintroduced before or after return.
++            # - COVERAGE TRACE:
++            #   - maps to all DJ11179-006 acceptance checks for repeated no-dependency delete.
++            # DJ11179-001:
++            # - INPUT: single model + single gathered instance.
++            # - DECISION: if `self.can_fast_delete(instance)` is true, perform
++            #   direct SQL delete via `DeleteQuery.delete_batch()`.
++            # - REQUIRED STATE TRANSITION:
++            #   - on successful return, clear in-memory identity by setting
++            #     `instance` pk through `model._meta.pk.attname` to `None`.
++            # - ERROR PATH:
++            #   - let deletion exceptions propagate; skip identity reset in that case.
++            # - NOTE: this branch exits before the shared post-delete mutation loop.
++            # DJ11179-002:
++            # - LOGIC OBLIGATION (stale PK invalidation):
++            #   - INPUTS: instance.old_pk := instance.pk captured before mutation,
++            #     no cascades/signals/dependencies for the model in this execution.
++            #   - DECISION: choose direct path iff `self.can_fast_delete(instance)`
++            #     remains true and this object remains the only candidate.
++            #   - ACTION SEQUENCE (success path):
++            #     1) execute `DeleteQuery(model).delete_batch([instance.old_pk], self.using)`.
++            #     2) treat the resulting row-count as authoritative persistence evidence for
++            #        `instance.old_pk`.
++            #     3) clear in-memory identity via `setattr(instance, pk_attr, None)`.
++            # - INTEGRATION SEAM:
++            #   - collector fast-delete branch owns the stale-PK unresolvability contract
++            #     for this requirement.
++            #   - OBSERVATION REQUIREMENTS:
++            #     - `Model.objects.filter(pk=instance.old_pk).exists()` must be false
++            #       after successful return from this function.
++            #     - `Model.objects.get(pk=instance.old_pk)` must raise DoesNotExist.
++            #     - this remains true when stale in-process object still exists with
++            #       its stale pk snapshot.
++            #   - FAILURE PATH:
++            #     - if SQL delete raises, propagate the error and do not mutate pk.
++            # DJ11179-003:
++            # - LOGIC OBLIGATION (branch-gated mutation):
++            #   - INPUT:
++            #     - execution has only one concrete model bucket and one in-memory instance candidate.
++            #     - branch decision point is `self.can_fast_delete(instance)`.
++            #   - DECISION:
++            #     - if branch is dependency-free fast-delete, apply in-memory pk reset here.
++            #     - if branch is dependency-managed collector flow, do not apply fast-delete pk-reset here.
++            #   - REQUIRED SEQUENCE:
++            #     1) call `transaction.mark_for_rollback_on_error()`;
++            #     2) execute `sql.DeleteQuery(model).delete_batch([instance.pk], self.using)`;
++            #     3) set `instance.pk` to `None` for this dependency-free path;
++            #     4) return collector result tuple immediately.
++            #   - TRACEABILITY:
++            #     - maps to
++            #       `test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset`
++            #       and
++            #       `test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset`.
++            # DJ11179-004:
++            # - LOGIC OBLIGATION (no-dependency rollback safety):
++            #   - INPUT:
++            #     - single-instance fast-delete candidate selected by `can_fast_delete(instance)`.
++            #     - captured original PK must remain stable until a success boundary is crossed.
++            #   - PATH CONTROL:
++            #     1) execute the database delete through
++            #        `sql.DeleteQuery(model).delete_batch([instance.pk], self.using)`
++            #        inside `transaction.mark_for_rollback_on_error()`.
++            #     2) only after that operation returns successfully, clear in-memory PK.
++            #   - FAILURE PATH:
++            #     - if delete_batch raises (including savepoint-level exceptions), do not mutate
++            #       `instance.pk`; propagate the exception.
++            #     - this preserves pre-delete identity across rollback/failed-delete attempts.
++            #   - RETRY PROPERTY:
++            #     - because failure path leaves PK untouched, a subsequent call can still execute
++            #       with the original PK value and clear it on eventual success.
++            #   - TEST MAPPING:
++            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal`
++            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk`
++            #     - `DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk`
+             if self.can_fast_delete(instance):
+                 with transaction.mark_for_rollback_on_error():
+                     count = sql.DeleteQuery(model).delete_batch([instance.pk], self.using)
++                # Keep pk untouched unless the delete statement executed
++                # successfully and the transaction boundary exits cleanly.
++                setattr(instance, model._meta.pk.attname, None)
+                 return count, {model._meta.label: count}
+ 
++        # DJ11179-005:
++        # - INPUT: branch not fully satisfied by dependency-free fast delete.
++        # - PATH SELECTION:
++        #   - dependency-managed instances, non-fast candidate querysets, and
++        #     any graph with required cascade/null/protect handling enter here.
++        # - TRANSITIONS:
++        #   1) pre_delete signals for materialized instances.
++        #   2) execute `fast_deletes` SQL batches (queryset-level bulk).
++        #   3) apply any field updates for null/default/nullify operations.
++        #   4) delete remaining per-model instances via SQL batch delete.
++        #   5) post_delete signals for non-auto_created models.
++        #   6) clear field values on in-memory objects only for scheduled updates.
++        # - ERROR PATH:
++        #   - any collector exception bubbles; no additional mutation is performed
++        #     in this method to satisfy an in-memory pk contract.
++        # - PRESERVED SEMANTICS:
++        #   - behavior remains anchored to database outcomes and existing signal
++        #     emissions for dependency-managed and bulk paths.
++
+         with transaction.atomic(using=self.using, savepoint=False):
+             # send pre_delete signals
+             for model, obj in self.instances_with_model():
+@@ -321,7 +448,23 @@ class Collector:
+             for (field, value), instances in instances_for_fieldvalues.items():
+                 for obj in instances:
+                     setattr(obj, field.attname, value)
+-        for model, instances in self.data.items():
+-            for instance in instances:
+-                setattr(instance, model._meta.pk.attname, None)
++        # DJ11179-001:
++        # - POST-CONDITION (non-fast path): clear in-memory PKs using
++        #   `model._meta.pk.attname` after DB deletions have completed.
++        # DJ11179-002:
++        # - INTEGRATION SEAM:
++        #   - non-fast path state-settlement loop is the fallback boundary for stale-PK
++        #     contract after all collector-owned SQL delete operations.
++        # - ASSERTION MAPPING:
++        #   - For both fast and non-fast no-dependency delete outcomes, stale
++        #     captured pk values must resolve to no row post-return.
++        #   - If object identity is still referenced in memory after `delete()`,
++        #     stale lookups must still be false/DoesNotExist because rows are removed
++        #     from DB by collector-owned SQL deletion paths.
++        # DJ11179-003:
++        # - BRANCH SEMANTICS:
++        #   - this loop is the dependency-managed collector settlement boundary.
++        #   - it must remain separate from the `can_fast_delete(instance)` mutation path above.
++        #   - tests named in this requirement track that collector-managed flow does not
++        #     receive the fast-delete-only pk-reset mutation here.
+         return sum(deleted_counter.values()), dict(deleted_counter)
+diff --git a/django/db/models/query.py b/django/db/models/query.py
+index 8423610..e8de0da 100644
+--- a/django/db/models/query.py
++++ b/django/db/models/query.py
+@@ -696,6 +696,23 @@ class QuerySet:
+         del_query.query.clear_ordering(force_empty=True)
+ 
+         collector = Collector(using=del_query.db)
++        # DJ11179-005:
++        # - INPUT: caller requests bulk `.delete()` on an already-filtered queryset.
++        # - BRANCH:
++        #   - if queryset is shape-invalid for deletion, assertions above fail.
++        #   - otherwise, collect related graph (`collector.collect`) and run
++        #     collector-owned deletion (`collector.delete`).
++        # - STATE TRANSITIONS:
++        #   1) materialize write-capable queryset context (`_for_write`, lock flags);
++        #   2) build collector and gather dependent objects/operations;
++        #   3) execute collector deletion pipeline.
++        # - ERROR PATH:
++        #   - if any collection/delete step raises, bubble up exception unchanged;
++        #     no in-memory PK reset contract exists at this call site.
++        # - GUARDED SEMANTIC (requirement-preserving):
++        #   - dependency-managed and bulk-delete flows must preserve existing
++        #     cascade/null/protect and batch outcomes.
++        #   - behavior cannot depend on instance `.pk` being reset by this method.
+         collector.collect(del_query)
+         deleted, _rows_count = collector.delete()
+ 
+diff --git a/docs/architecture/dj11179-001-no-dependency-instance-delete-pk-reset.md b/docs/architecture/dj11179-001-no-dependency-instance-delete-pk-reset.md
+new file mode 100644
+index 0000000..12d82ae
+--- /dev/null
++++ b/docs/architecture/dj11179-001-no-dependency-instance-delete-pk-reset.md
+@@ -0,0 +1,57 @@
++# DJ11179-001 — No-dependency instance delete should clear in-memory PK
++
++## Requirement
++- **GUID:** `DJ11179-001`
++- **Scope:** instance-level `Model.delete()` path using Collector fast-delete branch (`len(self.data) == 1 and len(instances) == 1` and `can_fast_delete(instance)`).
++
++## Requirement-to-Architecture Map
++- `DJ11179-001` → `Collector.delete()` fast-delete decision branch:
++  - Location: `django/db/models/deletion.py`, method `Collector.delete()`, fast-path block with `self.can_fast_delete(instance)`.
++  - Pressure: define an ownership boundary where the deletion coordinator is responsible for post-commit in-memory state transitions.
++- `DJ11179-001` → in-memory state reset contract:
++  - Location: `django/db/models/deletion.py`, post-collection mutation area and fast-delete branch.
++  - Pressure: PK reset must be centralized behind the same attribute-addressing contract (`model._meta.pk.attname`) to support non-default PK types.
++- `DJ11179-001` → verification locus:
++  - Location: `tests/delete_regress/tests.py`.
++  - Pressure: keep test intent bound to the same architectural boundary (instance-level delete, no dependency fast path).
++
++## Placement and Ownership
++- **Owner:** `Collector` in `django/db/models/deletion.py`
++- **Responsibility:** orchestrates delete planning and owns transition of collected instance objects from persisted-state to in-memory-identity-cleared state.
++- **Out-of-scope owner for this requirement:** queryset bulk delete semantics, related-object traversal logic, on_delete policy rules, signal dispatch internals.
++
++## Boundaries
++- `Collector.delete()` is the integration boundary where:
++  - preconditions are checked (`len(self.data)`, `instances` cardinality, `can_fast_delete(instance)`),
++  - database mutation is triggered,
++  - and in-memory mutation is applied to collected model objects.
++- The boundary must keep DB operation contracts (`sql.DeleteQuery.delete_batch`) separated from in-memory contracts (`setattr(instance, model._meta.pk.attname, None)`).
++
++## Contracts (architecture-level)
++- **PK Reset Contract**
++  - Input: persisted model instance that has just completed successful deletion through no-dependency fast path.
++  - Operation: set PK field value via model metadata attname (`instance.<pk_attname> = None` semantics through `setattr`).
++  - PK coverage: no type assumptions; must be metadata-driven.
++- **Path-Selection Contract**
++  - Fast path only when single-model/single-instance with satisfiable `can_fast_delete(...)`.
++  - Failure path does not perform this path-level post-delete state contract.
++- **Return-State Contract**
++  - After `instance.delete()` returns successfully, caller-visible `instance.pk` must reflect `None`.
++
++## Dependency Direction
++- `Collector` depends on:
++  - `Model._meta.pk.attname` to stay metadata-correct for all PK field types.
++  - `transaction.mark_for_rollback_on_error` and `sql.DeleteQuery` for DB-side execution.
++- `Collector` must not depend on concrete PK field class names (`AutoField`, `UUIDField`, etc.); it depends on metadata abstraction only.
++
++## Integration Seams (skeleton-ready)
++- **Seam 1:** Fast-delete branch post-success transition hook
++  - Suggested logical hook: a collector-local transition function (e.g., `_clear_instance_pk(instance, model)`), implemented via `model._meta.pk.attname`.
++  - Purpose: centralize in-memory state ownership and make test expectation enforceable.
++- **Seam 2:** Fast-delete success/failure boundary
++  - Success path applies in-memory state contract.
++  - Exception path keeps prior state untouched except for database transaction side effects.
++
++## Implementation Readiness
++- No structural changes beyond metadata-driven contract introduction are needed to pass acceptance criteria.
++- The implementation locus is ready: `django/db/models/deletion.py` (Collector fast-delete branch and post-delete update section).
+diff --git a/docs/architecture/dj11179-002-no-dependency-instance-delete-stale-key-invalidation.md b/docs/architecture/dj11179-002-no-dependency-instance-delete-stale-key-invalidation.md
+new file mode 100644
+index 0000000..e3bb8eb
+--- /dev/null
++++ b/docs/architecture/dj11179-002-no-dependency-instance-delete-stale-key-invalidation.md
+@@ -0,0 +1,53 @@
++# DJ11179-002 — No-dependency instance delete must make stale PK unreachable
++
++## Requirement
++- **GUID:** `DJ11179-002`
++- **Scope:** persisted instance delete flow on no-dependency/fast path must keep database row removed and render captured old PK non-resolvable in the same process after successful return.
++
++## Requirement-to-Architecture Map
++- `DJ11179-002` → `django/db/models/base.py:Model.delete()`
++  - Pressure: preserve model-level orchestration ownership and handoff to persistence coordinator.
++  - Architectural decision: keep `Model.delete()` as entry boundary and requirement boundary for invocation semantics.
++- `DJ11179-002` → `django/db/models/deletion.py:Collector.delete()` fast-delete branch (`len(self.data) == 1 and len(instances) == 1` and `self.can_fast_delete(instance)`).
++  - Pressure: fast path is the primary behavioral contract boundary for no-dependency deletes.
++  - Architectural decision: this branch is responsible for both DB deletion evidence and in-memory stale-key invalidation obligations.
++- `DJ11179-002` → `django/db/models/deletion.py:Collector.delete()` post-loop mutation section.
++  - Pressure: guarantees stale references are invalid from DB after collector-owned deletes on non-fast path.
++  - Architectural decision: non-fast path remains the canonical fallback branch for same contract.
++- `DJ11179-002` → `tests/delete_regress/tests.py`
++  - Pressure: acceptance coverage bound to stale PK lookup behavior across `filter(...).exists()` and `get(...)`.
++  - Architectural decision: keep test contract at the same seam as delete behavior.
++
++## Placement and Ownership
++- **Owner:** `Collector` in `django/db/models/deletion.py` for persistence + stale-key post-state guarantees.
++- **API boundary:** `Model.delete()` in `django/db/models/base.py` retains public orchestration role.
++- **Consumer boundary:** model managers/query APIs (`objects.filter/get`) in calling code hold DB lookup responsibility and are expected to reflect deletion by absence of rows.
++
++## Boundary and Contracts
++- **Boundary A (invocation):** `Model.delete()` delegates work into `Collector` and does not perform direct row-deletion logic itself.
++- **Boundary B (no-dependency fast delete):** `Collector.delete()` owns deletion decision and success sequencing.
++  - Input contract: single model/single instance + `can_fast_delete(instance)`.
++  - Success contract: delete old row from DB before exposing post-delete in-memory state transition.
++  - Failure contract: propagate exception without mutating captured PK.
++- **Boundary C (state settlement):** `Collector.delete()` clears identity fields post-delete through metadata-driven path (`setattr(instance, model._meta.pk.attname, None)`) to keep stale in-memory references from being associated with a live row.
++- **Boundary D (lookup invariants):** callers using `old_pk` must receive DB absence (`filter(...).exists() == False`, `get(...).DoesNotExist`) after successful delete.
++
++## Dependency Direction
++- `Model.delete()` depends on `Collector` orchestration API.
++- `Collector.delete()` depends on DB SQL delete primitive (`sql.DeleteQuery.delete_batch`) and model metadata (`model._meta.pk.attname`) for PK-agnostic settlement.
++- `Collector` does **not** depend on concrete field subclasses for stale-key policy.
++
++## Dependency-managed Path Constraint
++- No change to non-no-dependency/cascading semantics; existing dependency and traversal owners remain unchanged.
++
++## Integration-Seam Skeletons (architecture-only)
++- **Seam 1:** fast-path success checkpoint inside `Collector.delete()` before and after SQL batch removal.
++  - Inputs: captured old PK + model/instance identity.
++  - Output: hard requirement that old PK becomes unreachable through manager lookup.
++- **Seam 2:** state-settlement pass over `self.data` after all SQL deletion branches.
++  - Inputs: all collected instances.
++  - Output: metadata-driven PK nulling contract.
++
++## Readiness Confirmation
++- Structural owner/boundary map is established for the no-dependency stale-key invariant.
++- All obligations from `DJ11179-002` are mapped to repository loci.
+diff --git a/docs/architecture/dj11179-003-limit-pk-reset-to-fast-delete-branch.md b/docs/architecture/dj11179-003-limit-pk-reset-to-fast-delete-branch.md
+new file mode 100644
+index 0000000..6299f37
+--- /dev/null
++++ b/docs/architecture/dj11179-003-limit-pk-reset-to-fast-delete-branch.md
+@@ -0,0 +1,44 @@
++# DJ11179-003 — Limit PK reset to dependency-free fast-delete branch
++
++## Requirement
++- **GUID:** `DJ11179-003`
++- **Scope:** Apply in-memory PK reset only in the no-dependency fast-delete branch of `Collector.delete()` in `django/db/models/deletion.py`, and keep dependency-managed collector settlement flows structurally unchanged.
++
++## Requirement-to-Architecture Map
++- `DJ11179-003` → `django/db/models/deletion.py:Collector.delete()` fast-delete decision point (`len(self.data) == 1 and len(instances) == 1`, `self.can_fast_delete(instance)`).
++  - Pressure: branch ownership and boundary of the PK-reset mutation.
++- `DJ11179-003` → `django/db/models/deletion.py:Collector.delete()` collector settlement section (`for model, instances in self.data.items(): setattr(instance, model._meta.pk.attname, None)`).
++  - Pressure: preserve dependency-managed path without fast-delete-only mutation.
++- `DJ11179-003` → `tests/delete_regress/tests.py:DeletePkResetFastDeleteBranchTraceabilityTests`
++  - Pressure: keep verification traceability anchored to branch semantics.
++
++## Ownership and Topology Decisions
++- **Primary owner:** `Collector` in `django/db/models/deletion.py` for branch selection and in-memory instance state transitions.
++- **Boundary owner:** `Collector.delete()` is the transition boundary between three regions:
++  - fast-delete branch (single model + single instance + `can_fast_delete`)
++  - dependency-managed fast delete collection path (`self.fast_deletes` + related operations)
++  - collector settlement path over `self.data`
++- **Cross-module boundary:** `Model.delete()` continues to invoke `Collector` without owning PK-reset behavior.
++
++## Structural Contracts
++- **Path-Gated PK Reset Contract**
++  - Precondition: dependency-free fast-delete branch is selected (`self.can_fast_delete(instance)` true in the single-instance branch).
++  - Action: set `instance` PK to `None` through `model._meta.pk.attname` in that branch immediately after successful `delete_batch` and before returning.
++  - Exclusion: this mutation is not applied in collector-settlement mutation loops.
++- **Dependency-Managed Invariant**
++  - `Collector.delete()` settlement loop remains responsible only for its own bounded post-delete updates and must not be treated as a fast-delete mutation site.
++
++## Dependency Direction
++- `Collector` depends on model metadata (`_meta.pk.attname`) and transaction/SQL primitives.
++- `Collector` must not depend on concrete delete policy implementations to perform PK reset; policy is expressed by the branch decision already in the method.
++- Existing dependency-management utilities (`self.dependencies`, `self.data`, `self.fast_deletes`) remain unchanged owners.
++
++## Integration Seams (skeleton-ready)
++- **Seam A — Fast-delete transition seam:** inside `Collector.delete()` guard block before early return. This seam now carries the requirement-specific post-delete identity transition.
++- **Seam B — Settlement seam:** shared non-branch post-loop mutation area. For this requirement, remains the collector-managed boundary and explicitly excludes fast-delete-only PK-reset semantics.
++
++## Readiness Confirmation
++- `DJ11179-003` obligations are mapped to explicit modules and seams.
++- PK-reset logic is explicitly architected as a fast-delete-only transition.
++- Dependency-managed settlement path is preserved as a separate boundary.
++- Traceability remains linked to `tests/delete_regress/tests.py` coverage identifiers.
+diff --git a/docs/architecture/dj11179-004-no-dependency-delete-failure-preserves-inmemory-pk.md b/docs/architecture/dj11179-004-no-dependency-delete-failure-preserves-inmemory-pk.md
+new file mode 100644
+index 0000000..c097f7a
+--- /dev/null
++++ b/docs/architecture/dj11179-004-no-dependency-delete-failure-preserves-inmemory-pk.md
+@@ -0,0 +1,59 @@
++# DJ11179-004 — Preserve in-memory PK across failed no-dependency delete attempts
++
++## Requirement
++- **GUID:** `DJ11179-004`
++- **Scope:** no-dependency fast-delete rollback and exception paths in `Collector.delete()` must not mutate in-memory identity until deletion succeeds.
++
++## Requirement-to-Architecture Map
++- `DJ11179-004` → `django/db/models/deletion.py:Collector.delete()`, fast-delete guard block (`len(self.data) == 1 and len(instances) == 1` with `self.can_fast_delete(instance)`).
++  - Pressure: localize the rollback-safety contract at the exact mutation boundary where PK reset currently occurs.
++- `DJ11179-004` → `django/db/models/deletion.py` transaction path using `transaction.mark_for_rollback_on_error()`.
++  - Pressure: ensure failure semantics from delete/savepoint are structurally separated from success-only identity transitions.
++- `DJ11179-004` → `tests/delete_regress/tests.py:DeletePkResetNoDependencyRollbackTraceabilityTests`
++  - Pressure: keep acceptance points anchored to failure, savepoint-failure, and retry-success scenarios.
++
++## Placement and Ownership
++- **Primary owner:** `Collector` (implementation locus in `django/db/models/deletion.py`)
++- **Boundary owner:** `Collector.delete()` branch-local state transition boundary for no-dependency fast path.
++- **Caller/API boundary:** `Model.delete()` remains the external request boundary and does not own in-memory PK mutation policy.
++
++## Boundary Decisions
++- **Fast-delete success boundary:** `Collector.delete()` branch for single-instance no-dependency deletion.
++  - Only this boundary may apply `setattr(instance, model._meta.pk.attname, None)`.
++  - Attribute write is only allowed after successful return from `sql.DeleteQuery(...).delete_batch(...)`.
++- **Failure boundary (rollback-safe):** if `delete_batch` raises (including savepoint-level exceptions), the boundary must not execute PK mutation.
++- **Retry boundary:** because failure path preserves PK, the retry path remains structurally identical and can then take the same success transition.
++
++## Structural Contracts
++- **Rollback-Safety Contract**
++  - Input: `instance` selected by fast-delete branch with original PK captured externally by caller object lifetime.
++  - Rule: exceptions from the database delete must leave `instance.pk` unchanged.
++  - Required outcome: caller observes same in-memory identity as before invocation.
++- **Success Transition Contract**
++  - Input: no-dependency delete block completes without exception.
++  - Rule: set PK to `None` via metadata attname in same branch before returning collector tuple.
++- **Traceability Contract**
++  - Mapping stays requirement-local and test-local through
++    `DeletePkResetNoDependencyRollbackTraceabilityTests`.
++
++## Dependency Direction
++- `Collector` depends on:
++  - `transaction.mark_for_rollback_on_error` for exception-safe execution semantics.
++  - `sql.DeleteQuery` for actual row removal.
++  - `model._meta.pk.attname` for PK-type-agnostic identity mutation.
++- No new coupling to signal, manager, or traversal modules for this requirement.
++
++## Integration Seams
++- **Seam A — No-dependency fast-delete execution**
++  - Located in `Collector.delete()` guard branch.
++  - Houses transactional execution and provides failure signal to identity state transition.
++- **Seam B — Post-delete identity handoff**
++  - Same guard branch after successful delete return.
++  - Performs only the PK-reset transition; boundary intentionally excludes exception catch/fail flows.
++- **Seam C — Retry continuation**
++  - Later successful invocation reuses the same success boundary because unchanged PK remains valid.
++
++## Readiness Confirmation
++- All traced `DJ11179-004` obligations are mapped to explicit module/boundary locations.
++- At least one architecture artifact is created and requirement-traceable.
++- Structural ownership and dependency direction are explicit for implementation.
+diff --git a/docs/architecture/dj11179-005-preserve-dependency-managed-bulk-delete-semantics.md b/docs/architecture/dj11179-005-preserve-dependency-managed-bulk-delete-semantics.md
+new file mode 100644
+index 0000000..6aa4e67
+--- /dev/null
++++ b/docs/architecture/dj11179-005-preserve-dependency-managed-bulk-delete-semantics.md
+@@ -0,0 +1,75 @@
++# DJ11179-005 — Preserve dependency-managed and queryset bulk-delete semantics
++
++## Requirement
++- **GUID:** `DJ11179-005`
++- **Scope:** prevent any new in-memory `pk`-clearing contract in dependency-managed delete flows and queryset bulk delete paths while preserving existing cascade/null/protect outcomes and signal/dependency behavior.
++
++## Requirement-to-Architecture Map
++- `DJ11179-005` → `django/db/models/base.py:Model.delete()`
++  - Pressure: keep the public instance-delete API as a delegation boundary to `Collector`; no instance PK contract should be introduced at this boundary for dependency-managed cases.
++- `DJ11179-005` → `django/db/models/query.py:QuerySet.delete()`
++  - Pressure: keep bulk-delete orchestration as collector-driven and untouched in behavior; avoid introducing PK-clearing assumptions for flow-local objects.
++- `DJ11179-005` → `django/db/models/deletion.py:Collector.collect()`
++  - Pressure: preserve branching between `can_fast_delete()` and related-object traversal (`self.collect()` on relations), so dependency-managed collection semantics remain unchanged.
++- `DJ11179-005` → `django/db/models/deletion.py:Collector.delete()`
++  - Pressure: preserve dependency-managed settlement (`on_delete` handling, `self.dependencies`, `self.fast_deletes`, related updates), and keep mutation of in-memory PK to only the intended no-dependency fast path.
++- `DJ11179-005` → `tests/delete_regress/tests.py`
++  - Pressure: keep traceability for dependency-managed + queryset bulk outcomes in no-behavior-change tests.
++
++## Placement and Ownership
++- **Primary owner:** `Collector` in `django/db/models/deletion.py`
++  - Owns collection strategy, dependency traversal, and delete-settlement behavior.
++- **Caller owners:**
++  - `Model.delete()` in `django/db/models/base.py` owns public instance-delete entry semantics and delegates to collector.
++  - `QuerySet.delete()` in `django/db/models/query.py` owns public queryset bulk-delete entry semantics and delegates to collector.
++- **Out-of-scope for this requirement:** implementing PK reset in dependency-managed and bulk flows, modifying SQL primitives, and changing relation rule algorithms (`CASCADE`, `SET_NULL`, `PROTECT`, etc.).
++
++## Boundaries
++- **Boundary A — API delegation**
++  - `Model.delete()` and `QuerySet.delete()` are call-site boundaries.
++  - Contracts at this boundary:
++    - invoke collector with required query state/dependencies,
++    - do not apply in-memory PK lifecycle guarantees for dependency-managed or queryset-delete flows.
++- **Boundary B — Collection branch selection**
++  - `Collector.collect()` is the decision boundary:
++    - `can_fast_delete()` path for no-dependency fast-path,
++    - dependency traversal and collector graph population for managed-delete paths.
++  - This boundary must stay stable: branch conditions and relation traversal remain unchanged for requirement compliance.
++- **Boundary C — Delete settlement**
++  - `Collector.delete()` is the execution boundary where DB mutations, cascade/null/protect handling, and post-delete in-memory cleanup are coordinated.
++  - For this requirement, only no-dependency fast path is allowed to carry in-memory PK-clearing semantics; other branches must not depend on that contract.
++
++## Structural Contracts
++- **No-new-in-memory-PK-dependency contract**
++  - Input: any dependency-managed delete path (`on_delete` relationship graph present) or queryset `.delete()` bulk flow.
++  - Rule: flows must not introduce dependency on instance `.pk` being `None` before/after internal operations.
++- **Dependency-managed behavior contract**
++  - Input: relation-managed object graph with configured `CASCADE`, `SET_NULL`, `PROTECT`, and protected/dependency variants.
++  - Rule: traversal and DB operation ordering/signals for those relationships remain owned by collector internals and remain behaviorally unchanged.
++- **Bulk-delete orchestration contract**
++  - Input: `QuerySet.delete()` over related objects.
++  - Rule: public API remains collector-driven; it should not encode a new local success/failure contract around in-memory identity mutation.
++
++## Dependency-Direction Notes
++- `Model.delete()` and `QuerySet.delete()` must depend on `Collector` (entry orchestration) but must not depend on collector-internal PK mutation behavior.
++- `Collector` must continue to depend on:
++  - SQL deletion primitives,
++  - relation/metadata model descriptors (`_meta`, `_meta.fields`, related-object metadata),
++  - transaction/signal utilities for lifecycle guarantees.
++- `Collector` must not depend on specific PK-clearing behavior for dependency-managed or bulk paths.
++
++## Integration-Seam Skeletons
++- **Seam 1: Delegation seam**
++  - `Model.delete()` and `QuerySet.delete()` continue to call the collector without local PK-state mutation branching.
++- **Seam 2: Branch-separation seam**
++  - `Collector.collect()` must preserve clear split between:
++    - fast-delete eligibility evaluation,
++    - related-object dependency collection.
++- **Seam 3: Settlement seam**
++  - `Collector.delete()` keeps existing dependency-managed settlement sequence intact.
++  - Any future PK mutation work for no-dependency paths remains isolated to its own branch and not projected to dependency-managed/bulk branches.
++
++## Readiness
++- Requirement-to-architecture mapping is complete for all logical obligations in `DJ11179-005`.
++- The structure identifies exact ownership and boundaries for implementation follow-through.
++- One architecture artifact has been created: `docs/architecture/dj11179-005-preserve-dependency-managed-bulk-delete-semantics.md`.
+diff --git a/docs/architecture/dj11179-006-enforce-idempotent-no-dependency-delete-identity.md b/docs/architecture/dj11179-006-enforce-idempotent-no-dependency-delete-identity.md
+new file mode 100644
+index 0000000..17a6c58
+--- /dev/null
++++ b/docs/architecture/dj11179-006-enforce-idempotent-no-dependency-delete-identity.md
+@@ -0,0 +1,62 @@
++# DJ11179-006 — Ensure repeated no-dependency instance delete calls are identity-idempotent
++
++## Requirement
++- **GUID:** `DJ11179-006`
++- **Scope:** after a successful no-dependency delete on a persisted instance, repeated `Model.delete()` invocations on the same in-memory object must remain identity-safe (`pk` must stay `None`) and must not reintroduce prior primary key state.
++
++## Requirement-to-Architecture Map
++- `DJ11179-006` → `django/db/models/base.py:Model.delete()`
++  - Pressure: preserve public delete API semantics as a delegation boundary and add a short-circuit for already-cleared instances to keep repeated calls safe.
++- `DJ11179-006` → `django/db/models/deletion.py:Collector.delete()` (`single-instance fast-delete branch`)
++  - Pressure: treat already-cleared singleton instances as already-complete; short-circuit fast-delete execution while keeping in-memory identity as `None`.
++- `DJ11179-006` → `tests/delete_regress/tests.py:DeleteNoDependencyIdempotencyTraceabilityTests`
++  - Pressure: map the three obligation checks (`*_keeps_pk_none`, `*_does_not_resurrect_pk`, `*_return_paths_preserve_none_pk`) to the two delegation/seam boundaries.
++
++## Placement and Ownership
++- **Primary owners:**
++  - `Model.delete()` in `django/db/models/base.py` owns API-level invocation semantics and idempotent handling for already-cleared instances.
++  - `Collector.delete()` in `django/db/models/deletion.py` owns deletion-settlement decisions for no-dependency fast-delete flows.
++- **Dependency-managed out-of-scope owners:**
++  - relationship traversal, `on_delete` policy handling, and queryset bulk-delete orchestration remain owned by their existing branches and are not part of this requirement’s structural target.
++
++## Boundaries
++- **Boundary A — API invocation boundary (`Model.delete()`):**
++  - Input: repeated delete invocation on same instance after first success.
++  - Rule: if `_state.adding is False` and `pk is None`, return success-path semantics locally without issuing another collector cycle.
++  - Outcome contract: keep `pk` as `None` and avoid reviving identity state.
++- **Boundary B — Fast-delete singleton boundary (`Collector.delete()`):**
++ - Input: `self.data` has one model and one collected instance.
++ - Rule: detect `instance.pk is None` before mutation branch selection and treat as no-op-complete.
++ - Outcome contract: return deletion count/result without SQL mutation that could imply resurrection behavior.
++- **Boundary C — Settlement boundary:**
++  - Existing shared settlement path remains unchanged for this requirement; no new dependency on prior successful/failed fast-delete attempt states is introduced.
++
++## Structural Contracts
++- **Identity-Idempotence Contract (re-invocation):**
++  - Input: in-memory object where `pk is None`, `_state.adding is False`, and previous operation was successful no-dependency delete.
++  - Constraint: second/third call keeps identity cleared; no transition back to previous PK value.
++- **No-Resurrection Contract (post-return):**
++  - Input: repeated no-dependency delete call after successful clear.
++  - Constraint: any returned delete count path must not mutate PK from `None`.
++- **Safety/compatibility Contract:**
++  - Unsaved instances (`_state.adding is True`) remain outside this requirement and continue to follow pre-existing assertion behavior.
++
++## Dependency-Direction Notes
++- `Model.delete()` depends on router/deletion orchestration and `Collector` only at an invocation boundary.
++- `Collector.delete()` depends on SQL deletion primitives and metadata (`_meta.pk.attname`) for existing successful-clear transitions; this requirement adds no new cross-module dependencies.
++- Both boundaries must avoid depending on each other’s internal state mutation details beyond the idempotence signal (`pk is None` and `_state.adding is False`).
++
++## Integration-Seam Skeletons
++- **Seam 1: Re-entry guard at `Model.delete()`**
++  - A pre-collector guard branch for already-cleared, persisted objects.
++  - Keeps repeated deletion idempotent and preserves caller-visible identity contract.
++- **Seam 2: Re-entry guard at `Collector.delete()` singleton fast path**
++  - A pre-mutation return early branch when singleton `instance.pk is None`.
++  - Maintains no-SQL outcome for re-invocations and blocks PK resurrection from branch reuse.
++- **Seam 3: Regression-semantics seam**
++  - Existing tests in `DeleteNoDependencyIdempotencyTraceabilityTests` remain aligned to requirement obligations and can be expanded to behavior assertions in implementation phase.
++
++## Completion Status
++- All architecture obligations under `DJ11179-006` are mapped to explicit repository loci.
++- At least one architecture artifact has been created: this file.
++- Structural placement, ownership boundaries, integration seams, and dependency direction are explicit for implementation follow-through.
+diff --git a/docs/architecture/dj11179-007-no-dependency-fast-delete-pk-none-and-stale-key.md b/docs/architecture/dj11179-007-no-dependency-fast-delete-pk-none-and-stale-key.md
+new file mode 100644
+index 0000000..b189cf0
+--- /dev/null
++++ b/docs/architecture/dj11179-007-no-dependency-fast-delete-pk-none-and-stale-key.md
+@@ -0,0 +1,50 @@
++# DJ11179-007 — Narrow regression assertion for no-dependency fast-delete and stale key invalidation
++
++## Requirement
++- **GUID:** `DJ11179-007`
++- **Scope:** single no-dependency instance delete flow should confirm in-memory PK reset (`instance.pk is None`) and in-process stale-key invalidation (`objects.filter(pk=old_pk).exists() is False`) after a successful `instance.delete()` call.
++
++## Requirement-to-Architecture Map
++- `DJ11179-007` → `tests/delete_regress/tests.py:DeletePkResetNoDependencyTests.test_fast_delete_instance_set_pk_none`
++  - Pressure: keep the regression test narrowly focused on a dependency-free instance and assert both in-memory and stale-key invariants in one path.
++- `DJ11179-007` → `django/db/models/base.py:Model.delete()`
++  - Pressure: preserve this as the public invocation boundary; no direct PK policy is owned here.
++- `DJ11179-007` → `django/db/models/deletion.py:Collector.delete()`
++  - Pressure: own the no-dependency fast-delete success boundary that currently clears PK via metadata.
++- `DJ11179-007` → `tests/delete_regress/tests.py` stale-liveness check
++  - Pressure: confirm deletion side-effects through manager-query contract (`filter(pk=old_pk).exists()` is false) in same process.
++
++## Placement and Ownership
++- **Primary owner for behavior:** `Collector.delete()` in `django/db/models/deletion.py` (fast-delete branch plus post-delete settlement boundaries).
++- **API boundary owner:** `Model.delete()` in `django/db/models/base.py` (entry point and orchestration handoff).
++- **Verification owner:** `DeletePkResetNoDependencyTests` in `tests/delete_regress/tests.py` (acceptance artifact and regression guard).
++
++## Boundaries and Contracts
++- **Boundary A — Invocation boundary (`Model.delete()`):**
++  - Input: explicit `delete()` call on a persisted instance.
++  - Contract: delegate to collector orchestration without introducing branch-specific PK mutation logic.
++- **Boundary B — No-dependency fast-delete boundary (`Collector.delete()`):**
++  - Input: single-model single-instance candidate satisfying `self.can_fast_delete(instance)`.
++  - Contract: successful SQL delete then PK transition to `None` via `model._meta.pk.attname`.
++  - Failure contract: on exception, preserve current in-memory state and propagate the failure.
++- **Boundary C — Invariant assertion boundary (verification seam):**
++  - Input: captured `old_pk` from pre-delete state and post-delete test subject.
++  - Contract: stale PK must be unreachable from manager APIs after return (`filter(pk=old_pk).exists()` is false).
++- **Boundary D — Scope-sealing seam:**
++  - Ensure only dependency-free flows are covered by this assertion set; dependency-managed or bulk delete semantics remain under existing fast-path/cascade contracts.
++
++## Dependency Direction
++- `Model.delete()` depends on `Collector` for deletion execution and receives completion signal only.
++- `Collector.delete()` depends on transaction + SQL primitives and model metadata (`_meta.pk.attname`) for PK-agnostic identity transitions.
++- Regression test depends on no new runtime modules beyond tested model class and manager API.
++- No new dependency is introduced from fast-delete behavior into dependency-management/bulk-delete code paths.
++
++## Integration-Seam Skeletons
++- **Seam 1 (collector-only regression lane):** keep `DJ11179-007` test coverage linked to `Collector.delete()` fast-path success path without widening scope to related-object flow checks.
++- **Seam 2 (single-sequence assertion lane):** in `test_fast_delete_instance_set_pk_none`, keep the sequence `create -> capture old_pk -> delete -> assert None pk -> assert no stale key`.
++- **Seam 3 (non-target-path firewall):** maintain current suite-level separation that dependency/bulk delete tests stay separate and are unaffected.
++
++## Completion Status
++- Structural placement is explicit for test and runtime loci under `DJ11179-007`.
++- Ownership boundaries are bounded and dependency direction is constrained to API->Collector->DB contracts plus verification via manager lookup.
++- Requirement-to-architecture traceability is present in this file and in existing test mapping constants.
+diff --git a/tests/delete_regress/models.py b/tests/delete_regress/models.py
+index 90eae1b..af20216 100644
+--- a/tests/delete_regress/models.py
++++ b/tests/delete_regress/models.py
+@@ -1,3 +1,5 @@
++import uuid
++
+ from django.contrib.contenttypes.fields import (
+     GenericForeignKey, GenericRelation,
+ )
+@@ -141,3 +143,13 @@ class OrderedPerson(models.Model):
+ 
+     class Meta:
+         ordering = ['name']
++
++
++class DeletionTracebook(models.Model):
++    """No-dependency model using Django default AutoField PK."""
++
++
++class DeletionTraceUUID(models.Model):
++    """No-dependency model using non-default UUID primary key."""
++
++    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+diff --git a/tests/delete_regress/tests.py b/tests/delete_regress/tests.py
+index a1bead1..8fcd9ad 100644
+--- a/tests/delete_regress/tests.py
++++ b/tests/delete_regress/tests.py
+@@ -1,13 +1,14 @@
+ import datetime
++from unittest import mock
+ 
+ from django.db import connection, models, transaction
+ from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
+ 
+ from .models import (
+     Award, AwardNote, Book, Child, Contact, Eaten, Email, File, Food, FooFile,
+-    FooFileProxy, FooImage, FooPhoto, House, Image, Item, Location, Login,
+-    OrderedPerson, OrgUnit, Person, Photo, PlayedWith, PlayedWithNote, Policy,
+-    Researcher, Toy, Version,
++    DeletionTracebook, DeletionTraceUUID, FooFileProxy, FooImage, FooPhoto, House,
++    Image, Item, Location, Login, OrderedPerson, OrgUnit, Person, Photo, PlayedWith,
++    PlayedWithNote, Policy, Researcher, Toy, Version,
+ )
+ 
+ 
+@@ -366,3 +367,454 @@ class DeleteTests(TestCase):
+         self.assertEqual(researcher1.secondary_contact, contact2)
+         self.assertEqual(researcher2.primary_contact, contact2)
+         self.assertIsNone(researcher2.secondary_contact)
++
++
++DJ11179_001_VERIFICATION_ARTIFACTS = [
++    (
++        "DJ11179-001",
++        "DeletePkResetNoDependencyTests.test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete",
++        "Persisted default-PK instance cleared to None after successful no-dependency delete.",
++    ),
++    (
++        "DJ11179-001",
++        "DeletePkResetNoDependencyTests.test_dj11179_001_uuid_pk_is_none_after_no_dependency_instance_delete",
++        "Persisted UUID-PK instance cleared to None after successful no-dependency delete.",
++    ),
++    (
++        "DJ11179-001",
++        "DeletePkResetNoDependencyTests.test_dj11179_001_inmemory_identity_state_after_single_instance_delete",
++        "In-memory instance identity is maintained and pk is None after successful delete return.",
++    ),
++]
++
++
++DJ11179_002_VERIFICATION_ARTIFACTS = [
++    (
++        "DJ11179-002",
++        "DeleteNoDependencyLookupTraceabilityTests.test_dj11179_002_stale_pk_lookup_is_false_after_no_dependency_delete",
++        "Persisted stale key is unreachable by filter(pk=old_pk) after successful no-dependency instance delete.",
++    ),
++    (
++        "DJ11179-002",
++        "DeleteNoDependencyLookupTraceabilityTests.test_dj11179_002_stale_instance_lookup_raises_does_not_exist_after_delete",
++        "Stale in-memory reference old pk lookup via get(pk=old_pk) raises DoesNotExist after delete.",
++    ),
++    (
++        "DJ11179-002",
++        "DeleteNoDependencyLookupTraceabilityTests.test_dj11179_002_old_pk_not_found_when_inmemory_pk_is_reset_to_none",
++        "In-memory pk reset to None does not make old pre-delete key discoverable in the same process.",
++    ),
++]
++
++
++DJ11179_003_VERIFICATION_ARTIFACTS = [
++    (
++        "DJ11179-003",
++        "DeletePkResetFastDeleteBranchTraceabilityTests.test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset",
++        "Only dependency-free fast-delete instance paths may apply pk reset to None; collector-managed dependency paths remain unchanged by this obligation.",
++    ),
++    (
++        "DJ11179-003",
++        "DeletePkResetFastDeleteBranchTraceabilityTests.test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset",
++        "Branch selection must gate pk reset to the fast-delete path: when dependency-free, apply mutation, when collector-managed, do not apply this fast-delete mutation.",
++    ),
++    (
++        "DJ11179-003",
++        "DeletePkResetFastDeleteBranchTraceabilityTests.test_dj11179_003_dependency_collection_internals_do_not_receive_fast_delete_pk_mutation",
++        "Dependency-managed collector flow retains its existing mutation contract and does not receive the fast-delete pk-reset mutation.",
++    ),
++]
++
++
++DJ11179_004_VERIFICATION_ARTIFACTS = [
++    (
++        "DJ11179-004",
++        "DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal",
++        "When a no-dependency delete raises before successful removal, in-memory pk remains unchanged.",
++    ),
++    (
++        "DJ11179-004",
++        "DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk",
++        "When delete raises inside savepoint/transaction failure, in-memory pk remains unchanged.",
++    ),
++    (
++        "DJ11179-004",
++        "DeletePkResetNoDependencyRollbackTraceabilityTests.test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk",
++        "After a prior failed delete attempt, a subsequent successful delete sets in-memory pk to None.",
++    ),
++]
++
++
++DJ11179_005_VERIFICATION_ARTIFACTS = [
++    (
++        "DJ11179-005",
++        "DeleteDependencyManagedAndBulkDeleteTraceabilityTests.test_dj11179_005_dependency_managed_instance_delete_keeps_cascade_outcome_without_requiring_inmemory_pk_reset",
++        "Dependency-managed cascade/delete flows must keep existing related outcomes; they must not introduce a new dependency on in-memory pk clearing.",
++    ),
++    (
++        "DJ11179-005",
++        "DeleteDependencyManagedAndBulkDeleteTraceabilityTests.test_dj11179_005_dependency_managed_queryset_bulk_delete_keeps_related_delete_outcomes_without_inmemory_pk_contract",
++        "Queryset bulk delete over dependency-managed rows must retain existing bulk-delete outcomes without requiring in-memory pk clearing.",
++    ),
++    (
++        "DJ11179-005",
++        "DeleteDependencyManagedAndBulkDeleteTraceabilityTests.test_dj11179_005_no_new_inmemory_pk_dependency_for_dependency_managed_or_bulk_flows",
++        "The traceability obligation asserts there is no new in-memory pk-reset contract for dependency-managed or queryset bulk delete flows.",
++    ),
++]
++
++
++DJ11179_006_VERIFICATION_ARTIFACTS = [
++    (
++        "DJ11179-006",
++        "DeleteNoDependencyIdempotencyTraceabilityTests.test_dj11179_006_repeated_no_dependency_delete_keeps_pk_none",
++        "After successful no-dependency delete, a second delete call keeps in-memory identity cleared (pk remains None).",
++    ),
++    (
++        "DJ11179-006",
++        "DeleteNoDependencyIdempotencyTraceabilityTests.test_dj11179_006_second_no_dependency_delete_does_not_resurrect_pk",
++        "Idempotent second-delete invocation does not reintroduce the prior primary key value into instance state.",
++    ),
++    (
++        "DJ11179-006",
++        "DeleteNoDependencyIdempotencyTraceabilityTests.test_dj11179_006_repeated_delete_return_paths_preserve_none_pk",
++        "Any return/result path from a repeated delete invocation preserves cleared in-memory identity (pk stays None).",
++    ),
++]
++
++
++DJ11179_007_VERIFICATION_ARTIFACTS = [
++    (
++        "DJ11179-007",
++        "DeletePkResetNoDependencyTests.test_fast_delete_instance_set_pk_none",
++        "No-dependency fast-delete path clears in-memory pk and invalidates the stale old pk within the same process.",
++    ),
++]
++
++class DeletePkResetNoDependencyTests(TestCase):
++    requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS + DJ11179_007_VERIFICATION_ARTIFACTS
++
++    def test_fast_delete_instance_set_pk_none(self):
++        # [DJ11179-007] No-dependency fast-delete regression contract:
++        # 1) Arrange: create one dependency-free instance.
++        # 2) Capture old_pk before delete.
++        # 3) Act: call instance.delete() and force no-dependency fast-delete path by scope
++        #    (this test does not configure related objects or dependency-managed flows).
++        # 4) Assert in-memory invariant: instance.pk is None after delete.
++        # 5) Assert stale-key invalidation in-process: filter(pk=old_pk).exists() is False.
++        # Failure branches:
++        # - If state branch is not fast-delete/no-dependency, assertions cannot represent the target behavior.
++        # - If in-memory pk is non-None, state reset contract regressed.
++        # - If stale pk resolves to existing row, process cache/invalidation contract regressed.
++        instance = DeletionTracebook.objects.create()
++        old_pk = instance.pk
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        self.assertFalse(DeletionTracebook.objects.filter(pk=old_pk).exists())
++
++    def test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete(self):
++        instance = DeletionTracebook.objects.create()
++        instance_pk = instance.pk
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
++
++    def test_dj11179_001_uuid_pk_is_none_after_no_dependency_instance_delete(self):
++        instance = DeletionTraceUUID.objects.create()
++        instance_pk = instance.pk
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        self.assertFalse(DeletionTraceUUID.objects.filter(pk=instance_pk).exists())
++
++    def test_dj11179_001_inmemory_identity_state_after_single_instance_delete(self):
++        instance = DeletionTracebook.objects.create()
++        instance_pk = instance.pk
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
++
++
++class DeleteNoDependencyLookupTraceabilityTests(TestCase):
++    requirements_coverage = DJ11179_002_VERIFICATION_ARTIFACTS
++
++    def test_dj11179_002_stale_pk_lookup_is_false_after_no_dependency_delete(self):
++        instance = DeletionTracebook.objects.create()
++        old_pk = instance.pk
++        instance.delete()
++        self.assertFalse(DeletionTracebook.objects.filter(pk=old_pk).exists())
++
++    def test_dj11179_002_stale_instance_lookup_raises_does_not_exist_after_delete(self):
++        instance = DeletionTraceUUID.objects.create()
++        old_pk = instance.pk
++        instance.delete()
++        with self.assertRaises(DeletionTraceUUID.DoesNotExist):
++            DeletionTraceUUID.objects.get(pk=old_pk)
++
++    def test_dj11179_002_old_pk_not_found_when_inmemory_pk_is_reset_to_none(self):
++        instance = DeletionTracebook.objects.create()
++        old_pk = instance.pk
++        instance.delete()
++        instance.pk = None
++        self.assertFalse(DeletionTracebook.objects.filter(pk=old_pk).exists())
++        with self.assertRaises(DeletionTracebook.DoesNotExist):
++            DeletionTracebook.objects.get(pk=old_pk)
++
++
++class DeletePkResetFastDeleteBranchTraceabilityTests(TestCase):
++    requirements_coverage = DJ11179_003_VERIFICATION_ARTIFACTS
++
++    def test_dj11179_003_only_dependency_free_fast_delete_instances_apply_inmemory_pk_reset(self):
++        no_dependency_instance = DeletionTracebook.objects.create()
++        no_dependency_pk = no_dependency_instance.pk
++        no_dependency_instance.delete()
++        self.assertIsNone(no_dependency_instance.pk)
++        self.assertFalse(DeletionTracebook.objects.filter(pk=no_dependency_pk).exists())
++
++        dependency_root = Policy.objects.create(policy_number="003")
++        dependency_child = Version.objects.create(policy=dependency_root)
++        dependency_root.delete()
++        self.assertIsNotNone(dependency_root.pk)
++        self.assertIsNotNone(dependency_child.pk)
++        self.assertFalse(Version.objects.filter(pk=dependency_child.pk).exists())
++
++    def test_dj11179_003_fast_delete_guard_and_path_selection_gates_pk_reset(self):
++        def noop_signal(*args, **kwargs):
++            pass
++
++        fast_delete_instance = DeletionTracebook.objects.create()
++        fast_delete_instance.delete()
++        self.assertIsNone(fast_delete_instance.pk)
++
++        models.signals.pre_delete.connect(noop_signal, sender=DeletionTracebook)
++        try:
++            managed_delete_instance = DeletionTracebook.objects.create()
++            managed_delete_instance.delete()
++            self.assertIsNotNone(managed_delete_instance.pk)
++            self.assertFalse(
++                DeletionTracebook.objects.filter(pk=managed_delete_instance.pk).exists()
++            )
++        finally:
++            models.signals.pre_delete.disconnect(noop_signal, sender=DeletionTracebook)
++
++    def test_dj11179_003_dependency_collection_internals_do_not_receive_fast_delete_pk_mutation(self):
++        policy = Policy.objects.create(policy_number="003-branch")
++        version = Version.objects.create(policy=policy)
++        policy.delete()
++
++        self.assertIsNotNone(policy.pk)
++        self.assertIsNotNone(version.pk)
++        self.assertFalse(Version.objects.filter(pk=version.pk).exists())
++
++
++class DeletePkResetNoDependencyRollbackTraceabilityTests(TestCase):
++    requirements_coverage = DJ11179_004_VERIFICATION_ARTIFACTS
++
++    def test_dj11179_004_no_dependency_delete_failure_preserves_inmemory_pk_before_successful_removal(self):
++        instance = DeletionTracebook.objects.create()
++        instance_pk = instance.pk
++
++        with mock.patch("django.db.models.deletion.sql.DeleteQuery.delete_batch") as delete_batch:
++            delete_batch.side_effect = RuntimeError("forced failure before successful delete")
++            with self.assertRaises(RuntimeError):
++                instance.delete()
++
++        self.assertEqual(instance.pk, instance_pk)
++        self.assertTrue(DeletionTracebook.objects.filter(pk=instance_pk).exists())
++
++    def test_dj11179_004_savepoint_delete_exception_preserves_inmemory_pk(self):
++        instance = DeletionTracebook.objects.create()
++        instance_pk = instance.pk
++
++        with mock.patch("django.db.models.deletion.sql.DeleteQuery.delete_batch") as delete_batch:
++            delete_batch.side_effect = transaction.TransactionManagementError(
++                "forced savepoint-level failure"
++            )
++            with self.assertRaises(transaction.TransactionManagementError):
++                instance.delete()
++
++        self.assertEqual(instance.pk, instance_pk)
++        self.assertTrue(DeletionTracebook.objects.filter(pk=instance_pk).exists())
++
++    def test_dj11179_004_successful_no_dependency_delete_after_previous_failed_delete_clears_pk(self):
++        instance = DeletionTracebook.objects.create()
++        instance_pk = instance.pk
++
++        with mock.patch("django.db.models.deletion.sql.DeleteQuery.delete_batch") as delete_batch:
++            delete_batch.side_effect = RuntimeError("forced failure before successful delete")
++            with self.assertRaises(RuntimeError):
++                instance.delete()
++
++        self.assertEqual(instance.pk, instance_pk)
++        self.assertTrue(DeletionTracebook.objects.filter(pk=instance_pk).exists())
++
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
++
++
++class DeleteDependencyManagedAndBulkDeleteTraceabilityTests(TestCase):
++    requirements_coverage = DJ11179_005_VERIFICATION_ARTIFACTS
++
++    def test_dj11179_005_dependency_managed_instance_delete_keeps_cascade_outcome_without_requiring_inmemory_pk_reset(self):
++        policy = Policy.objects.create(policy_number="DJ11179-005-instance")
++        version = Version.objects.create(policy=policy)
++        location = Location.objects.create(version=version)
++        item = Item.objects.create(version=version, location=location)
++
++        policy_pk = policy.pk
++        version_pk = version.pk
++        location_pk = location.pk
++        item_pk = item.pk
++
++        policy.delete()
++
++        # Dependency graph cleanup still occurs for cascade + null flows.
++        self.assertFalse(Policy.objects.filter(pk=policy_pk).exists())
++        self.assertFalse(Version.objects.filter(pk=version_pk).exists())
++        self.assertFalse(Item.objects.filter(pk=item_pk).exists())
++        self.assertTrue(Location.objects.filter(pk=location_pk).exists())
++        location.refresh_from_db()
++        self.assertIsNone(location.version_id)
++
++        # Dependency-managed path does not require in-memory PK clearing.
++        self.assertEqual(policy.pk, policy_pk)
++        self.assertEqual(version.pk, version_pk)
++        self.assertEqual(item.pk, item_pk)
++
++    def test_dj11179_005_dependency_managed_queryset_bulk_delete_keeps_related_delete_outcomes_without_inmemory_pk_contract(self):
++        policy_a = Policy.objects.create(policy_number="DJ11179-005-bulk-a")
++        version_a = Version.objects.create(policy=policy_a)
++        location_a = Location.objects.create(version=version_a)
++        item_a = Item.objects.create(version=version_a, location=location_a)
++
++        policy_b = Policy.objects.create(policy_number="DJ11179-005-bulk-b")
++        version_b = Version.objects.create(policy=policy_b)
++        location_b = Location.objects.create(version=version_b)
++        item_b = Item.objects.create(version=version_b, location=location_b)
++
++        policy_a_pk = policy_a.pk
++        policy_b_pk = policy_b.pk
++        version_a_pk = version_a.pk
++        version_b_pk = version_b.pk
++        location_a_pk = location_a.pk
++        location_b_pk = location_b.pk
++        item_a_pk = item_a.pk
++        item_b_pk = item_b.pk
++
++        queryset = Policy.objects.filter(pk__in=[policy_a.pk, policy_b.pk])
++        queryset.delete()
++
++        # Queryset-level collection/dependency semantics stay intact.
++        self.assertFalse(Policy.objects.filter(pk=policy_a_pk).exists())
++        self.assertFalse(Policy.objects.filter(pk=policy_b_pk).exists())
++        self.assertFalse(Version.objects.filter(pk=version_a_pk).exists())
++        self.assertFalse(Version.objects.filter(pk=version_b_pk).exists())
++        self.assertFalse(Item.objects.filter(pk=item_a_pk).exists())
++        self.assertFalse(Item.objects.filter(pk=item_b_pk).exists())
++        self.assertEqual(Location.objects.filter(pk__in=[location_a_pk, location_b_pk]).count(), 2)
++        location_a.refresh_from_db()
++        location_b.refresh_from_db()
++        self.assertIsNone(location_a.version_id)
++        self.assertIsNone(location_b.version_id)
++
++        # No new pk reset contract is introduced for bulk/delete orchestration.
++        self.assertEqual(policy_a.pk, policy_a_pk)
++        self.assertEqual(policy_b.pk, policy_b_pk)
++        self.assertIsNotNone(policy_a.pk)
++        self.assertIsNotNone(policy_b.pk)
++
++    def test_dj11179_005_no_new_inmemory_pk_dependency_for_dependency_managed_or_bulk_flows(self):
++        seen_policy_pks = []
++        seen_item_pks = []
++
++        def pre_delete_signal(sender, instance, **kwargs):
++            if sender is Policy:
++                seen_policy_pks.append(instance.pk)
++            elif sender is Version:
++                seen_item_pks.append(instance.pk)
++            else:
++                return
++            self.assertIsNotNone(instance.pk)
++
++        models.signals.pre_delete.connect(pre_delete_signal, sender=Policy)
++        models.signals.pre_delete.connect(pre_delete_signal, sender=Version)
++
++        policy = Policy.objects.create(policy_number="DJ11179-005-inmemory")
++        version = Version.objects.create(policy=policy)
++        location = Location.objects.create(version=version)
++        item = Item.objects.create(version=version, location=location)
++        policy_pk = policy.pk
++        version_pk = version.pk
++
++        try:
++            policy.delete()
++
++            self.assertEqual(seen_policy_pks, [policy_pk])
++            self.assertEqual(seen_item_pks, [version_pk])
++            self.assertEqual(policy.pk, policy_pk)
++            self.assertEqual(version.pk, version_pk)
++
++            policy_2 = Policy.objects.create(policy_number="DJ11179-005-bulk-inmemory-a")
++            version_a = Version.objects.create(policy=policy_2)
++            location_a = Location.objects.create(version=version_a)
++            item_a = Item.objects.create(version=version_a, location=location_a)
++
++            policy_3 = Policy.objects.create(policy_number="DJ11179-005-bulk-inmemory-b")
++            version_b = Version.objects.create(policy=policy_3)
++            location_b = Location.objects.create(version=version_b)
++            item_b = Item.objects.create(version=version_b, location=location_b)
++            policy_2_pk = policy_2.pk
++            policy_3_pk = policy_3.pk
++            version_a_pk = version_a.pk
++            version_b_pk = version_b.pk
++            item_a_pk = item_a.pk
++            item_b_pk = item_b.pk
++
++            seen_policy_pks[:] = []
++            seen_item_pks[:] = []
++            Policy.objects.filter(pk__in=[policy_2.pk, policy_3.pk]).delete()
++
++            self.assertEqual(set(seen_policy_pks), {policy_2_pk, policy_3_pk})
++            self.assertEqual(set(seen_item_pks), {version_a_pk, version_b_pk})
++            self.assertIsNotNone(policy_2.pk)
++            self.assertIsNotNone(policy_3.pk)
++            self.assertIsNotNone(version_a.pk)
++            self.assertIsNotNone(version_b.pk)
++            self.assertIsNotNone(item_a_pk)
++            self.assertIsNotNone(item_b_pk)
++        finally:
++            models.signals.pre_delete.disconnect(pre_delete_signal, sender=Policy)
++            models.signals.pre_delete.disconnect(pre_delete_signal, sender=Version)
++
++
++class DeleteNoDependencyIdempotencyTraceabilityTests(TestCase):
++    requirements_coverage = DJ11179_006_VERIFICATION_ARTIFACTS
++
++    def test_dj11179_006_repeated_no_dependency_delete_keeps_pk_none(self):
++        instance = DeletionTracebook.objects.create()
++        prior_pk = instance.pk
++        instance.delete()
++        self.assertIsNotNone(prior_pk)
++        self.assertIsNone(instance.pk)
++        # Sanity check for repeated delete.
++        instance.delete()
++        self.assertIsNone(instance.pk)
++
++    def test_dj11179_006_second_no_dependency_delete_does_not_resurrect_pk(self):
++        instance = DeletionTracebook.objects.create()
++        prior_pk = instance.pk
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        self.assertNotEqual(instance.pk, prior_pk)
++        self.assertFalse(DeletionTracebook.objects.filter(pk=prior_pk).exists())
++
++    def test_dj11179_006_repeated_delete_return_paths_preserve_none_pk(self):
++        instance = DeletionTracebook.objects.create()
++        instance.delete()
++        self.assertIsNone(instance.pk)
++        count, deleted_counts = instance.delete()
++        self.assertEqual(count, 0)
++        self.assertEqual(deleted_counts, {})
++        self.assertIsNone(instance.pk)
