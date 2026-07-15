@@ -92,6 +92,12 @@ class Media:
           resolution (MEDIA-005, MEDIA-006).
         * Ordering and warnings emitted below this seam must be deterministic
           for a fixed sequence of source declarations (MEDIA-007).
+        * The cyclic-precedence boundary owns genuine opposite-order conflict
+          detection and ``MediaOrderConflictWarning`` emission (MEDIA-008).
+        * Conflict evidence must be selected from the original ``source_lists``
+          as an explicitly reversed file pair; intermediate graph placement is
+          not an admissible source for the files named by the warning
+          (MEDIA-009).
 
         Rendering consumes the result through ``Media._js``. CSS aggregation
         and the public shape of media declarations remain outside this seam.
