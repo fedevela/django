@@ -482,8 +482,24 @@ DJ11179_006_VERIFICATION_ARTIFACTS = [
     ),
 ]
 
+
+DJ11179_007_VERIFICATION_ARTIFACTS = [
+    (
+        "DJ11179-007",
+        "DeletePkResetNoDependencyTests.test_fast_delete_instance_set_pk_none",
+        "No-dependency fast-delete path clears in-memory pk and invalidates the stale old pk within the same process.",
+    ),
+]
+
 class DeletePkResetNoDependencyTests(TestCase):
-    requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS
+    requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS + DJ11179_007_VERIFICATION_ARTIFACTS
+
+    def test_fast_delete_instance_set_pk_none(self):
+        instance = DeletionTracebook.objects.create()
+        old_pk = instance.pk
+        instance.delete()
+        self.assertIsNone(instance.pk)
+        self.assertFalse(DeletionTracebook.objects.filter(pk=old_pk).exists())
 
     def test_dj11179_001_default_pk_is_none_after_no_dependency_instance_delete(self):
         instance = DeletionTracebook.objects.create()
