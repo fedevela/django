@@ -503,7 +503,7 @@ class SQLCompiler:
                 if (
                     combinator == 'union'
                     and self.query.distinct_fields
-                    and self.query.annotation_select
+                    and (self.query.annotation_select or self.query.annotations)
                 ):
                     raise NotSupportedError('annotate() + union() + distinct(fields) is not supported.')
                 if not getattr(features, 'supports_select_{}'.format(combinator)):
