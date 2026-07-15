@@ -1,0 +1,131 @@
+REQ-138-005 — align template and form display helper resolution with instance semantics
+=================================================================================
+
+Requirement
+-----------
+- REQ-138-005: Display helper resolution used by template rendering and form-related
+  call paths must match direct instance method semantics. For a given model state:
+  - user-defined `get_<field>_display()` must win first,
+  - generated fallback mapping must be used only when no override exists,
+  - template, form, and direct instance access must resolve to the same value.
+
+Constraint scope
+----------------
+- Preserve existing form and template behavior besides display-helper parity.
+- No API changes to fields, models, form classes, or template syntax.
+- Keep class-construction and fallback mechanics as the single binding points for
+  helper availability.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-005 -> `django/db/models/fields/__init__.py` (`Field.contribute_to_class`)
+  - Pressure O1 (override-first policy): decision to install generated accessor must
+    stop when an explicit or inherited `get_<field>_display` method is already
+    reachable.
+  - Pressure O2 (fallback enable): when no user method exists anywhere in class
+    MRO, generated helper must remain bound to `partialmethod(cls._get_FIELD_display, field=self)`.
+  - Pressure O3 (traceability): method-name ownership for generated helper remains
+    anchored to `display_name = f"get_{self.name}_display"`.
+
+- REQ-138-005 -> `django/db/models/base.py` (`Model._get_FIELD_display`)
+  - Pressure O2 (generated fallback contract): this boundary remains the sole
+    deterministic mapping path when helper resolution does not resolve to a user method.
+  - Pressure O3 (cross-path sameness): mapping semantics must remain
+    `dict(field.flatchoices).get(value, value)` and therefore deterministic for any
+    given instance state.
+
+- REQ-138-005 -> `django/template/base.py` (`Variable.resolve`/callable path)
+  - Pressure O1 (override-first behavior in template): template method-call
+    semantics must execute bound method with zero args and therefore return the same
+    override result as direct instance invocation.
+  - Pressure O3 (cross-path sameness): call-failure and argument-guard rules must
+    continue to be uniform while preserving returned value identity where the method
+    can execute.
+
+- REQ-138-005 -> `django/forms/models.py` (`model_to_dict` + `BaseModelForm.__init__`)
+  - Pressure O1/O2 (instance-state parity): object initialization for form flows must
+    consume values from the same model instance state used by direct helper calls.
+  - Pressure O3 (cross-path seam): explicit form state seeding becomes the adapter
+    boundary before any widget/display rendering path.
+
+- REQ-138-005 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - Pressure O1/O2/O3 remain mapped to existing three placeholder verification tests
+    under `TestReq138005TemplateAndFormDisplayResolutionParity`.
+
+Ownership and boundaries
+------------------------
+- Construction boundary (`Field.contribute_to_class`)
+  - Owns: whether to inject generated display helper into model class.
+  - Input: field metadata (`choices`, `name`) and target model class (`cls`).
+  - Output: explicit user method remains if found in local namespace or MRO; otherwise
+    generated helper binding is created.
+- Fallback boundary (`Model._get_FIELD_display`)
+  - Owns: mapping fallback for all non-overridden access paths.
+  - Input: model instance value from `field.attname` and flattened choices.
+  - Output: mapped string label or raw value fallback.
+- Template-call boundary (`Variable.resolve`)
+  - Owns: deciding whether an attribute access resolves as value or zero-argument
+    method invocation in templates.
+- Form-seed boundary (`model_to_dict` and `BaseModelForm.__init__`)
+  - Owns: creating the form’s initial state from the instance payload.
+  - Upstream: model instance data source.
+  - Downstream: form field/input values used by rendering and validation.
+
+Interface/type contracts
+-----------------------
+- Contract C1 (`Field.contribute_to_class`)
+  - `display_name = f"get_{self.name}_display"`.
+  - If `display_name` in `cls.__dict__`, leave class attribute unchanged.
+  - Else if `hasattr(cls, display_name)` (MRO hit), leave class attribute unchanged.
+  - Else bind `partialmethod(cls._get_FIELD_display, field=self)`.
+
+- Contract C2 (`Model._get_FIELD_display`)
+  - `value = getattr(self, field.attname)`
+  - Return `force_str(dict(field.flatchoices).get(value, value), strings_only=True)`.
+
+- Contract C3 (`Variable.resolve` method execution)
+  - If resolved attribute is callable, invoke only when safe by template rules
+    (`do_not_call_in_templates`, `alters_data`, and zero-argument check).
+  - Return callable result directly so display override returns flow through identical
+    method body as direct instance call.
+
+- Contract C4 (`model_to_dict` + `BaseModelForm.__init__`)
+  - For form-bound instance, initial data must derive from
+    `f.value_from_object(instance)` for each editable field.
+  - The resulting `object_data` becomes the canonical seed for form-path display/state
+    usage.
+
+Dependency-direction notes
+------------------------
+1. Field declaration (`choices` + `name`) -> `Field.contribute_to_class`.
+2. Contribution boundary -> model class method namespace (`get_<field>_display` binding).
+3. Runtime method access -> Python MRO dispatch on instance.
+4. No user override found -> `Model._get_FIELD_display` fallback.
+5. Template path -> `Variable.resolve` -> instance-bound callable/value.
+6. Form path -> `BaseModelForm.__init__` -> `model_to_dict` -> field value extraction from
+   same instance as direct path.
+
+Integration seam skeletons
+--------------------------
+- Seam S1 (`helper-installation gate`)
+  - Upstream: model class constructor.
+  - Downstream: class namespace and instance dispatch behavior for display helpers.
+- Seam S2 (`runtime callable resolution`)
+  - Upstream: template variable resolution.
+  - Downstream: direct model method invocation path via bound method semantics.
+- Seam S3 (`form initialisation contract`)
+  - Upstream: persisted model instance state.
+  - Downstream: form initial data (`object_data`) that must remain semantically aligned
+    with direct model value access.
+
+Architecture readiness
+---------------------
+- All three `REQ-138-005` obligations are assigned to concrete modules and explicit
+  ownership boundaries.
+- Dependency direction and control flow are explicitly separated between class
+  construction, direct runtime dispatch, template callable resolution, and form
+  seeding.
+- Traceability remains preserved through `REQ_ID_TO_VERIFICATION` links and requirement
+  comments already in `tests/model_fields/test_req138_001_display_overrides.py`.
+- Concrete architecture artifact created:
+  - `docs/internals/req-138-005-template-form-display-parity-architecture.txt`
