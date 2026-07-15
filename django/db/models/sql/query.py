@@ -1165,6 +1165,14 @@ class Query(BaseExpression):
 
         # ISNULL-001: strict __isnull RHS validation across filter, exclude, and
         # Q construction paths. The only accepted RHS type is bool.
+        # ISNULL-002-s1/s2 logic obligation:
+        # - For direct field lookups and related-path lookups, keep boolean RHS
+        #   values intact and route only bool True/False into isnull lookup
+        #   construction.
+        # - Accepted transitions:
+        #   input RHS None -> only __exact special-case to __isnull True (existing behavior),
+        #   non-bool -> immediate FieldError,
+        #   bool -> instantiate lookup_class(lhs, rhs) and continue unchanged.
         if lookup_name == 'isnull' and not isinstance(rhs, bool):
             raise FieldError("'__isnull' lookup only supports boolean values.")
 
@@ -1241,6 +1249,14 @@ class Query(BaseExpression):
         # add_filter() wraps kwargs -> Q -> add_q() -> _add_q() -> build_filter().
         # Query methods and direct build_filter() callers all converge here, then call
         # build_lookup(), which is the single deterministic validation point for __isnull.
+        # ISNULL-002-s1/s2 continuation:
+        # 1) solve lookup and resolve lhs/value.
+        # 2) build_lookup() enforces RHS typing and returns IsNull lookup
+        #    for bool RHS without path-dependent rewrites.
+        # 3) branch to col resolution:
+        #    - direct field: _get_col on final target
+        #    - relation chain: trim joins and materialize relation-aware source col.
+        # 4) build_filter adds condition and returns clause + used_joins.
         if isinstance(filter_expr, dict):
             raise FieldError("Cannot parse keyword query as dict")
         if hasattr(filter_expr, 'resolve_expression') and getattr(filter_expr, 'conditional', False):
@@ -1315,10 +1331,21 @@ class Query(BaseExpression):
         else:
             col = _get_col(targets[0], join_info.final_field, alias, simple_col)
 
+        # ISNULL-002-s1/s2: relation-preserving state path.
+        # relation=False and relation=True both land in same isnull lookup contract:
+        #   rhs True  -> IS NULL
+        #   rhs False -> IS NOT NULL
+        # No alternative SQL operator rewrite is introduced for __isnull.
         condition = self.build_lookup(lookups, col, value)
         lookup_type = condition.lookup_name
         clause.add(condition, AND)
 
+        # ISNULL-002-s1/s2 join policy notes:
+        # - require_outer is allowed for `isnull=True` in non-negated context.
+        # - require_outer is not forced for `isnull=False` here to preserve existing
+        #   cardinality/shape.
+        # - other negation-driven null guards remain existing behavior; no new
+        #   branch was added for __isnull False.
         require_outer = lookup_type == 'isnull' and condition.rhs is True and not current_negated
         if current_negated and (lookup_type != 'isnull' or condition.rhs is False) and condition.rhs is not None:
             require_outer = True
