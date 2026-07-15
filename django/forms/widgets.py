@@ -70,6 +70,34 @@ class Media:
 
     @property
     def _js(self):
+        # Pseudocode contract -- MEDIA-001, MEDIA-002, MEDIA-005, MEDIA-006,
+        # MEDIA-007:
+        #
+        # aggregate_javascript(source_lists):
+        #     # MEDIA-005: insertion-order uniqueness defines the candidates.
+        #     ordered_files := empty insertion-ordered set
+        #     precedence := empty graph mapping each file to its prerequisites
+        #     FOR EACH source_list IN source_lists, in merge order:
+        #         previous_file := NONE
+        #         FOR EACH file IN source_list, in declared order:
+        #             add file to ordered_files if it has not been seen
+        #             ensure file is a node in precedence
+        #             IF previous_file exists AND file differs from it:
+        #                 add previous_file as a prerequisite of file
+        #                 # MEDIA-001, MEDIA-002: this edge comes only from a
+        #                 # source declaration, never an intermediate result.
+        #             previous_file := file
+        #     TRY:
+        #         # MEDIA-006: satisfy every compatible declared prerequisite.
+        #         result := stable topological order of precedence, using
+        #                   ordered_files to break ties between unrelated files
+        #     IF precedence is incompatible:
+        #         emit the existing media-order conflict warning as a
+        #         deterministic function of source_lists and precedence
+        #         result := deterministic deduplicated fallback from ordered_files
+        #     # MEDIA-007: fixed inputs and merge order fix the result and the
+        #     # sequence of warning events on every execution.
+        #     RETURN result, containing every file exactly once
         js = self._js_lists[0]
         # filter(None, ...) avoids calling merge() with empty lists.
         for obj in filter(None, self._js_lists[1:]):
