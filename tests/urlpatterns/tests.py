@@ -95,18 +95,27 @@ class SimplifiedURLTests(SimpleTestCase):
 
     # DJNG-002: matched optional capture should remain keyword-bound and not change arity.
     def test_djng_002_matched_optional_capture_html_resolves_without_positional_arity_change(self):
-        resolve('/module/html')
-        self.assertTrue(True)
+        match = resolve('/module/html')
+        self.assertEqual(match.url_name, 'modules')
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {'format': 'html'})
+        self.assertEqual(self.client.get('/module/html').content.decode(), 'html')
 
     # DJNG-002: matched optional capture should remain keyword-bound and not change arity.
     def test_djng_002_matched_optional_capture_json_resolves_without_positional_arity_change(self):
-        resolve('/module/json')
-        self.assertTrue(True)
+        match = resolve('/module/json')
+        self.assertEqual(match.url_name, 'modules')
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {'format': 'json'})
+        self.assertEqual(self.client.get('/module/json').content.decode(), 'json')
 
     # DJNG-002: matched optional capture should remain keyword-bound and not change arity.
     def test_djng_002_matched_optional_capture_xml_resolves_without_positional_arity_change(self):
-        resolve('/module/xml')
-        self.assertTrue(True)
+        match = resolve('/module/xml')
+        self.assertEqual(match.url_name, 'modules')
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {'format': 'xml'})
+        self.assertEqual(self.client.get('/module/xml').content.decode(), 'xml')
 
     # DJNG-004: optional capture with defaulted parameter must not force positional arity.
     def test_djng_004_optional_capture_with_default_is_not_forced_to_positional_arity(self):
