@@ -298,6 +298,14 @@ def watched_files(self, include_globs=True):
         # REQUIREMENT ALLOCATION:
         #   - the managed launch script path from `python manage.py runserver`
         #     must be present in this combined stream before any snapshot diff.
+        # AUTO-004 pseudocode:
+        # PRESERVE:
+        #   - treat output as additive composition:
+        #       modules + preexisting explicit files + preexisting globs.
+        #   - do not replace, clear, or filter source collections when adding
+        #     manage.py to `extra_files`.
+        #   - emit each source segment as-is, so previously discovered baseline
+        #     entries remain present in snapshot inputs.
         yield from iter_all_python_module_files()
         yield from self.extra_files
         if include_globs:
@@ -391,6 +399,17 @@ class StatReloader(BaseReloader):
 
     def __init__(self):
         super().__init__()
+        # AUTO-004 pseudocode:
+        # PRESERVE: startup watch state from `BaseReloader` and existing stream
+        # sources must remain intact when adding manage.py.
+        # DECISION:
+        #   - start from existing `self.extra_files` baseline (preexisting explicit file
+        #     watches) and `self.directory_globs` baseline (preexisting watch globs).
+        #   - resolve candidate manage.py path: `manage_py = get_manage_py_path()`.
+        #   - if candidate is present, invoke `watch_file(manage_py)`; this only inserts
+        #     into `self.extra_files` (set union) and leaves existing modules/globs/files.
+        # FAILURE PATH:
+        #   - if `manage_py` is `None`, do not mutate any baseline watch collections.
         # AUTO-003 pseudocode:
         # PURPOSE: install exactly one canonical manage.py watch entry at startup.
         # DECISION:
@@ -451,6 +470,19 @@ class StatReloader(BaseReloader):
         # EFFECT:
         #   - absence of the manage.py launch path at this stage
         #     indicates a watcher snapshot gap for AUTO-001.
+        # AUTO-004 pseudocode:
+        # PURPOSE: emit an additive union of all baseline categories plus any
+        # managed launch path already present in `self.extra_files`.
+        # INPUTS:
+        #   - modules from iter_all_python_module_files()
+        #   - explicit files from `self.extra_files`
+        #   - expanded file globs from `self.directory_globs`
+        # PRESERVATION:
+        #   - do not drop or transform entries from modules/globs/explicit files.
+        #   - only remove during snapshotting are transient OSError skips for files that
+        #     disappear between collection and stat.
+        # FAILURE PATH:
+        #   - keep scanning remaining files after a single missing-file OSError.
         seen_files = set()
         for file in self.watched_files():
             if file in seen_files:
