@@ -13,6 +13,15 @@ ORDERBY_001_REQUIREMENT_TO_TESTS = {
     ]
 }
 
+# Traceability map for canonical requirement ORDERBY-002.
+ORDERBY_002_REQUIREMENT_TO_TESTS = {
+    "ORDERBY-002": [
+        "test_ORDERBY_002_S1_identical_multiline_line_endings_normalize_to_same_key",
+        "test_ORDERBY_002_S2_whitespace_variation_around_line_breaks_normalizes_to_duplicate_key",
+        "test_ORDERBY_002_S3_token_differences_with_whitespace_variants_stay_distinct",
+    ]
+}
+
 
 class ORDERBY001TraceabilityTests(TestCase):
 
@@ -102,3 +111,24 @@ class ORDERBY001TraceabilityTests(TestCase):
         self.assertIn("WHEN pub_date IS NOT NULL THEN 1", order_by_sql)
         self.assertIn("WHEN headline = 'x' THEN 1", order_by_sql)
         self.assertEqual(order_by_sql.count("CASE"), 2)
+
+
+class ORDERBY002TraceabilityTests(TestCase):
+
+    def test_ORDERBY_002_S1_identical_multiline_line_endings_normalize_to_same_key(self):
+        # Precondition: two equivalent multiline SQL fragments differ only by line endings.
+        # Action: compute dedupe keys through the order-by rendering pipeline.
+        # Expected outcome: a stable canonical key is produced for both fragments.
+        pass
+
+    def test_ORDERBY_002_S2_whitespace_variation_around_line_breaks_normalizes_to_duplicate_key(self):
+        # Precondition: two equivalent multiline SQL fragments differ only by indentation.
+        # Action: compute dedupe keys for the whitespace variants.
+        # Expected outcome: both map to the same duplicate key.
+        pass
+
+    def test_ORDERBY_002_S3_token_differences_with_whitespace_variants_stay_distinct(self):
+        # Precondition: fragments differ by SQL token content but vary only in whitespace noise.
+        # Action: compare canonical keys after normalization.
+        # Expected outcome: keys differ when token content differs, despite whitespace noise.
+        pass
