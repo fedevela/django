@@ -907,7 +907,38 @@ class AutodetectorTests(TestCase):
         FKEY-003: Generated migration operations must keep PK rename ahead of
         downstream FK AlterField operations that refresh an explicit to_field target.
         """
-        pass
+        before = [
+            ModelState('test', 'Author', [
+                ('field_wrong', models.IntegerField(primary_key=True)),
+            ]),
+            ModelState('test', 'Book', [
+                ('id', models.AutoField(primary_key=True)),
+                ('author', models.ForeignKey('test.Author', models.CASCADE, to_field='field_wrong')),
+            ]),
+        ]
+        after = [
+            ModelState('test', 'Author', [
+                ('field_fixed', models.IntegerField(primary_key=True)),
+            ]),
+            ModelState('test', 'Book', [
+                ('id', models.AutoField(primary_key=True)),
+                ('author', models.ForeignKey('test.Author', models.CASCADE, to_field='field_fixed')),
+            ]),
+        ]
+        changes = self.get_changes(before, after, MigrationQuestioner({'ask_rename': True}))
+        self.assertNumberMigrations(changes, 'test', 1)
+        self.assertOperationTypes(changes, 'test', 0, ['RenameField', 'AlterField'])
+        alter_deps = changes['test'][0].operations[1]._auto_deps
+        self.assertIn(('test', 'author', 'field_wrong', 'rename'), alter_deps)
+        self.assertIn(('test', 'author', None, True), alter_deps)
+        self.assertEqual(
+            changes['test'][0].operations[0].old_name,
+            'field_wrong',
+        )
+        self.assertEqual(
+            changes['test'][0].operations[1].name,
+            'author',
+        )
 
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')

@@ -816,11 +816,37 @@ class ExecutorUnitTests(SimpleTestCase):
         FKEY-003: When a PK rename precedes a downstream FK AlterField that updates
         to_field metadata, the end-to-end executor path must preserve execution order.
         """
-        pass
+        executor = MigrationExecutor(None)
+        rename_pk = FakeMigration("rename_pk")
+        alter_fk = FakeMigration("alter_fk")
+        execution_order = []
+        state = type("MockState", (), {"apps": None})()
+
+        def track_apply_migration(migration_state, migration, fake=False, fake_initial=False):
+            execution_order.append(migration.name)
+            return migration_state
+
+        with mock.patch.object(executor, "apply_migration", side_effect=track_apply_migration):
+            executor._migrate_all_forwards(
+                state,
+                [
+                    (alter_fk, False),
+                    (rename_pk, False),
+                ],
+                [
+                    (rename_pk, False),
+                    (alter_fk, False),
+                ],
+                fake=False,
+                fake_initial=False,
+            )
+        self.assertEqual(execution_order, ["rename_pk", "alter_fk"])
 
     def test_FKEY_003_wrong_to_field_reference_fails_early_during_execution_plan_replay(self):
         """
         FKEY-003: Execution replay for a stale explicit to_field (field_wrong) must
         fail deterministically instead of resolving to a pre-rename target.
         """
-        pass
+        with override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations_fkey003"}):
+            with self.assertRaises((AssertionError, ValueError)):
+                MigrationExecutor(connection).migrate([("migrations", "0003_alter_fk_stale")])

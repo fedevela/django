@@ -428,6 +428,13 @@ class MigrationAutodetector:
                 operation.name_lower == dependency[1].lower() and
                 (operation.order_with_respect_to or "").lower() != dependency[2].lower()
             )
+        # Field was renamed.
+        elif dependency[2] is not None and dependency[3] == "rename":
+            return (
+                isinstance(operation, operations.RenameField) and
+                operation.model_name_lower == dependency[1].lower() and
+                operation.old_name_lower == dependency[2].lower()
+            )
         # Field is removed and part of an index/unique_together
         elif dependency[2] is not None and dependency[3] == "foo_together_change":
             return (
@@ -940,8 +947,31 @@ class MigrationAutodetector:
                     new_field.remote_field.model._meta.app_label,
                     new_field.remote_field.model._meta.model_name,
                 )
-                if rename_key in self.renamed_models:
-                    new_field.remote_field.model = old_field.remote_field.model
+                old_remote_field = getattr(old_field, "remote_field", None)
+                new_to_fields = None
+                if getattr(new_field.remote_field, "to_fields", None):
+                    new_to_fields = tuple(new_field.remote_field.to_fields)
+                else:
+                    new_to_fields = (getattr(new_field.remote_field, "field_name", None),)
+                if old_remote_field is not None and getattr(old_remote_field, "to_fields", None):
+                    old_to_fields = tuple(old_remote_field.to_fields)
+                elif old_remote_field is not None:
+                    old_to_fields = (getattr(old_remote_field, "field_name", None),)
+                else:
+                    old_to_fields = ()
+                # [FKEY-003] If an explicit target resolved through rename from
+                # old_name -> new_name, the dependent FK AlterField must wait on
+                # the rename operation for that target field.
+                if new_to_fields and old_to_fields:
+                    for old_target, new_target in zip(old_to_fields, new_to_fields):
+                        if (
+                            old_target is not None and new_target is not None and
+                            self.renamed_fields.get(rename_key + (new_target,), None) == old_target
+                        ):
+                            dependencies.append((rename_key[0], rename_key[1], old_target, "rename"))
+
+                if rename_key in self.renamed_models and old_remote_field is not None:
+                    new_field.remote_field.model = old_remote_field.model
                 # Handle ForeignObjects which can have multiple from_fields/to_fields.
                 from_fields = getattr(new_field, 'from_fields', None)
                 if from_fields:
