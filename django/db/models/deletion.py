@@ -293,6 +293,8 @@ class Collector:
         # Optimize for the case with a single obj and no dependencies
         if len(self.data) == 1 and len(instances) == 1:
             instance = list(instances)[0]
+            if instance.pk is None and not instance._state.adding:
+                return 0, {}
             # DJ11179-006:
             # - INPUT: collected singleton instance may already be marked as identity-cleared
             #   from an earlier successful fast delete (`instance.pk is None`).

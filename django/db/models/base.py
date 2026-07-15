@@ -909,10 +909,14 @@ class Model(metaclass=ModelBase):
 
     def delete(self, using=None, keep_parents=False):
         using = using or router.db_for_write(self.__class__, instance=self)
-        assert self.pk is not None, (
-            "%s object can't be deleted because its %s attribute is set to None." %
-            (self._meta.object_name, self._meta.pk.attname)
-        )
+        if self.pk is None:
+            if self._state.adding:
+                raise AssertionError(
+                    "%s object can't be deleted because its %s attribute is set to None." %
+                    (self._meta.object_name, self._meta.pk.attname)
+                )
+            # Idempotent re-delete after successful no-dependency delete.
+            return 0, {}
         # DJ11179-006:
         # - INPUT: Model.delete() is called again on an instance already
         #   success-cleared by a prior no-dependency fast delete.

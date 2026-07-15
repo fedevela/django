@@ -764,10 +764,30 @@ class DeleteNoDependencyIdempotencyTraceabilityTests(TestCase):
     requirements_coverage = DJ11179_006_VERIFICATION_ARTIFACTS
 
     def test_dj11179_006_repeated_no_dependency_delete_keeps_pk_none(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        prior_pk = instance.pk
+        instance.delete()
+        self.assertIsNotNone(prior_pk)
+        self.assertIsNone(instance.pk)
+        # Sanity check for repeated delete.
+        instance.delete()
+        self.assertIsNone(instance.pk)
 
     def test_dj11179_006_second_no_dependency_delete_does_not_resurrect_pk(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        prior_pk = instance.pk
+        instance.delete()
+        self.assertIsNone(instance.pk)
+        instance.delete()
+        self.assertIsNone(instance.pk)
+        self.assertNotEqual(instance.pk, prior_pk)
+        self.assertFalse(DeletionTracebook.objects.filter(pk=prior_pk).exists())
 
     def test_dj11179_006_repeated_delete_return_paths_preserve_none_pk(self):
-        self.assertTrue(True)
+        instance = DeletionTracebook.objects.create()
+        instance.delete()
+        self.assertIsNone(instance.pk)
+        count, deleted_counts = instance.delete()
+        self.assertEqual(count, 0)
+        self.assertEqual(deleted_counts, {})
+        self.assertIsNone(instance.pk)
