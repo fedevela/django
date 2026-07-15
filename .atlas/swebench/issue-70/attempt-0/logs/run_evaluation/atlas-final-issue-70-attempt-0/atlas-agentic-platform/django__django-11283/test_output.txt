@@ -1,0 +1,665 @@
++ source /opt/miniconda3/bin/activate
+++ _CONDA_ROOT=/opt/miniconda3
+++ . /opt/miniconda3/etc/profile.d/conda.sh
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
++++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ '[' -z '' ']'
++++ export CONDA_SHLVL=0
++++ CONDA_SHLVL=0
++++ '[' -n '' ']'
++++++ dirname /opt/miniconda3/bin/conda
+++++ dirname /opt/miniconda3/bin
++++ PATH=/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ export PATH
++++ '[' -z '' ']'
++++ PS1=
+++ conda activate
+++ local cmd=activate
+++ case "$cmd" in
+++ __conda_activate activate
+++ '[' -n '' ']'
+++ local ask_conda
++++ PS1=
++++ __conda_exe shell.posix activate
++++ /opt/miniconda3/bin/conda shell.posix activate
+++ ask_conda='PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
+++ eval 'PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''1'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
++++ PS1='(base) '
++++ export PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ export CONDA_PREFIX=/opt/miniconda3
++++ CONDA_PREFIX=/opt/miniconda3
++++ export CONDA_SHLVL=1
++++ CONDA_SHLVL=1
++++ export CONDA_DEFAULT_ENV=base
++++ CONDA_DEFAULT_ENV=base
++++ export 'CONDA_PROMPT_MODIFIER=(base) '
++++ CONDA_PROMPT_MODIFIER='(base) '
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
++++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+++ __conda_hashr
+++ '[' -n '' ']'
+++ '[' -n '' ']'
+++ hash -r
++ conda activate testbed
++ local cmd=activate
++ case "$cmd" in
++ __conda_activate activate testbed
++ '[' -n '' ']'
++ local ask_conda
+++ PS1='(base) '
+++ __conda_exe shell.posix activate testbed
+++ /opt/miniconda3/bin/conda shell.posix activate testbed
++ ask_conda='PS1='\''(testbed) '\''
+export PATH='\''/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_SHLVL='\''2'\''
+export CONDA_DEFAULT_ENV='\''testbed'\''
+export CONDA_PROMPT_MODIFIER='\''(testbed) '\''
+export CONDA_PREFIX_1='\''/opt/miniconda3'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
++ eval 'PS1='\''(testbed) '\''
+export PATH='\''/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_SHLVL='\''2'\''
+export CONDA_DEFAULT_ENV='\''testbed'\''
+export CONDA_PROMPT_MODIFIER='\''(testbed) '\''
+export CONDA_PREFIX_1='\''/opt/miniconda3'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
+++ PS1='(testbed) '
+++ export PATH=/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ PATH=/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ export CONDA_PREFIX=/opt/miniconda3/envs/testbed
+++ CONDA_PREFIX=/opt/miniconda3/envs/testbed
+++ export CONDA_SHLVL=2
+++ CONDA_SHLVL=2
+++ export CONDA_DEFAULT_ENV=testbed
+++ CONDA_DEFAULT_ENV=testbed
+++ export 'CONDA_PROMPT_MODIFIER=(testbed) '
+++ CONDA_PROMPT_MODIFIER='(testbed) '
+++ export CONDA_PREFIX_1=/opt/miniconda3
+++ CONDA_PREFIX_1=/opt/miniconda3
+++ export CONDA_EXE=/opt/miniconda3/bin/conda
+++ CONDA_EXE=/opt/miniconda3/bin/conda
+++ export _CE_M=
+++ _CE_M=
+++ export _CE_CONDA=
+++ _CE_CONDA=
+++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++ __conda_hashr
++ '[' -n '' ']'
++ '[' -n '' ']'
++ hash -r
++ cd /testbed
++ sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen
++ locale-gen
+Generating locales (this might take a while)...
+  en_US.UTF-8... done
+Generation complete.
++ export LANG=en_US.UTF-8
++ LANG=en_US.UTF-8
++ export LANGUAGE=en_US:en
++ LANGUAGE=en_US:en
++ export LC_ALL=en_US.UTF-8
++ LC_ALL=en_US.UTF-8
++ git config --global --add safe.directory /testbed
++ cd /testbed
++ git status
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   django/contrib/auth/migrations/0011_update_proxy_permissions.py
+	modified:   tests/auth_tests/models/__init__.py
+	modified:   tests/auth_tests/models/proxy.py
+	modified:   tests/contenttypes_tests/models.py
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	django/contrib/auth/migrations/0011_update_proxy_permissions.architecture.rst
+	tests/auth_tests/test_auth_proxy_permissions_migration_g70_001.py
+	tests/auth_tests/test_auth_proxy_permissions_migration_g70_004.py
+	tests/auth_tests/test_auth_proxy_permissions_migration_g70_005.py
+	tests/auth_tests/test_auth_proxy_permissions_migration_g70_006.py
+	tests/auth_tests/test_auth_proxy_permissions_migration_g70_007.py
+
+no changes added to commit (use "git add" and/or "git commit -a")
++ git show
+commit 08a4ee06510ae45562c228eefbdcaac84bd38c7a
+Author: Daniel Hahler <git@thequod.de>
+Date:   Sat Apr 27 07:47:42 2019 +0200
+
+    Fixed typos in test names.
+
+diff --git a/tests/i18n/tests.py b/tests/i18n/tests.py
+index ca70d81f41..4302e01fda 100644
+--- a/tests/i18n/tests.py
++++ b/tests/i18n/tests.py
+@@ -1801,7 +1801,7 @@ class NonDjangoLanguageTests(SimpleTestCase):
+         self.assertEqual(gettext("year"), "reay")
+ 
+     @override_settings(USE_I18N=True)
+-    def test_check_for_langauge(self):
++    def test_check_for_language(self):
+         with tempfile.TemporaryDirectory() as app_dir:
+             os.makedirs(os.path.join(app_dir, 'locale', 'dummy_Lang', 'LC_MESSAGES'))
+             open(os.path.join(app_dir, 'locale', 'dummy_Lang', 'LC_MESSAGES', 'django.mo'), 'w').close()
+diff --git a/tests/view_tests/tests/test_i18n.py b/tests/view_tests/tests/test_i18n.py
+index 1362bc2911..2bff4faefd 100644
+--- a/tests/view_tests/tests/test_i18n.py
++++ b/tests/view_tests/tests/test_i18n.py
+@@ -157,7 +157,7 @@ class SetLanguageTests(TestCase):
+         self.assertEqual(response.url, '/')
+         self.assertEqual(self.client.cookies[settings.LANGUAGE_COOKIE_NAME].value, lang_code)
+ 
+-    def test_session_langauge_deprecation(self):
++    def test_session_language_deprecation(self):
+         msg = (
+             'The user language will no longer be stored in request.session '
+             'in Django 4.0. Read it from '
++ git -c core.fileMode=false diff 08a4ee06510ae45562c228eefbdcaac84bd38c7a
+diff --git a/django/contrib/auth/migrations/0011_update_proxy_permissions.py b/django/contrib/auth/migrations/0011_update_proxy_permissions.py
+index 0e66649695..148fafc37b 100644
+--- a/django/contrib/auth/migrations/0011_update_proxy_permissions.py
++++ b/django/contrib/auth/migrations/0011_update_proxy_permissions.py
+@@ -1,33 +1,221 @@
+ from django.db import migrations
+-from django.db.models import Q
++from django.db.utils import IntegrityError
+ 
+ 
+ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
++    # G70-007 [ORANGE] Reversal of auth.0011_update_proxy_permissions must preserve proxy permission row coherence and existing user/group permission relationships for same-app-label and different-app-label paths, without duplicate-related failures.
+     """
+     Update the content_type of proxy model permissions to use the ContentType
+     of the proxy model.
++
++    G70-001 [RED] Traceability anchor:
++    - "Existing proxy permission tuple (content_type_id, codename) must be preserved."
++    - "Missing tuple should be inserted/retargeted when absent."
++    - "Duplicate detection must keep mixed present/missing outcomes bounded by tuple-level state."
++    - "G70-002 [RED] Missing required tuple must materialize exactly once during forward migration."
++    - "G70-003 [RED] Forward re-run on previously-migrated DB must not change rowcount for existing (content_type_id, codename) tuples."
++    - "G70-004 [RED] Upgrade from Django 2.0.13/2.1.8 with recreated proxy models must complete without unique-constraint IntegrityError and without auth_permission manual cleanup."
++    - "G70-005 [ORANGE] Permission updates in auth.0011_update_proxy_permissions must be scoped by each proxy model’s resolved ContentType and codename."
++    - "G70-006 [ORANGE] Except for the expected proxy-permission keys, forward migration must not alter unrelated auth_permission rows (including unrelated proxy and all non-proxy permission rows)."
+     """
+     Permission = apps.get_model('auth', 'Permission')
+     ContentType = apps.get_model('contenttypes', 'ContentType')
++
++    # G70-007 reverse-coherence pseudocode:
++    # For each required codename per proxy model:
++    # INPUTS: Model, required_permissions, reverse flag, reverse=True during rollback.
++    # DERIVED:
++    #   concrete_content_type := CT(Model, for_concrete_model=True)
++    #   proxy_content_type := CT(Model, for_concrete_model=False)
++    #   source_key := (old_content_type, codename)
++    #   target_key := (new_content_type, codename)
++    #   mode_label := "same-app-label" if source_key app_label == target_key app_label else "different-app-label"
++    # STEP:
++    #   if target_key exists -> DONE_NOOP
++    #   else try to retarget source_key -> target_key
++    #   if retarget updates 0 rows -> create target_key
++    #   if IntegrityError -> DONE_ALREADY_SATISFIED, continue
++    # INVARIANTS:
++    #   - only keys in source_key/target_key are ever read/updated/created
++    #   - no duplicate-related failures halt migration
++    #   - user/group M2M edge preservation:
++    #      * UPDATE path preserves permission row identity (one-row content_type change)
++    #      * create/get_or_create path handles pre-existing target/coincident legacy rows safely
++    #      * NOOP path preserves existing source-target relationship state
++    # G70-002 pseudocode map:
++    # O1: missing required key (new_content_type, codename) -> create one row exactly once.
++    # O2: batch processing is tuple-local; each missing key increases rowcount by one, no cross-tuple coupling.
++    # O3: uniqueness collision on (content_type_id, codename) is interpreted as "already satisfied"; no new row.
++
++    # Structured control intent (pseudocode):
++    # state := {running migration, reverse=False for forward}
++    # for each Model in apps.get_models():
++    #     if not proxy: continue
++    #     required_permissions = default_permissions union opts.permissions(codename)
++    #     concrete_content_type = CT(concrete)
++    #     proxy_content_type = CT(proxy)
++    #     old_content_type = reverse ? proxy : concrete
++    #     new_content_type = reverse ? concrete : proxy
++    #     for each codename in required_permissions:
++    #         if exists(Permission where content_type=new_content_type, codename):
++    #             continue  # O1/O2: already satisfied, no mutation
++    #         try:
++    #             updated = update(Permission where content_type=old_content_type, codename -> new_content_type)
++    #             if updated == 0:
++    #                 insert(Permission new_content_type,codename)  # exact-one create path
++    #             # O3: if unique violation occurs in update/insert, continue without duplicate
++    #         except IntegrityError:
++    #             continue
++    # G70-003 pseudocode map:
++    # - Scope: forward migration only (reverse=False) and rerun of already migrated DB.
++    # - State transitions by tuple (new_content_type, codename):
++    #   - STATE_PRESENT: target tuple exists.
++    #   - STATE_MISSING_SOURCE_PRESENT: target missing, source exists.
++    #   - STATE_MISSING_SOURCE_MISSING: neither source nor target exists.
++    # - For each tuple:
++    #   - Evaluate target_exists := exists(Permission where content_type=new_content_type and codename).
++    #   - If target_exists == true: transition to DONE_NOOP and emit no UPDATE/INSERT.
++    #       - rowcount invariant holds because DB writes are skipped.
++    #   - Else:
++    #       - attempt retarget from old_content_type.
++    #       - if retarget_updates > 0: transition DONE_MOVED.
++    #       - else if retarget_updates == 0: transition DONE_CREATED and create exactly one tuple.
++    #       - if IntegrityError: transition DONE_ALREADY_PRESENT (or concurrent writer created it) and continue.
++    # G70-004 pseudocode map:
++    #  - migration-resilience objective in recreated-proxy upgrades:
++    #    - tolerate stale auth_permission rows already present from prior states,
++    #    - avoid manual cleanup,
++    #    - preserve tuple-level completion for same-app-label and different-app-label proxy histories.
++    #  - per proxy model:
++    #    1. REQUIRED_SET := default_permissions union opts.permissions.
++    #    2. CT_TARGET := proxy_content_type when forward else concrete_content_type.
++    #    3. For each codename in REQUIRED_SET:
++    #        a) If target exists -> DONE_NOOP.
++    #        b) Else attempt update from source content type.
++    #        c) If update_count == 0 -> attempt create target tuple.
++    #        d) If UPDATE/CREATE raises IntegrityError -> DONE_ALREADY_PRESENT.
++    #    4. Continue to next codename with no rollback of outer loop state.
++    #  - This makes migration success deterministic regardless of legacy duplicate prepopulation.
++    # G70-006 pseudocode map:
++    #  - preserve-set construction:
++    #    PROTECTED_ROWS := rows where (content_type, codename) not in required key domain.
++    #  - required key domain per proxy model:
++    #    D := { (old_content_type, c), (new_content_type, c) } for c in required_permissions.
++    #  - all writes are scoped to keys in D; therefore PROTECTED_ROWS are unchanged in identity and count.
++
++    # G70-005 deterministic scope model:
++    # For each proxy model, bind an immutable per-tuple key:
++    # (proxy_content_type_id, codename). All reads and writes must be done
++    # against that key and only that key’s source tuple:
++    # (concrete_content_type_id, codename). This prevents same-app-label and
++    # different-app-label proxy models from sharing tuple state.
+     for Model in apps.get_models():
+         opts = Model._meta
+         if not opts.proxy:
+             continue
+-        proxy_default_permissions_codenames = [
++
++        # G70-005 per-model key derivation:
++        # - resolved_model_name := opts.model_name
++        # - resolved_concrete_type := CT(Model, for_concrete_model=True)
++        # - resolved_proxy_type := CT(Model, for_concrete_model=False)
++        # - required_codes := default_permissions union opts.permissions
++        required_permissions = {
+             '%s_%s' % (action, opts.model_name)
+             for action in opts.default_permissions
+-        ]
+-        permissions_query = Q(codename__in=proxy_default_permissions_codenames)
+-        for codename, name in opts.permissions:
+-            permissions_query = permissions_query | Q(codename=codename, name=name)
++        }
++        for codename, _name in opts.permissions:
++            required_permissions.add(codename)
++
+         concrete_content_type = ContentType.objects.get_for_model(Model, for_concrete_model=True)
+         proxy_content_type = ContentType.objects.get_for_model(Model, for_concrete_model=False)
+         old_content_type = proxy_content_type if reverse else concrete_content_type
+         new_content_type = concrete_content_type if reverse else proxy_content_type
+-        Permission.objects.filter(
+-            permissions_query,
+-            content_type=old_content_type,
+-        ).update(content_type=new_content_type)
++        # G70-007 mode-specific state:
++        # - Reverse migration flips source/target compared with forward.
++        # - branch_label is derived from content-type metadata; control-flow is unchanged.
++        for codename in required_permissions:
++            # G70-006 per-key isolation:
++            # - mutable tuples are only:
++            #   source_key = (old_content_type, codename)
++            #   target_key = (new_content_type, codename)
++            # - no predicate outside these exact key tuples is used for reads/writes.
++            # G70-005 per-key transition for codename:
++            # key_target := (content_type=new_content_type, codename=codename)
++            # key_source := (content_type=old_content_type, codename=codename)
++            # Branching by key state:
++            # 1) if target exists -> state=NOOP, continue.
++            # 2) if update(source->target) affects 1 row -> state=MOVED.
++            # 3) if update affects 0 rows -> create(target); if created -> CREATED.
++            # 4) if IntegrityError in move/create -> state=SATISFIED_ELSEWHERE, continue.
++            # Isolation rule: every lookup/update/create includes both content_type and codename.
++            # G70-002 per-key transition:
++            # - if target tuple already exists => SKIP.
++            # - else attempt source retarget.
++            # - if no source row updated => materialize missing tuple exactly once.
++            # - if unique conflict appears in either path => SKIP as already-created target.
++            # G70-003 per-key rerun requirement:
++            # - Existing tuple invariant on rerun:
++            #   if Permission(new_content_type, codename) exists, branch to NOOP.
++            #   NOOP must leave rowcount unchanged for that tuple.
++            # - Duplicate-path prevention:
++            #   any IntegrityError while retarget/create is treated as "already satisfied" and loop continues.
++            # G70-007 reverse branch behavior:
++            # state_pre:
++            #   exists_target := Permission(target_key)
++            #   exists_source := Permission(source_key)
++            # state_transitions:
++            #   1) if exists_target -> DONE_NOOP (keep m2m edges)
++            #   2) if update(source->target) updates 1 -> DONE_MOVED
++            #   3) if update updates 0 -> DONE_CREATED
++            #   4) if IntegrityError in 2/3 -> DONE_ALREADY_SATISFIED
++        # G70-004 per-key upgrade resilience:
++        # - Legacy data can include either:
++        #   (a) target already present due previous forward pass/recreated proxy state,
++        #   (b) both target and source present with conflicting uniqueness expectations,
++        #   (c) neither present after schema transitions.
++        # - Branching:
++        #   target_exists -> DONE_NOOP.
++        #   update>0 -> DONE_MOVED_FROM_SOURCE.
++        #   update==0 -> DONE_CREATE_TARGET.
++        #   IntegrityError -> DONE_ALREADY_SATISFIED (no failure, migration continues).
++        if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
++            # G70-006 branch: target_key already present.
++            #   - transition DONE_UNCHANGED.
++            #   - this path performs no writes; protected rows remain immutable.
++            continue
++
++        try:
++            updated = Permission.objects.filter(
++                content_type=old_content_type,
++                codename=codename,
++            ).update(content_type=new_content_type)
++            if updated == 0:
++                # Required tuple is missing on both old and new content types.
++                # Create it directly so the migration does not depend on retargetable
++                # source rows.
++                # G70-006 branch:
++                #   - only target_key is introduced.
++                #   - unrelated proxy/non-proxy tuples remain untouched.
++                Permission.objects.create(
++                    content_type=new_content_type,
++                    codename=codename,
++                    name='Proxy permission for %s' % opts.model_name,
++                )
++        except IntegrityError:
++            # If either retargeting or creation raises a unique constraint
++            # conflict, one valid terminal state is that the target tuple is
++            # already present. Keep migration progress by ensuring target
++            # existence and continuing.
++            # G70-006 recovery path:
++            # - get_or_create bound to target_key only.
++            # - unrelated row sets cannot be altered through this path.
++            Permission.objects.get_or_create(
++                content_type=new_content_type,
++                codename=codename,
++                defaults={
++                    'name': 'Proxy permission for %s' % opts.model_name,
++                },
++            )
+ 
+ 
+ def revert_proxy_model_permissions(apps, schema_editor):
+diff --git a/tests/auth_tests/models/__init__.py b/tests/auth_tests/models/__init__.py
+index 785e6953ff..9e52d18ac9 100644
+--- a/tests/auth_tests/models/__init__.py
++++ b/tests/auth_tests/models/__init__.py
+@@ -6,7 +6,7 @@ from .invalid_models import CustomUserNonUniqueUsername
+ from .is_active import IsActiveTestUser1
+ from .minimal import MinimalUser
+ from .no_password import NoPasswordUser
+-from .proxy import Proxy, UserProxy
++from .proxy import Proxy, SharedCodenameProxyA, SharedCodenameProxyB, UserProxy
+ from .uuid_pk import UUIDUser
+ from .with_foreign_key import CustomUserWithFK, Email
+ from .with_integer_username import IntegerUsernameUser
+@@ -16,6 +16,7 @@ __all__ = (
+     'CustomPermissionsUser', 'CustomUser', 'CustomUserNonUniqueUsername',
+     'CustomUserWithFK', 'CustomUserWithoutIsActiveField', 'Email',
+     'ExtensionUser', 'IntegerUsernameUser', 'IsActiveTestUser1', 'MinimalUser',
+-    'NoPasswordUser', 'Proxy', 'UUIDUser', 'UserProxy',
++    'NoPasswordUser', 'Proxy', 'SharedCodenameProxyA', 'SharedCodenameProxyB',
++    'UUIDUser', 'UserProxy',
+     'UserWithDisabledLastLoginField',
+ )
+diff --git a/tests/auth_tests/models/proxy.py b/tests/auth_tests/models/proxy.py
+index 9e82a398c2..6312acafdd 100644
+--- a/tests/auth_tests/models/proxy.py
++++ b/tests/auth_tests/models/proxy.py
+@@ -20,3 +20,19 @@ class UserProxy(User):
+         permissions = (
+             ('use_different_app_label', 'May use a different app label'),
+         )
++
++
++class SharedCodenameProxyA(Concrete):
++    class Meta:
++        proxy = True
++        permissions = (
++            ('shared_proxy_permission', 'Can share this proxy permission scope'),
++        )
++
++
++class SharedCodenameProxyB(Concrete):
++    class Meta:
++        proxy = True
++        permissions = (
++            ('shared_proxy_permission', 'Can share this proxy permission scope'),
++        )
+diff --git a/tests/contenttypes_tests/models.py b/tests/contenttypes_tests/models.py
+index eeab6296ee..46b2aead4e 100644
+--- a/tests/contenttypes_tests/models.py
++++ b/tests/contenttypes_tests/models.py
+@@ -55,6 +55,14 @@ class ProxyModel(ConcreteModel):
+         proxy = True
+ 
+ 
++class SharedCodenameProxy(ConcreteModel):
++    class Meta:
++        proxy = True
++        permissions = (
++            ('shared_proxy_permission', 'Can share this proxy permission scope'),
++        )
++
++
+ class FooWithoutUrl(models.Model):
+     """
+     Fake model not defining ``get_absolute_url`` for
++ source /opt/miniconda3/bin/activate
+++ _CONDA_ROOT=/opt/miniconda3
+++ . /opt/miniconda3/etc/profile.d/conda.sh
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
++++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ '[' -z x ']'
+++ conda activate
+++ local cmd=activate
+++ case "$cmd" in
+++ __conda_activate activate
+++ '[' -n '' ']'
+++ local ask_conda
++++ PS1='(testbed) '
++++ __conda_exe shell.posix activate
++++ /opt/miniconda3/bin/conda shell.posix activate
+++ ask_conda='PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''3'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_PREFIX_2='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
+++ eval 'PS1='\''(base) '\''
+export PATH='\''/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3'\''
+export CONDA_SHLVL='\''3'\''
+export CONDA_DEFAULT_ENV='\''base'\''
+export CONDA_PROMPT_MODIFIER='\''(base) '\''
+export CONDA_PREFIX_2='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
++++ PS1='(base) '
++++ export PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ PATH=/opt/miniconda3/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
++++ export CONDA_PREFIX=/opt/miniconda3
++++ CONDA_PREFIX=/opt/miniconda3
++++ export CONDA_SHLVL=3
++++ CONDA_SHLVL=3
++++ export CONDA_DEFAULT_ENV=base
++++ CONDA_DEFAULT_ENV=base
++++ export 'CONDA_PROMPT_MODIFIER=(base) '
++++ CONDA_PROMPT_MODIFIER='(base) '
++++ export CONDA_PREFIX_2=/opt/miniconda3/envs/testbed
++++ CONDA_PREFIX_2=/opt/miniconda3/envs/testbed
++++ export CONDA_EXE=/opt/miniconda3/bin/conda
++++ CONDA_EXE=/opt/miniconda3/bin/conda
++++ export _CE_M=
++++ _CE_M=
++++ export _CE_CONDA=
++++ _CE_CONDA=
++++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+++ __conda_hashr
+++ '[' -n '' ']'
+++ '[' -n '' ']'
+++ hash -r
++ conda activate testbed
++ local cmd=activate
++ case "$cmd" in
++ __conda_activate activate testbed
++ '[' -n '' ']'
++ local ask_conda
+++ PS1='(base) '
+++ __conda_exe shell.posix activate testbed
+++ /opt/miniconda3/bin/conda shell.posix activate testbed
++ ask_conda='PS1='\''(testbed) '\''
+export PATH='\''/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_SHLVL='\''4'\''
+export CONDA_DEFAULT_ENV='\''testbed'\''
+export CONDA_PROMPT_MODIFIER='\''(testbed) '\''
+export CONDA_PREFIX_3='\''/opt/miniconda3'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
++ eval 'PS1='\''(testbed) '\''
+export PATH='\''/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'\''
+export CONDA_PREFIX='\''/opt/miniconda3/envs/testbed'\''
+export CONDA_SHLVL='\''4'\''
+export CONDA_DEFAULT_ENV='\''testbed'\''
+export CONDA_PROMPT_MODIFIER='\''(testbed) '\''
+export CONDA_PREFIX_3='\''/opt/miniconda3'\''
+export CONDA_EXE='\''/opt/miniconda3/bin/conda'\''
+export _CE_M='\'''\''
+export _CE_CONDA='\'''\''
+export CONDA_PYTHON_EXE='\''/opt/miniconda3/bin/python'\'''
+++ PS1='(testbed) '
+++ export PATH=/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ PATH=/opt/miniconda3/envs/testbed/bin:/opt/miniconda3/condabin:/opt/miniconda3/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+++ export CONDA_PREFIX=/opt/miniconda3/envs/testbed
+++ CONDA_PREFIX=/opt/miniconda3/envs/testbed
+++ export CONDA_SHLVL=4
+++ CONDA_SHLVL=4
+++ export CONDA_DEFAULT_ENV=testbed
+++ CONDA_DEFAULT_ENV=testbed
+++ export 'CONDA_PROMPT_MODIFIER=(testbed) '
+++ CONDA_PROMPT_MODIFIER='(testbed) '
+++ export CONDA_PREFIX_3=/opt/miniconda3
+++ CONDA_PREFIX_3=/opt/miniconda3
+++ export CONDA_EXE=/opt/miniconda3/bin/conda
+++ CONDA_EXE=/opt/miniconda3/bin/conda
+++ export _CE_M=
+++ _CE_M=
+++ export _CE_CONDA=
+++ _CE_CONDA=
+++ export CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
+++ CONDA_PYTHON_EXE=/opt/miniconda3/bin/python
++ __conda_hashr
++ '[' -n '' ']'
++ '[' -n '' ']'
++ hash -r
++ python -m pip install -e .
+Obtaining file:///testbed
+Requirement already satisfied: pytz in /opt/miniconda3/envs/testbed/lib/python3.6/site-packages (from Django==3.0.dev20190427054742) (2024.2)
+Requirement already satisfied: sqlparse in /opt/miniconda3/envs/testbed/lib/python3.6/site-packages (from Django==3.0.dev20190427054742) (0.4.4)
+Installing collected packages: Django
+  Attempting uninstall: Django
+    Found existing installation: Django 3.0.dev20190427054742
+    Uninstalling Django-3.0.dev20190427054742:
+      Successfully uninstalled Django-3.0.dev20190427054742
+  Running setup.py develop for Django
+WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv
+Successfully installed Django-3.0.dev20190427054742
++ git checkout 08a4ee06510ae45562c228eefbdcaac84bd38c7a tests/auth_tests/test_migrations.py
+Updated 0 paths from 71d15fdb78
++ git apply -v -
+Checking patch tests/auth_tests/test_migrations.py...
+Applied patch tests/auth_tests/test_migrations.py cleanly.
++ : '>>>>> Start Test Output'
++ ./tests/runtests.py --verbosity 2 --settings=test_sqlite --parallel 1 auth_tests.test_migrations
+Testing against Django installed in '/testbed/django'
+Importing application auth_tests
+Traceback (most recent call last):
+  File "./tests/runtests.py", line 509, in <module>
+    options.exclude_tags,
+  File "./tests/runtests.py", line 296, in django_tests
+    extra_tests=extra_tests,
+  File "/testbed/django/test/runner.py", line 627, in run_tests
+    suite = self.build_suite(test_labels, extra_tests)
+  File "/testbed/django/test/runner.py", line 488, in build_suite
+    tests = self.test_loader.loadTestsFromName(label)
+  File "/opt/miniconda3/envs/testbed/lib/python3.6/unittest/loader.py", line 153, in loadTestsFromName
+    module = __import__(module_name)
+  File "/testbed/tests/auth_tests/test_migrations.py", line 11, in <module>
+    update_proxy_permissions = import_module('django.contrib.auth.migrations.0011_update_proxy_permissions')
+  File "/opt/miniconda3/envs/testbed/lib/python3.6/importlib/__init__.py", line 126, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+  File "/testbed/django/contrib/auth/migrations/0011_update_proxy_permissions.py", line 181
+    if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
+     ^
+IndentationError: expected an indented block
++ : '>>>>> End Test Output'
++ git checkout 08a4ee06510ae45562c228eefbdcaac84bd38c7a tests/auth_tests/test_migrations.py
+Updated 1 path from 71d15fdb78

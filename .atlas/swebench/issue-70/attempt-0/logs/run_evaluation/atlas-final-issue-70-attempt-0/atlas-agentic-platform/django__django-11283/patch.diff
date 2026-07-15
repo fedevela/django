@@ -1,0 +1,1863 @@
+diff --git a/django/contrib/auth/migrations/0011_update_proxy_permissions.architecture.rst b/django/contrib/auth/migrations/0011_update_proxy_permissions.architecture.rst
+new file mode 100644
+index 0000000..0be8488
+--- /dev/null
++++ b/django/contrib/auth/migrations/0011_update_proxy_permissions.architecture.rst
+@@ -0,0 +1,209 @@
++G70-001, G70-002, G70-003, G70-004, G70-005, G70-006, and G70-007 Architecture: auth.0011_update_proxy_permissions
++========================================================================================================
++
++Requirement-to-architecture map
++-------------------------------
++
++- G70-001 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++  - loop ownership: ``update_proxy_model_permissions`` drives tuple-level migration policy for proxy models
++  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_001.py``
++- G70-002 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++  - pressure O1: missing required tuple should be materialized once per key during forward execution.
++  - pressure O2: batch processing is tuple-local; each missing key increases rowcount by one, no cross-tuple coupling.
++  - pressure O3: uniqueness on ``(content_type_id, codename)`` must be respected as a precondition boundary.
++  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_001.py``
++- G70-003 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++  - pressure O1: rerun of forward migration on already-migrated DB must preserve rowcount for every existing ``(content_type_id, codename)`` tuple.
++  - pressure O2: rerun must not add duplicate permission rows for already-present tuples.
++  - pressure O3: rerun must terminate without unique-constraint failure and keep required tuples present.
++  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_001.py``
++- G70-004 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++  - pressure R1: migrated DB from Django 2.0.13/2.1.8 with recreated proxy history must complete forward migration without unique-index cleanup.
++  - pressure R2: pre-existing legacy ``auth_permission`` rows from those upgrade paths must not cause migration failure.
++  - pressure R3: migration success must hold for same-app-label and different-app-label recreated-proxy transitions.
++  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_004.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++- G70-005 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++  - pressure A1: each proxy model’s workflow is keyed by that model’s resolved concrete/proxy ``ContentType`` pair and permission ``codename``.
++  - pressure A2: missing/renamed tuple operations must never read, update, or create outside the active tuple key.
++  - pressure A3: same ``codename`` on different ``(content_type_id, codename)`` keys must never cross-pollute state.
++  - pressure A4: same-app-label and different-app-label proxy pairs with shared codenames remain isolated by resolved content type.
++  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_005.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++- G70-006 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++  - pressure S1: forward migration targets only expected proxy-permission keys derived from each proxy model's resolved content types and required permission codenames.
++  - pressure S2: related rows outside that key domain must retain identity and count.
++  - pressure S3: unrelated proxy and non-proxy permission rows are immutable during forward migration.
++  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_006.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++- G70-007 -> ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++  - pressure R1: reverse execution must preserve proxy permission tuple coherence and avoid duplicate-related failures.
++  - pressure R2: rollback must preserve user/group permission links for same-app-label content-type transitions.
++  - pressure R3: rollback must preserve user/group permission links for different-app-label content-type transitions.
++  - verification seam: ``tests/auth_tests/test_auth_proxy_permissions_migration_g70_007.py`` and ``django/contrib/auth/migrations/0011_update_proxy_permissions.py``
++
++File and module placement decisions
++----------------------------------
++
++- Keep all tuple policy in the migration module as the sole ownership boundary for data transition concerns.
++- Keep per-model tuple-level behavior in ``update_proxy_model_permissions`` scope, not in models, schema editors, or service layers.
++- Keep test mapping and scenario coverage in ``tests/auth_tests`` as the verification boundary.
++- Keep rerun-idempotency as a forward-loop execution policy; no new control-plane module is introduced.
++- Keep recreated-proxy resilience handling inside the existing per-tuple loop, with no new abstraction layer.
++- Keep ``G70-005`` isolation as data-local policy inside the existing proxy loop; no cross-loop caches or shared staging state.
++- Keep ``G70-006`` isolation as mutation-surface control by scoping all writes to expected keys and treating all others as protected rows.
++- Keep rollback transition semantics (``DONE_NOOP``, ``DONE_MOVED``, ``DONE_CREATED``, ``DONE_ALREADY_SATISFIED``) inside existing control flow using only ``reverse=True`` source/target swap.
++- Keep user/group relationship coherence as a boundary: reverse execution preserves permission-row identity when retargeting and must not introduce relation-level mutations.
++
++Ownership and boundaries
++------------------------
++
++- Ownership unit: ``update_proxy_model_permissions`` (forward + reverse paths via ``reverse`` flag).
++- Migration boundary: this artifact remains a migration-time adapter over historical models from ``apps.get_model``.
++- App boundary: permission writes/read only through historical model handles from ``apps.get_model``.
++- Data boundary: ``Permission`` rows keyed by ``(content_type_id, codename)`` are the guarded state.
++- Idempotency boundary for ``G70-003``: existing tuples for target keys are immutable during rerun.
++- Legacy-upgrade boundary for ``G70-004``: existing target tuples represent completion and must be treated as terminal NOOP state.
++- Protected-row boundary for ``G70-006``: every tuple not in active ``(content_type_id, codename)`` key-domain is outside migration ownership.
++- Reverse-coherence boundary for ``G70-007``: tuple transitions during rollback are restricted to ``D := {(old_content_type, codename), (new_content_type, codename)}`` per proxy model.
++
++Interface and contract artifacts
++-------------------------------
++
++- Contract C1 (tuple discovery):
++  - Input: ``Model._meta`` for each proxy model in migration registry.
++  - Output: required tuple set ``[(content_type_id, codename)]`` from ``default_permissions`` and ``opts.permissions``.
++- Contract C2 (target existence precondition):
++  - If ``Permission`` already exists for target key, skip tuple mutation branch.
++- Contract C3 (mixed state):
++  - Preserve pre-existing tuples and execute migration transitions only for missing tuples.
++- Contract C4 (error handling):
++  - ``IntegrityError`` during update/create is treated as local "already satisfied" state for that tuple.
++- Contract C5 (forward-only insertion behavior):
++  - In forward execution, ``Permission.objects.filter(new_content_type, codename).exists()`` gates mutation.
++  - If source retarget does not update any row, insert one tuple for that key.
++- Contract C6 (batch locality):
++  - Required permissions are iterated in ``required_permissions`` set; each key is handled independently.
++- Contract C7 (unique-index tolerance):
++  - If update/create path raises ``IntegrityError`` at target key, boundary treats it as no-op completion for that key.
++- Contract C8 (rerun rowcount invariance):
++  - If tuple exists at start of iteration, the rerun branch must emit no write for that key.
++- Contract C9 (rerun convergence):
++  - After successful first forward pass, second forward run keeps required tuples present and stable with no additional key cardinality.
++- Contract C10 (legacy presence short-circuit):
++  - If the target key already exists before mutations, the loop marks the key as done and returns NOOP.
++- Contract C11 (legacy collision tolerance):
++  - Any ``IntegrityError`` in update/create paths means the required key is already satisfied and migration continues.
++- Contract C12 (upgrade-route parity):
++  - The same tuple policy applies regardless of whether recreated-proxy transitions share or change app labels.
++- Contract C13 (per-model tuple key binding):
++  - For each proxy model, bind ``resolved_content_type`` pairs:
++    ``concrete_content_type = CT(Model, for_concrete_model=True)`` and
++    ``proxy_content_type = CT(Model, for_concrete_model=False)``.
++  - For each codename, policy operations must execute only on ``(content_type_id, codename)`` keys derived from those resolved models.
++- Contract C14 (cross-model codename safety):
++  - Two proxy models can share a codename only if their resolved ``content_type_id`` differs; contracts require that no operation crosses to another key by using both fields in every filter.
++- Contract C15 (expected-key scope):
++  - For each proxy model and required codename:
++    ``D := {(old_content_type, codename), (new_content_type, codename)}``
++  - The loop may only evaluate and mutate rows in ``D``.
++- Contract C16 (unrelated-row immutability):
++  - Any row with tuple not in union of all active ``D`` sets must be preserved with identical identity.
++- Contract C17 (unrelated-row count invariance):
++  - Forward migration must preserve cardinality for complement rows outside active ``D``.
++- Contract C18 (reverse transition state machine):
++  - For each reverse-mode tuple compute ``source_key`` and ``target_key`` and apply deterministic transitions:
++    ``DONE_NOOP`` if target exists, ``DONE_MOVED`` on successful retarget update, ``DONE_CREATED`` on zero-row retarget, and ``DONE_ALREADY_SATISFIED`` on ``IntegrityError``.
++- Contract C19 (reverse identity preservation):
++  - The migration should keep existing ``Permission`` identity whenever possible during rollback so related ``auth_user_user_permissions`` / ``auth_group_permissions`` rows remain coherent.
++- Contract C20 (mode-label parity):
++  - Same-app-label and different-app-label rollback share transition logic and differ only in resolved content-type metadata.
++
++Dependency-direction notes
++--------------------------
++
++- Upward dependency (migration runtime order):
++  - ``('auth', '0010_alter_group_name_max_length')``
++  - ``('contenttypes', '0002_remove_content_type_name')``
++- Inward dependency from data migration layer:
++  - ``auth`` and ``contenttypes`` historical models via ``apps.get_model`` only.
++- G70-003 dependency direction:
++  - writes are attempted only after the current tuple state is read and classified.
++  - duplicate-key or pre-existing-key branches must not alter rowcount state, only transition control locally.
++- G70-004 dependency direction:
++  - no new imports, services, or cross-app call sites; legacy-row outcomes are consumed locally by the tuple gate and collision handler.
++- G70-005 dependency direction:
++  - key derivation from ``for_concrete_model=True/False`` must feed every permission query and write in that model iteration.
++  - no data from sibling proxy model iterations is referenced in key transitions, writes, or collision handling.
++- G70-006 dependency direction:
++  - No query/update/create path is allowed to depend on rows outside active key domain, preventing unrelated state contamination.
++  - Tests validate protected-row complements as the migration observable dependency boundary.
++- G70-007 dependency direction:
++  - reverse branch uses the same tuple classifier; only source/target binding changes when ``reverse=True``.
++  - relationship coherence is achieved by preserving row identity in retarget path and tolerating pre-satisfied target states.
++- No new cross-app imports beyond existing historical model access.
++
++Integration-seam skeletons
++--------------------------
++
++- Seam S1: ``Permission`` queryset existence gate keyed by ``(content_type_id, codename)``.
++- Seam S2: ``ContentType`` resolution for concrete/proxy tuple endpoints.
++- Seam S3: reverse execution path via ``revert_proxy_model_permissions`` swapping source/target.
++- Seam S4: retarget branch from source tuple to target content type.
++- Seam S5: creation branch for concrete key-missing case.
++- Seam S6: rerun guard for already-present keys (``DONE_NOOP``).
++- Seam S7: integrity collision sink mapped to tuple-local completion (``DONE_ALREADY_PRESENT``).
++- Seam S8: legacy target presence branch for recreated-proxy rows.
++- Seam S9: non-disruptive collision recovery for mixed historical states in ``G70-004``.
++- Seam S10: per-proxy resolved key binding for ``(old_content_type, new_content_type, codename)`` transitions.
++- Seam S11: expected-key-domain projection that defines the writable tuple-set and excludes protected rows.
++- Seam S12: reverse transition state-machine with terminal outcomes ``DONE_NOOP``, ``DONE_MOVED``, ``DONE_CREATED``, ``DONE_ALREADY_SATISFIED``.
++- Seam S13: reverse relationship-coherence behavior tied to stable row identity on retarget and controlled target-existence short-circuit.
++
++Seam-to-contract mapping
++------------------------
++
++- S1 -> C2, C8
++- S4 -> C3, C5
++- S5 -> C5, C6
++- S6 -> C8, C9
++- S7 -> C4, C7
++- S8 -> C10, C12
++- S9 -> C11, C12
++- S10 -> C13, C14
++- S11 -> C15, C16, C17
++- S12 -> C18, C19, C20
++- S13 -> C19, C20
++- C9 is satisfied when S1 returns pre-existing for all required tuples or S5/S4 ensure one-time materialization.
++- G70-005 obligations:
++  - A1 isolation -> C13
++  - A2 boundary -> C14, S10
++  - A3 no cross-pollution -> C14, C13
++  - A4 app-label variants -> C13, C14, S10
++
++Traceability and completeness check
++-----------------------------------
++
++- ``G70-001`` obligation 1 (existing tuple rowcount preserved) -> ``C2``, ``C3``, S1
++- ``G70-001`` obligation 2 (existing tuple detected, no integrity error) -> ``C4``
++- ``G70-001`` obligation 3 (mixed present/missing handling) -> ``C3``, C4
++- ``G70-002`` obligation 1 (missing tuple materializes once) -> ``C5``, ``C6``, S5
++- ``G70-002`` obligation 2 (batch tuple-local insertion) -> ``C6``, S4, S5
++- ``G70-002`` obligation 3 (unique index safe path) -> ``C7``, C4
++- ``G70-003`` obligation 1 (rerun rowcount invariant) -> ``C2``, ``C8``, S1
++- ``G70-003`` obligation 2 (no duplicate row growth) -> C8, S6, C7, S7
++- ``G70-003`` obligation 3 (rerun no constraint error, required tuples present) -> C9, C4, S5, S7
++- ``G70-004`` obligation 1 (legacy 2.0.13/2.1.8 upgrade completes without manual cleanup) -> C10, C11, S1, S7
++- ``G70-004`` obligation 2 (preexisting proxy rows are accepted) -> C10, S8
++- ``G70-004`` obligation 3 (same-app-label and different-app-label scenarios remain valid) -> C12, S8, S9
++- ``G70-005`` obligation 1 (proxy updates are resolved by each model’s content type + codename) -> C13, S10
++- ``G70-005`` obligation 2 (same-app-label and different-app-label proxy models are independent) -> C13, C14, S1, S10
++- ``G70-005`` obligation 3 (shared codenames across models do not overwrite each other) -> C14, S1, S10
++- ``G70-006`` obligation 1 (unrelated rows preserve identity and counts when forward migration runs) -> ``C16``, ``C17``, ``S11``
++- ``G70-006`` obligation 2 (recorded unrelated tuple counts match pre-migration baseline exactly) -> ``C16``, ``C17``, ``S11``
++- ``G70-006`` obligation 3 (only expected proxy permission keys are transitioned) -> ``C15``, ``C16``, ``S11``
++- ``G70-007`` obligation 1 (reverse row coherence and duplicate-related safety) -> ``C18``, ``S12``, ``S7``
++- ``G70-007`` obligation 2 (same-app-label user/group relationship preservation) -> ``C19``, ``S13``, ``C20``
++- ``G70-007`` obligation 3 (different-app-label user/group relationship preservation) -> ``C20``, ``C19``, ``S13``
++
++Completion status
++----------------
++
++- Structural-ready status: **Ready for implementation** with explicit ``G70-004``, ``G70-006``, and ``G70-007`` ownership, contracts, seam mappings, and requirement traceability.
+diff --git a/django/contrib/auth/migrations/0011_update_proxy_permissions.py b/django/contrib/auth/migrations/0011_update_proxy_permissions.py
+index 0e66649..148fafc 100644
+--- a/django/contrib/auth/migrations/0011_update_proxy_permissions.py
++++ b/django/contrib/auth/migrations/0011_update_proxy_permissions.py
+@@ -1,33 +1,221 @@
+ from django.db import migrations
+-from django.db.models import Q
++from django.db.utils import IntegrityError
+ 
+ 
+ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
++    # G70-007 [ORANGE] Reversal of auth.0011_update_proxy_permissions must preserve proxy permission row coherence and existing user/group permission relationships for same-app-label and different-app-label paths, without duplicate-related failures.
+     """
+     Update the content_type of proxy model permissions to use the ContentType
+     of the proxy model.
++
++    G70-001 [RED] Traceability anchor:
++    - "Existing proxy permission tuple (content_type_id, codename) must be preserved."
++    - "Missing tuple should be inserted/retargeted when absent."
++    - "Duplicate detection must keep mixed present/missing outcomes bounded by tuple-level state."
++    - "G70-002 [RED] Missing required tuple must materialize exactly once during forward migration."
++    - "G70-003 [RED] Forward re-run on previously-migrated DB must not change rowcount for existing (content_type_id, codename) tuples."
++    - "G70-004 [RED] Upgrade from Django 2.0.13/2.1.8 with recreated proxy models must complete without unique-constraint IntegrityError and without auth_permission manual cleanup."
++    - "G70-005 [ORANGE] Permission updates in auth.0011_update_proxy_permissions must be scoped by each proxy model’s resolved ContentType and codename."
++    - "G70-006 [ORANGE] Except for the expected proxy-permission keys, forward migration must not alter unrelated auth_permission rows (including unrelated proxy and all non-proxy permission rows)."
+     """
+     Permission = apps.get_model('auth', 'Permission')
+     ContentType = apps.get_model('contenttypes', 'ContentType')
++
++    # G70-007 reverse-coherence pseudocode:
++    # For each required codename per proxy model:
++    # INPUTS: Model, required_permissions, reverse flag, reverse=True during rollback.
++    # DERIVED:
++    #   concrete_content_type := CT(Model, for_concrete_model=True)
++    #   proxy_content_type := CT(Model, for_concrete_model=False)
++    #   source_key := (old_content_type, codename)
++    #   target_key := (new_content_type, codename)
++    #   mode_label := "same-app-label" if source_key app_label == target_key app_label else "different-app-label"
++    # STEP:
++    #   if target_key exists -> DONE_NOOP
++    #   else try to retarget source_key -> target_key
++    #   if retarget updates 0 rows -> create target_key
++    #   if IntegrityError -> DONE_ALREADY_SATISFIED, continue
++    # INVARIANTS:
++    #   - only keys in source_key/target_key are ever read/updated/created
++    #   - no duplicate-related failures halt migration
++    #   - user/group M2M edge preservation:
++    #      * UPDATE path preserves permission row identity (one-row content_type change)
++    #      * create/get_or_create path handles pre-existing target/coincident legacy rows safely
++    #      * NOOP path preserves existing source-target relationship state
++    # G70-002 pseudocode map:
++    # O1: missing required key (new_content_type, codename) -> create one row exactly once.
++    # O2: batch processing is tuple-local; each missing key increases rowcount by one, no cross-tuple coupling.
++    # O3: uniqueness collision on (content_type_id, codename) is interpreted as "already satisfied"; no new row.
++
++    # Structured control intent (pseudocode):
++    # state := {running migration, reverse=False for forward}
++    # for each Model in apps.get_models():
++    #     if not proxy: continue
++    #     required_permissions = default_permissions union opts.permissions(codename)
++    #     concrete_content_type = CT(concrete)
++    #     proxy_content_type = CT(proxy)
++    #     old_content_type = reverse ? proxy : concrete
++    #     new_content_type = reverse ? concrete : proxy
++    #     for each codename in required_permissions:
++    #         if exists(Permission where content_type=new_content_type, codename):
++    #             continue  # O1/O2: already satisfied, no mutation
++    #         try:
++    #             updated = update(Permission where content_type=old_content_type, codename -> new_content_type)
++    #             if updated == 0:
++    #                 insert(Permission new_content_type,codename)  # exact-one create path
++    #             # O3: if unique violation occurs in update/insert, continue without duplicate
++    #         except IntegrityError:
++    #             continue
++    # G70-003 pseudocode map:
++    # - Scope: forward migration only (reverse=False) and rerun of already migrated DB.
++    # - State transitions by tuple (new_content_type, codename):
++    #   - STATE_PRESENT: target tuple exists.
++    #   - STATE_MISSING_SOURCE_PRESENT: target missing, source exists.
++    #   - STATE_MISSING_SOURCE_MISSING: neither source nor target exists.
++    # - For each tuple:
++    #   - Evaluate target_exists := exists(Permission where content_type=new_content_type and codename).
++    #   - If target_exists == true: transition to DONE_NOOP and emit no UPDATE/INSERT.
++    #       - rowcount invariant holds because DB writes are skipped.
++    #   - Else:
++    #       - attempt retarget from old_content_type.
++    #       - if retarget_updates > 0: transition DONE_MOVED.
++    #       - else if retarget_updates == 0: transition DONE_CREATED and create exactly one tuple.
++    #       - if IntegrityError: transition DONE_ALREADY_PRESENT (or concurrent writer created it) and continue.
++    # G70-004 pseudocode map:
++    #  - migration-resilience objective in recreated-proxy upgrades:
++    #    - tolerate stale auth_permission rows already present from prior states,
++    #    - avoid manual cleanup,
++    #    - preserve tuple-level completion for same-app-label and different-app-label proxy histories.
++    #  - per proxy model:
++    #    1. REQUIRED_SET := default_permissions union opts.permissions.
++    #    2. CT_TARGET := proxy_content_type when forward else concrete_content_type.
++    #    3. For each codename in REQUIRED_SET:
++    #        a) If target exists -> DONE_NOOP.
++    #        b) Else attempt update from source content type.
++    #        c) If update_count == 0 -> attempt create target tuple.
++    #        d) If UPDATE/CREATE raises IntegrityError -> DONE_ALREADY_PRESENT.
++    #    4. Continue to next codename with no rollback of outer loop state.
++    #  - This makes migration success deterministic regardless of legacy duplicate prepopulation.
++    # G70-006 pseudocode map:
++    #  - preserve-set construction:
++    #    PROTECTED_ROWS := rows where (content_type, codename) not in required key domain.
++    #  - required key domain per proxy model:
++    #    D := { (old_content_type, c), (new_content_type, c) } for c in required_permissions.
++    #  - all writes are scoped to keys in D; therefore PROTECTED_ROWS are unchanged in identity and count.
++
++    # G70-005 deterministic scope model:
++    # For each proxy model, bind an immutable per-tuple key:
++    # (proxy_content_type_id, codename). All reads and writes must be done
++    # against that key and only that key’s source tuple:
++    # (concrete_content_type_id, codename). This prevents same-app-label and
++    # different-app-label proxy models from sharing tuple state.
+     for Model in apps.get_models():
+         opts = Model._meta
+         if not opts.proxy:
+             continue
+-        proxy_default_permissions_codenames = [
++
++        # G70-005 per-model key derivation:
++        # - resolved_model_name := opts.model_name
++        # - resolved_concrete_type := CT(Model, for_concrete_model=True)
++        # - resolved_proxy_type := CT(Model, for_concrete_model=False)
++        # - required_codes := default_permissions union opts.permissions
++        required_permissions = {
+             '%s_%s' % (action, opts.model_name)
+             for action in opts.default_permissions
+-        ]
+-        permissions_query = Q(codename__in=proxy_default_permissions_codenames)
+-        for codename, name in opts.permissions:
+-            permissions_query = permissions_query | Q(codename=codename, name=name)
++        }
++        for codename, _name in opts.permissions:
++            required_permissions.add(codename)
++
+         concrete_content_type = ContentType.objects.get_for_model(Model, for_concrete_model=True)
+         proxy_content_type = ContentType.objects.get_for_model(Model, for_concrete_model=False)
+         old_content_type = proxy_content_type if reverse else concrete_content_type
+         new_content_type = concrete_content_type if reverse else proxy_content_type
+-        Permission.objects.filter(
+-            permissions_query,
+-            content_type=old_content_type,
+-        ).update(content_type=new_content_type)
++        # G70-007 mode-specific state:
++        # - Reverse migration flips source/target compared with forward.
++        # - branch_label is derived from content-type metadata; control-flow is unchanged.
++        for codename in required_permissions:
++            # G70-006 per-key isolation:
++            # - mutable tuples are only:
++            #   source_key = (old_content_type, codename)
++            #   target_key = (new_content_type, codename)
++            # - no predicate outside these exact key tuples is used for reads/writes.
++            # G70-005 per-key transition for codename:
++            # key_target := (content_type=new_content_type, codename=codename)
++            # key_source := (content_type=old_content_type, codename=codename)
++            # Branching by key state:
++            # 1) if target exists -> state=NOOP, continue.
++            # 2) if update(source->target) affects 1 row -> state=MOVED.
++            # 3) if update affects 0 rows -> create(target); if created -> CREATED.
++            # 4) if IntegrityError in move/create -> state=SATISFIED_ELSEWHERE, continue.
++            # Isolation rule: every lookup/update/create includes both content_type and codename.
++            # G70-002 per-key transition:
++            # - if target tuple already exists => SKIP.
++            # - else attempt source retarget.
++            # - if no source row updated => materialize missing tuple exactly once.
++            # - if unique conflict appears in either path => SKIP as already-created target.
++            # G70-003 per-key rerun requirement:
++            # - Existing tuple invariant on rerun:
++            #   if Permission(new_content_type, codename) exists, branch to NOOP.
++            #   NOOP must leave rowcount unchanged for that tuple.
++            # - Duplicate-path prevention:
++            #   any IntegrityError while retarget/create is treated as "already satisfied" and loop continues.
++            # G70-007 reverse branch behavior:
++            # state_pre:
++            #   exists_target := Permission(target_key)
++            #   exists_source := Permission(source_key)
++            # state_transitions:
++            #   1) if exists_target -> DONE_NOOP (keep m2m edges)
++            #   2) if update(source->target) updates 1 -> DONE_MOVED
++            #   3) if update updates 0 -> DONE_CREATED
++            #   4) if IntegrityError in 2/3 -> DONE_ALREADY_SATISFIED
++        # G70-004 per-key upgrade resilience:
++        # - Legacy data can include either:
++        #   (a) target already present due previous forward pass/recreated proxy state,
++        #   (b) both target and source present with conflicting uniqueness expectations,
++        #   (c) neither present after schema transitions.
++        # - Branching:
++        #   target_exists -> DONE_NOOP.
++        #   update>0 -> DONE_MOVED_FROM_SOURCE.
++        #   update==0 -> DONE_CREATE_TARGET.
++        #   IntegrityError -> DONE_ALREADY_SATISFIED (no failure, migration continues).
++        if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
++            # G70-006 branch: target_key already present.
++            #   - transition DONE_UNCHANGED.
++            #   - this path performs no writes; protected rows remain immutable.
++            continue
++
++        try:
++            updated = Permission.objects.filter(
++                content_type=old_content_type,
++                codename=codename,
++            ).update(content_type=new_content_type)
++            if updated == 0:
++                # Required tuple is missing on both old and new content types.
++                # Create it directly so the migration does not depend on retargetable
++                # source rows.
++                # G70-006 branch:
++                #   - only target_key is introduced.
++                #   - unrelated proxy/non-proxy tuples remain untouched.
++                Permission.objects.create(
++                    content_type=new_content_type,
++                    codename=codename,
++                    name='Proxy permission for %s' % opts.model_name,
++                )
++        except IntegrityError:
++            # If either retargeting or creation raises a unique constraint
++            # conflict, one valid terminal state is that the target tuple is
++            # already present. Keep migration progress by ensuring target
++            # existence and continuing.
++            # G70-006 recovery path:
++            # - get_or_create bound to target_key only.
++            # - unrelated row sets cannot be altered through this path.
++            Permission.objects.get_or_create(
++                content_type=new_content_type,
++                codename=codename,
++                defaults={
++                    'name': 'Proxy permission for %s' % opts.model_name,
++                },
++            )
+ 
+ 
+ def revert_proxy_model_permissions(apps, schema_editor):
+diff --git a/tests/auth_tests/models/__init__.py b/tests/auth_tests/models/__init__.py
+index 785e695..9e52d18 100644
+--- a/tests/auth_tests/models/__init__.py
++++ b/tests/auth_tests/models/__init__.py
+@@ -6,7 +6,7 @@ from .invalid_models import CustomUserNonUniqueUsername
+ from .is_active import IsActiveTestUser1
+ from .minimal import MinimalUser
+ from .no_password import NoPasswordUser
+-from .proxy import Proxy, UserProxy
++from .proxy import Proxy, SharedCodenameProxyA, SharedCodenameProxyB, UserProxy
+ from .uuid_pk import UUIDUser
+ from .with_foreign_key import CustomUserWithFK, Email
+ from .with_integer_username import IntegerUsernameUser
+@@ -16,6 +16,7 @@ __all__ = (
+     'CustomPermissionsUser', 'CustomUser', 'CustomUserNonUniqueUsername',
+     'CustomUserWithFK', 'CustomUserWithoutIsActiveField', 'Email',
+     'ExtensionUser', 'IntegerUsernameUser', 'IsActiveTestUser1', 'MinimalUser',
+-    'NoPasswordUser', 'Proxy', 'UUIDUser', 'UserProxy',
++    'NoPasswordUser', 'Proxy', 'SharedCodenameProxyA', 'SharedCodenameProxyB',
++    'UUIDUser', 'UserProxy',
+     'UserWithDisabledLastLoginField',
+ )
+diff --git a/tests/auth_tests/models/proxy.py b/tests/auth_tests/models/proxy.py
+index 9e82a39..6312aca 100644
+--- a/tests/auth_tests/models/proxy.py
++++ b/tests/auth_tests/models/proxy.py
+@@ -20,3 +20,19 @@ class UserProxy(User):
+         permissions = (
+             ('use_different_app_label', 'May use a different app label'),
+         )
++
++
++class SharedCodenameProxyA(Concrete):
++    class Meta:
++        proxy = True
++        permissions = (
++            ('shared_proxy_permission', 'Can share this proxy permission scope'),
++        )
++
++
++class SharedCodenameProxyB(Concrete):
++    class Meta:
++        proxy = True
++        permissions = (
++            ('shared_proxy_permission', 'Can share this proxy permission scope'),
++        )
+diff --git a/tests/auth_tests/test_auth_proxy_permissions_migration_g70_001.py b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_001.py
+new file mode 100644
+index 0000000..9190727
+--- /dev/null
++++ b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_001.py
+@@ -0,0 +1,361 @@
++from importlib import import_module
++from django.apps import apps
++from django.contrib.auth.models import Permission
++from django.contrib.contenttypes.models import ContentType
++from django.test import TestCase
++
++from .models import Proxy
++
++
++update_proxy_permissions = import_module(
++    'django.contrib.auth.migrations.0011_update_proxy_permissions'
++)
++
++G70_001_REQUIREMENT_TO_VERIFICATION = {
++    "G70-001": [
++        "G70_001UpdateProxyPermissionsTraceabilityTests::test_G70_001_existing_tuple_rowcount_for_content_type_codename_is_preserved",
++        "G70_001UpdateProxyPermissionsTraceabilityTests::test_G70_001_existing_tuple_is_detected_without_integrity_error",
++        "G70_001UpdateProxyPermissionsTraceabilityTests::test_G70_001_mixed_present_and_missing_tuples_preserve_existing_rows",
++    ],
++    "G70-002": [
++        "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_missing_required_proxy_tuple_is_created_exactly_once_during_forward_migration",
++        "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_batch_of_missing_proxy_tuples_adds_one_row_each",
++        "G70_002UpdateProxyPermissionsTraceabilityTests::test_G70_002_missing_proxy_tuple_inserts_respect_unique_content_type_codename_constraint",
++    ],
++    "G70-003": [
++        "G70_003UpdateProxyPermissionsTraceabilityTests::test_G70_003_forward_rerun_preserves_existing_content_type_and_codename_rowcount",
++        "G70_003UpdateProxyPermissionsTraceabilityTests::test_G70_003_forward_rerun_rejects_duplicate_inserts_for_existing_proxy_tuples",
++        "G70_003UpdateProxyPermissionsTraceabilityTests::test_G70_003_forward_rerun_keeps_all_required_permissions_present_without_constraint_errors",
++    ],
++}
++
++
++class G70_001UpdateProxyPermissionsTraceabilityTests(TestCase):
++    available_apps = [
++        'auth_tests',
++        'django.contrib.auth',
++        'django.contrib.contenttypes',
++    ]
++
++    def setUp(self):
++        Permission.objects.all().delete()
++
++    def test_G70_001_existing_tuple_rowcount_for_content_type_codename_is_preserved(self):
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        codename = 'add_proxy'
++
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename=codename,
++            name='Can add proxy',
++        )
++        Permission.objects.create(
++            content_type=proxy_content_type,
++            codename=codename,
++            name='Existing proxy permission',
++        )
++
++        concrete_count_before = Permission.objects.filter(
++            content_type=concrete_content_type,
++            codename=codename,
++        ).count()
++        proxy_count_before = Permission.objects.filter(
++            content_type=proxy_content_type,
++            codename=codename,
++        ).count()
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=codename,
++            ).count(),
++            proxy_count_before,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_content_type,
++                codename=codename,
++            ).count(),
++            concrete_count_before,
++        )
++
++    def test_G70_001_existing_tuple_is_detected_without_integrity_error(self):
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename='add_proxy',
++            name='Can add proxy',
++        )
++        Permission.objects.create(
++            content_type=proxy_content_type,
++            codename='add_proxy',
++            name='Existing proxy permission',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(Permission.objects.filter(codename='add_proxy').count(), 2)
++
++    def test_G70_001_mixed_present_and_missing_tuples_preserve_existing_rows(self):
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename='add_proxy',
++            name='Can add proxy',
++        )
++        Permission.objects.create(
++            content_type=proxy_content_type,
++            codename='add_proxy',
++            name='Existing proxy permission',
++        )
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename='display_proxys',
++            name='May display proxys information',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_content_type,
++                codename='add_proxy',
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename='add_proxy',
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_content_type,
++                codename='display_proxys',
++            ).count(),
++            0,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename='display_proxys',
++            ).count(),
++            1,
++        )
++
++
++class G70_002UpdateProxyPermissionsTraceabilityTests(TestCase):
++    available_apps = [
++        'auth_tests',
++        'django.contrib.auth',
++        'django.contrib.contenttypes',
++    ]
++
++    def setUp(self):
++        Permission.objects.all().delete()
++
++    def test_G70_002_missing_required_proxy_tuple_is_created_exactly_once_during_forward_migration(self):
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        codename = 'display_proxys'
++
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename='add_proxy',
++            name='Can add proxy',
++        )
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=codename,
++            ).count(),
++            0,
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=codename,
++            ).count(),
++            1,
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=codename,
++            ).count(),
++            1,
++        )
++
++    def test_G70_002_batch_of_missing_proxy_tuples_adds_one_row_each(self):
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        missing_permissions = {
++            '%s_%s' % (action, Proxy._meta.model_name)
++            for action in Proxy._meta.default_permissions
++        }
++        missing_permissions.update(codename for codename, _name in Proxy._meta.permissions)
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        for codename in sorted(missing_permissions):
++            self.assertEqual(
++                Permission.objects.filter(
++                    content_type=proxy_content_type,
++                    codename=codename,
++                ).count(),
++                1,
++            )
++
++    def test_G70_002_missing_proxy_tuple_inserts_respect_unique_content_type_codename_constraint(self):
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename='add_proxy',
++            name='Can add proxy',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename='add_proxy',
++            ).count(),
++            1,
++        )
++
++
++class G70_003UpdateProxyPermissionsTraceabilityTests(TestCase):
++    available_apps = [
++        'auth_tests',
++        'django.contrib.auth',
++        'django.contrib.contenttypes',
++    ]
++
++    def setUp(self):
++        Permission.objects.all().delete()
++
++    def _required_proxy_permissions(self):
++        return {
++            '%s_%s' % (action, Proxy._meta.model_name)
++            for action in Proxy._meta.default_permissions
++        }.union(codename for codename, _name in Proxy._meta.permissions)
++
++    def test_G70_003_forward_rerun_preserves_existing_content_type_and_codename_rowcount(self):
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        required_permissions = self._required_proxy_permissions()
++
++        # Simulate a previously migrated database: half the required rows are already
++        # present on the proxy content type, the others remain on concrete.
++        for codename in sorted(required_permissions):
++            Permission.objects.create(
++                content_type=concrete_content_type,
++                codename=codename,
++                name='Concrete permission for %s' % codename,
++            )
++            if codename.startswith('add_'):
++                Permission.objects.create(
++                    content_type=proxy_content_type,
++                    codename=codename,
++                    name='Existing proxy permission for %s' % codename,
++                )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        rowcount_before = {
++            codename: Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=codename,
++            ).count()
++            for codename in required_permissions
++        }
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        for codename in required_permissions:
++            self.assertEqual(
++                Permission.objects.filter(
++                    content_type=proxy_content_type,
++                    codename=codename,
++                ).count(),
++                rowcount_before[codename],
++            )
++
++    def test_G70_003_forward_rerun_rejects_duplicate_inserts_for_existing_proxy_tuples(self):
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        required_permissions = self._required_proxy_permissions()
++
++        for codename in sorted(required_permissions):
++            Permission.objects.create(
++                content_type=concrete_content_type,
++                codename=codename,
++                name='Concrete permission for %s' % codename,
++            )
++            Permission.objects.create(
++                content_type=proxy_content_type,
++                codename=codename,
++                name='Existing proxy permission for %s' % codename,
++            )
++
++        # Rerun should treat the proxy tuple as already satisfied and perform no
++        # extra insert for these already existing codename/content_type combinations.
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        for codename in required_permissions:
++            self.assertEqual(
++                Permission.objects.filter(
++                    content_type=proxy_content_type,
++                    codename=codename,
++                ).count(),
++                1,
++            )
++
++    def test_G70_003_forward_rerun_keeps_all_required_permissions_present_without_constraint_errors(self):
++        proxy_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        concrete_content_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        required_permissions = self._required_proxy_permissions()
++
++        for codename in sorted(required_permissions):
++            Permission.objects.create(
++                content_type=concrete_content_type,
++                codename=codename,
++                name='Clean source permission for %s' % codename,
++            )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename='add_proxy',
++            ).count(),
++            1,
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        for codename in sorted(required_permissions):
++            self.assertEqual(
++                Permission.objects.filter(
++                    content_type=proxy_content_type,
++                    codename=codename,
++                ).count(),
++                1,
++            )
+diff --git a/tests/auth_tests/test_auth_proxy_permissions_migration_g70_004.py b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_004.py
+new file mode 100644
+index 0000000..ee5350d
+--- /dev/null
++++ b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_004.py
+@@ -0,0 +1,198 @@
++from importlib import import_module
++
++from django.apps import apps
++from django.contrib.auth.models import Permission
++from django.contrib.contenttypes.models import ContentType
++from django.test import TestCase
++
++from .models import Proxy, UserProxy
++
++
++update_proxy_permissions = import_module(
++    'django.contrib.auth.migrations.0011_update_proxy_permissions'
++)
++
++
++G70_004_REQUIREMENT_TO_VERIFICATION = {
++    "G70-004": [
++        "G70_004UpdateProxyPermissionsTraceabilityTests::test_G70_004_auth_0011_completes_from_2_0_13_upgrade_without_unique_constraint_integrityerror",
++        "G70_004UpdateProxyPermissionsTraceabilityTests::test_G70_004_auth_0011_completes_when_proxy_permission_rows_preexist_without_manual_cleanup",
++        "G70_004UpdateProxyPermissionsTraceabilityTests::test_G70_004_auth_0011_completes_with_same_and_different_app_label_proxy_changes",
++    ],
++}
++
++
++class G70_004UpdateProxyPermissionsTraceabilityTests(TestCase):
++    available_apps = [
++        "auth_tests",
++        "django.contrib.auth",
++        "django.contrib.contenttypes",
++    ]
++
++    def setUp(self):
++        Permission.objects.all().delete()
++
++    def _required_permissions(self, model):
++        return {
++            '%s_%s' % (action, model._meta.model_name)
++            for action in model._meta.default_permissions
++        }.union(codename for codename, _name in model._meta.permissions)
++
++    def test_G70_004_auth_0011_completes_from_2_0_13_upgrade_without_unique_constraint_integrityerror(self):
++        concrete_proxy_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        concrete_user_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=True)
++        userproxy_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=False)
++
++        proxy_permissions = self._required_permissions(Proxy)
++        user_permissions = self._required_permissions(UserProxy)
++
++        for codename in proxy_permissions:
++            Permission.objects.create(
++                content_type=concrete_proxy_type,
++                codename=codename,
++                name='legacy proxy source',
++            )
++        for codename in user_permissions:
++            Permission.objects.create(
++                content_type=concrete_user_type,
++                codename=codename,
++                name='legacy userproxy source',
++            )
++
++        # Simulate stale rows that were already upgraded in one historical leg.
++        Permission.objects.create(
++            content_type=proxy_type,
++            codename=next(iter(proxy_permissions)),
++            name='already upgraded proxy row',
++        )
++        Permission.objects.create(
++            content_type=userproxy_type,
++            codename=next(iter(user_permissions)),
++            name='already upgraded userproxy row',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        for codename in proxy_permissions:
++            self.assertEqual(
++                Permission.objects.filter(content_type=proxy_type, codename=codename).count(),
++                1,
++            )
++        for codename in user_permissions:
++            self.assertEqual(
++                Permission.objects.filter(content_type=userproxy_type, codename=codename).count(),
++                1,
++            )
++
++    def test_G70_004_auth_0011_completes_when_proxy_permission_rows_preexist_without_manual_cleanup(self):
++        concrete_proxy_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        concrete_user_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=True)
++        userproxy_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=False)
++
++        proxy_permissions = self._required_permissions(Proxy)
++        user_permissions = self._required_permissions(UserProxy)
++        first_proxy_permission = next(iter(proxy_permissions))
++        first_user_permission = next(iter(user_permissions))
++
++        # Leave legacy source rows and pre-created target rows to emulate historical
++        # manual cleanup guidance that should no longer be required.
++        Permission.objects.create(
++            content_type=proxy_type,
++            codename=first_proxy_permission,
++            name='already present proxy target',
++        )
++        Permission.objects.create(
++            content_type=userproxy_type,
++            codename=first_user_permission,
++            name='already present userproxy target',
++        )
++
++        for codename in proxy_permissions:
++            Permission.objects.create(
++                content_type=concrete_proxy_type,
++                codename=codename,
++                name='legacy proxy source',
++            )
++        for codename in user_permissions:
++            Permission.objects.create(
++                content_type=concrete_user_type,
++                codename=codename,
++                name='legacy userproxy source',
++            )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_type,
++                codename=first_proxy_permission,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=userproxy_type,
++                codename=first_user_permission,
++            ).count(),
++            1,
++        )
++        for codename in proxy_permissions:
++            self.assertEqual(
++                Permission.objects.filter(content_type=proxy_type, codename=codename).count(),
++                1,
++            )
++        for codename in user_permissions:
++            self.assertEqual(
++                Permission.objects.filter(content_type=userproxy_type, codename=codename).count(),
++                1,
++            )
++
++    def test_G70_004_auth_0011_completes_with_same_and_different_app_label_proxy_changes(self):
++        concrete_proxy_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=True)
++        proxy_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        concrete_user_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=True)
++        userproxy_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=False)
++
++        proxy_permissions = sorted(self._required_permissions(Proxy))
++        user_permissions = sorted(self._required_permissions(UserProxy))
++
++        # Same-app-label transition starts with one upgraded tuple and missing source rows.
++        Permission.objects.create(
++            content_type=proxy_type,
++            codename=proxy_permissions[0],
++            name='already upgraded proxy',
++        )
++        for codename in proxy_permissions[1:]:
++            Permission.objects.create(
++                content_type=concrete_proxy_type,
++                codename=codename,
++                name='legacy proxy source',
++            )
++
++        # Different-app-label transition mirrors the same mixed state.
++        Permission.objects.create(
++            content_type=userproxy_type,
++            codename=user_permissions[0],
++            name='already upgraded userproxy',
++        )
++        for codename in user_permissions[1:]:
++            Permission.objects.create(
++                content_type=concrete_user_type,
++                codename=codename,
++                name='legacy userproxy source',
++            )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        for codename in proxy_permissions:
++            self.assertEqual(
++                Permission.objects.filter(content_type=proxy_type, codename=codename).count(),
++                1,
++            )
++        for codename in user_permissions:
++            self.assertEqual(
++                Permission.objects.filter(content_type=userproxy_type, codename=codename).count(),
++                1,
++            )
+diff --git a/tests/auth_tests/test_auth_proxy_permissions_migration_g70_005.py b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_005.py
+new file mode 100644
+index 0000000..7a49b4a
+--- /dev/null
++++ b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_005.py
+@@ -0,0 +1,216 @@
++from importlib import import_module
++
++from django.apps import apps
++from django.contrib.auth.models import Permission
++from django.contrib.contenttypes.models import ContentType
++from django.test import TestCase
++
++from .models import SharedCodenameProxyA, SharedCodenameProxyB
++from tests.contenttypes_tests.models import SharedCodenameProxy as CrossAppSharedCodenameProxy
++
++
++update_proxy_permissions = import_module(
++    'django.contrib.auth.migrations.0011_update_proxy_permissions'
++)
++
++
++SHARED_CODENAME = 'shared_proxy_permission'
++
++
++G70_005_REQUIREMENT_TO_VERIFICATION = {
++    "G70-005": [
++        "G70_005UpdateProxyPermissionsTraceabilityTests::test_G70_005_scope_proxy_permission_updates_by_resolved_content_type_and_codename",
++        "G70_005UpdateProxyPermissionsTraceabilityTests::test_G70_005_keep_same_app_label_proxy_models_isolated_by_content_type_and_codename",
++        "G70_005UpdateProxyPermissionsTraceabilityTests::test_G70_005_keep_different_app_label_proxy_models_isolated_by_content_type_and_codename",
++        "G70_005UpdateProxyPermissionsTraceabilityTests::test_G70_005_prevent_cross_pollution_for_same_codename_across_content_types",
++    ],
++}
++
++
++class G70_005UpdateProxyPermissionsTraceabilityTests(TestCase):
++    available_apps = [
++        "auth_tests",
++        "contenttypes_tests",
++        "django.contrib.auth",
++        "django.contrib.contenttypes",
++    ]
++
++    def setUp(self):
++        Permission.objects.all().delete()
++
++    def _concrete_type(self, model):
++        return ContentType.objects.get_for_model(model, for_concrete_model=True)
++
++    def _proxy_type(self, model):
++        return ContentType.objects.get_for_model(model, for_concrete_model=False)
++
++    def test_G70_005_scope_proxy_permission_updates_by_resolved_content_type_and_codename(self):
++        concrete_a = self._concrete_type(SharedCodenameProxyA)
++        proxy_a = self._proxy_type(SharedCodenameProxyA)
++        concrete_b = self._concrete_type(SharedCodenameProxyB)
++        proxy_b = self._proxy_type(SharedCodenameProxyB)
++
++        Permission.objects.create(
++            content_type=proxy_a,
++            codename=SHARED_CODENAME,
++            name='already-present-a',
++        )
++        Permission.objects.create(
++            content_type=concrete_b,
++            codename=SHARED_CODENAME,
++            name='source-b',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_a,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_b,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_b,
++                codename=SHARED_CODENAME,
++            ).count(),
++            0,
++        )
++
++    def test_G70_005_keep_same_app_label_proxy_models_isolated_by_content_type_and_codename(self):
++        concrete_a = self._concrete_type(SharedCodenameProxyA)
++        proxy_a = self._proxy_type(SharedCodenameProxyA)
++        concrete_b = self._concrete_type(SharedCodenameProxyB)
++        proxy_b = self._proxy_type(SharedCodenameProxyB)
++
++        Permission.objects.create(
++            content_type=concrete_a,
++            codename=SHARED_CODENAME,
++            name='source-a',
++        )
++        Permission.objects.create(
++            content_type=proxy_b,
++            codename=SHARED_CODENAME,
++            name='already-present-b',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_a,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_b,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_a,
++                codename=SHARED_CODENAME,
++            ).count(),
++            0,
++        )
++
++    def test_G70_005_keep_different_app_label_proxy_models_isolated_by_content_type_and_codename(self):
++        concrete_a = self._concrete_type(SharedCodenameProxyA)
++        proxy_a = self._proxy_type(SharedCodenameProxyA)
++        concrete_b = self._concrete_type(CrossAppSharedCodenameProxy)
++        proxy_b = self._proxy_type(CrossAppSharedCodenameProxy)
++
++        Permission.objects.create(
++            content_type=proxy_a,
++            codename=SHARED_CODENAME,
++            name='already-present-a',
++        )
++        Permission.objects.create(
++            content_type=concrete_b,
++            codename=SHARED_CODENAME,
++            name='source-b',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_a,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_b,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_b,
++                codename=SHARED_CODENAME,
++            ).count(),
++            0,
++        )
++
++    def test_G70_005_prevent_cross_pollution_for_same_codename_across_content_types(self):
++        concrete_a = self._concrete_type(SharedCodenameProxyA)
++        proxy_a = self._proxy_type(SharedCodenameProxyA)
++        concrete_b = self._concrete_type(CrossAppSharedCodenameProxy)
++        proxy_b = self._proxy_type(CrossAppSharedCodenameProxy)
++
++        Permission.objects.create(
++            content_type=concrete_a,
++            codename=SHARED_CODENAME,
++            name='source-a',
++        )
++        Permission.objects.create(
++            content_type=concrete_b,
++            codename=SHARED_CODENAME,
++            name='source-b',
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_a,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_b,
++                codename=SHARED_CODENAME,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_a,
++                codename=SHARED_CODENAME,
++            ).count(),
++            0,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_b,
++                codename=SHARED_CODENAME,
++            ).count(),
++            0,
++        )
+diff --git a/tests/auth_tests/test_auth_proxy_permissions_migration_g70_006.py b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_006.py
+new file mode 100644
+index 0000000..4b18062
+--- /dev/null
++++ b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_006.py
+@@ -0,0 +1,283 @@
++from collections import Counter
++from importlib import import_module
++
++from django.apps import apps
++from django.contrib.auth.models import Permission
++from django.contrib.contenttypes.models import ContentType
++from django.test import TestCase
++
++from .models import Proxy, SharedCodenameProxyA, SharedCodenameProxyB, UserProxy
++from .models.proxy import Concrete
++
++update_proxy_permissions = import_module(
++    'django.contrib.auth.migrations.0011_update_proxy_permissions'
++)
++
++G70_006_REQUIREMENT_TO_VERIFICATION = {
++    "G70-006": [
++        "G70_006UpdateProxyPermissionsTraceabilityTests::test_G70_006_unrelated_auth_permission_rows_preserve_identity_and_count_when_forward_migration_runs_for_proxy_models",
++        "G70_006UpdateProxyPermissionsTraceabilityTests::test_G70_006_recorded_unrelated_tuple_counts_match_pre_migration_baseline_after_auth_0011_forward",
++        "G70_006UpdateProxyPermissionsTraceabilityTests::test_G70_006_only_expected_proxy_permission_keys_transition_leaving_unrelated_rows_untouched",
++    ],
++}
++
++
++class G70_006UpdateProxyPermissionsTraceabilityTests(TestCase):
++    available_apps = [
++        "auth_tests",
++        "django.contrib.auth",
++        "django.contrib.contenttypes",
++    ]
++
++    def setUp(self):
++        Permission.objects.all().delete()
++
++    def test_G70_006_unrelated_auth_permission_rows_preserve_identity_and_count_when_forward_migration_runs_for_proxy_models(self):
++        concrete_type = ContentType.objects.get_for_model(Concrete, for_concrete_model=True)
++        proxy_type = ContentType.objects.get_for_model(Proxy, for_concrete_model=False)
++        user_concrete_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=True)
++        user_proxy_type = ContentType.objects.get_for_model(UserProxy, for_concrete_model=False)
++        shared_proxy_type = ContentType.objects.get_for_model(
++            SharedCodenameProxyA,
++            for_concrete_model=False,
++        )
++        shared_concrete_type = ContentType.objects.get_for_model(
++            SharedCodenameProxyA,
++            for_concrete_model=True,
++        )
++
++        unrelated_a = Permission.objects.create(
++            content_type=concrete_type,
++            codename="unrelated_non_proxy_permission",
++            name="Non-proxy unrelated",
++        )
++        unrelated_b = Permission.objects.create(
++            content_type=proxy_type,
++            codename="unrelated_proxy_permission",
++            name="Proxy unrelated",
++        )
++        unrelated_c = Permission.objects.create(
++            content_type=user_concrete_type,
++            codename="another_unrelated_user_proxy_source_permission",
++            name="User proxy unrelated",
++        )
++        unrelated_d = Permission.objects.create(
++            content_type=user_proxy_type,
++            codename="unrelated_user_proxy_target_permission",
++            name="User proxy unrelated target",
++        )
++        unrelated_e = Permission.objects.create(
++            content_type=shared_proxy_type,
++            codename="unrelated_shared_proxy_permission",
++            name="Shared unrelated proxy",
++        )
++        unrelated_f = Permission.objects.create(
++            content_type=shared_concrete_type,
++            codename="unrelated_shared_proxy_source_permission",
++            name="Shared unrelated proxy source",
++        )
++
++        Permission.objects.create(
++            content_type=ContentType.objects.get_for_model(
++                Proxy,
++                for_concrete_model=True,
++            ),
++            codename="add_proxy",
++            name="Legacy source permission",
++        )
++
++        baseline = {
++            permission.pk: (
++                permission.content_type_id,
++                permission.codename,
++                permission.name,
++            )
++            for permission in [unrelated_a, unrelated_b, unrelated_c, unrelated_d, unrelated_e, unrelated_f]
++        }
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        post_migration = Permission.objects.filter(
++            pk__in=baseline.keys()
++        ).order_by("pk")
++
++        self.assertEqual(len(post_migration), len(baseline))
++        for permission in post_migration:
++            self.assertEqual(
++                (
++                    permission.content_type_id,
++                    permission.codename,
++                    permission.name,
++                ),
++                baseline[permission.pk],
++            )
++
++    def test_G70_006_recorded_unrelated_tuple_counts_match_pre_migration_baseline_after_auth_0011_forward(self):
++        # Unrelated tuple set includes proxy + non-proxy rows not in the migration key
++        # domain for this test case.
++        proxy_domain_model = (Proxy, SharedCodenameProxyB, UserProxy, SharedCodenameProxyA)
++        for model in proxy_domain_model:
++            for codename in (
++                '%s_%s' % (action, model._meta.model_name)
++                for action in model._meta.default_permissions
++            ):
++                Permission.objects.create(
++                    content_type=ContentType.objects.get_for_model(
++                        model,
++                        for_concrete_model=False,
++                    ),
++                    codename=codename,
++                    name="Domain baseline to be migrated",
++                )
++
++        unrelated_model = ContentType.objects.get_for_model(Concrete, for_concrete_model=True)
++        Permission.objects.create(
++            content_type=unrelated_model,
++            codename="unrelated_domain_counter_1",
++            name="Unrelated 1",
++        )
++        Permission.objects.create(
++            content_type=unrelated_model,
++            codename="unrelated_domain_counter_2",
++            name="Unrelated 2",
++        )
++        Permission.objects.create(
++            content_type=ContentType.objects.get_for_model(
++                UserProxy,
++                for_concrete_model=False,
++            ),
++            codename="shared_proxy_permission",
++            name="Shared proxy row excluded from unrelated baseline",
++        )
++
++        baseline_counts = Counter(
++            tuple(permission)
++            for permission in Permission.objects.values_list(
++                "content_type_id",
++                "codename",
++            )
++            if tuple(permission) not in expected_domain
++        )
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        expected_domain = self._expected_permission_domain(proxy_domain_model)
++        post_counts = Counter(
++            tuple(permission)
++            for permission in Permission.objects.values_list(
++                "content_type_id",
++                "codename",
++            )
++            if tuple(permission) not in expected_domain
++        )
++
++        self.assertEqual(post_counts, baseline_counts)
++        self.assertEqual(len(post_counts), len(baseline_counts))
++
++    def test_G70_006_only_expected_proxy_permission_keys_transition_leaving_unrelated_rows_untouched(self):
++        proxy_models = (Proxy, SharedCodenameProxyA, SharedCodenameProxyB, UserProxy)
++        expected_domain = self._expected_permission_domain(proxy_models)
++
++        for model in proxy_models:
++            concrete_type = ContentType.objects.get_for_model(
++                model,
++                for_concrete_model=True,
++            )
++            proxy_type = ContentType.objects.get_for_model(
++                model,
++                for_concrete_model=False,
++            )
++            for codename in self._required_permissions(model):
++                Permission.objects.create(
++                    content_type=concrete_type,
++                    codename=codename,
++                    name="Source before migration",
++                )
++
++        unrelated_rows = {
++            (
++                ContentType.objects.get_for_model(
++                    SharedCodenameProxyA, for_concrete_model=False
++                ).id,
++                "another_unrelated",
++            ): {
++                "name": "Unrelated proxy model target",
++            },
++            (
++                ContentType.objects.get_for_model(Concrete, for_concrete_model=True).id,
++                "unrelated_non_proxy",
++            ): {
++                "name": "Unrelated non-proxy",
++            },
++            (
++                ContentType.objects.get_for_model(UserProxy, for_concrete_model=True).id,
++                "still_unrelated_non_migrated",
++            ): {
++                "name": "Unrelated non-proxy 2",
++            },
++        }
++        for (content_type_id, codename), values in unrelated_rows.items():
++            Permission.objects.create(
++                content_type_id=content_type_id,
++                codename=codename,
++                name=values["name"],
++            )
++
++        pre_snapshot = {
++            permission.id: (
++                permission.content_type_id,
++                permission.codename,
++                permission.name,
++            )
++            for permission in Permission.objects.all()
++            if (permission.content_type_id, permission.codename) not in expected_domain
++        }
++
++        update_proxy_permissions.update_proxy_model_permissions(apps, None)
++
++        post_snapshot = {
++            permission.id: (
++                permission.content_type_id,
++                permission.codename,
++                permission.name,
++            )
++            for permission in Permission.objects.all()
++            if (permission.content_type_id, permission.codename) not in expected_domain
++        }
++
++        self.assertEqual(post_snapshot, pre_snapshot)
++        for model in proxy_models:
++            proxy_type = ContentType.objects.get_for_model(
++                model,
++                for_concrete_model=False,
++            )
++            for codename in self._required_permissions(model):
++                self.assertEqual(
++                    Permission.objects.filter(
++                        content_type=proxy_type,
++                        codename=codename,
++                    ).count(),
++                    1,
++                )
++
++    def _required_permissions(self, model):
++        return {
++            "%s_%s" % (action, model._meta.model_name)
++            for action in model._meta.default_permissions
++        }.union(codename for codename, _name in model._meta.permissions)
++
++    def _expected_permission_domain(self, models):
++        domain = set()
++        for model in models:
++            concrete_type = ContentType.objects.get_for_model(
++                model,
++                for_concrete_model=True,
++            )
++            proxy_type = ContentType.objects.get_for_model(
++                model,
++                for_concrete_model=False,
++            )
++            for codename in self._required_permissions(model):
++                domain.add((concrete_type.id, codename))
++                domain.add((proxy_type.id, codename))
++        return domain
+diff --git a/tests/auth_tests/test_auth_proxy_permissions_migration_g70_007.py b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_007.py
+new file mode 100644
+index 0000000..b5cd9ef
+--- /dev/null
++++ b/tests/auth_tests/test_auth_proxy_permissions_migration_g70_007.py
+@@ -0,0 +1,259 @@
++from importlib import import_module
++
++from django.apps import apps
++from django.contrib.auth.models import Group, Permission, User
++from django.contrib.contenttypes.models import ContentType
++from django.test import TestCase
++
++from .models import Proxy, UserProxy
++
++
++update_proxy_permissions = import_module(
++    'django.contrib.auth.migrations.0011_update_proxy_permissions'
++)
++
++
++G70_007_REQUIREMENT_TO_VERIFICATION = {
++    "G70-007": [
++        "G70_007UpdateProxyPermissionsTraceabilityTests::test_G70_007_reversal_of_auth_0011_preserves_proxy_permission_row_coherence_without_duplicate_related_failures",
++        "G70_007UpdateProxyPermissionsTraceabilityTests::test_G70_007_reversal_preserves_user_and_group_proxy_permission_relationships_in_same_app_label_mode",
++        "G70_007UpdateProxyPermissionsTraceabilityTests::test_G70_007_reversal_preserves_user_and_group_proxy_permission_relationships_in_different_app_label_mode",
++    ],
++}
++
++
++class G70_007UpdateProxyPermissionsTraceabilityTests(TestCase):
++    # G70-007 requirement-to-logic map:
++    # - Reverse coherence:
++    #   input: affected proxy and concrete permission tuples after forward migration.
++    #   process: execute revert path for each required codename.
++    #   output: tuple is in coherent terminal state (existing target/no new duplicate).
++    # - Relationship preservation:
++    #   input: existing auth_user_user_permissions / auth_group_permissions rows for affected permissions.
++    #   process: rollback branch preserves valid permission row identity or stabilizes target with get_or_create.
++    #   output: user/group relationship sets remain coherent and no IntegrityError aborts.
++    available_apps = [
++        "auth_tests",
++        "django.contrib.auth",
++        "django.contrib.contenttypes",
++    ]
++
++    def setUp(self):
++        Permission.objects.all().delete()
++        User.objects.all().delete()
++        Group.objects.all().delete()
++
++    def _content_types(self, model):
++        return (
++            ContentType.objects.get_for_model(model, for_concrete_model=True),
++            ContentType.objects.get_for_model(model, for_concrete_model=False),
++        )
++
++    def test_G70_007_reversal_of_auth_0011_preserves_proxy_permission_row_coherence_without_duplicate_related_failures(self):
++        concrete_content_type, proxy_content_type = self._content_types(Proxy)
++
++        # G70-007 reverse coherence pseudocode:
++        # 1) identify affected proxy models and required permission codenames
++        # 2) seed mixed pre-revert states (target-only, source-only, both-missing, both-present)
++        # 3) call revert path
++        # 4) assert per codename state transition:
++        #    - target present -> DONE_NOOP
++        #    - moved -> DONE_MOVED
++        #    - created -> DONE_CREATED
++        #    - collision -> DONE_ALREADY_SATISFIED (no failure)
++        source_only_codename = "add_proxy"
++        target_only_codename = "change_proxy"
++        missing_codename = "delete_proxy"
++        collision_codename = "display_proxys"
++
++        source_only_permission = Permission.objects.create(
++            content_type=proxy_content_type,
++            codename=source_only_codename,
++            name="Source row should be moved",
++        )
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename=target_only_codename,
++            name="Target row already present",
++        )
++        Permission.objects.create(
++            content_type=concrete_content_type,
++            codename=collision_codename,
++            name="Existing target collision row",
++        )
++        Permission.objects.create(
++            content_type=proxy_content_type,
++            codename=collision_codename,
++            name="Source collision row",
++        )
++
++        update_proxy_permissions.revert_proxy_model_permissions(apps, None)
++
++        moved_permission = Permission.objects.get(
++            content_type=concrete_content_type,
++            codename=source_only_codename,
++        )
++        missing_permission = Permission.objects.get(
++            content_type=concrete_content_type,
++            codename=missing_codename,
++        )
++
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=source_only_codename,
++            ).count(),
++            0,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_content_type,
++                codename=target_only_codename,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_content_type,
++                codename=missing_codename,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=missing_codename,
++            ).count(),
++            0,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_content_type,
++                codename=collision_codename,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=collision_codename,
++            ).count(),
++            1,
++        )
++        self.assertEqual(moved_permission.id, source_only_permission.id)
++        self.assertEqual(moved_permission.name, source_only_permission.name)
++        self.assertEqual(missing_permission.name, 'Proxy permission for proxy')
++
++    def test_G70_007_reversal_preserves_user_and_group_proxy_permission_relationships_in_same_app_label_mode(self):
++        # G70-007 relationship logic pseudocode for same-app-label mode:
++        # 1) create proxy permissions and related user/group permission links where
++        #    app_label(source) == app_label(target)
++        # 2) execute rollback for the same model pair repeatedly if needed
++        # 3) verify:
++        #    - user/group FK rows remain valid
++        #    - permissions referenced by links still satisfy lookup via has_perm-style codename checks
++        concrete_content_type, proxy_content_type = self._content_types(Proxy)
++        codename = "add_proxy"
++        source_permission = Permission.objects.create(
++            content_type=proxy_content_type,
++            codename=codename,
++            name="Coherent same-app permission",
++        )
++
++        user = User.objects.create()
++        group = Group.objects.create(name="same-app-group")
++        user.user_permissions.add(source_permission)
++        group.permissions.add(source_permission)
++
++        update_proxy_permissions.revert_proxy_model_permissions(apps, None)
++
++        target_permission = Permission.objects.get(
++            content_type=concrete_content_type,
++            codename=codename,
++        )
++        user = User.objects.get(pk=user.pk)
++        group = Group.objects.get(pk=group.pk)
++
++        self.assertTrue(user.has_perm("auth_tests.add_proxy"))
++        self.assertTrue(
++            user.user_permissions.filter(pk=target_permission.pk).exists(),
++        )
++        self.assertFalse(
++            user.user_permissions.filter(pk=source_permission.pk).exists(),
++        )
++        self.assertTrue(
++            group.permissions.filter(pk=target_permission.pk).exists(),
++        )
++        self.assertFalse(
++            group.permissions.filter(pk=source_permission.pk).exists(),
++        )
++        self.assertEqual(target_permission.id, source_permission.id)
++
++    def test_G70_007_reversal_preserves_user_and_group_proxy_permission_relationships_in_different_app_label_mode(self):
++        # G70-007 relationship logic pseudocode for different-app-label mode:
++        # 1) create source/target permission tuples with differing app labels
++        # 2) attach users/groups to source-side permissions
++        # 3) run rollback path
++        # 4) verify:
++        #    - no duplicate-related IntegrityError path
++        #    - related users/groups resolve to a coherent permission identity in either source/target state
++        concrete_content_type, proxy_content_type = self._content_types(UserProxy)
++        moved_codename = "use_different_app_label"
++        colliding_codename = "add_userproxy"
++
++        moved_source_permission = Permission.objects.create(
++            content_type=proxy_content_type,
++            codename=moved_codename,
++            name="Move path source permission",
++        )
++        collision_source_permission = Permission.objects.create(
++            content_type=proxy_content_type,
++            codename=colliding_codename,
++            name="Pre-existing source collision",
++        )
++        collision_target_permission = Permission.objects.create(
++            content_type=concrete_content_type,
++            codename=colliding_codename,
++            name="Pre-existing target collision",
++        )
++
++        user = User.objects.create()
++        group = Group.objects.create(name="different-app-group")
++        user.user_permissions.add(moved_source_permission, collision_source_permission)
++        group.permissions.add(collision_target_permission)
++
++        update_proxy_permissions.revert_proxy_model_permissions(apps, None)
++
++        user = User.objects.get(pk=user.pk)
++        group = Group.objects.get(pk=group.pk)
++        moved_target_permission = Permission.objects.get(
++            content_type=concrete_content_type,
++            codename=moved_codename,
++        )
++
++        self.assertTrue(user.has_perm("auth.use_different_app_label"))
++        self.assertFalse(user.has_perm("auth_tests.use_different_app_label"))
++        self.assertTrue(
++            user.user_permissions.filter(pk=moved_target_permission.pk).exists(),
++        )
++        self.assertEqual(
++            user.user_permissions.filter(pk=collision_source_permission.pk).count(),
++            1,
++        )
++        self.assertTrue(
++            group.permissions.filter(pk=collision_target_permission.pk).exists(),
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=concrete_content_type,
++                codename=colliding_codename,
++            ).count(),
++            1,
++        )
++        self.assertEqual(
++            Permission.objects.filter(
++                content_type=proxy_content_type,
++                codename=colliding_codename,
++            ).count(),
++            1,
++        )
+diff --git a/tests/contenttypes_tests/models.py b/tests/contenttypes_tests/models.py
+index eeab629..46b2aea 100644
+--- a/tests/contenttypes_tests/models.py
++++ b/tests/contenttypes_tests/models.py
+@@ -55,6 +55,14 @@ class ProxyModel(ConcreteModel):
+         proxy = True
+ 
+ 
++class SharedCodenameProxy(ConcreteModel):
++    class Meta:
++        proxy = True
++        permissions = (
++            ('shared_proxy_permission', 'Can share this proxy permission scope'),
++        )
++
++
+ class FooWithoutUrl(models.Model):
+     """
+     Fake model not defining ``get_absolute_url`` for
