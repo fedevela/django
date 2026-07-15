@@ -157,6 +157,11 @@ class ASGIHandler(base.BaseHandler):
         if request is None:
             await self.send_response(error_response, send)
             return
+        # ASGI-001: Async response callability contract.
+        # Deterministic behavior required by staticfiles ASGI dispatch:
+        # - resolve an awaitable callable via `self.get_response_async(request)`;
+        # - invoke it exactly once per request after request creation;
+        # - fail loudly if it is not callable/awaitable before sending data.
         # Get the response, using the async mode of BaseHandler.
         response = await self.get_response_async(request)
         response._handler_class = self.__class__
