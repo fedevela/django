@@ -1,0 +1,67 @@
+AUTORELOAD-001 Architecture: embedded-null path-resolution failure in autoreload module listing
+===============================================================================
+
+Canonical requirement
+- AUTORELOAD-001: The reloader must catch `ValueError: embedded null byte` from
+  module path resolution and skip only that malformed path entry.
+
+Requirement-to-architecture pressure map
+- Requirement pressure: Exception-targeting policy
+  - Locus: `django.utils.autoreload.iter_modules_and_files`
+  - Responsibility: handle only path-resolution failures for malformed candidates.
+- Requirement pressure: Boundary isolation
+  - Locus: `django.utils.autoreload.iter_all_python_module_files`
+  - Responsibility: assemble module iterator; enforce policy belongs to downstream path-normalization boundary.
+- Requirement pressure: Observable behavior contract
+  - Locus: returned path set from `iter_modules_and_files`
+  - Responsibility: stable deduped absolute Path output with single-entry skip semantics.
+
+Placement and ownership
+- Primary owner: `django/utils/autoreload.py` remains the processing boundary.
+  - `iter_modules_and_files` owns candidate normalization, resolution filtering,
+    and set assembly.
+  - `iter_all_python_module_files` owns module enumeration and candidate sourcing.
+- External ownership: stdlib `pathlib.Path` is the abstraction for path normalization.
+  - `Path.resolve(strict=True).absolute()` is the single resolution mechanism in this obligation.
+
+Interface/contracts
+- Inbound contract for `iter_modules_and_files(modules, extra_files)`
+  - `modules`: iterable of imported runtime objects.
+  - `extra_files`: iterable of candidate path-like values.
+  - Output: `frozenset(Path)` of resolved absolute paths.
+- Candidate contract (internal boundary):
+  - Accepted when `filename` is truthy and path-convertible.
+  - Resolved only when strict resolution succeeds.
+  - Missing path (`FileNotFoundError`) is ignored.
+  - Malformed path (`ValueError` originating from resolution due to embedded null byte)
+    is ignored for that candidate only.
+  - Any other exception remains propagated.
+
+Dependency direction notes
+- `iter_all_python_module_files` -> `iter_modules_and_files`
+- `iter_modules_and_files` -> `pathlib.Path`
+- Both functions should avoid broad filesystem policy coupling; only `Path` resolution errors
+  are boundary-filtered here.
+
+Integration-seam skeleton
+- Boundary seam to introduce next: candidate-resolution adapter (if needed for testability)
+  - Function: `_iter_resolvable_candidates(modules, extra_files)`
+  - Inputs: same streams as `iter_modules_and_files` currently consumes.
+  - Behavior: yields only candidates that pass the AUTORELOAD-001 rejection policy.
+  - Current phase keeps this as design boundary; no behavior change yet.
+
+Traceability
+- `AUTORELOAD-001` currently traced in code comments in:
+  - `django/utils/autoreload.py`
+    - `iter_all_python_module_files` skip-behavior note
+    - `iter_modules_and_files` candidate resolution block
+- Verification scaffold currently in:
+  - `tests/utils_tests/test_autoreload.py`
+    - `AUTORELOAD_REQUIREMENT_TO_VERIFICATION`
+    - placeholder tests under `TestIterModulesAndFilesContractTests`
+
+Minimal compliance criteria for next phase
+- Keep contract ownership here (`iter_modules_and_files` only for malformed-path filtering).
+- Add targeted exception branch for embedded-null candidate and continue.
+- Preserve behavior for valid entries and skip malformed entry only.
+- Do not add generic exception suppression at this boundary.
