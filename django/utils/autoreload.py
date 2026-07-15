@@ -222,6 +222,22 @@ def get_child_arguments():
 
 def get_manage_py_path():
     """Return the resolved `manage.py` path when starting `runserver`."""
+    # AUTO-003 pseudocode:
+    # INPUT:
+    #   - process launch vector: sys.argv[0] (script token), sys.argv[1] (subcommand).
+    # BRANCH:
+    #   - if argv is missing / command is not runserver / argv[0] is empty -> return None.
+    #   - else normalize argv[0] into an absolute candidate via Path.resolve()
+    #     (resolves cwd-relative forms, symbolic links, and redundant separators).
+    #   - if candidate.name != 'manage.py' -> return None.
+    #   - if candidate does not exist -> return None.
+    # TRANSITION:
+    #   - return candidate only when all preconditions pass.
+    #   - returned value must be a single canonical absolute real path for a valid
+    #     manage.py launch form (absolute, relative, symlink, subdirectory).
+    # FAILURE PATH:
+    #   - any normalization / resolution error should short-circuit to None and avoid
+    #     touching watcher state.
     if len(sys.argv) < 2:
         return None
     if sys.argv[1] != 'runserver':
@@ -383,6 +399,15 @@ class StatReloader(BaseReloader):
 
     def __init__(self):
         super().__init__()
+        # AUTO-003 pseudocode:
+        # PURPOSE: install exactly one canonical manage.py watch entry at startup.
+        # DECISION:
+        #   - compute candidate = get_manage_py_path()
+        #   - if candidate is None: no runserver-manage.py watch entry is added.
+        #   - if candidate is a path: register via watch_file(candidate).
+        # POSTCONDITION:
+        #   - watcher snapshot receives only the canonical absolute real path from
+        #     get_manage_py_path.
         manage_py = get_manage_py_path()
         if manage_py is not None:
             self.watch_file(manage_py)
