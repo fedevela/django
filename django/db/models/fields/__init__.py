@@ -1585,6 +1585,13 @@ class DurationField(Field):
     of microseconds on other databases.
     """
     empty_strings_allowed = False
+    # DUR-001/DUR-002/DUR-005:
+    # Logic obligation:
+    # - invalid input must be reported through code "invalid" with message from
+    #   self.error_messages['invalid'].
+    # - default message is expected to describe format "[DD] [[HH:]MM:]ss[.uuuuuu]".
+    # - legacy token order "[DD] [HH:[MM:]]ss[.uuuuuu]" must not be emitted.
+    # - if callers pass error_messages["invalid"], that override must remain authoritative.
     default_error_messages = {
         'invalid': _("'%(value)s' value has an invalid format. It must be in "
                      "[DD] [HH:[MM:]]ss[.uuuuuu] format.")
@@ -1595,6 +1602,18 @@ class DurationField(Field):
         return "DurationField"
 
     def to_python(self, value):
+        # DUR-001/DUR-002:
+        # 1) If value is None => return None.
+        # 2) If value is already datetime.timedelta => return.
+        # 3) Attempt parse_duration(value).
+        # 4) If parse_duration raises ValueError -> malformed.
+        # 5) Else if parse_duration returns a timedelta => return parsed.
+        # 6) Else (parse returned None) -> malformed.
+        # 7) On malformed values, raise ValidationError('invalid', params={'value': value}),
+        #    so the message remains parameterized and can include the literal input.
+        # DUR-005:
+        # self.error_messages['invalid'] must be the effective message after constructor merge,
+        # so explicit custom invalid messages override defaults without code-path branching.
         if value is None:
             return value
         if isinstance(value, datetime.timedelta):

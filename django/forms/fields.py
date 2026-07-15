@@ -467,6 +467,13 @@ class DateTimeField(BaseTemporalField):
 
 
 class DurationField(Field):
+    # DUR-001/DUR-002/DUR-005:
+    # Logic obligation:
+    # 1) invalid-format rejection should surface via self.error_messages['invalid']
+    # 2) the canonical format contract is "[DD] [[HH:]MM:]ss[.uuuuuu]"
+    # 3) legacy form "[DD] [HH:[MM:]]ss[.uuuuuu]" is not acceptable in default output
+    # 4) any explicit error_messages override for "invalid" remains authoritative.
+    # This comment maps requirement intent to the form validation path.
     default_error_messages = {
         'invalid': _('Enter a valid duration.'),
         'overflow': _('The number of days must be between {min_days} and {max_days}.')
@@ -478,6 +485,16 @@ class DurationField(Field):
         return value
 
     def to_python(self, value):
+        # DUR-001/DUR-002:
+        # 1) If value is empty, return None (no validation failure).
+        # 2) If already datetime.timedelta, accept and return.
+        # 3) Parse with parse_duration(str(value)).
+        # 4) On OverflowError, raise "overflow" with min/max microseconds bounds.
+        # 5) If parse_duration returns None, treat as malformed duration:
+        #    raise ValidationError(self.error_messages['invalid'], code='invalid').
+        # DUR-005:
+        # explicit form-level error_messages["invalid"] replaces the default before clean();
+        # this branch must therefore emit that concrete message unchanged.
         if value in self.empty_values:
             return None
         if isinstance(value, datetime.timedelta):
