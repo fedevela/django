@@ -287,19 +287,9 @@ class HttpResponse(HttpResponseBase):
     def __init__(self, content=b'', *args, **kwargs):
         super().__init__(*args, **kwargs)
         # MEMVIEW-001 / MEMVIEW-002:
-        # Decision: constructor receives `content` as initialization input.
-        #   if isinstance(content, memoryview):
-        #       normalized_content = bytes(content)  # deterministic bytes payload
-        #       # handles empty payload as b""
-        #       # ensures .content reflects raw bytes not memoryview repr
-        #   else:
-        #       normalized_content = content
-        # Transition:
-        #   store normalized_content via `self.content` setter.
-        # Failure paths:
-        #   if bytes(content) raises, constructor initialization should surface the
-        #   exception (constructor-level failure, no deferred normalization).
-        # Content is a bytestring. See the `content` property methods.
+        # Normalize constructor-time memoryviews so response content is always bytes.
+        if isinstance(content, memoryview):
+            content = bytes(content)
         self.content = content
 
     def __repr__(self):
@@ -318,16 +308,7 @@ class HttpResponse(HttpResponseBase):
     @property
     def content(self):
         # MEMVIEW-004:
-        # Inputs: current internal container state in self._container.
-        # Transition:
-        #   read_result = b''.join(self._container)
-        # Outputs: a bytes object assembled from stored items.
-        # Guarantee:
-        #   for constructor-normalized memoryview input, container contains one
-        #   immutable bytes payload, so repeated reads are equal and stable.
-        # Failure paths:
-        #   if any _container element is non-bytes, join() path would raise or
-        #   force conversion at the byte boundary; constructor path should avoid this.
+        # Return deterministic bytes from stored container chunks on every read.
         return b''.join(self._container)
 
     @content.setter
