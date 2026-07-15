@@ -101,21 +101,22 @@ class SafeExceptionReporterFilter:
             # - iterate entries in native order
             # - recurse per (child_key, child_value) to preserve depth reachability
             # - keep dict container as dict
-            # - non-dict/non-list/tuple leaf values return unmodified.
             elif isinstance(value, dict):
                 cleansed = {k: self.cleanse_setting(k, v) for k, v in value.items()}
             # if value is list:
-            # - create a list output
-            # - for each element in index order:
-            #   - recurse with same element key context is preserved if element is dict by inner call
-            # - append each returned element unchanged for scalar entries
-            # - preserve element order exactly.
-            # elif value is tuple:
-            # - mirror same per-index recursion strategy in tuple output
-            # - preserve tuple container type and order.
-            # (recursive list/tuple logic below is required to satisfy
-            # SWE196-002 and preserve container semantics for SWE196-006)
+            # - process elements in order
+            # - recurse into each element
+            # - rebuild and preserve list type.
+            elif isinstance(value, list):
+                cleansed = [self.cleanse_setting(key, item) for item in value]
+            # if value is tuple:
+            # - process elements in order
+            # - recurse into each element
+            # - rebuild and preserve tuple type.
+            elif isinstance(value, tuple):
+                cleansed = tuple(self.cleanse_setting(key, item) for item in value)
             else:
+                # Scalar values are preserved unchanged.
                 cleansed = value
         except TypeError:
             # If the key isn't regex-able, just return as-is.

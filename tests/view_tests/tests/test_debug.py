@@ -1267,21 +1267,73 @@ class ExceptionReporterFilterTests(ExceptionReportTestMixin, LoggingCaptureMixin
 
     def test_guid_swe196_002_list_tuple_recursion_reaches_sensitive_dict_keys(self):
         """
-        Traceability artifact for recursive cleansing traversal over nested list/tuple paths.
+        Recursive cleansing should reach sensitive dict keys in nested list and tuple
+        containers.
         """
-        self.assertTrue(True)
+        reporter_filter = SafeExceptionReporterFilter()
+        initial = [
+            {'password': 'top', 'public': 'ok'},
+            (
+                {'token': 'auth'},
+                {'client_id': 'should_not_mask', 'token': {'secret': 'nested_secret'}},
+            ),
+        ]
+        value = {'payload': initial}
+        result = reporter_filter.cleanse_setting('MY_SETTING', value)
+        expected = {
+            'payload': [
+                {'password': reporter_filter.cleansed_substitute, 'public': 'ok'},
+                (
+                    {'token': reporter_filter.cleansed_substitute},
+                    {'client_id': 'should_not_mask', 'token': {'secret': reporter_filter.cleansed_substitute}},
+                ),
+            ]
+        }
+        self.assertEqual(result, expected)
 
     def test_guid_swe196_006_iterable_shape_is_preserved_for_list_and_tuple(self):
         """
-        Traceability artifact for preserving iterable container types and nesting.
+        Recursive cleansing must preserve list and tuple container types and element order.
         """
-        self.assertTrue(True)
+        reporter_filter = SafeExceptionReporterFilter()
+        initial = [
+            {'public': 1},
+            (('password', 'token'), {'token': 'abc', 'nested': ('x', {'api_key': 'value'})}),
+        ]
+        result = reporter_filter.cleanse_setting('MY_SETTING', {'value': initial})['value']
+        self.assertIsInstance(result, list)
+        self.assertIsInstance(result[1], tuple)
+        self.assertIsInstance(result[1][1], dict)
+        self.assertIsInstance(result[1][1]['nested'], tuple)
+        self.assertIsInstance(result[1][1]['nested'][1], dict)
+        self.assertEqual(result[1][0], ('password', 'token'))
+        self.assertEqual(result[1][1], {'token': reporter_filter.cleansed_substitute, 'nested': ('x', {'api_key': reporter_filter.cleansed_substitute})})
+        self.assertEqual(
+            result[1][1]['nested'][1]['api_key'],
+            reporter_filter.cleansed_substitute,
+        )
 
     def test_guid_swe196_005_iterable_scalars_are_preserved_and_unchanged(self):
         """
-        Traceability artifact for preserving scalar entries and order in mixed iterables.
+        Non-dict scalar values in iterables must remain unchanged and ordered.
         """
-        self.assertTrue(True)
+        reporter_filter = SafeExceptionReporterFilter()
+        initial = [
+            {'token': 'secret', 'keep': 'visible'},
+            1,
+            ('x', {'password': 'hidden'}, 'y'),
+            3.14,
+            ({'api_key': 'abc'}, 5),
+        ]
+        result = reporter_filter.cleanse_setting('MY_SETTING', initial)
+        self.assertEqual(result[0], {'token': reporter_filter.cleansed_substitute, 'keep': 'visible'})
+        self.assertEqual(result[1], 1)
+        self.assertEqual(result[2][0], 'x')
+        self.assertEqual(result[2][1]['password'], reporter_filter.cleansed_substitute)
+        self.assertEqual(result[2][2], 'y')
+        self.assertEqual(result[3], 3.14)
+        self.assertEqual(result[4][0], {'api_key': reporter_filter.cleansed_substitute})
+        self.assertEqual(result[4][1], 5)
 
     def test_request_meta_filtering(self):
         request = self.rf.get('/', HTTP_SECRET_HEADER='super_secret')
