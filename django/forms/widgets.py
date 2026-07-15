@@ -70,6 +70,24 @@ class Media:
 
     @property
     def _js(self):
+        return self._aggregate_js(self._js_lists)
+
+    def _aggregate_js(self, source_lists):
+        """
+        Aggregate the original JavaScript declarations held by ``Media``.
+
+        Architecture contract:
+
+        * ``Media.__add__()`` owns collection of source declarations and must
+          pass them here without first flattening them (MEDIA-001, MEDIA-002).
+        * This seam owns JavaScript uniqueness and compatible declared-order
+          resolution (MEDIA-005, MEDIA-006).
+        * Ordering and warnings emitted below this seam must be deterministic
+          for a fixed sequence of source declarations (MEDIA-007).
+
+        Rendering consumes the result through ``Media._js``. CSS aggregation
+        and the public shape of media declarations remain outside this seam.
+        """
         # Pseudocode contract -- MEDIA-001, MEDIA-002, MEDIA-005, MEDIA-006,
         # MEDIA-007:
         #
@@ -98,9 +116,9 @@ class Media:
         #     # MEDIA-007: fixed inputs and merge order fix the result and the
         #     # sequence of warning events on every execution.
         #     RETURN result, containing every file exactly once
-        js = self._js_lists[0]
+        js = source_lists[0]
         # filter(None, ...) avoids calling merge() with empty lists.
-        for obj in filter(None, self._js_lists[1:]):
+        for obj in filter(None, source_lists[1:]):
             js = self.merge(js, obj)
         return js
 
