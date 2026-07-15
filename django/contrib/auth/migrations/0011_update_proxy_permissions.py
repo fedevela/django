@@ -67,10 +67,19 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
                 continue
 
             try:
-                Permission.objects.filter(
+                updated = Permission.objects.filter(
                     content_type=old_content_type,
                     codename=codename,
                 ).update(content_type=new_content_type)
+                if updated == 0:
+                    # Required tuple is missing on both old and new content types.
+                    # Create it directly so the migration does not depend on retargetable
+                    # source rows.
+                    Permission.objects.create(
+                        content_type=new_content_type,
+                        codename=codename,
+                        name='Proxy permission for %s' % opts.model_name,
+                    )
             except IntegrityError:
                 # Treat an unexpected integrity collision as a proxy of
                 # an already-existing target tuple, and continue.
