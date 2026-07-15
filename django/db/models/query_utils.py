@@ -56,6 +56,10 @@ class Q(tree.Node):
     conditional = True
 
     def __init__(self, *args, _connector=None, _negated=False, **kwargs):
+        # ISNULL-003 composition contract:
+        # - normalize constructor input into Node children (args/kwargs).
+        # - no validation of lookup RHS values is performed here.
+        # - validation responsibility remains in Query.add_q/_add_q/build_filter path.
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
@@ -69,6 +73,10 @@ class Q(tree.Node):
         elif not self:
             return copy.deepcopy(other)
 
+        # ISNULL-003 composition flow:
+        # - return a fresh Q node with connector=conn
+        # - preserve both operands as children
+        # - do not validate rhs here; validation happens when traversed by Query._add_q
         obj = type(self)()
         obj.connector = conn
         obj.add(self, conn)

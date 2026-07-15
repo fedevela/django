@@ -1145,6 +1145,10 @@ class Query(BaseExpression):
 
     def _validate_isnull_lookup_rhs(self, lookup_name, rhs):
         """Guardrails for lookup-value type validation before SQL rendering."""
+        # ISNULL-003 canonical guard:
+        # - exact check for lookup_name == 'isnull'
+        # - reject non-bool rhs with one shared ValueError message path
+        # - all lookup construction entry points must transit this check via build_lookup
         if lookup_name == 'isnull' and not isinstance(rhs, bool):
             raise ValueError(
                 'Invalid value for lookup "__isnull": got value of type %s.'
@@ -1283,6 +1287,10 @@ class Query(BaseExpression):
             # - Build direct lookups before adding to WHERE.
             # - Any ValueError from build_lookup must escape here and stop query
             #   compilation before SQL generation.
+            # ISNULL-003 trace:
+            # - direct arg->(field, lookup, value) path enters build_lookup
+            # - build_lookup immediately invokes _validate_isnull_lookup_rhs
+            # - non-bool __isnull fails here before where-clause assembly
             condition = self.build_lookup(lookups, reffed_expression, value)
             clause.add(condition, AND)
             return clause, []
@@ -1331,6 +1339,9 @@ class Query(BaseExpression):
         # - Joined-field lookup path also routes through build_lookup.
         # - Successful guard keeps condition available for compiler and execute_sql;
         #   failing guard prevents both string compilation and database hit.
+        # ISNULL-003 parity:
+        # - joined-path also funnels lookup construction through same build_lookup
+        # - therefore invalid rhs for __isnull raises same ValueError in this branch too
         condition = self.build_lookup(lookups, col, value)
         lookup_type = condition.lookup_name
         clause.add(condition, AND)
@@ -1363,6 +1374,10 @@ class Query(BaseExpression):
         A preprocessor for the internal _add_q(). Responsible for doing final
         join promotion.
         """
+        # ISNULL-003 handoff:
+        # - add_q is a single shared entry for filters with Q trees.
+        # - it must not re-implement __isnull validation.
+        # - validation is delegated to _add_q -> build_filter -> build_lookup -> _validate_isnull_lookup_rhs.
         # For join promotion this case is doing an AND for the added q_object
         # and existing conditions. So, any existing inner join forces the join
         # type to remain inner. Existing outer joins can however be demoted.
@@ -1382,6 +1397,12 @@ class Query(BaseExpression):
                current_negated=False, allow_joins=True, split_subq=True,
                simple_col=False):
         """Add a Q-object to the current filter."""
+        # ISNULL-003 composition traversal:
+        # - maintain current_negated and branch_negated for descendants.
+        # - for each child:
+        #   - Node child -> recurse _add_q (preserves operator/negation state)
+        #   - leaf child -> build_filter(...) where __isnull RHS is validated
+        # - collected clause is returned; validation exceptions bubble here.
         connector = q_object.connector
         current_negated = current_negated ^ q_object.negated
         branch_negated = branch_negated or q_object.negated

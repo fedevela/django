@@ -902,6 +902,9 @@ class QuerySet:
         Return a new QuerySet instance with the args ANDed to the existing
         set.
         """
+        # ISNULL-003: public entrypoint anchor (filter path)
+        # - delegate to shared _filter_or_exclude with negate=False
+        # - downstream validation must always occur through add_q -> Query._add_q -> build_filter -> build_lookup
         self._not_support_combined_queries('filter')
         return self._filter_or_exclude(False, *args, **kwargs)
 
@@ -910,6 +913,9 @@ class QuerySet:
         Return a new QuerySet instance with NOT (args) ANDed to the existing
         set.
         """
+        # ISNULL-003: public entrypoint anchor (exclude path)
+        # - delegate to shared _filter_or_exclude with negate=True
+        # - downstream validation must be same as filter path (no duplicate logic here)
         self._not_support_combined_queries('exclude')
         return self._filter_or_exclude(True, *args, **kwargs)
 
@@ -918,6 +924,11 @@ class QuerySet:
             assert not self.query.is_sliced, \
                 "Cannot filter a query once a slice has been taken."
 
+        # ISNULL-003 control flow:
+        # 1. Clone query state before applying next predicate.
+        # 2. Route both filter/exclude through Query.add_q exactly once.
+        # 3. Negation switch is expressed as Q() vs ~Q() before downstream processing.
+        # 4. Any non-bool __isnull path must fail through shared Query build/filter pipeline.
         clone = self._chain()
         if negate:
             clone.query.add_q(~Q(*args, **kwargs))
@@ -1237,6 +1248,10 @@ class QuerySet:
         Return a copy of the current QuerySet that's ready for another
         operation.
         """
+        # ISNULL-003 chain semantics:
+        # 1. clone carries existing filter state and sticky_filter flag.
+        # 2. next predicate attachment uses same query tree object lineage.
+        # 3. therefore validation for newly added predicate must still occur in the shared add_q path immediately.
         obj = self._clone()
         if obj._sticky_filter:
             obj.query.filter_is_sticky = True
