@@ -222,6 +222,17 @@ def get_child_arguments():
 
 def get_manage_py_path():
     """Return the resolved `manage.py` path when starting `runserver`."""
+    # AUTO-006 pseudocode:
+    # DECISION LATTICE (launch-path gated):
+    #   IF argument length < 2 -> RETURN None.
+    #   ELSE IF argv[1] != 'runserver' -> RETURN None.
+    #   ELSE IF argv[0] is empty -> RETURN None.
+    #   ELSE TRY resolve(argv[0]) and continue only if resolution succeeds.
+    #   IF resolved name != 'manage.py' OR path missing -> RETURN None.
+    #   ELSE RETURN resolved canonical path.
+    # REQUIREMENT:
+    #   A non-manage.py launch entry must not produce a manage.py watch path
+    #   so later watch-seed logic cannot mutate scope for non-manage entry points.
     # AUTO-003 implementation:
     # - only evaluate when runserver is the subcommand.
     # - normalize candidate script path to a canonical absolute path.
@@ -426,6 +437,16 @@ class StatReloader(BaseReloader):
         #     watched path.
         #   - unchanged baselines must not satisfy any trigger branch in later
         #     cycles, so initial inclusion cannot create a restart by itself.
+        # AUTO-006 pseudocode:
+        # BRANCH:
+        #   candidate = get_manage_py_path()
+        #   IF candidate is None -> do not call self.watch_file().
+        #   IF candidate is Path -> call self.watch_file(candidate).
+        # EFFECT:
+        #   - launch entries not based on manage.py preserve their pre-seed watch
+        #     baseline exactly as-is; no synthetic manage.py scope growth occurs.
+        #   - launch entries based on manage.py append exactly one canonical
+        #     absolute watch entry.
         manage_py = get_manage_py_path()
         if manage_py is not None:
             self.watch_file(manage_py)
