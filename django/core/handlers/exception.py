@@ -40,6 +40,13 @@ def convert_exception_to_response(get_response):
 
 def response_for_exception(request, exc):
     if isinstance(exc, Http404):
+        # [DJ-RES-003] Http404 handling branch for converter-raised 404 and all routing misses.
+        # Decision matrix:
+        # - when DEBUG=True: return technical_404_response(request, exc) (diagnostic mode)
+        # - when DEBUG=False: route through get_exception_response(..., 404, exc) (safe mode)
+        # Required transitions:
+        # 1) preserve HTTP 404 status
+        # 2) avoid interactive traceback / technical diagnostics in non-debug mode
         if settings.DEBUG:
             response = debug.technical_404_response(request, exc)
         else:
@@ -104,6 +111,15 @@ def response_for_exception(request, exc):
 
 def get_exception_response(request, resolver, status_code, exception):
     try:
+        # [DJ-RES-003] Normalized response path for non-debug 404:
+        # Input:
+        # - status_code=404
+        # - exception may be Resolver404 propagated from route matching
+        # Output contract:
+        # - use configured exception handler for the status code
+        # Failure path:
+        # - if handler resolution or handler execution fails, fall back to
+        #   handle_uncaught_exception to avoid unhandled exception leakage.
         callback, param_dict = resolver.resolve_error_handler(status_code)
         response = callback(request, **{**param_dict, 'exception': exception})
     except Exception:

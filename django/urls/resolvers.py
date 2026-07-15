@@ -260,6 +260,20 @@ class RoutePattern(CheckURLMixin):
                 try:
                     kwargs[key] = converter.to_python(value)
                 except Http404 as exc:
+                    # [DJ-RES-003] Convert converter-level Http404 to a route-miss event.
+                    # Inputs:
+                    # - key: captured parameter name
+                    # - value: raw URL text for that parameter
+                    # - exc: Http404 raised during converter.to_python(value)
+                    # Decision:
+                    # - treat converter Http404 as URL resolution miss (not as internal error)
+                    # State transition:
+                    # - success_match_state -> routing_miss_state
+                    # Output:
+                    # - raise Resolver404(payload) where payload['path'] is remaining_path
+                    #   and payload['reason'] is str(exc)
+                    # Failure path:
+                    # - preserve debug-safe 404 rendering contract via resolver exception flow
                     raise Resolver404({
                         'path': path[match.end():],
                         'reason': str(exc),
