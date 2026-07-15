@@ -71,6 +71,12 @@ class Media:
     @property
     def _js(self):
         js = self._js_lists[0]
+        # MED-001/MED-002/MED-003: JS merge should be deterministic over the
+        # ordered media lists:
+        # 1) Seed state from the first list in composition order.
+        # 2) For each subsequent media list, merge it through Media.merge().
+        # 3) After each step, emit the merged frontier state for later steps.
+        # 4) Return the final state only once all merges complete.
         # filter(None, ...) avoids calling merge() with empty lists.
         for obj in filter(None, self._js_lists[1:]):
             js = self.merge(js, obj)
@@ -125,6 +131,37 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
+        # PSEUDOCODE (MED-001, MED-002, MED-003)
+        # INPUTS:
+        #   - list_1: currently merged JS order (possibly containing all prior
+        #     constraints).
+        #   - list_2: next JS order to reconcile against list_1.
+        # OUTPUT:
+        #   - combined_list: new order that satisfies merged relative constraints.
+        # STATE:
+        #   - combined_list: copy(list_1)
+        #   - last_insert_index: insertion frontier in combined_list
+        #
+        # ALGO:
+        #   combined_list = copy(list_1)
+        #   last_insert_index = len(list_1)
+        #   for path in reverse(list_2):               # right-to-left fold
+        #     if path not in combined_list:
+        #       insert path at last_insert_index        # MED-001 / MED-003 dedupe by insert-if-missing
+        #     else:
+        #       existing_index = index(path in combined_list)
+        #       if existing_index > last_insert_index:
+        #         warn MediaOrderConflictWarning         # inverse order would be required
+        #       last_insert_index = existing_index      # anchor frontier for earlier neighbors
+        #   return combined_list
+        #
+        # REQUIREMENT TRACE:
+        # - MED-002: reverse traversal + moving frontier captures transitive chains
+        #   (a before b before c) and avoids false inversions from merge sequencing.
+        # - MED-003: uniqueness is enforced as each unmatched path is inserted at
+        #   most once; matched paths never duplicate.
+        # - MED-001: reproducer expectation depends on stable anchor movement and
+        #   first-merge-then-merge ordering defined by _js list composition.
         # Start with a copy of list_1.
         combined_list = list(list_1)
         last_insert_index = len(list_1)
@@ -150,6 +187,9 @@ class Media:
         return combined_list
 
     def __add__(self, other):
+        # MED-002: Composition order is captured by concatenating list bundles.
+        # MED-001/MED-003: each added media object appends its css/js candidate lists
+        # in sequence; final ordering is resolved later by _js/_css through merge().
         combined = Media()
         combined._css_lists = self._css_lists + other._css_lists
         combined._js_lists = self._js_lists + other._js_lists
