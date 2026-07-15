@@ -239,6 +239,7 @@ class FileSystemStorage(Storage):
 
     def _save(self, name, content):
         full_path = self.path(name)
+        file_permissions_mode = self.file_permissions_mode
 
         # DJ10914-002 (default-path parity):
         # STATE: Save enters with unresolved storage name and uploaded content object.
@@ -325,8 +326,8 @@ class FileSystemStorage(Storage):
         #   MemoryUploadedFile flows.
         # - Failure path:
         #   - Explicit None continues as existing behavior: do not change mode.
-        if self.file_permissions_mode is not None:
-            os.chmod(full_path, self.file_permissions_mode)
+        if file_permissions_mode is not None:
+            os.chmod(full_path, file_permissions_mode)
 
         # Store filenames with forward slashes, even on Windows.
         return name.replace('\\', '/')

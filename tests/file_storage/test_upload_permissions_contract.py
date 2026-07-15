@@ -7,6 +7,7 @@ import unittest
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage, get_storage_class
+from django.core.files.uploadedfile import InMemoryUploadedFile, TemporaryUploadedFile
 from django.http import HttpRequest
 from django.test import SimpleTestCase, override_settings
 
@@ -69,7 +70,23 @@ class FileUploadPermissionContractTests(SimpleTestCase):
         - When persisted through FileSystemStorage.save()
         - Then file mode resolves to 0o644 under default flow.
         """
-        pass
+        payload = b"memory uploaded file bytes"
+
+        with tempfile.TemporaryDirectory() as storage_dir:
+            storage = FileSystemStorage(storage_dir)
+            uploaded = InMemoryUploadedFile(
+                io.BytesIO(payload),
+                "file",
+                "memory.txt",
+                "text/plain",
+                len(payload),
+                "utf-8",
+            )
+            name = storage.save("memory.txt", uploaded)
+            mode = os.stat(storage.path(name)).st_mode & 0o777
+
+        self.assertEqual(storage.file_permissions_mode, 0o644)
+        self.assertEqual(mode, 0o644)
 
     @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
     def test_DJ10914_002_default_file_upload_permissions_apply_to_temporary_uploaded_file(self):
@@ -81,7 +98,24 @@ class FileUploadPermissionContractTests(SimpleTestCase):
         - When persisted through FileSystemStorage.save()
         - Then file mode resolves to 0o644 and is not 0o0600 by temporary-file defaults.
         """
-        pass
+        payload = b"temporary uploaded file bytes"
+
+        with tempfile.TemporaryDirectory() as storage_dir:
+            storage = FileSystemStorage(storage_dir)
+            with TemporaryUploadedFile(
+                "temporary.txt",
+                "text/plain",
+                len(payload),
+                "utf-8",
+            ) as uploaded:
+                uploaded.write(payload)
+                uploaded.seek(0)
+                name = storage.save("temporary.txt", uploaded)
+                mode = os.stat(storage.path(name)).st_mode & 0o777
+
+        self.assertEqual(storage.file_permissions_mode, 0o644)
+        self.assertEqual(mode, 0o644)
+        self.assertNotEqual(mode, 0o600)
 
     @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
     def test_DJ10914_002_default_file_upload_permissions_are_identical_across_handlers(self):
@@ -93,7 +127,38 @@ class FileUploadPermissionContractTests(SimpleTestCase):
         - When both run with FILE_UPLOAD_PERMISSIONS unset
         - Then both persisted files resolve to identical mode 0o644.
         """
-        pass
+        memory_payload = b"memory for parity"
+        temp_payload = b"temporary for parity"
+
+        with tempfile.TemporaryDirectory() as storage_dir:
+            storage = FileSystemStorage(storage_dir)
+
+            memory_uploaded = InMemoryUploadedFile(
+                io.BytesIO(memory_payload),
+                "memory_file",
+                "memory.txt",
+                "text/plain",
+                len(memory_payload),
+                "utf-8",
+            )
+            memory_name = storage.save("memory.txt", memory_uploaded)
+            memory_mode = os.stat(storage.path(memory_name)).st_mode & 0o777
+
+            with TemporaryUploadedFile(
+                "temporary.txt",
+                "text/plain",
+                len(temp_payload),
+                "utf-8",
+            ) as temp_uploaded:
+                temp_uploaded.write(temp_payload)
+                temp_uploaded.seek(0)
+                temp_name = storage.save("temporary.txt", temp_uploaded)
+                temporary_mode = os.stat(storage.path(temp_name)).st_mode & 0o777
+
+        self.assertEqual(storage.file_permissions_mode, 0o644)
+        self.assertEqual(memory_mode, 0o644)
+        self.assertEqual(temporary_mode, 0o644)
+        self.assertEqual(memory_mode, temporary_mode)
 
     @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
     @override_settings(FILE_UPLOAD_PERMISSIONS=0o600)
