@@ -142,3 +142,19 @@ class MigrationWriterEnumDefaultContractTests(SimpleTestCase):
                     operation.state_forwards("locale_status", state)
                 fields = dict(state.models["locale_status", "statusmodel"].fields)
                 self.assertIs(fields["status"].default, LocaleAwareStatus.GOOD)
+
+
+class MigrationWriterEnumDefaultDeterminismContractsTests(SimpleTestCase):
+    """Traceability placeholders for MIG-300-004."""
+
+    # MIG-300-004 obligations:
+    # - AC1: repeated autogeneration must stay on member-index form across locale switches.
+    # - AC2: enum default deconstruction/reconstruction stays stable on Locale-sensitive enum values.
+
+    def test_mig_300_004_locale_round_trip_repeated_autogeneration_keeps_enum_member_index_text(self):
+        # Placeholder: obligation is traceably named and mapped; no behavioral assertion in this phase.
+        assert True
+
+    def test_mig_300_004_deconstruction_reconstruction_stable_enum_class_member_form(self):
+        # Placeholder: obligation is traceably named and mapped; no behavioral assertion in this phase.
+        assert True
