@@ -71,6 +71,13 @@ class Media:
     @property
     def _js(self):
         js = self._js_lists[0]
+        # Remove duplicate filenames within each media definition so a single
+        # list or a merged list never emits the same script multiple times.
+        deduplicated_js = []
+        for path in js:
+            if path not in deduplicated_js:
+                deduplicated_js.append(path)
+        js = deduplicated_js
         # MED-001/MED-002/MED-003: JS merge should be deterministic over the
         # ordered media lists:
         # 1) Seed state from the first list in composition order.
@@ -162,12 +169,23 @@ class Media:
         #   most once; matched paths never duplicate.
         # - MED-001: reproducer expectation depends on stable anchor movement and
         #   first-merge-then-merge ordering defined by _js list composition.
-        # Start with a copy of list_1.
-        combined_list = list(list_1)
-        last_insert_index = len(list_1)
-        # Walk list_2 in reverse, inserting each element into combined_list if
-        # it doesn't already exist.
-        for path in reversed(list_2):
+        # Ensure each list is de-duplicated before merge constraints are
+        # reconciled, preserving first-seen order.
+        deduped_list_1 = []
+        for path in list_1:
+            if path not in deduped_list_1:
+                deduped_list_1.append(path)
+        deduped_list_2 = []
+        for path in list_2:
+            if path not in deduped_list_2:
+                deduped_list_2.append(path)
+
+        # Start with a copy of list_1 (de-duplicated), then reconcile list_2.
+        combined_list = list(deduped_list_1)
+        last_insert_index = len(combined_list)
+        # Walk list_2 (de-duplicated) in reverse, inserting each element into
+        # combined_list if it doesn't already exist.
+        for path in reversed(deduped_list_2):
             try:
                 # Does path already exist in the list?
                 index = combined_list.index(path)

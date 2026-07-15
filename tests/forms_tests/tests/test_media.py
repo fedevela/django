@@ -1,6 +1,8 @@
+import warnings
 from django.forms import CharField, Form, Media, MultiWidget, TextInput
 from django.template import Context, Template
 from django.test import SimpleTestCase, override_settings
+from django.forms.widgets import MediaOrderConflictWarning
 
 
 @override_settings(
@@ -602,7 +604,35 @@ class FormsMediaTraceabilityTests(SimpleTestCase):
         ['text-editor.js', 'text-editor-extras.js', 'color-picker.js'] with no
         MediaOrderConflictWarning.
         """
-        self.assertTrue(True)
+        class ColorPicker(TextInput):
+            class Media:
+                js = ('color-picker.js',)
+
+        class SimpleTextWidget(TextInput):
+            class Media:
+                js = ('text-editor.js',)
+
+        class FancyTextWidget(TextInput):
+            class Media:
+                js = (
+                    'text-editor.js',
+                    'text-editor-extras.js',
+                    ColorPicker.media.js[0],
+                )
+
+        class MyForm(Form):
+            field1 = CharField(max_length=20, widget=SimpleTextWidget())
+            field2 = CharField(max_length=20, widget=FancyTextWidget())
+
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter('always')
+            js = MyForm().media._js
+
+        self.assertEqual(js, ['text-editor.js', 'text-editor-extras.js', 'color-picker.js'])
+        self.assertFalse(
+            any(warning.category is MediaOrderConflictWarning for warning in recorded),
+            'Expected no MediaOrderConflictWarning for satisfiable merge order',
+        )
 
     def test_med_002_transitive_js_constraints_a_before_b_before_c_merge_stable_and_conflict_free(self):
         """
@@ -611,7 +641,27 @@ class FormsMediaTraceabilityTests(SimpleTestCase):
         variants, when merged, output ordering must stay deterministic and
         conflict-free.
         """
-        self.assertTrue(True)
+        media_a = Media(js=['a.js'])
+        media_ab = Media(js=['a.js', 'b.js'])
+        media_bc = Media(js=['b.js', 'c.js'])
+
+        with warnings.catch_warnings(record=True) as warnings_a_to_c:
+            warnings.simplefilter('always')
+            merged_a_to_c = media_a + media_ab + media_bc
+        self.assertEqual(merged_a_to_c._js, ['a.js', 'b.js', 'c.js'])
+        self.assertFalse(
+            any(warning.category is MediaOrderConflictWarning for warning in warnings_a_to_c),
+            'Expected no MediaOrderConflictWarning for satisfiable chain merge',
+        )
+
+        with warnings.catch_warnings(record=True) as warnings_c_to_a:
+            warnings.simplefilter('always')
+            merged_c_to_a = media_bc + media_ab + media_a
+        self.assertEqual(merged_c_to_a._js, ['a.js', 'b.js', 'c.js'])
+        self.assertFalse(
+            any(warning.category is MediaOrderConflictWarning for warning in warnings_c_to_a),
+            'Expected no MediaOrderConflictWarning for satisfiable alternate merge sequence',
+        )
 
     def test_med_003_duplicate_js_filenames_are_deduplicated_once_preserving_relative_order_constraints(self):
         """
@@ -620,4 +670,15 @@ class FormsMediaTraceabilityTests(SimpleTestCase):
         ['x.js', 'y.js', 'x.js', 'z.js', 'y.js']),
         the final merged list must contain each filename once.
         """
-        self.assertTrue(True)
+        first = Media(js=['x.js', 'y.js'])
+        second = Media(js=['x.js', 'z.js', 'y.js'])
+        with warnings.catch_warnings(record=True) as recorded:
+            warnings.simplefilter('always')
+            js = (first + second)._js
+
+        self.assertEqual(js, ['x.js', 'z.js', 'y.js'])
+        self.assertEqual(len(js), len(set(js)))
+        self.assertFalse(
+            any(warning.category is MediaOrderConflictWarning for warning in recorded),
+            'Expected no MediaOrderConflictWarning for satisfiable deduplicated merge',
+        )
