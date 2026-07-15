@@ -128,19 +128,28 @@ class DictionarySerializer(BaseSerializer):
 class EnumSerializer(BaseSerializer):
     def serialize(self):
         # MIG-300-002 [locale-safe enum defaults]:
-        # INPUT: enum member `self.value` used during migration rendering.
+        # INPUT: enum member `self.value` from model deconstruction.
         # GOAL: emit a locale-invariant constructor form so migration import/execute
         #       is valid regardless of active translation context.
-        # BRANCH A: self.value is models.Choices (e.g. TextChoices values are translated).
-        #   - Resolve serialized identifier from enum member name.
-        #   - Emit "<module>.<enum_name>[<member_name>]" and import the enum module.
-        #   - Never emit raw `self.value.value` because it can vary by locale.
+        # BRANCH A: self.value is models.Choices (e.g. TextChoices values may be lazy/translated).
+        #   - Use the enum member name, not runtime value, for serialization.
         # BRANCH B: self.value is plain enum.Enum.
-        #   - Emit "<module>.<enum_name>[<member_name>]" and import the enum module.
+        #   - Use module/class member-name form as canonical stable representation.
         # FAILURE PATH:
-        #   - If serialized string is rendered from translated text, importing the
-        #     migration under a different locale can raise ValueError.
-        #   - This branch avoids that path by preserving the stable member name.
+        #   - Emitting translated/raw `value` text couples to locale and can break
+        #     import-time reconstruction.
+        #
+        # MIG-300-003 [enum member identity preservation across locales]:
+        # INPUT: locale may change after migration generation.
+        # DECISION: emit "<module>.<EnumClass>[<member_name>]" for both branches.
+        # TRANSITION:
+        #   - serialization branch returns an expression that resolves by enum lookup on import.
+        #   - runtime evaluator gets the member object from the enum class singleton.
+        # POST-CONDITION:
+        #   - object identity equals the source member (`is Status.GOOD`) after import/execution.
+        # FAILURE PATH:
+        #   - if serialization emitted a raw literal or callable value, identity could
+        #     degrade to value-equivalent or recreated members.
         if isinstance(self.value, models.Choices):
             return serializer_factory(self.value.value).serialize()
         enum_class = self.value.__class__

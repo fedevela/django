@@ -145,6 +145,23 @@ class MigrationWriter:
         #   If any enum default is emitted as translated text, module import can fail
         #   with ValueError; therefore import generation relies on member-name
         #   references for enum defaults.
+        #
+        # MIG-300-003 [enum object identity across locale]:
+        # STATE INPUT:
+        #   - migration operations deconstructed from source model state.
+        #   - current process locale may differ from locale at migration execution time.
+        # DECISION:
+        #   - each serialized operation/default is emitted as plain Python AST-like
+        #     source and imported independently of active locale.
+        # BRANCH:
+        #   - when encountering enum-default expressions from EnumSerializer, generated
+        #     code references `module.Enum['MEMBER']`; this evaluates to existing enum
+        #     members at import execution time.
+        # ERROR PATH:
+        #   - locale-dependent serialized literals would raise mismatch/lookup errors
+        #     across locale switches.
+        # SUCCESS STATE:
+        #   - import/eval under a different locale still resolves to the same member object.
         operations = []
         for operation in self.migration.operations:
             operation_string, operation_imports = OperationWriter(operation).serialize()
