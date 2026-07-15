@@ -313,6 +313,20 @@ def label_for_field(name, model, model_admin=None, return_attr=False, form=None)
     return the resolved attribute (which could be a callable). This will be
     None if (and only if) the name refers to a field.
     """
+    # D172-007: label_for_field is metadata-derived and independent from readonly JSON formatting.
+    # INPUT: name + model + optional model_admin/form + return_attr flag.
+    # STATE:
+    # - resolve through model field metadata first,
+    # - fallback through callable/property/field metadata,
+    # - or report missing metadata with a deterministic AttributeError.
+    # OUTPUT:
+    # - label is always selected from attr metadata or verbose model/field names.
+    # - return_attr changes only the tuple return shape, never the label source.
+    # ERROR PATH:
+    # - FieldDoesNotExist triggers attribute/form fallback;
+    # - unresolved identifiers always raise.
+    # INDEPENDENCE GUARD:
+    # - no branch in this function reads value/formatting state from display_for_field or JSONField.prepare_value.
     attr = None
     try:
         field = _get_non_gfk_field(model._meta, name)

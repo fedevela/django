@@ -162,6 +162,12 @@ class AdminReadonlyField:
         if form._meta.labels and class_name in form._meta.labels:
             label = form._meta.labels[class_name]
         else:
+            # D172-007:
+            # DECISION: label source is form/meta metadata via label_for_field.
+            # LABEL STATE: resolved before value rendering.
+            # STATE INDEPENDENCE:
+            # - This phase never inspects field values or JSON formatting.
+            # - It must remain stable even if display_for_field JSON behavior changes.
             label = label_for_field(field, form._meta.model, model_admin, form=form)
 
         if form._meta.help_texts and class_name in form._meta.help_texts:
@@ -215,6 +221,10 @@ class AdminReadonlyField:
                 if isinstance(f.remote_field, ManyToManyRel) and value is not None:
                     result_repr = ", ".join(map(str, value.all()))
                 else:
+                    # D172-007:
+                    # VALUE PATH:
+                    # - display value rendering is delegated to display_for_field.
+                    # - this is intentionally separate from label resolution.
                     result_repr = display_for_field(value, f, self.empty_value_display)
                 result_repr = linebreaksbr(result_repr)
         return conditional_escape(result_repr)
@@ -280,6 +290,10 @@ class InlineAdminFormSet:
             if not self.has_change_permission or field_name in self.readonly_fields:
                 yield {
                     'name': field_name,
+                    # D172-007:
+                    # LABEL CONTRACT:
+                    # - label resolution is metadata-first (meta_labels, fallback label_for_field).
+                    # - value formatting remains elsewhere in rendering; never mixed in this branch.
                     'label': meta_labels.get(field_name) or label_for_field(
                         field_name,
                         self.opts.model,
