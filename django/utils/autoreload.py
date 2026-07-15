@@ -235,6 +235,15 @@ def get_manage_py_path():
 
 
 def trigger_reload(filename):
+    # AUTO-002 pseudocode:
+    # INPUT: file_path identified as changed by file watcher.
+    # TRANSITION:
+    #   - Log and raise a reload request through process termination signal.
+    #   - Preserve existing contract that this request is represented by exit code 3.
+    # OUTCOME:
+    #   - restart_with_reloader() interprets exit code 3 as "restart and re-exec".
+    # FAILURE PATH:
+    #   - no in-process fallback path is declared in this pseudocode locus.
     logger.info('%s changed, reloading.', filename)
     sys.exit(3)
 
@@ -346,6 +355,15 @@ def watched_files(self, include_globs=True):
         raise NotImplementedError('subclasses must implement check_availability().')
 
     def notify_file_changed(self, path):
+        # AUTO-002 pseudocode:
+        # TRIGGER:
+        #   - Change detection surface has emitted a concrete file path.
+        # FLOW:
+        #   - emit autoreload signal with changed path.
+        #   - if no handler accepts responsibility (all results are falsy):
+        #       -> call trigger_reload(path).
+        # EFFECT:
+        #   - changed `manage.py` in a watched path becomes a restart request.
         results = file_changed.send(sender=self, file_path=path)
         logger.debug('%s notified as changed. Signal results: %s.', path, results)
         if not any(res[1] for res in results):
@@ -370,6 +388,24 @@ class StatReloader(BaseReloader):
             self.watch_file(manage_py)
 
     def tick(self):
+        # AUTO-002 pseudocode:
+        # REQUIREMENT: detect persisted `manage.py` change on the next check cycle.
+        # INPUTS:
+        #   - managed snapshot map mtimes from prior check cycles.
+        #   - `snapshot_files()` stream of (filepath, mtime).
+        # STATE:
+        #   - mtimes is initialized empty on first call and retained per generator loop.
+        # LOOP:
+        #   - for each (filepath, mtime):
+        #       - if filepath unseen: seed mtimes[filepath]=mtime and continue.
+        #       - if mtime > mtimes[filepath]:
+        #           - fire notify_file_changed(filepath) immediately.
+        #           - do not block other checks until loop continues.
+        #   - sleep SLEEP_TIME before yielding control to run_loop.
+        # TRANSITION:
+        #   - next run_loop tick repeats diffing against persisted mtimes baseline.
+        # FAILURE PATH:
+        #   - snapshot read misses/deletions are filtered inside snapshot_files.
         mtimes = {}
         while True:
             for filepath, mtime in self.snapshot_files():

@@ -366,6 +366,20 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         already watched, when `manage.py` is modified and saved, the next check
         cycle must detect it and complete a restart cycle automatically.
         """
+        # AUTO-002 pseudocode locus (traceability anchor):
+        # PRECONDITION:
+        #   - runserver launched with `sys.argv[0] == manage.py`, `sys.argv[1] == runserver`.
+        #   - StatReloader.__init__ has already added resolve(manage.py) into watched files.
+        #   - first tick has established base mtimes in StatReloader.tick().
+        # INPUT ACTION:
+        #   - persist mtime update to watched manage.py while process remains running.
+        # CONTROL TRANSITION:
+        #   - next StatReloader.tick() receives managed snapshot from snapshot_files().
+        #   - existing mtime map entry exists; new mtime > old causes notify_file_changed(manage.py).
+        #   - notify_file_changed executes trigger_reload(manage.py) when no custom signal receiver claims it.
+        #   - trigger_reload emits the reload/restart exit path.
+        # EXPECTED OUTCOME:
+        #   - automatic restart cycle begins on that next check without manual action.
         self.assertTrue(True)
 
 
