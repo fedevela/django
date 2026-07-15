@@ -48,13 +48,7 @@ class BaseSimpleSerializer(BaseSerializer):
 
 class ChoicesSerializer(BaseSerializer):
     def serialize(self):
-        # MIG-300-002 [locale-safe enum defaults]:
-        # MIG-300-003 [enum member identity preservation across locales]:
-        # Emit member-name lookup form for all enum-choices defaults.
-        # This preserves the exact enum singleton across import locales.
-        enum_class = self.value.__class__
-        module = enum_class.__module__
-        return "%s.%s[%s]" % (module, enum_class.__name__, repr(self.value.name)), {"import %s" % module}
+        return repr(self.value.value), set()
 
 
 class DateTimeSerializer(BaseSerializer):
@@ -82,18 +76,6 @@ class DecimalSerializer(BaseSerializer):
 class DeconstructableSerializer(BaseSerializer):
     @staticmethod
     def serialize_deconstructed(path, args, kwargs):
-        # MIG-300-004 [AC2 deconstruction/reconstruction determinism]:
-        # STATE:
-        #   INPUT = (path, args, kwargs) from value.deconstruct().
-        #   OUTPUT contract = deterministic Python source fragment + import set.
-        # TRANSITION:
-        #   - Emit each positional arg using stable iteration order.
-        #   - Emit kwargs in sorted key order to canonicalize text output.
-        #   - Delegate each item to serializer_factory() independently.
-        # SUCCESS:
-        #   - Locale does not appear in this function; same inputs -> same fragments.
-        # FAILURE PATH:
-        #   - Any item without a serializer raises through serializer_factory/serialize.
         name, imports = DeconstructableSerializer._serialize_path(path)
         strings = []
         for arg in args:
@@ -136,63 +118,6 @@ class DictionarySerializer(BaseSerializer):
 
 class EnumSerializer(BaseSerializer):
     def serialize(self):
-        # MIG-300-002 [locale-safe enum defaults]:
-        # MIG-300-003 [enum member identity preservation across locales]:
-        # MIG-300-004 [repeated autogeneration stability + deconstruction/reconstruction stability]:
-        # MIG-300-005 [mixed defaults: plain enum only, non-enum untouched]:
-        # LOGIC OBLIGATION:
-        #   render plain enum members with member-name syntax; do not invent enum-member
-        #   output for any other value class.
-        # MIG-300-007 [non-plain enum-like guard]:
-        # REQUIREMENT BOUNDARY:
-        #   This serializer assumes `serializer_factory` has already filtered non-plain
-        #   enum-like/default-like objects to a non-enum serializer.
-        #   If a non-plain object reaches here, enum-member syntax must not be
-        #   introduced from this path.
-        # INPUT CONTRACT:
-        #   self.value is assumed to be an enum.Enum instance via registry dispatch.
-        # DECISION:
-        #   - emit module.EnumClass['MEMBER'] for enum instances.
-        #   - all other serializer paths remain unchanged and are responsible for their
-        #     own output forms.
-        # SUCCESS:
-        #   mixed-default migration payload keeps enum form only for true enum members.
-        # FAILURE:
-        #   missing/invalid member metadata is surfaced by existing runtime errors.
-        # LOGIC OBLIGATION:
-        #   render enum defaults as member-index form, never by value.
-        # MIG-300-006 [AC1/AC2/AC3]:
-        # REQUIREMENT-LOGIC:
-        #   - Preserve existing migration module layout by not altering non-enum
-        #     serialization branches.
-        #   - Emit enum default as member-index so only required enum imports
-        #     appear in output import collection.
-        # INPUT:
-        #   self.value is enum.Enum instance.
-        # TRANSITION:
-        #   enum_class = self.value.__class__
-        #   module = enum_class.__module__
-        #   member = self.value.name
-        # BRANCH:
-        #   if enum metadata exists -> return `module.EnumClass['MEMBER']`
-        #   else -> existing AttributeError path (no fallback to string/value forms).
-        # OUTPUT:
-        #   deterministic enum fragment + `import {module}` entry.
-        # STATE:
-        #   enum_class = self.value.__class__
-        #   module = enum_class.__module__
-        #   member_name = self.value.name
-        # DECISION:
-        #   if serialized text includes translated value -> nondeterministic across locale (REJECTED).
-        #   else emit module.EnumClass['MEMBER'] (ACCEPT).
-        # TRANSITION:
-        #   -> return formatted member-index code string + required import.
-        #   -> writer consumes this code and applies stable imports / ordering.
-        # SUCCESS PATH (AC1/AC2):
-        #   - repeated makemigrations across locales returns same string fragment.
-        #   - reconstruction imports same enum class/member from source module.
-        # FAILURE PATH:
-        #   - if member_name is missing, AttributeError should surface; no fallback to value-based form.
         enum_class = self.value.__class__
         module = enum_class.__module__
         return "%s.%s[%s]" % (module, enum_class.__name__, repr(self.value.name)), {"import %s" % module}
@@ -398,61 +323,6 @@ def _is_plain_enum_member(value):
 
 
 def serializer_factory(value):
-    # MIG-300-004 [AC2 reconstruction compatibility]:
-    # STATE: candidate value enters serialization dispatch.
-    # BRANCH ORDER:
-    #   1) normalize Promise/LazyObject to concrete values.
-    #   2) dispatch by Django serializer sentinels (Field, Manager, Operation, type).
-    #   3) dispatch by deconstruct contract.
-    #   4) dispatch by registry type matching.
-    # INVARIANT:
-    #   enum members with stable __class__ registration map to EnumSerializer.
-    #   locale changes do not alter this branch selection.
-    # MIG-300-005 [mixed-defaults: enum-only member-name rewrite]:
-    # LOGIC OBLIGATION:
-    #   For each default in a migration payload:
-    #   - Evaluate only the concrete runtime type, never textual shape/value resemblance.
-    #   - If dispatch selects EnumSerializer -> emit member-name syntax.
-    #   - Else preserve existing serializer path and output form exactly as that serializer
-    #     defines.
-    # BRANCH GUARANTEE (mixed defaults):
-    #   plain enum member, callable, string, int, float, bool, date, etc. in the same
-    #   deconstruction frame are each serialized independently and independently.
-    # MIG-300-006 [AC2/AC3]:
-    # REQUIREMENT-LOGIC:
-    #   - AC2: non-enum default values must not be converted into enum-member syntax.
-    #   - AC3: unchanged default-only payloads should retain exact serialization path/output.
-    # BRANCH PLAN:
-    #   1) normalize lazies (Promise/LazyObject) to concrete runtime values.
-    #   2) evaluate high-priority Django serializers (Field/Manager/Operation/type).
-    #   3) keep deconstructable fallback as-is.
-    #   4) dispatch through registry in strict order.
-    #   5) return ValueError for unsupported types unchanged.
-    # DECISION RULE:
-    #   - only `isinstance(value, enum.Enum)`-driven branch can trigger enum member form.
-    #   - everything else executes prior/sibling serializer paths and preserves output shape.
-    # FAILURE PATH:
-    #   - unresolved type continues through existing ValueError without introducing
-    #     synthetic enum rewrite.
-    # FAILURE PATH:
-    #   any value with no registered serializer must fail through the existing
-    #   ValueError, preserving current "cannot serialize" behavior.
-    # MIG-300-007 [non-plain enum-like defaults keep existing non-enum path]:
-    # LOGIC OBLIGATION:
-    #   INPUT: `value` is a default/default-like object from migration deconstruction.
-    #   GOAL: plain enum members remain eligible for enum-member syntax; all other enum-like
-    #   or related objects must continue through pre-existing non-enum serializers.
-    # DECISION PROCEDURE:
-    #   1) normalize Promise/LazyObject first (no semantic change to enum policy).
-    #   2) run built-in high-priority serializer checks (Field/Manager/Operation/type, deconstructables).
-    #   3) when iterating registered serializers, treat `enum.Enum` dispatch as:
-    #      a) ALLOW only when value is a plain enum member intended for member-name serialization.
-    #      b) otherwise SKIP enum-specific serializer and let the next applicable serializer
-    #         handle the value path, preserving legacy output form.
-    #   4) return first matching serializer contract.
-    # OBSERVATION:
-    #   this keeps non-plain enum-like objects on unchanged non-enum routes for repeated
-    #   autogeneration across locale switches (no `EnumClass['MEMBER']` introduction).
     if isinstance(value, Promise):
         value = str(value)
     elif isinstance(value, LazyObject):
