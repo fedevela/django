@@ -164,6 +164,12 @@ def parse_http_date(date):
 
     Return an integer expressed in seconds since the epoch, in UTC.
     """
+    # HTTPDATE-003: Determine parser branch before field parsing.
+    # - RFC1123_DATE handles RFC1123 (four-digit year).
+    # - RFC850_DATE handles RFC850 (two-digit year form).
+    # - ASCTIME_DATE handles asctime (four-digit year).
+    # The formats are checked in order above; parse proceeds only on first match.
+    # If no pattern matches, raise a format error.
     # email.utils.parsedate() does the job for RFC1123 dates; unfortunately
     # RFC7231 makes it mandatory to support RFC850 dates too. So we roll
     # our own RFC-compliant parsing.
@@ -174,9 +180,15 @@ def parse_http_date(date):
     else:
         raise ValueError("%r is not in a valid HTTP date format" % date)
     try:
+        # HTTPDATE-003: Two-digit-year centurial remap is applied only when
+        # RFC850 was the matching branch and the matched year has two digits.
+        # For RFC1123 and asctime four-digit-year inputs, this branch must not
+        # alter year semantics.
         year = int(m.group('year'))
         if year < 100:
             # HTTPDATE-001/002/005: RFC850 two-digit year inference.
+            # HTTPDATE-003 gate: only execute this block in the RFC850
+            # two-digit-year path; all other parser formats bypass it.
             # Keep the existing parse behavior for all other fields.
             current_year = datetime.date.today().year
             century_base = current_year - (current_year % 100)
