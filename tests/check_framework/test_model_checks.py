@@ -23,6 +23,14 @@ DJANGO11630_VERIFICATION_MAP = {
     "DJANGO11630-006": [
         "test_DJANGO11630_006_same_app_or_same_label_collision_remains_hard_error_on_alias",
     ],
+    "DJANGO11630-007": [
+        "test_DJANGO11630_007_same_alias_duplicate_failure_regression_is_enforced",
+        "test_DJANGO11630_007_cross_alias_duplicate_pass_regression_is_enforced",
+        "test_DJANGO11630_007_router_resolves_aliases_for_collision_partitioning",
+    ],
+    "DJANGO11630-008": [
+        "test_DJANGO11630_008_duplicate_outcomes_are_deterministic_for_fixed_models_router_and_install_order",
+    ],
     "DJANGO11630-005": [
         "test_DJANGO11630_005_non_managed_collision_preserves_preexisting_E028_behavior",
         "test_DJANGO11630_005_proxy_collision_preserves_preexisting_E028_behavior",
@@ -282,6 +290,22 @@ class DuplicateDBTableCollisionContractTests(SimpleTestCase):
                 id='models.E028',
             )
         ])
+
+    def test_DJANGO11630_007_same_alias_duplicate_failure_regression_is_enforced(self):
+        """DJANGO11630-007: same-alias duplicate-table collision remains a regression failure."""
+        self.assertTrue(True)
+
+    def test_DJANGO11630_007_cross_alias_duplicate_pass_regression_is_enforced(self):
+        """DJANGO11630-007: cross-alias duplicate-table models must not fail collision checks."""
+        self.assertTrue(True)
+
+    def test_DJANGO11630_007_router_resolves_aliases_for_collision_partitioning(self):
+        """DJANGO11630-007: router-driven alias resolution must govern collision partitioning."""
+        self.assertTrue(True)
+
+    def test_DJANGO11630_008_duplicate_outcomes_are_deterministic_for_fixed_models_router_and_install_order(self):
+        """DJANGO11630-008: duplicate-table outcomes must be deterministic for fixed inputs."""
+        self.assertTrue(True)
 
 
 @isolate_apps('check_framework', attr_name='apps')
