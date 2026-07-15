@@ -78,6 +78,30 @@ class Req138DisplayOverrideModel(models.Model):
         return 'required:' + self.status
 
 
+class Req138DisplayBaseModel(models.Model):
+    status = models.CharField(max_length=8, choices=(('on', 'On'), ('off', 'Off')))
+
+    def get_status_display(self):
+        return 'base:' + self.status
+
+
+class Req138DisplayInheritedModel(Req138DisplayBaseModel):
+    pass
+
+
+class Req138DisplayOverrideSubclassModel(Req138DisplayBaseModel):
+    def get_status_display(self):
+        return 'sub:' + self.status
+
+
+class Req138DisplayGeneratedBaseModel(models.Model):
+    status = models.CharField(max_length=8, choices=(('on', 'On'), ('off', 'Off')))
+
+
+class Req138DisplayGeneratedInheritedModel(Req138DisplayGeneratedBaseModel):
+    pass
+
+
 class Req138StatefulDisplayOverrideModel(models.Model):
     status = models.CharField(max_length=8, choices=(('on', 'On'), ('off', 'Off')))
     is_primary = models.BooleanField(default=False)

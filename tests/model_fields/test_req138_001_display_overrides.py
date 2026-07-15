@@ -5,6 +5,11 @@ from django.template import Context, Engine
 
 from .models import (
     Req138DisplayOverrideModel,
+    Req138DisplayInheritedModel,
+    Req138DisplayBaseModel,
+    Req138DisplayOverrideSubclassModel,
+    Req138DisplayGeneratedBaseModel,
+    Req138DisplayGeneratedInheritedModel,
     Req138StatefulDisplayOverrideModel,
     Req138SentinelDisplayModel,
     Whiz,
@@ -125,10 +130,16 @@ class TestReq138004DisplayOverrideInheritance(SimpleTestCase):
     """Specification traceability artifact for REQ-138-004."""
 
     def test_req_138_004_subclass_inherits_base_get_status_display_when_not_overridden(self):
-        self.assertTrue(True)
+        instance = Req138DisplayInheritedModel(status='on')
+        self.assertEqual(instance.get_status_display(), 'base:on')
 
     def test_req_138_004_subclass_override_preempts_base_and_generated_helper(self):
-        self.assertTrue(True)
+        instance = Req138DisplayOverrideSubclassModel(status='off')
+        self.assertEqual(instance.get_status_display(), 'sub:off')
 
     def test_req_138_004_generated_display_fallback_remains_active_when_no_user_override(self):
-        self.assertTrue(True)
+        base_instance = Req138DisplayGeneratedBaseModel(status='off')
+        inherited_instance = Req138DisplayGeneratedInheritedModel(status='on')
+
+        self.assertEqual(base_instance.get_status_display(), 'Off')
+        self.assertEqual(inherited_instance.get_status_display(), 'On')

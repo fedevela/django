@@ -800,7 +800,7 @@ class Field(RegisterLookupMixin):
             #   current value from the instance and its own flattened choices map.
             # - Failure mode: if no mapped label exists, fallback returns raw value from
             #   `_get_FIELD_display` so unmapped/invalid values pass through unchanged.
-            if display_name not in cls.__dict__:
+            if display_name not in cls.__dict__ and not hasattr(cls, display_name):
                 setattr(cls, display_name, partialmethod(cls._get_FIELD_display, field=self))
 
     def get_filter_kwargs_for_object(self, obj):
