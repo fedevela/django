@@ -137,6 +137,22 @@ class MigrationWriter:
 
         # Deconstruct operations
         # MIG-300-002 [locale-safe import path]:
+        # MIG-300-004 [stable repeated autogeneration under locale transitions]:
+        # AC1/AC2 LOGIC OBLIGATION:
+        #   - For each operation in self.migration.operations, serialize independently,
+        #     accumulate text+imports, and never infer locale at this boundary.
+        #   - Preserve deterministic operation order as provided by migration state.
+        #   - Keep enum-default expression text stable so rerun with different locale
+        #     does not alter emitted fragments.
+        # TRANSITION:
+        #   - write operation payload -> collect operation_string/operation_imports.
+        #   - merge all imports into one canonical set.
+        #   - join operation strings in source order for migrations to be byte-stable.
+        # SUCCESS (AC1):
+        #   - Output contains `EnumClass['MEMBER']` consistently across A->B->A locale runs.
+        # FAILURE PATH:
+        #   - any unstable enum representation would produce locale-variant fragments and
+        #     break migration import/replay checks.
         # STATE: render each operation into migration source text.
         # TRANSITION: for every operation arg/default in deconstructed args and kwargs,
         # call MigrationWriter.serialize(...) to produce deterministic serial form.
@@ -294,6 +310,14 @@ class MigrationWriter:
 
     @classmethod
     def serialize(cls, value):
+        # MIG-300-004 [AC2 deconstruction/reconstruction loopback]:
+        # STATE INPUT: abstract operation/field/default fragment `value`.
+        # DECISION:
+        #   - route value through serializer_factory(value) for deterministic serializer selection.
+        #   - return (string, imports) as canonical serialization contract.
+        # EFFECT:
+        #   - the serialized form is the deconstruction boundary consumed later by as_string.
+        #   - if the same deconstructed value is serialized twice, output must be identical.
         return serializer_factory(value).serialize()
 
     @classmethod

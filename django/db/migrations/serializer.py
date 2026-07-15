@@ -82,6 +82,18 @@ class DecimalSerializer(BaseSerializer):
 class DeconstructableSerializer(BaseSerializer):
     @staticmethod
     def serialize_deconstructed(path, args, kwargs):
+        # MIG-300-004 [AC2 deconstruction/reconstruction determinism]:
+        # STATE:
+        #   INPUT = (path, args, kwargs) from value.deconstruct().
+        #   OUTPUT contract = deterministic Python source fragment + import set.
+        # TRANSITION:
+        #   - Emit each positional arg using stable iteration order.
+        #   - Emit kwargs in sorted key order to canonicalize text output.
+        #   - Delegate each item to serializer_factory() independently.
+        # SUCCESS:
+        #   - Locale does not appear in this function; same inputs -> same fragments.
+        # FAILURE PATH:
+        #   - Any item without a serializer raises through serializer_factory/serialize.
         name, imports = DeconstructableSerializer._serialize_path(path)
         strings = []
         for arg in args:
@@ -126,9 +138,24 @@ class EnumSerializer(BaseSerializer):
     def serialize(self):
         # MIG-300-002 [locale-safe enum defaults]:
         # MIG-300-003 [enum member identity preservation across locales]:
-        # Input enum member `self.value` always serializes to member-name lookup.
-        # That makes generated source locale-invariant and import-time returns the
-        # canonical enum singleton object from the source class.
+        # MIG-300-004 [repeated autogeneration stability + deconstruction/reconstruction stability]:
+        # LOGIC OBLIGATION:
+        #   render enum defaults as member-index form, never by value.
+        # STATE:
+        #   enum_class = self.value.__class__
+        #   module = enum_class.__module__
+        #   member_name = self.value.name
+        # DECISION:
+        #   if serialized text includes translated value -> nondeterministic across locale (REJECTED).
+        #   else emit module.EnumClass['MEMBER'] (ACCEPT).
+        # TRANSITION:
+        #   -> return formatted member-index code string + required import.
+        #   -> writer consumes this code and applies stable imports / ordering.
+        # SUCCESS PATH (AC1/AC2):
+        #   - repeated makemigrations across locales returns same string fragment.
+        #   - reconstruction imports same enum class/member from source module.
+        # FAILURE PATH:
+        #   - if member_name is missing, AttributeError should surface; no fallback to value-based form.
         enum_class = self.value.__class__
         module = enum_class.__module__
         return "%s.%s[%s]" % (module, enum_class.__name__, repr(self.value.name)), {"import %s" % module}
@@ -320,6 +347,16 @@ class Serializer:
 
 
 def serializer_factory(value):
+    # MIG-300-004 [AC2 reconstruction compatibility]:
+    # STATE: candidate value enters serialization dispatch.
+    # BRANCH ORDER:
+    #   1) normalize Promise/LazyObject to concrete values.
+    #   2) dispatch by Django serializer sentinels (Field, Manager, Operation, type).
+    #   3) dispatch by deconstruct contract.
+    #   4) dispatch by registry type matching.
+    # INVARIANT:
+    #   enum members with stable __class__ registration map to EnumSerializer.
+    #   locale changes do not alter this branch selection.
     if isinstance(value, Promise):
         value = str(value)
     elif isinstance(value, LazyObject):
