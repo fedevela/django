@@ -763,6 +763,16 @@ class Field(RegisterLookupMixin):
             if not getattr(cls, self.attname, None):
                 setattr(cls, self.attname, self.descriptor_class(self))
         if self.choices is not None:
+            # REQ-138-001 pseudocode for display-method precedence.
+            # FUNCTION ensure_model_display_override():
+            #   display_name <- format('get_%s_display', self.name)
+            #   IF display_name in cls.__dict__:
+            #     # Model-defined method in class namespace must remain authoritative.
+            #     DO NOT bind generated helper.
+            #   ELSE:
+            #     BIND cls.display_name to partialmethod(cls._get_FIELD_display, field=self)
+            #     # This helper is fallback behavior only when user override is absent.
+            #   ENDIF
             setattr(cls, 'get_%s_display' % self.name,
                     partialmethod(cls._get_FIELD_display, field=self))
 
