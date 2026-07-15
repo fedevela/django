@@ -108,6 +108,21 @@ def iter_all_python_module_files():
 @functools.lru_cache(maxsize=1)
 def iter_modules_and_files(modules, extra_files):
     """Iterate through all modules needed to be watched."""
+    # ARL-001/002/007 [logic obligation mapping]:
+    # Inputs:
+    # - modules: iterable of imported module objects
+    # - extra_files: candidate paths supplied by error-tracking + explicit watches
+    # For each candidate path, apply independent resolution; never fail the whole
+    # scan from one malformed candidate.
+    # ARL-001:
+    # - if resolve raises ValueError("embedded null byte"), skip that candidate only.
+    # ARL-002:
+    # - never abort remaining candidates when one candidate fails; continue loop.
+    # ARL-003:
+    # - each snapshot cycle recomputes candidates from current module/error inputs.
+    # ARL-007:
+    # - do not create or mutate alternate candidate variants; retry the same raw
+    #   candidate in future cycles when observed again.
     sys_file_paths = []
     for module in modules:
         # During debugging (with PyDev) the 'typing.io' and 'typing.re' objects
@@ -137,6 +152,11 @@ def iter_modules_and_files(modules, extra_files):
         if not filename:
             continue
         path = Path(filename)
+        # Pseudocode candidate transition:
+        # 1) Resolve candidate path defensively from raw filename.
+        # 2) If FileNotFoundError -> omit candidate, proceed to next.
+        # 3) If ValueError("embedded null byte") -> omit candidate, proceed to next.
+        # 4) Else add resolved_path to results set.
         try:
             resolved_path = path.resolve(strict=True).absolute()
         except FileNotFoundError:
@@ -354,6 +374,10 @@ class StatReloader(BaseReloader):
     def snapshot_files(self):
         # watched_files may produce duplicate paths if globs overlap.
         seen_files = set()
+        # ARL-003/007 [control-flow and failure path]:
+        # Each tick iterates snapshot from watched_files afresh.
+        # If a candidate is omitted upstream this cycle, do not cache or synthesize
+        # replacements here; keep the set to allow future cycles to reattempt.
         for file in self.watched_files():
             if file in seen_files:
                 continue
