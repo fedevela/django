@@ -147,12 +147,16 @@ class Media:
                 except ValueError:
                     # Add path to combined_list since it doesn't exist.
                     combined_list.insert(last_insert_index, path)
-                else:
-                    if index > last_insert_index:
-                        warnings.warn(
-                            'Detected duplicate Media files in an opposite order:\n'
-                            '%s\n%s' % (
-                                combined_list[last_insert_index],
+            else:
+                # MED-003-1 (non-final partial-merge states):
+                # Preserve existing pairwise short-circuit behavior; MED-003 warning
+                # emission policy is defined for the final merged graph produced by
+                # one Media.merge call with all accumulated chunks.
+                if index > last_insert_index:
+                    warnings.warn(
+                        'Detected duplicate Media files in an opposite order:\n'
+                        '%s\n%s' % (
+                            combined_list[last_insert_index],
                                 combined_list[index],
                             ),
                             MediaOrderConflictWarning,
@@ -164,6 +168,12 @@ class Media:
 
         # For three or more lists, build a dependency graph and compute a stable
         # topological order so one merge can honor all dependency constraints.
+        # MED-003 Traceability:
+        # - Input: all remaining list chunks composing this final merge.
+        # - Requirement: emit warnings only when final merged constraints are
+        #   genuinely unsatisfiable.
+        # - Requirement: reported conflict must be a real pair in that final
+        #   merged graph, not a deduplication-boundary artifact.
         # MED-002-1 deterministic satisfiable merge:
         # Input contract:
         # - list_i are ordered sequences of assets where each adjacent pair
@@ -181,6 +191,8 @@ class Media:
         #   - iterate media_list in original sequence for each list.
         #   - register nodes in graph on first encounter.
         #   - register edges previous -> path for each adjacent pair.
+        #   - track candidate contradictory_pairs as immediate edge reversals
+        #     within this final graph (A->B and B->A).
         # Step 2: initialize indegree/incoming from graph.
         # Step 3: repeatedly emit a ready node:
         #   - choose the first path with an empty predecessor set, scanning in
@@ -189,7 +201,13 @@ class Media:
         #   - remove it from all successor incoming sets.
         # Step 4: failure path:
         #   - if no ready path exists before processing all nodes, cycle exists.
-        #   - emit MediaOrderConflictWarning and return stable fallback dedup list.
+        #   - re-run conflict derivation *only on the final merged graph*:
+        #       a) preferred: select a contradiction pair from contradictory_pairs
+        #          that belongs to the cycle context in deterministic order.
+        #       b) else: detect one cycle in remaining subgraph and pick the
+        #          first back-edge (u, v) as a representative contradiction pair.
+        #   - emit MediaOrderConflictWarning with that pair and return stable fallback
+        #     deduplicated list (preserving current behavior).
         # Step 5: success path:
         #   - return ordered when all paths have been placed.
         graph = {}
