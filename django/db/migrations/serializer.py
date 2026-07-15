@@ -155,6 +155,23 @@ class EnumSerializer(BaseSerializer):
         #   missing/invalid member metadata is surfaced by existing runtime errors.
         # LOGIC OBLIGATION:
         #   render enum defaults as member-index form, never by value.
+        # MIG-300-006 [AC1/AC2/AC3]:
+        # REQUIREMENT-LOGIC:
+        #   - Preserve existing migration module layout by not altering non-enum
+        #     serialization branches.
+        #   - Emit enum default as member-index so only required enum imports
+        #     appear in output import collection.
+        # INPUT:
+        #   self.value is enum.Enum instance.
+        # TRANSITION:
+        #   enum_class = self.value.__class__
+        #   module = enum_class.__module__
+        #   member = self.value.name
+        # BRANCH:
+        #   if enum metadata exists -> return `module.EnumClass['MEMBER']`
+        #   else -> existing AttributeError path (no fallback to string/value forms).
+        # OUTPUT:
+        #   deterministic enum fragment + `import {module}` entry.
         # STATE:
         #   enum_class = self.value.__class__
         #   module = enum_class.__module__
@@ -381,6 +398,22 @@ def serializer_factory(value):
     # BRANCH GUARANTEE (mixed defaults):
     #   plain enum member, callable, string, int, float, bool, date, etc. in the same
     #   deconstruction frame are each serialized independently and independently.
+    # MIG-300-006 [AC2/AC3]:
+    # REQUIREMENT-LOGIC:
+    #   - AC2: non-enum default values must not be converted into enum-member syntax.
+    #   - AC3: unchanged default-only payloads should retain exact serialization path/output.
+    # BRANCH PLAN:
+    #   1) normalize lazies (Promise/LazyObject) to concrete runtime values.
+    #   2) evaluate high-priority Django serializers (Field/Manager/Operation/type).
+    #   3) keep deconstructable fallback as-is.
+    #   4) dispatch through registry in strict order.
+    #   5) return ValueError for unsupported types unchanged.
+    # DECISION RULE:
+    #   - only `isinstance(value, enum.Enum)`-driven branch can trigger enum member form.
+    #   - everything else executes prior/sibling serializer paths and preserves output shape.
+    # FAILURE PATH:
+    #   - unresolved type continues through existing ValueError without introducing
+    #     synthetic enum rewrite.
     # FAILURE PATH:
     #   any value with no registered serializer must fail through the existing
     #   ValueError, preserving current "cannot serialize" behavior.

@@ -101,6 +101,18 @@ class OperationWriter:
         #   all others follow their existing serializer branch.
         # ERROR PATH:
         #   missing serializer for any arg is delegated to the existing serialize failure.
+        # MIG-300-006 [AC1/AC2/AC3]:
+        # REQUIREMENT-LOGIC:
+        #   - Preserve positional and keyword ordering; no additional enumeration
+        #     or regrouping pass exists in this phase.
+        #   - Route each arg through MigrationWriter.serialize unchanged.
+        #   - Keep serialized kwargs in operation signature order to avoid diff churn.
+        #   - Only args that resolve to enum serializer create enum-member syntax;
+        #     all other args keep existing serializer output text.
+        # TRANSITION:
+        #   serialized_arg -> _write() -> OperationWriter.buff line + import accumulation.
+        # FAILURE PATH:
+        #   unsupported defaults remain delegated to existing serialization errors.
         for i, arg in enumerate(args):
             arg_value = arg
             arg_name = operation_args[i]
@@ -193,6 +205,27 @@ class MigrationWriter:
         #     across locale switches.
         # SUCCESS STATE:
         #   - import/eval under a different locale still resolves to the same member object.
+        # MIG-300-006 [AC1/AC2/AC3]:
+        # REQUIREMENT-LOGIC:
+        #   - Preserve import scaffold shape and non-enum fragments unless enum-member
+        #     rendering requires enum-class import.
+        #   - Maintain operation iteration order and dependency ordering as source order
+        #     stable signal.
+        #   - Apply existing import normalization/composition steps only.
+        # DECISION:
+        #   - keep serialized non-enum argument forms from existing serializer branches.
+        #   - include `from django.db import migrations` or `from django.db import migrations, models`
+        #     based on current set-membership.
+        #   - route migration-file function imports into manual-porting notes only.
+        # STATE TRANSITIONS:
+        #   1) collect operation imports/text
+        #   2) add dependency-derived imports/references
+        #   3) move `migration_imports` and set `needs_manual_porting`
+        #   4) normalize base django db import entry
+        #   5) sort render for deterministic output shape
+        # FAILURE PATH:
+        #   no added recovery branch; unresolved serialization failures are surfaced
+        #   through existing writer/serializer exceptions.
         operations = []
         for operation in self.migration.operations:
             operation_string, operation_imports = OperationWriter(operation).serialize()
