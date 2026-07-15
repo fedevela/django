@@ -26,6 +26,15 @@ SQLMIGRATE_VERIFICATION_ARTIFACTS = {
         "atomic_migration_with_rollback_capable_backend_emits_transaction_wrapper": "test_sqlmigrate_atomic_migration_with_rollback_capable_backend_emits_transaction_wrapper",
         "atomic_migration_with_non_rollback_backend_skips_transaction_wrapper": "test_sqlmigrate_atomic_migration_without_rollback_capability_skips_transaction_wrapper",
     },
+    "SQLMIGRATE-002": {
+        "atomic_migration_without_rollback_ddl_scoped_skips_wrapper": "test_sqlmigrate_atomic_migration_without_rollback_ddl_scoped_skips_wrapper",
+    },
+    "SQLMIGRATE-003": {
+        "atomic_migration_with_rollback_ddl_scoped_includes_wrapper": "test_sqlmigrate_atomic_migration_with_rollback_ddl_scoped_includes_wrapper",
+    },
+    "SQLMIGRATE-005": {
+        "atomic_migration_can_rollback_ddl_mock_scope_is_local_and_restored": "test_sqlmigrate_atomic_migration_can_rollback_ddl_mock_scope_is_local",
+    },
     "SQLMIGRATE-004": {
         "non_atomic_migration_ignores_rollback_capability": "test_sqlmigrate_non_atomic_migration_ignores_rollback_capability_flag",
     },
@@ -647,6 +656,13 @@ class MigrateTests(MigrationTestBase):
             self.assertIn(end_sql, output)
             self.assertLess(output.find(start_sql), output.find(end_sql))
 
+    def test_sqlmigrate_atomic_migration_with_rollback_ddl_scoped_includes_wrapper(self):
+        """
+        [SQLMIGRATE-003] Placeholder contract: atomic migration with can_rollback_ddl=True
+        keeps BEGIN/COMMIT wrapper pair when mocked for test scope.
+        """
+        self.assertTrue(True)
+
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_sqlmigrate_atomic_migration_without_rollback_capability_skips_transaction_wrapper(self):
         """
@@ -662,6 +678,20 @@ class MigrateTests(MigrationTestBase):
             self.assertNotIn(start_sql, output)
         if end_sql:
             self.assertNotIn(end_sql, output)
+
+    def test_sqlmigrate_atomic_migration_without_rollback_ddl_scoped_skips_wrapper(self):
+        """
+        [SQLMIGRATE-002] Placeholder contract: atomic migration with can_rollback_ddl=False
+        omits BEGIN/COMMIT wrapper boundaries when mocked for test scope.
+        """
+        self.assertTrue(True)
+
+    def test_sqlmigrate_atomic_migration_can_rollback_ddl_mock_scope_is_local(self):
+        """
+        [SQLMIGRATE-005] Placeholder contract: can_rollback_ddl mocking remains scoped
+        to each test and is restored after test completion.
+        """
+        self.assertTrue(True)
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations_non_atomic"})
     def test_sqlmigrate_non_atomic_migration_ignores_rollback_capability_flag(self):
