@@ -459,6 +459,9 @@ class ExceptionReporter:
 def technical_404_response(request, exception):
     """Create a technical 404 error response. `exception` is the Http404."""
     # DJ-RES-007:
+    # Architecture boundary:
+    # Owner: technical_404_response() owns presentation of resolver-generated not-found
+    # context. It must consume diagnostic payload from resolver miss state before fallback.
     # Decision flow for converter-originated resolver 404s:
     # 1) Read resolver payload from exception.args when present.
     # 2) If payload has 'reason', keep it as diagnostic_reason.
@@ -473,8 +476,15 @@ def technical_404_response(request, exception):
     except (IndexError, TypeError, KeyError):
         error_url = request.path_info[1:]  # Trim leading slash
 
+    diagnostic_reason = None
     try:
-        tried = exception.args[0]['tried']
+        payload = exception.args[0]
+        tried = payload['tried']
+        # DJ-RES-007:
+        # - Primary diagnostic contract: reason is optional payload key on payload.
+        # - Keep this as the preferred boundary message for converter-originated misses.
+        # - Fallback remains str(exception) when payload lacks reason.
+        diagnostic_reason = payload.get('reason')
     except (IndexError, TypeError, KeyError):
         tried = []
     else:
@@ -514,7 +524,11 @@ def technical_404_response(request, exception):
         'root_urlconf': settings.ROOT_URLCONF,
         'request_path': error_url,
         'urlpatterns': tried,
-        'reason': str(exception),
+        # DJ-RES-007:
+        # Reason precedence contract:
+        # 1. exception payload reason (converter-originated)
+        # 2. fallback to str(exception)
+        'reason': diagnostic_reason or str(exception),
         'request': request,
         'settings': get_safe_settings(),
         'raising_view_name': caller,
