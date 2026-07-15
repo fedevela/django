@@ -163,6 +163,12 @@ def iter_modules_and_files(modules, extra_files):
             # The module could have been removed, don't fail loudly if this
             # is the case.
             continue
+        except ValueError as e:
+            # Certain malformed paths (for example with embedded null bytes) should
+            # be ignored without aborting the entire scan.
+            if str(e) != 'embedded null byte':
+                raise
+            continue
         results.add(resolved_path)
     return frozenset(results)
 

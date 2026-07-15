@@ -149,19 +149,100 @@ class TestIterModulesAndFiles(SimpleTestCase):
 
     def test_arl_001_skip_embedded_null_candidate_without_propagating(self):
         """ARL-001: ensure embedded-null resolution failures are caught and skipped."""
-        pass
+        bad_candidate = 'bad\x00candidate.py'
+        good_candidate = self.temporary_file('good.py')
+        good_candidate.touch()
+        expected = good_candidate.resolve().absolute()
+
+        self.clear_autoreload_caches()
+        self.assertEqual(
+            autoreload.iter_modules_and_files(
+                (),
+                frozenset((str(good_candidate), bad_candidate)),
+            ),
+            frozenset((expected,)),
+        )
 
     def test_arl_002_skip_only_failing_candidate_and_continue_cycle(self):
         """ARL-002: omit only the malformed candidate and process remaining candidates."""
-        pass
+        bad_candidate = 'bad\x00candidate.py'
+        first_candidate = self.temporary_file('first.py')
+        second_candidate = self.temporary_file('second.py')
+        first_candidate.touch()
+        second_candidate.touch()
+
+        expected = {
+            first_candidate.resolve().absolute(),
+            second_candidate.resolve().absolute(),
+        }
+
+        self.clear_autoreload_caches()
+        self.assertEqual(
+            autoreload.iter_modules_and_files(
+                (),
+                frozenset((str(first_candidate), bad_candidate, str(second_candidate))),
+            ),
+            frozenset(expected),
+        )
 
     def test_arl_003_resume_cycle_resolution_after_tick_failures(self):
         """ARL-003: allow malformed candidates to be retried on later snapshot ticks."""
-        pass
+        target = self.temporary_file('intermittent.py')
+        target.touch()
+        call_count = 0
+        original_resolve = Path.resolve
+        expected = frozenset((original_resolve(target, strict=True).absolute(),))
+
+        def resolve_with_tick_retry(self, *args, **kwargs):
+            nonlocal call_count
+            if str(self) == str(target):
+                call_count += 1
+                if call_count == 1:
+                    raise ValueError('embedded null byte')
+            return original_resolve(self, *args, **kwargs)
+
+        self.clear_autoreload_caches()
+        with mock.patch.object(Path, 'resolve', side_effect=resolve_with_tick_retry):
+            self.assertEqual(
+                autoreload.iter_modules_and_files((), frozenset((str(target),))),
+                frozenset(),
+            )
+            self.clear_autoreload_caches()
+            self.assertEqual(
+                autoreload.iter_modules_and_files((), frozenset((str(target),))),
+                expected,
+            )
+            self.assertEqual(call_count, 2)
 
     def test_arl_007_retry_failed_candidate_without_synthetic_substitutions(self):
         """ARL-007: avoid duplicate/oscillating malformed substitutions across ticks."""
-        pass
+        target = self.temporary_file('unstable.py')
+        target.touch()
+        calls = []
+        original_resolve = Path.resolve
+        attempts = 0
+        expected = frozenset((original_resolve(target, strict=True).absolute(),))
+
+        def resolve_with_recovery(self, *args, **kwargs):
+            nonlocal attempts
+            if str(self) == str(target):
+                calls.append(str(self))
+                attempts += 1
+                if attempts <= 2:
+                    raise ValueError('embedded null byte')
+            return original_resolve(self, *args, **kwargs)
+
+        self.clear_autoreload_caches()
+        with mock.patch.object(Path, 'resolve', side_effect=resolve_with_recovery):
+            snapshot1 = autoreload.iter_modules_and_files((), frozenset((str(target),)))
+            self.assertEqual(snapshot1, frozenset())
+            self.clear_autoreload_caches()
+            snapshot2 = autoreload.iter_modules_and_files((), frozenset((str(target),)))
+            self.assertEqual(snapshot2, frozenset())
+            self.clear_autoreload_caches()
+            snapshot3 = autoreload.iter_modules_and_files((), frozenset((str(target),)))
+            self.assertEqual(snapshot3, expected)
+            self.assertEqual(calls, [str(target), str(target), str(target)])
 
 
 class TestCommonRoots(SimpleTestCase):
