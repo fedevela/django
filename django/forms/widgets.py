@@ -70,6 +70,30 @@ class Media:
 
     @property
     def _js(self):
+        # PSEUDOCODE-STATE [MEDIA-006][MEDIA-007][MEDIA-008]:
+        # Inputs:
+        #   chunks = ordered list of js chunks from merged Media inputs (self._js_lists).
+        # State:
+        #   dedupe_candidates derive from explicit nodes, not repeated list positions.
+        # Branch:
+        #   If no chunks -> return [].
+        #   If global resolve covers all nodes -> return resolved.
+        #   Else discover cycle and emit warning path, then deterministic fallback merge.
+        # Deterministic flow:
+        #   1) Build unique graph nodes + precedence edges from each chunk adjacency.
+        #   2) Resolve topologically with deterministic tie-breakers.
+        #      - available nodes sorted by first-seen position.
+        #      - outgoing edges sorted by first-seen position.
+        #   3) If unresolved nodes remain:
+        #      - detect a representative contradiction cycle with deterministic DFS order.
+        #      - if found, emit cycle warning; else emit generic unresolved warning.
+        #   4) Fallback merges chunks left-to-right using merge() while suppressing
+        #      MediaOrderConflictWarning, preserving legacy two-object behavior where
+        #      non-contradictory merges were previously resolvable.
+        # Outcome mapping:
+        #   - MEDIA-006: duplicates collapse to one node/output entry in graph path.
+        #   - MEDIA-007: full-object warning evaluation prevents false-positive blocking.
+        #   - MEDIA-008: same logical graph yields stable output ordering and warning set.
         chunks = [chunk for chunk in self._js_lists if chunk]
         if not chunks:
             return []
@@ -105,6 +129,16 @@ class Media:
 
     @staticmethod
     def _build_js_constraint_graph(chunks):
+        # PSEUDOCODE [MEDIA-006]:
+        # Input:
+        #   chunks in declaration order.
+        # For each path in each chunk:
+        #   - If path new, register node + stable first-seen index.
+        #   - Always initialize graph[path].
+        #   - Add edge previous -> path for adjacent distinct paths.
+        # Return:
+        #   nodes in first-seen order, node_position for deterministic sorting,
+        #   graph for topo resolution.
         nodes = []
         node_position = {}
         graph = {}
@@ -124,6 +158,18 @@ class Media:
 
     @staticmethod
     def _resolve_js_order(nodes, node_position, graph):
+        # PSEUDOCODE [MEDIA-008]:
+        # Inputs: unique nodes, deterministic first-seen positions, directed graph.
+        # Init:
+        #   in_degree[node] = number of incoming edges.
+        #   available = all indegree-zero nodes.
+        # Loop:
+        #   sort(available, key=node_position) before each selection.
+        #   pop earliest and append to resolved.
+        #   for each target in sorted(graph[current], key=node_position):
+        #       decrement indegree[target]; if 0 enqueue.
+        # Result:
+        #   resolved list is deterministic order if acyclic.
         in_degree = {node: 0 for node in nodes}
         for source, targets in graph.items():
             for target in targets:
@@ -145,6 +191,18 @@ class Media:
 
     @staticmethod
     def _discover_js_cycle(graph, node_position, resolved):
+        # PSEUDOCODE [MEDIA-007][MEDIA-008]:
+        # Inputs:
+        #   graph = constraint graph, node_position = stable index map,
+        #   resolved = topo result already emitted.
+        # Derivation:
+        #   unresolved_nodes = all nodes not yet emitted.
+        #   sort unresolved_nodes by node_position.
+        # DFS in deterministic outgoing order (node_position keyed):
+        #   state 0=unvisited,1=visiting,2=done.
+        #   when edge reaches visiting node -> return cycle slice from stack index.
+        # Return:
+        #   ordered cycle for warning, or None if no contradiction among unresolved.
         unresolved_nodes = [
             node for node in node_position
             if node not in set(resolved)
@@ -236,7 +294,7 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
-        # PSEUDOCODE-LOCAL [MEDIA-005]:
+        # PSEUDOCODE [MEDIA-005][MEDIA-006][MEDIA-007]:
         # Inputs:
         #   list_1: current consolidated sequence (possibly partial)
         #   list_2: next declared media sequence
@@ -255,9 +313,13 @@ class Media:
         #
         # Legacy pairwise warning behavior in this helper currently triggers early.
         # MEDIA-002 requires this warning decision to move to full-graph evaluation.
-        # MEDIA-004 extension:
-        # This helper remains a local, deterministic order-preserving merge and
-        # must not define the contradiction payload for merged constraints.
+        # MEDIA-004/007 extension:
+        # This helper keeps local deterministic dedupe/ordering semantics for two-object
+        # merges while global contradiction decision is deferred to _js.
+        # - Walk list_2 in reverse.
+        # - Insert missing paths at stable boundary.
+        # - Suppress only duplicated path re-emission.
+        # - Preserve order by updating last_insert_index to the found duplicate index.
         # Start with a copy of list_1.
         combined_list = list(list_1)
         last_insert_index = len(list_1)
@@ -283,7 +345,7 @@ class Media:
         return combined_list
 
     def __add__(self, other):
-        # PSEUDOCODE-STATE [MEDIA-001][MEDIA-002][MEDIA-003][MEDIA-005]:
+        # PSEUDOCODE-STATE [MEDIA-001][MEDIA-002][MEDIA-003][MEDIA-005][MEDIA-007]:
         # Inputs:
         #   self = Media A with chunk vectors A._css_lists, A._js_lists
         #   other = Media B with chunk vectors B._css_lists, B._js_lists
@@ -297,6 +359,10 @@ class Media:
         #   IF concatenation introduces contradiction only in some merge sequence:
         #       final conflict/warning outcome must be computed from aggregated graph
         #       once, not from transient left-to-right pairwise steps (MEDIA-002/003).
+        # MEDIA-007 compatibility policy:
+        #   __add__ does not finalize conflict outcome; it only stores input chunks.
+        #   this preserves historical two-object merge output while avoiding
+        #   false-positive local blockers in final ordering.
         # Hand-off:
         #   return Media(combined) without resolving final _js yet; _js caller performs
         #   deterministic full-constraint resolution.
