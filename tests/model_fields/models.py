@@ -6,6 +6,7 @@ from django.contrib.contenttypes.fields import (
     GenericForeignKey, GenericRelation,
 )
 from django.contrib.contenttypes.models import ContentType
+from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 from django.db import models
 from django.db.models.fields.files import ImageField, ImageFieldFile
@@ -187,6 +188,16 @@ class VerboseNameField(models.Model):
     field20 = models.URLField("verbose field20")
     field21 = models.UUIDField("verbose field21")
     field22 = models.DurationField("verbose field22")
+
+
+def get_local_upload_path():
+    return settings.LOCAL_FILE_DIR
+
+
+class FilePathFieldCallablePathModel(models.Model):
+    """Model used only for FilePathField callable path traceability artifacts."""
+
+    file = models.FilePathField(path=get_local_upload_path)
 
 
 class GenericIPAddress(models.Model):
