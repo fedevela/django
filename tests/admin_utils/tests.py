@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+import json
 
 from django import forms
 from django.conf import settings
@@ -119,21 +120,32 @@ class UtilsTests(SimpleTestCase):
         D172-001: Read-only JSONField rendering should use field.prepare_value in
         display_for_field.
         """
-        pass
+        class PreparedJSONField(models.JSONField):
+            def prepare_value(self, value):
+                return json.dumps(value, sort_keys=True, separators=(',', ':'))
+
+        field = PreparedJSONField()
+        value = {"b": 1, "a": 2}
+
+        display_value = display_for_field(value, field, self.empty_value)
+        self.assertEqual(display_value, field.prepare_value(value))
 
     def test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display(self):
         """
         D172-004: JSONField readonly rendering should preserve None/empty display
         semantics and not force serialization.
         """
-        pass
+        display_value = display_for_field(None, models.JSONField(), self.empty_value)
+        self.assertEqual(display_value, self.empty_value)
 
     def test_D172_005_display_for_field_jsonfield_logic_only_for_jsonfield_instance(self):
         """
         D172-005: JSON-specific rendering logic in display_for_field must not affect
         non-JSON fields.
         """
-        pass
+        value = {"foo": "bar"}
+        display_value = display_for_field(value, models.CharField(), self.empty_value)
+        self.assertEqual(display_value, "{'foo': 'bar'}")
 
     def test_values_from_lookup_field(self):
         """
@@ -243,7 +255,22 @@ class UtilsTests(SimpleTestCase):
         D172-006: Non-JSON fields in readonly output must keep existing numeric/date/
         boolean/text formatting behavior.
         """
-        pass
+        self.assertEqual(
+            display_for_field(True, models.BooleanField(), self.empty_value),
+            '<img src="%sadmin/img/icon-yes.svg" alt="True">' % settings.STATIC_URL,
+        )
+        self.assertEqual(
+            display_for_field(False, models.BooleanField(), self.empty_value),
+            '<img src="%sadmin/img/icon-no.svg" alt="False">' % settings.STATIC_URL,
+        )
+        self.assertEqual(
+            display_for_field('hello', models.CharField(), self.empty_value),
+            'hello',
+        )
+        self.assertEqual(
+            display_for_field(datetime(2025, 1, 2).date(), models.DateField(), self.empty_value),
+            localize(datetime(2025, 1, 2).date()),
+        )
 
     def test_list_display_for_value(self):
         display_value = display_for_value([1, 2, 3], self.empty_value)

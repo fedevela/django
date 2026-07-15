@@ -410,10 +410,9 @@ def display_for_field(value, field, empty_value_display):
     elif isinstance(field, models.FileField) and value:
         return format_html('<a href="{}">{}</a>', value.url, value)
     # D172-001:
-    # JSON-specific pseudocode (actual implementation in next phase):
-    # if isinstance(field, models.JSONField):
-    #     prepared = field.prepare_value(value)
-    #     return display_for_value(prepared, empty_value_display)
+    elif isinstance(field, models.JSONField):
+        prepare_value = getattr(field, 'prepare_value', field.get_prep_value)
+        return display_for_value(prepare_value(value), empty_value_display)
     else:
         return display_for_value(value, empty_value_display)
 
