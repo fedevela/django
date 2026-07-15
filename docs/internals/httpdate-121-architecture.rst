@@ -1,9 +1,62 @@
 HTTPDATE-121 Architecture Artifact (Yesod)
 =========================================
 
-:Issue: #121
-:Canonical Requirements: HTTPDATE-001, HTTPDATE-002, HTTPDATE-005
+:Issue: #121, #122
+:Canonical Requirements: HTTPDATE-001, HTTPDATE-002, HTTPDATE-003, HTTPDATE-005
 :Scope: RFC 850 two-digit year handling in ``django.utils.http.parse_http_date``
+
+
+HTTPDATE-003 Architecture Pressure (Yesod)
+-----------------------------------------
+
+- HTTPDATE-003
+  - Pressure: gate/guard placement and branch ownership
+  - Architecture locus: ``parse_http_date`` branch-dispatch + RFC850 regex match path
+  - Rationale: centurial adjustment must be bounded to the RFC850 parser seam and only for two-digit-year RFC850 inputs; RFC1123 and asctime branches must remain unaffected by this guard.
+
+  - Gate expression to enforce:
+
+    - branch_match == ``RFC850_DATE``
+    - parsed ``year`` format length is 2 digits
+
+  - Ownership implication:
+    - RFC850 matcher is sole owner of two-digit-century remap.
+    - RFC1123 matcher owns RFC1123 parsing rules only.
+    - ASCTIME matcher owns four-digit-year extraction only.
+
+Requirement-to-architecture map
+-------------------------------
+
+- HTTPDATE-003
+  - Parser branch boundary:
+    - ``django/utils/http.py::parse_http_date``: RFC850 match must satisfy two additional conditions before running century remap.
+  - Contract locus:
+    - ``RFC850_DATE`` match result path only.
+    - Branch-local invariants:
+      - if ``len(year) == 2`` and candidate year is out of current-century bounds, remap is permitted.
+      - all other formats bypass remap entirely.
+  - Verification seam:
+    - keep mapping in ``tests/utils_tests/test_http.py`` under ``HTTPDATE_121_TRACEABILITY_MAP["HTTPDATE-003"]``:
+      - ``HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc850_four_digit_year_bypasses_two_digit_century_gate``
+      - ``HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc1123_two_digit_year_does_not_share_rfc850_century_inference_gate``
+      - ``HttpDateRFC850TraceabilityTests.test_httpdate_003_asctime_four_digit_year_bypasses_two_digit_century_gate``
+
+Dependency-direction notes
+-------------------------
+
+- Keep one-way dependency from parser branch control to:
+  - datetime arithmetic (current-year horizon) only when RFC850 two-digit branch is active
+  - regex match payload only within that branch
+  - no new cross-module dependency introduced
+
+Integration seam skeleton
+-------------------------
+
+- Add/keep explicit seam variables in ``parse_http_date``:
+  - ``is_rfc850`` (format owner flag)
+  - ``year_is_two_digits`` (shape guard)
+  - ``rfc850_century_gate_allowed`` (single boolean guard)
+- The seam can be implemented as a local guard to preserve function signature and behavior boundaries.
 
 Requirement-to-architecture mapping
 ----------------------------------
