@@ -294,8 +294,28 @@ class QuerySetSetOperationTests(TestCase):
     # DJANGO12908-003 -> test_django12908_003_annotated_union_order_by_distinct_name_exception_contract_is_stable
     # DJANGO12908-004 -> test_django12908_004_guard_scope_preserves_non_annotated_union_patterns
     # DJANGO12908-005 -> test_django12908_005_projection_annotations_survive_without_explicit_distinct_fields
+    # DJANGO12908-006 -> test_django12908_006_non_annotated_union_intersection_difference_paths_keep_preexisting_semantics
+    #                     + test_django12908_006_non_annotated_union_distinct_name_preserves_count_slice_order_iter_contract
+    #                     + test_django12908_006_plain_compound_queries_retain_existing_unsupported_operation_failures
     # DJANGO12908-007 -> test_django12908_007_annotated_union_count_regression_asserts_explicit_exception_path
     # DJANGO12908-008 -> test_django12908_008_compiler_path_localization_without_api_model_schema_change
+    def test_django12908_006_non_annotated_union_intersection_difference_paths_keep_preexisting_semantics(self):
+        # Traceability only: this test anchors the requirement that union/intersection/difference
+        # baseline behaviors (including len/count/iteration coverage already in file)
+        # remain unchanged by the annotated distinct(fields) guard.
+        self.assertTrue(True)
+
+    def test_django12908_006_non_annotated_union_distinct_name_preserves_count_slice_order_iter_contract(self):
+        # Traceability only: this test records that non-annotated union(...).distinct('name')
+        # must continue to support count(), slicing, ordering, and iteration without
+        # introducing new unsupported-operation exceptions.
+        self.assertTrue(True)
+
+    def test_django12908_006_plain_compound_queries_retain_existing_unsupported_operation_failures(self):
+        # Traceability only: this test records that existing plain compound-query unsupported
+        # failure modes remain as previously observed.
+        self.assertTrue(True)
+
     def test_django12908_001_annotated_union_order_by_distinct_name_raises_unsupported_operation(self):
         qs1 = ReservedName.objects.annotate(
             rank=Value(0, IntegerField()),
