@@ -107,10 +107,29 @@ class FilePathFieldStringPathMigrationContractTests(SimpleTestCase):
 
     def test_fpf_004_string_path_deconstruction_generates_string_literal_path_argument(self):
         """FPF-004 Scenario 1: FilePathField path passed as string remains a string token."""
-        # TODO(placeholder): preserve canonical string-path migration shape once FPF-004 work lands.
-        self.assertTrue(True)
+        path = "/var/data/example_dir"
+        name, field_path, args, kwargs = models.FilePathField(path=path).deconstruct()
+        self.assertEqual(name, "file_path")
+        self.assertEqual(field_path, "django.db.models.FilePathField")
+        self.assertEqual(args, [])
+        self.assertEqual(kwargs["path"], path)
+        self.assertIsInstance(kwargs["path"], str)
+
+        serialized, imports = self._serialize_file_path_field(path)
+        self.assertIn("FilePathField(path='/var/data/example_dir')", serialized)
+        self.assertEqual(imports, set())
+        self.assertIn("example_dir", serialized)
+        self.assertNotIn("pathlib", imports)
 
     def test_fpf_004_migration_output_shape_stable_for_existing_string_path_models(self):
         """FPF-004 Scenario 1: existing migration content for string path is accepted unchanged."""
-        # TODO(placeholder): verify makemigrations/migrate compatibility for pre-existing strings.
-        self.assertTrue(True)
+        path = "/var/data/example_dir"
+        existing_migration_code = "models.FilePathField(path=%r)" % path
+        field = models.FilePathField(path=path)
+
+        serialized, imports = self._serialize_file_path_field(field.path)
+        self.assertEqual(serialized, existing_migration_code)
+        self.assertEqual(imports, set())
+
+        # Ensure host/path separators are preserved as provided, not rewritten/expanded.
+        self.assertIn(path, serialized)

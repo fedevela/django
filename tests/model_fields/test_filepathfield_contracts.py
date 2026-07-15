@@ -148,10 +148,57 @@ class FilePathFieldContractsFPF004Tests(SimpleTestCase):
 
     def test_FPF_004_string_path_runtime_choices_match_legacy_current_behavior(self):
         """FPF-004 Scenario 2: string and callable path runtime choice behavior remains traceable."""
-        # TODO(placeholder): assert de-facto parity against established string-path baseline.
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as path_root:
+            allowed_file = os.path.join(path_root, "allowed.txt")
+            blocked_file = os.path.join(path_root, "blocked.tmp")
+            with open(allowed_file, "w"), open(blocked_file, "w"):
+                pass
+
+            with open(os.path.join(path_root, "__pycache__"), "w"):
+                pass
+
+            class FilePathFieldRuntimeStringPathModel(models.Model):
+                file = models.FilePathField(path=path_root, match=r"^.*\\.txt$")
+
+                class Meta:
+                    app_label = "model_fields"
+
+            field = FilePathFieldRuntimeStringPathModel._meta.get_field("file")
+            form_field = field.formfield()
+
+            self.assertIn((allowed_file, os.path.basename(allowed_file)), form_field.choices)
+            self.assertNotIn((blocked_file, os.path.basename(blocked_file)), form_field.choices)
+            self.assertNotIn(
+                (os.path.join(path_root, "__pycache__"), os.path.basename("__pycache__")),
+                form_field.choices,
+            )
 
     def test_FPF_004_string_and_callable_path_runtime_choices_share_semantics_contract(self):
         """FPF-004 Scenario 2: baseline parity contract across string vs callable path models."""
-        # TODO(placeholder): ensure runtime path enumeration semantics stay equivalent.
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as path_root:
+            alpha = os.path.join(path_root, "alpha.txt")
+            with open(alpha, "w"):
+                pass
+
+            def get_root_path():
+                return path_root
+
+            class FilePathFieldRuntimeStringPathModel(models.Model):
+                file = models.FilePathField(path=path_root)
+
+                class Meta:
+                    app_label = "model_fields"
+
+            class FilePathFieldRuntimeCallablePathModel(models.Model):
+                file = models.FilePathField(path=get_root_path)
+
+                class Meta:
+                    app_label = "model_fields"
+
+            string_field = FilePathFieldRuntimeStringPathModel._meta.get_field("file")
+            callable_field = FilePathFieldRuntimeCallablePathModel._meta.get_field("file")
+
+            self.assertEqual(
+                string_field.formfield().choices,
+                callable_field.formfield().choices,
+            )
