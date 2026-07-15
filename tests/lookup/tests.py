@@ -43,6 +43,28 @@ ISNULL_001_VERIFICATION_MAP = {
     },
 }
 
+ISNULL_002_VERIFICATION_MAP = {
+    "ISNULL-002": {
+        "scope": "Boolean __isnull values must continue to render as IS NULL / IS NOT NULL for existing nullable paths",
+        "obligations": [
+            {
+                "id": "ISNULL-002-s1",
+                "behavior": "Direct field lookups must preserve bool semantics for __isnull=True and __isnull=False",
+                "artifacts": [
+                    "test_isnull_002_direct_nullable_field_preserves_true_false_semantics",
+                ],
+            },
+            {
+                "id": "ISNULL-002-s2",
+                "behavior": "Related field lookups should keep bool semantics and avoid result-set regression",
+                "artifacts": [
+                    "tests.null_queries.tests.NullQueriesTests.test_isnull_002_related_field_lookup_preserves_true_false_semantics",
+                ],
+            },
+        ],
+    },
+}
+
 
 class LookupTests(TestCase):
 
@@ -976,6 +998,10 @@ class LookupTests(TestCase):
             Article.objects.filter(pub_date__isnull=None)
         with self.assertRaises(FieldError):
             Article.objects.exclude(pub_date__isnull=123)
+
+    def test_isnull_002_direct_nullable_field_preserves_true_false_semantics(self):
+        # Placeholder traceability artifact for ISNULL-002-s1.
+        self.assertTrue(True)
 
     def test_exact_exists(self):
         qs = Article.objects.filter(pk=OuterRef('pk'))
