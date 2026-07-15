@@ -125,6 +125,36 @@ class Media:
         #     # sequence of warning events on every execution.
         #     RETURN result, containing every file exactly once
         #
+        # contradictory_source_order_warning(source_lists, precedence_error):
+        #     # MEDIA-008, MEDIA-009: derive conflict evidence exclusively from
+        #     # original declarations, never from an intermediate merged order.
+        #     declared_directions := empty mapping from an unordered file pair
+        #                            to its observed source-relative directions
+        #     contradictory_pairs := empty insertion-ordered set
+        #     FOR EACH source_list IN source_lists, in merge order:
+        #         FOR EACH pair (earlier_file, later_file) appearing at distinct
+        #                 positions in source_list, in declaration order:
+        #             pair_key := unordered identity of the two files
+        #             direction := earlier_file before later_file
+        #             IF the reverse direction exists in declared_directions[pair_key]:
+        #                 add pair_key to contradictory_pairs if not already present
+        #             record direction in declared_directions[pair_key]
+        #     WHEN precedence_error reports incompatible ordering:
+        #         IF contradictory_pairs is not empty:
+        #             conflict_pair := first contradictory pair in deterministic
+        #                              source encounter order
+        #             # MEDIA-008: opposite explicit declarations reach this path.
+        #             emit MediaOrderConflictWarning
+        #             # MEDIA-009: name exactly the two files in conflict_pair;
+        #             # omit files encountered only through merged placement or
+        #             # as unrelated/intermediate members of the source lists.
+        #             warning_message := existing warning text formatted with
+        #                                only conflict_pair
+        #         ELSE:
+        #             preserve the pre-existing cyclic-dependency failure path;
+        #             MEDIA-008 and MEDIA-009 impose no additional outcome
+        #         RETURN the deterministic deduplicated fallback order
+        #
         # provided_three_widget_media(source_lists):
         #     # MEDIA-003, MEDIA-004: source_lists preserve the unchanged
         #     # ColorPicker, SimpleTextWidget, and FancyTextWidget declarations.
