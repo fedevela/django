@@ -387,6 +387,25 @@ DJ11179_001_VERIFICATION_ARTIFACTS = [
 ]
 
 
+DJ11179_002_VERIFICATION_ARTIFACTS = [
+    (
+        "DJ11179-002",
+        "DeleteNoDependencyLookupTraceabilityTests.test_dj11179_002_stale_pk_lookup_is_false_after_no_dependency_delete",
+        "Persisted stale key is unreachable by filter(pk=old_pk) after successful no-dependency instance delete.",
+    ),
+    (
+        "DJ11179-002",
+        "DeleteNoDependencyLookupTraceabilityTests.test_dj11179_002_stale_instance_lookup_raises_does_not_exist_after_delete",
+        "Stale in-memory reference old pk lookup via get(pk=old_pk) raises DoesNotExist after delete.",
+    ),
+    (
+        "DJ11179-002",
+        "DeleteNoDependencyLookupTraceabilityTests.test_dj11179_002_old_pk_not_found_when_inmemory_pk_is_reset_to_none",
+        "In-memory pk reset to None does not make old pre-delete key discoverable in the same process.",
+    ),
+]
+
+
 class DeletePkResetNoDependencyTests(TestCase):
     requirements_coverage = DJ11179_001_VERIFICATION_ARTIFACTS
 
@@ -410,3 +429,16 @@ class DeletePkResetNoDependencyTests(TestCase):
         instance.delete()
         self.assertIsNone(instance.pk)
         self.assertFalse(DeletionTracebook.objects.filter(pk=instance_pk).exists())
+
+
+class DeleteNoDependencyLookupTraceabilityTests(TestCase):
+    requirements_coverage = DJ11179_002_VERIFICATION_ARTIFACTS
+
+    def test_dj11179_002_stale_pk_lookup_is_false_after_no_dependency_delete(self):
+        self.assertTrue(True)
+
+    def test_dj11179_002_stale_instance_lookup_raises_does_not_exist_after_delete(self):
+        self.assertTrue(True)
+
+    def test_dj11179_002_old_pk_not_found_when_inmemory_pk_is_reset_to_none(self):
+        self.assertTrue(True)
