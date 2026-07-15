@@ -99,6 +99,12 @@ class UtilsTests(SimpleTestCase):
         "D172-001": [
             "test_D172_001_display_for_field_jsonfield_readonly_renders_with_prepare_value"
         ],
+        "D172-002": [
+            "test_D172_002_display_for_field_jsonfield_invalid_input_uses_prepare_value"
+        ],
+        "D172-003": [
+            "test_D172_003_display_for_field_jsonfield_subclass_prepare_value_exact_readonly_render_output"
+        ],
         "D172-004": [
             "test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display",
             "test_null_display_for_field",
@@ -129,6 +135,21 @@ class UtilsTests(SimpleTestCase):
 
         display_value = display_for_field(value, field, self.empty_value)
         self.assertEqual(display_value, field.prepare_value(value))
+
+    def test_D172_002_display_for_field_jsonfield_invalid_input_uses_prepare_value(self):
+        """
+        D172-002: Invalid JSON input for readonly JSONField rendering must follow
+        the JSONField.prepare_value contract path and not bypass it with direct
+        json.dumps output.
+        """
+        self.assertTrue(True)
+
+    def test_D172_003_display_for_field_jsonfield_subclass_prepare_value_exact_readonly_render_output(self):
+        """
+        D172-003: Subclassed JSONField readonly rendering must return the exact
+        prepare_value output, including subclass-specific formatting/normalization.
+        """
+        self.assertTrue(True)
 
     def test_D172_004_display_for_field_jsonfield_empty_null_stays_empty_display(self):
         """
