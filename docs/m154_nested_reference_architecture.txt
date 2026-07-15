@@ -1,9 +1,9 @@
 Issue M154: Preserve nested deconstruction paths and reject unstable nested references
-===================================================================
+====================================================================
 
 ## Completion target
-- Canonical requirements: M154-001, M154-002, M154-004
-- Scope: nested class object serialization in field deconstruction and migration serialization.
+- Canonical requirements: M154-001, M154-002, M154-004, M154-006
+- Scope: nested class object serialization in field deconstruction, migration serialization, and migration command idempotence.
 - Constraint: preserve deterministic structure-only behavior for implementation phase; no runtime policy changes in this artifact.
 
 ## Requirement-to-architecture map
@@ -19,6 +19,16 @@ Issue M154: Preserve nested deconstruction paths and reject unstable nested refe
   - Owning locus: `django/db/migrations/serializer.py` `TypeSerializer.serialize()` failure path + default `ValueError` in `serializer_factory()`
   - Boundary: class-resolution contract -> existing non-serializable error reporting channel.
   - Structural pressure: never emit invented or shortened paths when stable module/class-chain resolution is not possible.
+- M154-006 / Scenario 1 (clean second run)
+  - Owning locus: `django/core/management/commands/makemigrations.py` `Command.handle()` and `Command.write_migration_files()`
+  - Boundary: migration-change detection -> writer side-effect boundary.
+  - Structural pressure: unchanged model definitions must map to `changes == {}` and stay in no-write path.
+  - Required invariants: no file writes and no added migration operations for target app.
+- M154-006 / Scenario 2 (byte-for-byte stability)
+  - Owning locus: `django/db/migrations/writer.py` `MigrationWriter.as_string()` (`OperationWriter.serialize()` participates)
+  - Boundary: in-memory migration aggregate -> deterministic text contract.
+  - Structural pressure: ordered operation iteration + stable import sorting + template interpolation.
+  - Required invariants: regenerated file text is byte-identical for fixed operation/dependency graph and environment ordering.
 
 ## Topology and ownership
 - Core deconstruction source:
@@ -28,6 +38,13 @@ Issue M154: Preserve nested deconstruction paths and reject unstable nested refe
   - `serializer.py` owns conversion from deconstructed path/class values to importable migration code.
   - `_serialize_path()` is the seam for module import prefix handling.
   - `TypeSerializer.serialize()` is the seam for class object options.
+- Command execution boundary:
+  - `makemigrations.py` owns migration graph comparison and whether filesystem mutations occur.
+  - `Command.handle()` owns change/no-change branching.
+  - `Command.write_migration_files()` owns migration file creation and persistence.
+- Writer boundary:
+  - `writer.py` owns the byte-level rendering contract of a `Migration` aggregate.
+  - `MigrationWriter.as_string()` and `OperationWriter.serialize()` own operation text and import emission sequencing.
 - Error reporting seam:
   - unresolved class chains must flow to existing non-serializable/local-scope reporting through serializer dispatch, not to a synthetic path.
 
@@ -36,6 +53,9 @@ Issue M154: Preserve nested deconstruction paths and reject unstable nested refe
   -> produces deconstruct payload consumed by `django/db/migrations/serializer.py`.
 - `serializer.py` depends on `models.Field`, `models.manager.BaseManager`, and `Operation` via `serializer_factory()`
   but remains directionally one-way from deconstruct input to emitted migration token strings/imports.
+- `django/core/management/commands/makemigrations.py`
+  -> consumes `MigrationAutodetector.changes()` and controls whether `MigrationWriter.as_string()` output is materialized.
+- `MigrationWriter.as_string()` -> consumes operation list/dependencies and delegates value rendering to `MigrationWriter.serialize()`.
 - `TypeSerializer` must not mutate nested class shape; it depends on class metadata attributes (`__module__`, `__qualname__`)
   and existing serializer failure behavior.
 
@@ -51,15 +71,27 @@ Issue M154: Preserve nested deconstruction paths and reject unstable nested refe
   - Must continue to dispatch `isinstance(value, type)` before generic deconstructable fallback for nested class arguments.
 - Seam S4: unresolved path reporting
   - Fail closed through existing `ValueError` reporting path.
+- Seam S5: no-write branch (second-run idempotence)
+  - Inputs: `changes` from autodetector in `Command.handle()`.
+  - Decision: empty change map means status-only branch and skip `write_migration_files()`.
+  - Output contract: no migration file mutations and no operation rendering side effects.
+- Seam S6: deterministic serialization output
+  - Inputs: ordered `Migration.operations`, serialized dependency tuples, import token set.
+  - Output pipeline:
+    1. iterate operations once in stored order
+    2. serialize each operation and collect imports
+    3. sort imports before render
+    4. interpolate migration template with stable key set each call
+  - Output contract: same input and environment produce byte-equal migration source.
 
 ## Implementation-ready mapping checklist
 - [x] Assign each requirement to owning module/contract.
-- [x] Pin each required boundary (deconstruct boundary, serializer boundary, failure boundary).
+- [x] Pin each required boundary (deconstruct boundary, serializer boundary, command control boundary, writer output boundary).
 - [x] Record dependency direction for later code changes.
-- [x] Preserve all mapping with canonical IDs.
+- [x] Add explicit architecture seams for `M154-006` control flow and deterministic rendering.
 - [ ] Behavioral implementation to be applied in subsequent phases only.
 
 ## Artifact cross references
 - Verification traceability: `tests/migrations/test_writer_nested_reference_traceability.py`
   (`REQUIREMENT_TO_VERIFICATION`)
-- Logic loci: `django/db/models/fields/__init__.py`, `django/db/migrations/serializer.py`
+- Logic loci: `django/db/models/fields/__init__.py`, `django/db/migrations/serializer.py`, `django/core/management/commands/makemigrations.py`, `django/db/migrations/writer.py`
