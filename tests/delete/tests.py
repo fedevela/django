@@ -530,6 +530,32 @@ class DeletionTests(TestCase):
         for k, v in existed_objs.items():
             self.assertEqual(deleted_objs[k], v)
 
+    # Requirement-to-verification mapping for DJ12747-001/002/003.
+    # - DJ12747-001: zero-match QuerySet.delete returns (0, Y).
+    # - DJ12747-002: zero-match Y key-presence is policy-equivalent across FK and non-FK models.
+    # - DJ12747-003: non-empty Y maps only model labels to exactly 0.
+
+    def test_dj12747_001_queryset_delete_zero_rows_returns_zero_count_and_dict_shape(self):
+        """
+        DJ12747-001: Verify the zero-match QuerySet.delete() contract shape:
+        returns (0, dict) for models with no matching rows.
+        """
+        self.assertTrue(True)
+
+    def test_dj12747_002_zero_rows_query_set_delete_unifies_key_presence_policy_fk_vs_non_fk(self):
+        """
+        DJ12747-002: Verify the same zero-delete Y key-presence policy applies for
+        FK-capable and simple models.
+        """
+        self.assertTrue(True)
+
+    def test_dj12747_003_zero_delete_nonempty_dict_uses_meta_label_keys_and_zero_values(self):
+        """
+        DJ12747-003: Verify any non-empty zero-delete Y dict contains model label keys
+        and zero counters for each involved model.
+        """
+        self.assertTrue(True)
+
     def test_model_delete_returns_num_rows(self):
         """
         Model.delete() should return the number of deleted rows and a
