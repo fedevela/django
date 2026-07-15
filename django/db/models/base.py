@@ -939,6 +939,17 @@ class Model(metaclass=ModelBase):
     delete.alters_data = True
 
     def _get_FIELD_display(self, field):
+        # REQ-138-006: this fallback is field-local and only reached for the
+        # accessor that was installed for one concrete field.
+        # - Input: single `field` argument from the generated accessor for that field.
+        # - Decision: load value from `field.attname` and resolve only in
+        #   `field.flatchoices`; do not inspect any other model fields or
+        #   global override registries.
+        # - Outputs:
+        #   - mapped label when current field value is in flattened choices;
+        #   - raw value when unmapped.
+        # - Failure path: mapping miss returns raw value, preserving independent
+        #   behavior for non-overridden sibling fields.
         # REQ-138-002 obligation mapping:
         # - Input: model instance `self`, one choice-enabled field descriptor `field`.
         # - Branch: no custom method path here; this is the generated fallback.

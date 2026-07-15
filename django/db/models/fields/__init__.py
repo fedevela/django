@@ -806,6 +806,27 @@ class Field(RegisterLookupMixin):
             #   - runtime callable at instance level that resolves to:
             #     explicit user override when present, generated fallback otherwise.
             display_name = 'get_%s_display' % self.name
+            # REQ-138-006 per-field isolation:
+            # - Input: model class `cls`, choice field object `self`, display method
+            #   name `display_name` derived from this field only.
+            # - Loop invariant (per field): evaluate override presence for this field
+            #   without reading or mutating any sibling choice fields.
+            # - Branch A: if `display_name in cls.__dict__`
+            #   - explicit override exists on current class for this field only;
+            #   - do not install generated helper for this field.
+            # - Branch B: elif `hasattr(cls, display_name)`
+            #   - helper is inherited from base class for this field;
+            #   - do not install generated helper for this field.
+            # - Branch C: else
+            #   - no override exists for this field in MRO;
+            #   - install generated helper for this specific field via
+            #     `partialmethod(cls._get_FIELD_display, field=self)`.
+            # - Cross-field failure condition:
+            #   - if another field (e.g., `foo`) has a custom helper, that must
+            #     only satisfy its own Branch A and must not short-circuit
+            #     Branch C for any other field (e.g., `bar`).
+            # - Output: per-field accessor map where each field gets either user
+            #   override or generated mapping fallback independently.
             # REQ-138-002: generated helper behavior for non-overridden methods
             # remains unchanged (lookup through `_get_FIELD_display`, fallback raw).
             # REQ-138-003.OBLIGATIONS[1] / [2] map to this branch:
