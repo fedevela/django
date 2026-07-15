@@ -77,6 +77,12 @@ def check_language_settings_consistent(app_configs, **kwargs):
     #   - S1: LANGUAGE_CODE='de-at', LANGUAGES=[('de','German')] => base 'de' present -> no E004.
     #   - S2: LANGUAGE_CODE='fr-ca', LANGUAGES=[('fr','French')] => base 'fr' present -> no E004.
 
-    if settings.LANGUAGE_CODE not in available_tags:
+    language_code = settings.LANGUAGE_CODE
+    if language_code not in available_tags:
+        # GEV-001: allow regional LANGUAGE_CODE fallback to its base language
+        # if the base language exists in LANGUAGES.
+        base_language = language_code.split('-')[0]
+        if base_language != language_code and base_language in available_tags:
+            return []
         return [E004]
     return []

@@ -88,19 +88,15 @@ class TranslationCheckTests(SimpleTestCase):
     def test_gev_001_regional_language_code_with_base_language_present_no_e004(self):
         # GEV-001-S1: GIVEN LANGUAGE_CODE is regional and base language exists,
         # THEN translation.E004 must not be emitted for LANGUAGE_CODE.
-        # PSEUDOCODE:
-        #   1) Arrange: with self.settings(LANGUAGE_CODE='de-at',
-        #      LANGUAGES=[('de', 'German')]).
-        #   2) Act: call check_language_settings_consistent(None).
-        #   3) Assert (pseudo): result == [] because regional fallback to "de" is allowed.
-        pass
+        # Arrange
+        with self.settings(LANGUAGE_CODE='de-at', LANGUAGES=[('de', 'German')]):
+            # Act + Assert
+            self.assertEqual(check_language_settings_consistent(None), [])
 
     def test_gev_001_french_regional_code_with_base_language_present_no_e004(self):
         # GEV-001-S2: GIVEN LANGUAGE_CODE='fr-ca' and LANGUAGES contains 'fr',
         # THEN translation.E004 must not be emitted for LANGUAGE_CODE.
-        # PSEUDOCODE:
-        #   1) Arrange: with self.settings(LANGUAGE_CODE='fr-ca',
-        #      LANGUAGES=[('fr', 'French')]).
-        #   2) Act: call check_language_settings_consistent(None).
-        #   3) Assert (pseudo): result == [] because fallback to base "fr" is accepted.
-        pass
+        # Arrange
+        with self.settings(LANGUAGE_CODE='fr-ca', LANGUAGES=[('fr', 'French')]):
+            # Act + Assert
+            self.assertEqual(check_language_settings_consistent(None), [])
