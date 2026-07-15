@@ -178,11 +178,10 @@ def parse_http_date(date):
     try:
         year_text = m.group("year")
         year = int(year_text)
-        # RFC 850 allows 2-digit years; apply runtime-based century inference there.
         if is_rfc850 and len(year_text) == 2:
             current_year = datetime.date.today().year
             century_candidate = current_year - (current_year % 100) + year
-            year = century_candidate - 100 if century_candidate > current_year + 50 else century_candidate
+            year = century_candidate - 100 if century_candidate - current_year > 50 else century_candidate
         # Maintain legacy ASCTIME handling for year values written as two-digit years with
         # leading zeros (for example, "0037" -> 2037).
         elif regex is ASCTIME_DATE and year < 100:

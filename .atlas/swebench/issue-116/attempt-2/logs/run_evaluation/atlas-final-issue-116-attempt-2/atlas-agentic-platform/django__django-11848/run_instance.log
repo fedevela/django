@@ -1,0 +1,314 @@
+2026-07-15 07:02:14,035 - INFO - Creating container for django__django-11848...
+2026-07-15 07:02:14,952 - INFO - Container for django__django-11848 created: 6ffd03825b1ffe16f396e39cc1c364c66edae0cf8bb7b1700681416b27afd3f8
+2026-07-15 07:02:15,069 - INFO - Container for django__django-11848 started: 6ffd03825b1ffe16f396e39cc1c364c66edae0cf8bb7b1700681416b27afd3f8
+2026-07-15 07:02:15,070 - INFO - Intermediate patch for django__django-11848 written to logs/run_evaluation/atlas-final-issue-116-attempt-2/atlas-agentic-platform/django__django-11848/patch.diff, now applying to container...
+2026-07-15 07:02:15,187 - INFO - >>>>> Applied Patch:
+/tmp/patch.diff:69: trailing whitespace.
+ 
+/tmp/patch.diff:75: trailing whitespace.
+ 
+/tmp/patch.diff:100: trailing whitespace.
+ 
+/tmp/patch.diff:129: trailing whitespace.
+ 
+/tmp/patch.diff:132: trailing whitespace.
+ 
+Checking patch .atlas/swebench/issue-116/attempt-0/.swebench_predictions/django__django-11848.jsonl...
+Checking patch .atlas/swebench/issue-116/attempt-0/atlas-agentic-platform.atlas-final-issue-116-attempt-0.json...
+Checking patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/eval.sh...
+Checking patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/patch.diff...
+Checking patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/report.json...
+Checking patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/run_instance.log...
+Checking patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/test_output.txt...
+Checking patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/test_result.txt...
+Checking patch .atlas/swebench/issue-116/attempt-1/.swebench_predictions/django__django-11848.jsonl...
+Checking patch .atlas/swebench/issue-116/attempt-1/atlas-agentic-platform.atlas-final-issue-116-attempt-1.json...
+Checking patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/eval.sh...
+Checking patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/patch.diff...
+Checking patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/report.json...
+Checking patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/run_instance.log...
+Checking patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/test_output.txt...
+Checking patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/test_result.txt...
+Checking patch django/utils/http.py...
+Checking patch docs/internals/httpdate-121-architecture.rst...
+Checking patch docs/internals/httpdate-123-architecture.rst...
+Checking patch tests/utils_tests/test_http.py...
+Applied patch .atlas/swebench/issue-116/attempt-0/.swebench_predictions/django__django-11848.jsonl cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-0/atlas-agentic-platform.atlas-final-issue-116-attempt-0.json cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/eval.sh cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/patch.diff cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/report.json cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/run_instance.log cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/test_output.txt cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-0/logs/run_evaluation/atlas-final-issue-116-attempt-0/atlas-agentic-platform/django__django-11848/test_result.txt cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/.swebench_predictions/django__django-11848.jsonl cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/atlas-agentic-platform.atlas-final-issue-116-attempt-1.json cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/eval.sh cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/patch.diff cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/report.json cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/run_instance.log cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/test_output.txt cleanly.
+Applied patch .atlas/swebench/issue-116/attempt-1/logs/run_evaluation/atlas-final-issue-116-attempt-1/atlas-agentic-platform/django__django-11848/test_result.txt cleanly.
+Applied patch django/utils/http.py cleanly.
+Applied patch docs/internals/httpdate-121-architecture.rst cleanly.
+Applied patch docs/internals/httpdate-123-architecture.rst cleanly.
+Applied patch tests/utils_tests/test_http.py cleanly.
+warning: squelched 63 whitespace errors
+warning: 68 lines add whitespace errors.
+
+2026-07-15 07:02:15,734 - INFO - Git diff before:
+diff --git a/django/utils/http.py b/django/utils/http.py
+index 572cfb4347..64565143c4 100644
+--- a/django/utils/http.py
++++ b/django/utils/http.py
+@@ -33,9 +33,10 @@ __D2 = r'(?P<day>[ \d]\d)'
+ __M = r'(?P<mon>\w{3})'
+ __Y = r'(?P<year>\d{4})'
+ __Y2 = r'(?P<year>\d{2})'
++__Y2_OR_Y4 = r'(?P<year>\d{2}(?:\d{2})?)'
+ __T = r'(?P<hour>\d{2}):(?P<min>\d{2}):(?P<sec>\d{2})'
+ RFC1123_DATE = re.compile(r'^\w{3}, %s %s %s %s GMT$' % (__D, __M, __Y, __T))
+-RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))
++RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2_OR_Y4, __T))
+ ASCTIME_DATE = re.compile(r'^\w{3} %s %s %s %s$' % (__M, __D2, __T, __Y))
+ 
+ RFC3986_GENDELIMS = ":/?#[]@"
+@@ -167,19 +168,25 @@ def parse_http_date(date):
+     # email.utils.parsedate() does the job for RFC1123 dates; unfortunately
+     # RFC7231 makes it mandatory to support RFC850 dates too. So we roll
+     # our own RFC-compliant parsing.
+-    for regex in RFC1123_DATE, RFC850_DATE, ASCTIME_DATE:
++    for regex in (RFC1123_DATE, RFC850_DATE, ASCTIME_DATE):
+         m = regex.match(date)
+         if m is not None:
++            is_rfc850 = regex is RFC850_DATE
+             break
+     else:
+         raise ValueError("%r is not in a valid HTTP date format" % date)
+     try:
+-        year = int(m.group('year'))
+-        if year < 100:
+-            if year < 70:
+-                year += 2000
+-            else:
+-                year += 1900
++        year_text = m.group("year")
++        year = int(year_text)
++        # RFC 850 allows 2-digit years; apply runtime-based century inference there.
++        if is_rfc850 and len(year_text) == 2:
++            current_year = datetime.date.today().year
++            century_candidate = current_year - (current_year % 100) + year
++            year = century_candidate - 100 if century_candidate > current_year + 50 else century_candidate
++        # Maintain legacy ASCTIME handling for year values written as two-digit years with
++        # leading zeros (for example, "0037" -> 2037).
++        elif regex is ASCTIME_DATE and year < 100:
++            year += 2000
+         month = MONTHS.index(m.group('mon').lower()) + 1
+         day = int(m.group('day'))
+         hour = int(m.group('hour'))
+diff --git a/tests/utils_tests/test_http.py b/tests/utils_tests/test_http.py
+index bc8bcfe977..a7733d3052 100644
+--- a/tests/utils_tests/test_http.py
++++ b/tests/utils_tests/test_http.py
+@@ -6,7 +6,8 @@ from django.utils.datastructures import MultiValueDict
+ from django.utils.deprecation import RemovedInDjango40Warning
+ from django.utils.http import (
+     base36_to_int, escape_leading_slashes, http_date, int_to_base36,
+-    is_safe_url, is_same_domain, parse_etags, parse_http_date, quote_etag,
++    is_safe_url, is_same_domain, parse_etags, parse_http_date,
++    parse_http_date_safe, quote_etag,
+     url_has_allowed_host_and_scheme, urlencode, urlquote, urlquote_plus,
+     urlsafe_base64_decode, urlsafe_base64_encode, urlunquote, urlunquote_plus,
+ )
+@@ -329,6 +330,129 @@ class HttpDateProcessingTests(unittest.TestCase):
+         self.assertEqual(datetime.utcfromtimestamp(parsed), datetime(2037, 11, 6, 8, 49, 37))
+ 
+ 
++class HttpDateRFC850TraceabilityTests(unittest.TestCase):
++    """
++    Issue #121 verification scaffolding for RFC 850 two-digit year inference.
++
++    Mappings:
++    - HTTPDATE-001: runtime-centurial mapping for RFC 850 two-digit years.
++    - HTTPDATE-002: boundary remains unchanged at exactly 50 years ahead.
++    - HTTPDATE-005: no fixed split (e.g., 00-69/70-99) in century assignment logic.
++    - HTTPDATE-003: centurial remap is confined to RFC 850 two-digit-year branch.
++    """
++
++    def test_httpdate_001_candidate_year_is_runtime_century_plus_two_digits(self):
++        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
++            parsed = parse_http_date("Thursday, 01-Dec-90 00:00:00 GMT")
++        self.assertEqual(
++            datetime.utcfromtimestamp(parsed),
++            datetime(1990, 12, 1, 0, 0),
++        )
++
++    def test_httpdate_001_strictly_more_than_50_years_ahead_reduces_century_by_100(self):
++        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
++            parsed = parse_http_date("Thursday, 01-Dec-77 00:00:00 GMT")
++        self.assertEqual(
++            datetime.utcfromtimestamp(parsed),
++            datetime(1977, 12, 1, 0, 0),
++        )
++
++    def test_httpdate_002_exactly_50_years_ahead_keeps_current_century(self):
++        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
++            parsed = parse_http_date("Thursday, 01-Dec-76 00:00:00 GMT")
++        self.assertEqual(
++            datetime.utcfromtimestamp(parsed),
++            datetime(2076, 12, 1, 0, 0),
++        )
++
++    def test_httpdate_005_only_century_inference_changes_for_rfc850_two_digit_year(self):
++        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
++            parsed = parse_http_date("Thursday, 01-Dec-90 00:00:00 GMT")
++        parsed_datetime = datetime.utcfromtimestamp(parsed)
++        self.assertEqual(parsed_datetime.month, 12)
++        self.assertEqual(parsed_datetime.day, 1)
++        self.assertEqual(parsed_datetime.hour, 0)
++        self.assertEqual(parsed_datetime.minute, 0)
++        self.assertEqual(parsed_datetime.second, 0)
++
++    def test_httpdate_001_field_values_remain_unchanged_when_runtime_century_is_recomputed(self):
++        with unittest.mock.patch("django.utils.http.datetime.date.today", return_value=datetime.date(2026, 1, 1)):
++            parsed = parse_http_date("Thursday, 31-Mar-76 12:34:56 GMT")
++        parsed_datetime = datetime.utcfromtimestamp(parsed)
++        self.assertEqual(parsed_datetime.month, 3)
++        self.assertEqual(parsed_datetime.day, 31)
++        self.assertEqual(parsed_datetime.hour, 12)
++        self.assertEqual(parsed_datetime.minute, 34)
++        self.assertEqual(parsed_datetime.second, 56)
++        self.assertEqual(parsed_datetime.weekday(), 1)
++
++    def test_httpdate_003_rfc850_four_digit_year_bypasses_two_digit_century_gate(self):
++        parsed = parse_http_date("Thursday, 01-Dec-1977 00:00:00 GMT")
++        self.assertEqual(
++            datetime.utcfromtimestamp(parsed),
++            datetime(1977, 12, 1, 0, 0),
++        )
++
++    def test_httpdate_003_rfc1123_two_digit_year_does_not_share_rfc850_century_inference_gate(self):
++        parsed = parse_http_date("Fri, 01 Dec 1977 00:00:00 GMT")
++        self.assertEqual(
++            datetime.utcfromtimestamp(parsed),
++            datetime(1977, 12, 1, 0, 0),
++        )
++
++    def test_httpdate_003_asctime_four_digit_year_bypasses_two_digit_century_gate(self):
++        parsed = parse_http_date("Fri Dec  1 00:00:00 1977")
++        self.assertEqual(
++            datetime.utcfromtimestamp(parsed),
++            datetime(1977, 12, 1, 0, 0),
++        )
++
++
++class HttpDateMalformedInputTraceabilityTests(unittest.TestCase):
++    """
++    Issue #123 verification scaffolding for malformed HTTP date inputs.
++
++    Mappings:
++    - HTTPDATE-004: malformed inputs must remain non-parsing outcomes; two-digit
++      year remap must never restore them.
++    """
++
++    def test_httpdate_004_malformed_input_missing_required_tokens_stays_none(self):
++        self.assertIsNone(parse_http_date_safe("Sunday, 06-Nov-94 08:49 GMT"))
++
++    def test_httpdate_004_invalid_rfc850_syntax_remains_none_without_century_recovery(self):
++        self.assertIsNone(parse_http_date_safe("Thursday, 99-Foo-90 00:00:00 GMT"))
++        self.assertIsNone(parse_http_date_safe("Thursday, 31-Dec-90 99:99:99 GMT"))
++
++    def test_httpdate_004_numeric_suffix_non_date_remains_none_no_fallback(self):
++        self.assertIsNone(parse_http_date_safe("not-a-date-90-01-01T99"))
++
++
++HTTPDATE_121_TRACEABILITY_MAP = {
++    "HTTPDATE-001": [
++        "HttpDateRFC850TraceabilityTests.test_httpdate_001_candidate_year_is_runtime_century_plus_two_digits",
++        "HttpDateRFC850TraceabilityTests.test_httpdate_001_strictly_more_than_50_years_ahead_reduces_century_by_100",
++        "HttpDateRFC850TraceabilityTests.test_httpdate_001_field_values_remain_unchanged_when_runtime_century_is_recomputed",
++    ],
++    "HTTPDATE-002": [
++        "HttpDateRFC850TraceabilityTests.test_httpdate_002_exactly_50_years_ahead_keeps_current_century",
++    ],
++    "HTTPDATE-005": [
++        "HttpDateRFC850TraceabilityTests.test_httpdate_005_only_century_inference_changes_for_rfc850_two_digit_year",
++    ],
++    "HTTPDATE-003": [
++        "HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc850_four_digit_year_bypasses_two_digit_century_gate",
++        "HttpDateRFC850TraceabilityTests.test_httpdate_003_rfc1123_two_digit_year_does_not_share_rfc850_century_inference_gate",
++        "HttpDateRFC850TraceabilityTests.test_httpdate_003_asctime_four_digit_year_bypasses_two_digit_century_gate",
++    ],
++    "HTTPDATE-004": [
++        "HttpDateMalformedInputTraceabilityTests.test_httpdate_004_malformed_input_missing_required_tokens_stays_none",
++        "HttpDateMalformedInputTraceabilityTests.test_httpdate_004_invalid_rfc850_syntax_remains_none_without_century_recovery",
++        "HttpDateMalformedInputTraceabilityTests.test_httpdate_004_numeric_suffix_non_date_remains_none_no_fallback",
++    ],
++}
++
++
+ class EscapeLeadingSlashesTests(unittest.TestCase):
+     def test(self):
+         tests = (
+2026-07-15 07:02:15,734 - INFO - Eval script for django__django-11848 written to logs/run_evaluation/atlas-final-issue-116-attempt-2/atlas-agentic-platform/django__django-11848/eval.sh; copying to container...
+2026-07-15 07:02:22,919 - INFO - Test runtime: 7.14 seconds
+2026-07-15 07:02:22,920 - INFO - Test output for django__django-11848 written to logs/run_evaluation/atlas-final-issue-116-attempt-2/atlas-agentic-platform/django__django-11848/test_output.txt
+2026-07-15 07:02:22,961 - INFO - Git diff after:
+diff --git a/django/utils/http.py b/django/utils/http.py
+index 572cfb4347..64565143c4 100644
+--- a/django/utils/http.py
++++ b/django/utils/http.py
+@@ -33,9 +33,10 @@ __D2 = r'(?P<day>[ \d]\d)'
+ __M = r'(?P<mon>\w{3})'
+ __Y = r'(?P<year>\d{4})'
+ __Y2 = r'(?P<year>\d{2})'
++__Y2_OR_Y4 = r'(?P<year>\d{2}(?:\d{2})?)'
+ __T = r'(?P<hour>\d{2}):(?P<min>\d{2}):(?P<sec>\d{2})'
+ RFC1123_DATE = re.compile(r'^\w{3}, %s %s %s %s GMT$' % (__D, __M, __Y, __T))
+-RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))
++RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2_OR_Y4, __T))
+ ASCTIME_DATE = re.compile(r'^\w{3} %s %s %s %s$' % (__M, __D2, __T, __Y))
+ 
+ RFC3986_GENDELIMS = ":/?#[]@"
+@@ -167,19 +168,25 @@ def parse_http_date(date):
+     # email.utils.parsedate() does the job for RFC1123 dates; unfortunately
+     # RFC7231 makes it mandatory to support RFC850 dates too. So we roll
+     # our own RFC-compliant parsing.
+-    for regex in RFC1123_DATE, RFC850_DATE, ASCTIME_DATE:
++    for regex in (RFC1123_DATE, RFC850_DATE, ASCTIME_DATE):
+         m = regex.match(date)
+         if m is not None:
++            is_rfc850 = regex is RFC850_DATE
+             break
+     else:
+         raise ValueError("%r is not in a valid HTTP date format" % date)
+     try:
+-        year = int(m.group('year'))
+-        if year < 100:
+-            if year < 70:
+-                year += 2000
+-            else:
+-                year += 1900
++        year_text = m.group("year")
++        year = int(year_text)
++        # RFC 850 allows 2-digit years; apply runtime-based century inference there.
++        if is_rfc850 and len(year_text) == 2:
++            current_year = datetime.date.today().year
++            century_candidate = current_year - (current_year % 100) + year
++            year = century_candidate - 100 if century_candidate > current_year + 50 else century_candidate
++        # Maintain legacy ASCTIME handling for year values written as two-digit years with
++        # leading zeros (for example, "0037" -> 2037).
++        elif regex is ASCTIME_DATE and year < 100:
++            year += 2000
+         month = MONTHS.index(m.group('mon').lower()) + 1
+         day = int(m.group('day'))
+         hour = int(m.group('hour'))
+2026-07-15 07:02:22,961 - INFO - Git diff changed after running eval script
+2026-07-15 07:02:22,961 - INFO - Grading answer for django__django-11848...
+2026-07-15 07:02:22,962 - INFO - report: {'django__django-11848': {'patch_is_None': False, 'patch_exists': True, 'patch_successfully_applied': True, 'resolved': False, 'tests_status': {'FAIL_TO_PASS': {'success': [], 'failure': ['test_parsing_rfc850 (utils_tests.test_http.HttpDateProcessingTests)', 'test_parsing_year_less_than_70 (utils_tests.test_http.HttpDateProcessingTests)']}, 'PASS_TO_PASS': {'success': ['test_input_too_large (utils_tests.test_http.Base36IntTests)', 'test_invalid_literal (utils_tests.test_http.Base36IntTests)', 'test_negative_input (utils_tests.test_http.Base36IntTests)', 'test_roundtrip (utils_tests.test_http.Base36IntTests)', 'test_to_base36_errors (utils_tests.test_http.Base36IntTests)', 'test_to_int_errors (utils_tests.test_http.Base36IntTests)', 'test_values (utils_tests.test_http.Base36IntTests)', 'test (utils_tests.test_http.EscapeLeadingSlashesTests)', 'test_quote (utils_tests.test_http.URLQuoteTests)', 'test_quote_plus (utils_tests.test_http.URLQuoteTests)', 'test_unquote (utils_tests.test_http.URLQuoteTests)', 'test_unquote_plus (utils_tests.test_http.URLQuoteTests)', 'test_parsing (utils_tests.test_http.ETagProcessingTests)', 'test_quoting (utils_tests.test_http.ETagProcessingTests)', 'test_allowed_hosts_str (utils_tests.test_http.IsSafeURLTests)', 'test_bad_urls (utils_tests.test_http.IsSafeURLTests)', 'test_basic_auth (utils_tests.test_http.IsSafeURLTests)', 'test_good_urls (utils_tests.test_http.IsSafeURLTests)', 'test_is_safe_url_deprecated (utils_tests.test_http.IsSafeURLTests)', 'test_no_allowed_hosts (utils_tests.test_http.IsSafeURLTests)', 'test_secure_param_https_urls (utils_tests.test_http.IsSafeURLTests)', 'test_secure_param_non_https_urls (utils_tests.test_http.IsSafeURLTests)', 'test_bad (utils_tests.test_http.IsSameDomainTests)', 'test_good (utils_tests.test_http.IsSameDomainTests)', 'test_roundtrip (utils_tests.test_http.URLSafeBase64Tests)', 'test_http_date (utils_tests.test_http.HttpDateProcessingTests)', 'test_parsing_asctime (utils_tests.test_http.HttpDateProcessingTests)', 'test_parsing_rfc1123 (utils_tests.test_http.HttpDateProcessingTests)', 'test_custom_iterable_not_doseq (utils_tests.test_http.URLEncodeTests)', 'test_dict (utils_tests.test_http.URLEncodeTests)', 'test_dict_containing_empty_sequence_doseq (utils_tests.test_http.URLEncodeTests)', 'test_dict_containing_sequence_doseq (utils_tests.test_http.URLEncodeTests)', 'test_dict_containing_sequence_not_doseq (utils_tests.test_http.URLEncodeTests)', 'test_dict_containing_tuple_not_doseq (utils_tests.test_http.URLEncodeTests)', 'test_dict_with_bytearray (utils_tests.test_http.URLEncodeTests)', 'test_dict_with_bytes_values (utils_tests.test_http.URLEncodeTests)', 'test_dict_with_sequence_of_bytes (utils_tests.test_http.URLEncodeTests)', 'test_generator (utils_tests.test_http.URLEncodeTests)', 'test_multivaluedict (utils_tests.test_http.URLEncodeTests)', 'test_none (utils_tests.test_http.URLEncodeTests)', 'test_none_in_generator (utils_tests.test_http.URLEncodeTests)', 'test_none_in_sequence (utils_tests.test_http.URLEncodeTests)', 'test_tuples (utils_tests.test_http.URLEncodeTests)'], 'failure': []}, 'FAIL_TO_FAIL': {'success': [], 'failure': []}, 'PASS_TO_FAIL': {'success': [], 'failure': []}}}}
+Result for django__django-11848: resolved: False
+2026-07-15 07:02:22,962 - INFO - Attempting to stop container sweb.eval.django__django-11848.atlas-final-issue-116-attempt-2...
+2026-07-15 07:02:38,102 - INFO - Attempting to remove container sweb.eval.django__django-11848.atlas-final-issue-116-attempt-2...
+2026-07-15 07:02:38,118 - INFO - Container sweb.eval.django__django-11848.atlas-final-issue-116-attempt-2 removed.
+2026-07-15 07:02:38,118 - INFO - Attempting to remove image swebench/sweb.eval.x86_64.django_1776_django-11848:latest...
+2026-07-15 07:02:38,453 - INFO - Image swebench/sweb.eval.x86_64.django_1776_django-11848:latest removed.
