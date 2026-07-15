@@ -13,6 +13,7 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     - "Duplicate detection must keep mixed present/missing outcomes bounded by tuple-level state."
     - "G70-002 [RED] Missing required tuple must materialize exactly once during forward migration."
     - "G70-003 [RED] Forward re-run on previously-migrated DB must not change rowcount for existing (content_type_id, codename) tuples."
+    - "G70-004 [RED] Upgrade from Django 2.0.13/2.1.8 with recreated proxy models must complete without unique-constraint IntegrityError and without auth_permission manual cleanup."
     """
     Permission = apps.get_model('auth', 'Permission')
     ContentType = apps.get_model('contenttypes', 'ContentType')
@@ -56,6 +57,21 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
     #       - if retarget_updates > 0: transition DONE_MOVED.
     #       - else if retarget_updates == 0: transition DONE_CREATED and create exactly one tuple.
     #       - if IntegrityError: transition DONE_ALREADY_PRESENT (or concurrent writer created it) and continue.
+    # G70-004 pseudocode map:
+    #  - migration-resilience objective in recreated-proxy upgrades:
+    #    - tolerate stale auth_permission rows already present from prior states,
+    #    - avoid manual cleanup,
+    #    - preserve tuple-level completion for same-app-label and different-app-label proxy histories.
+    #  - per proxy model:
+    #    1. REQUIRED_SET := default_permissions union opts.permissions.
+    #    2. CT_TARGET := proxy_content_type when forward else concrete_content_type.
+    #    3. For each codename in REQUIRED_SET:
+    #        a) If target exists -> DONE_NOOP.
+    #        b) Else attempt update from source content type.
+    #        c) If update_count == 0 -> attempt create target tuple.
+    #        d) If UPDATE/CREATE raises IntegrityError -> DONE_ALREADY_PRESENT.
+    #    4. Continue to next codename with no rollback of outer loop state.
+    #  - This makes migration success deterministic regardless of legacy duplicate prepopulation.
 
     for Model in apps.get_models():
         opts = Model._meta
@@ -85,6 +101,16 @@ def update_proxy_model_permissions(apps, schema_editor, reverse=False):
             #   NOOP must leave rowcount unchanged for that tuple.
             # - Duplicate-path prevention:
             #   any IntegrityError while retarget/create is treated as "already satisfied" and loop continues.
+            # G70-004 per-key upgrade resilience:
+            # - Legacy data can include either:
+            #   (a) target already present due previous forward pass/recreated proxy state,
+            #   (b) both target and source present with conflicting uniqueness expectations,
+            #   (c) neither present after schema transitions.
+            # - Branching:
+            #   target_exists -> DONE_NOOP.
+            #   update>0 -> DONE_MOVED_FROM_SOURCE.
+            #   update==0 -> DONE_CREATE_TARGET.
+            #   IntegrityError -> DONE_ALREADY_SATISFIED (no failure, migration continues).
             if Permission.objects.filter(content_type=new_content_type, codename=codename).exists():
                 continue
 
