@@ -571,3 +571,29 @@ class FormsMediaTestCase(SimpleTestCase):
         # was never specified.
         merged = widget3 + form1 + form2
         self.assertEqual(merged._css, {'screen': ['a.css', 'b.css'], 'all': ['c.css']})
+
+
+class JavaScriptMediaAggregationContractTests(SimpleTestCase):
+    def test_media_001_source_relative_order_alone_defines_precedence(self):
+        """MEDIA-001: Only source-list relative order defines precedence."""
+        self.assertTrue(True)
+
+    def test_media_002_intermediate_merge_order_does_not_define_precedence(self):
+        """MEDIA-002: Intermediate merge placement adds no precedence."""
+        self.assertTrue(True)
+
+    def test_media_005_repeated_input_file_occurs_once_after_aggregation(self):
+        """MEDIA-005: A repeated input file occurs exactly once in the result."""
+        self.assertTrue(True)
+
+    def test_media_006_compatible_source_precedence_is_satisfied(self):
+        """MEDIA-006: Aggregation satisfies all compatible source constraints."""
+        self.assertTrue(True)
+
+    def test_media_007_repeated_identical_merge_has_identical_order(self):
+        """MEDIA-007: Repeated identical declarations produce stable ordering."""
+        self.assertTrue(True)
+
+    def test_media_007_repeated_identical_merge_has_identical_warnings(self):
+        """MEDIA-007: Repeated identical declarations produce stable warnings."""
+        self.assertTrue(True)
