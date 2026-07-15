@@ -260,6 +260,21 @@ class RoutePattern(CheckURLMixin):
                     kwargs[key] = converter.to_python(value)
                 except ValueError:
                     return None
+                # DJ-RES-001:
+                # - When converter.to_python() raises Http404, the path is a route
+                #   miss, not a server-error condition.
+                # - Convert this into resolver-miss semantics so sibling patterns
+                #   can still be evaluated and no 500 path is triggered.
+                # DJ-RES-007:
+                # - Preserve converter exception message for technical-404 output.
+                # Pseudocode:
+                #   except Http404 as exc:
+                #       reason = str(exc)
+                #       raise Resolver404({
+                #           'path': path[match.end():],
+                #           'tried': [[self]],
+                #           'reason': reason,
+                #       })
             return path[match.end():], (), kwargs
         return None
 
@@ -546,6 +561,18 @@ class URLResolver:
                         tried.extend([pattern] + t for t in sub_tried)
                     else:
                         tried.append([pattern])
+                # DJ-RES-001:
+                # - If a child resolve raises Http404 from converter logic:
+                #   1) treat it as a candidate miss equivalent to Resolver404.
+                #   2) record the probing path with [pattern] for normal debug 404 trace.
+                #   3) persist any converter reason (e.g., message) for later
+                #      technical-404 surfacing.
+                # Pseudocode:
+                #   except Http404 as e:
+                #       converter_reason = str(e)
+                #       reason_for_debug_404 = converter_reason
+                #       tried.append([pattern])
+                #       continue
                 else:
                     if sub_match:
                         # Merge captured arguments in match with submatch

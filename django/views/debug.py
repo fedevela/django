@@ -458,6 +458,16 @@ class ExceptionReporter:
 
 def technical_404_response(request, exception):
     """Create a technical 404 error response. `exception` is the Http404."""
+    # DJ-RES-007:
+    # Decision flow for converter-originated resolver 404s:
+    # 1) Read resolver payload from exception.args when present.
+    # 2) If payload has 'reason', keep it as diagnostic_reason.
+    # 3) Build debug context reason from:
+    #    - diagnostic_reason (preferred)
+    #    - else str(exception).
+    # 4) Ensure technical-404 output includes diagnostic_reason even when the
+    #    URLconf trace ('tried') is non-empty, so converter messages like
+    #    "user not found" remain visible in DEBUG mode.
     try:
         error_url = exception.args[0]['path']
     except (IndexError, TypeError, KeyError):
