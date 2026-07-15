@@ -1,9 +1,12 @@
+from types import FunctionType
+
 from django.test import SimpleTestCase
 from django.template import Context, Engine
 
 from .models import (
     Req138DisplayOverrideModel,
     Req138StatefulDisplayOverrideModel,
+    Req138SentinelDisplayModel,
     Whiz,
 )
 
@@ -98,7 +101,9 @@ class TestReq138003DisplayAccessorConstruction(SimpleTestCase):
     """Specification traceability artifact for REQ-138-003."""
 
     def test_req_138_003_preserves_model_defined_get_field_display_during_construction(self):
-        self.assertTrue(True)
+        display_method = Req138SentinelDisplayModel.__dict__['get_code_display']
+        self.assertIsInstance(display_method, FunctionType)
 
     def test_req_138_003_emits_sentinel_from_explicit_get_field_display_after_init(self):
-        self.assertTrue(True)
+        instance = Req138SentinelDisplayModel(code='a')
+        self.assertEqual(instance.get_code_display(), 'REQ-138-003-SENTINEL')

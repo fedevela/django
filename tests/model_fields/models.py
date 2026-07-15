@@ -87,6 +87,13 @@ class Req138StatefulDisplayOverrideModel(models.Model):
         return f'{state_label}:{self.status}'
 
 
+class Req138SentinelDisplayModel(models.Model):
+    code = models.CharField(max_length=8, choices=(('a', 'Alpha'), ('b', 'Bravo')))
+
+    def get_code_display(self):
+        return 'REQ-138-003-SENTINEL'
+
+
 class Choiceful(models.Model):
     no_choices = models.IntegerField(null=True)
     empty_choices = models.IntegerField(choices=(), null=True)
