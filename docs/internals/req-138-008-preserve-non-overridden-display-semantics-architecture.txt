@@ -1,0 +1,147 @@
+REQ-138-008 — preserve non-overridden display semantics for existing choices helpers
+===============================================================================
+
+Requirement
+-----------
+- REQ-138-008: Existing non-overridden display semantics must remain unchanged, including
+  standard behavior used by field access APIs and tests for choice rendering (labels,
+  coercion behavior, and callsites that rely on generated helpers).
+
+Constraint scope
+----------------
+- Preserve baseline `get_<field>_display()` behavior for fields without user-defined
+  override methods.
+- Keep generated helper wiring and fallback mapping boundaries unchanged.
+- Do not alter public model/form/template APIs as part of this phase.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-008 -> `django/db/models/fields/__init__.py` (`Field.contribute_to_class`)
+  - Pressure O1 (construction ownership): for fields with `choices`, determine whether to
+    install generated `get_<field>_display` exactly as a fallback-only path.
+  - Pressure O2 (non-overridden path preservation): when no local method exists in
+    `cls.__dict__` and no inherited method via MRO exists, generated helper is attached;
+    otherwise, no generated path replacement is permitted.
+  - Pressure O3 (callsite stability): ensure helper identity and binding are decided once
+    during construction so templates/forms and direct instance calls share the same method
+    surface.
+
+- REQ-138-008 -> `django/db/models/base.py` (`Model._get_FIELD_display`)
+  - Pressure O4 (label conversion contract): maintain value-to-label behavior using
+    `dict(field.flatchoices).get(value, value)`.
+  - Pressure O5 (coercion contract): keep `force_str(..., strings_only=True)` for
+    generated output so translated proxies and numeric/string values keep established
+    rendering semantics.
+  - Pressure O6 (fallback stability): when value absent in choices, return raw value
+    to preserve current backward-compatible output.
+
+- REQ-138-008 -> `django/template/base.py` (`Variable.resolve`)
+  - Pressure O7 (callsite parity): template resolution must continue to execute the
+    same bound helper object as direct instance access, with no custom non-override
+    branch.
+
+- REQ-138-008 -> `django/forms/models.py` (`model_to_dict`, `BaseModelForm.__init__`)
+  - Pressure O8 (form parity): form-bound instance state remains sourced from model
+    fields in a way that resolves to the same generated helper output as direct calls
+    when overrides are absent.
+
+- REQ-138-008 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - `REQ_138_008_OBLIGATIONS` and `REQ_ID_TO_VERIFICATION["REQ-138-008"]` provide
+    traceability for all three obligations, currently represented by
+    `TestReq138008DisplaySemanticsNonOverridden`.
+
+File/module placement decisions
+-------------------------------
+- Construction boundary: `django/db/models/fields/__init__.py`
+  - Owner for whether `get_<field>_display` is user-defined, inherited, or generated.
+- Fallback boundary: `django/db/models/base.py`
+  - Owner for generated label mapping and coercion behavior.
+- Template-call boundary: `django/template/base.py`
+  - Owner for resolving method-call vs value semantics in template context.
+- Form-call boundary: `django/forms/models.py`
+  - Owner for form state seeding and instance-based display-path continuity.
+- Verification boundary: `tests/model_fields/test_req138_001_display_overrides.py`
+  - Owner for requirement ID wiring and acceptance hooks.
+
+Ownership-boundary artifacts
+----------------------------
+- Boundary B1 (`Field.contribute_to_class`)
+  - Owner: `Field` in `django/db/models/fields/__init__.py`.
+  - Responsibility: decide helper source precedence and install generated helper only in
+    non-overridden scenarios.
+
+- Boundary B2 (`Model._get_FIELD_display`)
+  - Owner: `Model` in `django/db/models/base.py`.
+  - Responsibility: implement single stable fallback contract (`choices -> value`) for all
+    non-overridden call paths.
+
+- Boundary B3 (`Variable.resolve`)
+  - Owner: template engine resolver in `django/template/base.py`.
+  - Responsibility: keep method dispatch rules neutral so generated helpers are invoked in
+    generated mode.
+
+- Boundary B4 (`BaseModelForm`/`model_to_dict`)
+  - Owner: form model adapter in `django/forms/models.py`.
+  - Responsibility: ensure state presented to display usage is the same state as direct
+    instance call path.
+
+Interface/type/contract artifacts
+--------------------------------
+- Contract C1 (`contribute_to_class` helper-installation)
+  - `display_name = "get_%s_display" % self.name`.
+  - If `display_name in cls.__dict__`: do not replace local override.
+  - Else if `hasattr(cls, display_name)`: keep inherited helper.
+  - Else: `setattr(cls, display_name, partialmethod(cls._get_FIELD_display, field=self))`.
+
+- Contract C2 (`_get_FIELD_display` fallback)
+  - `value = getattr(instance, field.attname)`.
+  - `choices = dict(field.flatchoices)`.
+  - Return `force_str(choices.get(value, value), strings_only=True)`.
+
+- Contract C3 (`template callable path`)
+  - If attribute is callable and passes template-call guard, execute callable to yield the
+    bound helper result.
+  - Result must therefore be identical to direct instance method execution for generated
+    non-overridden display methods.
+
+- Contract C4 (`form value seeding`)
+  - For model forms, object-backed values used for rendering/validation flow from
+    `model_to_dict` over instance state, preserving direct-instance semantics.
+
+Dependency-direction notes
+-------------------------
+1. Field declaration (`choices` + `name`) -> `Field.contribute_to_class`.
+2. Contribution boundary -> class namespace method binding (`get_<field>_display`).
+3. Direct call path -> class lookup/MRO -> bound helper.
+4. Non-overridden bound helper -> `Model._get_FIELD_display`.
+5. `Model._get_FIELD_display` -> `field.attname`, `field.flatchoices`.
+6. Template call path -> `Variable.resolve` -> bound helper call.
+7. Form path -> form initialization/state seed -> bound helper call on same instance state.
+
+Integration-seam skeletons
+--------------------------
+- Seam S1 (construction-time helper gate)
+  - Upstream: `Field.contribute_to_class` with metadata context.
+  - Downstream: model class helper namespace and runtime dispatch map.
+
+- Seam S2 (fallback execution seam)
+  - Upstream: generated method invocation on instance.
+  - Downstream: `Model._get_FIELD_display` mapping contract.
+
+- Seam S3 (template-call seam)
+  - Upstream: template variable resolver.
+  - Downstream: bound callable/value result contract from model instance.
+
+- Seam S4 (form-call seam)
+  - Upstream: form field state extraction (`model_to_dict`).
+  - Downstream: generated helper output for non-overridden fields.
+
+Completion status
+----------------
+- One architecture artifact created at
+  `docs/internals/req-138-008-preserve-non-overridden-display-semantics-architecture.txt`.
+- All `REQ-138-008` obligations are mapped to concrete owning boundaries and seams.
+- Traceability is explicit via `REQ_138_008_OBLIGATIONS` and
+  `REQ_ID_TO_VERIFICATION["REQ-138-008"]` in the existing test artifact.
+- Dependency direction is explicit and keeps existing semantics centralized at construction
+  and fallback boundaries.
