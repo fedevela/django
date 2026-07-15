@@ -300,21 +300,60 @@ class QuerySetSetOperationTests(TestCase):
     # DJANGO12908-007 -> test_django12908_007_annotated_union_count_regression_asserts_explicit_exception_path
     # DJANGO12908-008 -> test_django12908_008_compiler_path_localization_without_api_model_schema_change
     def test_django12908_006_non_annotated_union_intersection_difference_paths_keep_preexisting_semantics(self):
-        # Traceability only: this test anchors the requirement that union/intersection/difference
-        # baseline behaviors (including len/count/iteration coverage already in file)
-        # remain unchanged by the annotated distinct(fields) guard.
-        self.assertTrue(True)
+        union_qs = Number.objects.filter(num__lte=1).union(Number.objects.filter(num__gte=8))
+        self.assertEqual(union_qs.count(), 4)
+        self.assertEqual(list(union_qs.order_by('num')[:4]), [0, 1, 9, 8])
+
+        if connection.features.supports_select_difference:
+            diff_qs = Number.objects.filter(num__lte=5).difference(Number.objects.filter(num__lte=4))
+            self.assertNumbersEqual(diff_qs, [5], ordered=False)
+
+        if connection.features.supports_select_intersection:
+            inter_qs = Number.objects.filter(num__gte=5).intersection(
+                Number.objects.filter(num__lte=5),
+            )
+            self.assertNumbersEqual(inter_qs, [5], ordered=False)
 
     def test_django12908_006_non_annotated_union_distinct_name_preserves_count_slice_order_iter_contract(self):
-        # Traceability only: this test records that non-annotated union(...).distinct('name')
-        # must continue to support count(), slicing, ordering, and iteration without
-        # introducing new unsupported-operation exceptions.
-        self.assertTrue(True)
+        ReservedName.objects.bulk_create([
+            ReservedName(name='alpha', order=1),
+            ReservedName(name='alpha', order=2),
+            ReservedName(name='beta', order=3),
+            ReservedName(name='beta', order=4),
+            ReservedName(name='gamma', order=5),
+            ReservedName(name='delta', order=6),
+        ])
+        compound = (
+            ReservedName.objects.values_list('name', flat=True)
+            .filter(order__lte=3)
+            .union(ReservedName.objects.values_list('name', flat=True).filter(order__gte=4))
+            .order_by('name')
+            .distinct('name')
+        )
+        self.assertEqual(compound.count(), 4)
+        self.assertEqual(compound[:2], ['alpha', 'beta'])
+        self.assertEqual(list(compound.order_by('name')), ['alpha', 'beta', 'delta', 'gamma'])
+        self.assertEqual(len(list(compound)), 4)
 
     def test_django12908_006_plain_compound_queries_retain_existing_unsupported_operation_failures(self):
-        # Traceability only: this test records that existing plain compound-query unsupported
-        # failure modes remain as previously observed.
-        self.assertTrue(True)
+        qs = Number.objects.all()
+        msg = 'Calling QuerySet.%s() after %s() is not supported.'
+        combinators = ['union']
+        if connection.features.supports_select_difference:
+            combinators.append('difference')
+        if connection.features.supports_select_intersection:
+            combinators.append('intersection')
+        for combinator in combinators:
+            for operation in ('annotate', 'filter', 'exclude', 'delete', 'update'):
+                with self.subTest(combinator=combinator, operation=operation):
+                    with self.assertRaisesMessage(
+                        NotSupportedError,
+                        msg % (operation, combinator),
+                    ):
+                        if operation == 'update':
+                            getattr(getattr(qs, combinator)(qs), operation)(num=F('num'))
+                        else:
+                            getattr(getattr(qs, combinator)(qs), operation)()
 
     def test_django12908_001_annotated_union_order_by_distinct_name_raises_unsupported_operation(self):
         qs1 = ReservedName.objects.annotate(
