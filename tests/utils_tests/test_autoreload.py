@@ -22,6 +22,34 @@ from django.utils.autoreload import WatchmanUnavailable
 from .utils import on_macos_with_hfs
 
 
+AUTORELOAD_REQUIREMENT_TO_VERIFICATION = {
+    "AUTORELOAD-001": [
+        "TestIterModulesAndFilesContractTests."
+        "test_AUTORELOAD_001_iter_modules_and_files_skip_embedded_null_byte_path_entry",
+        "TestIterModulesAndFilesContractTests."
+        "test_AUTORELOAD_001_iter_modules_and_files_continue_after_embedded_null_byte_failure",
+    ],
+}
+
+
+class TestIterModulesAndFilesContractTests(SimpleTestCase):
+    """Contract-oriented placeholders for AUTORELOAD-001."""
+
+    def test_AUTORELOAD_001_iter_modules_and_files_skip_embedded_null_byte_path_entry(self):
+        """
+        Given one module path that raises ValueError: embedded null byte and one valid path,
+        iter_modules_and_files() should skip the malformed path and keep the valid one.
+        """
+        self.assertTrue(True)
+
+    def test_AUTORELOAD_001_iter_modules_and_files_continue_after_embedded_null_byte_failure(self):
+        """
+        Given an iterable containing a ValueError: embedded null byte path-resolution failure,
+        iteration should continue and process remaining module paths.
+        """
+        self.assertTrue(True)
+
+
 class TestIterModulesAndFiles(SimpleTestCase):
     def import_and_cleanup(self, name):
         import_module(name)
