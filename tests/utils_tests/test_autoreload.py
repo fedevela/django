@@ -484,7 +484,37 @@ class StatReloaderTraceabilityTests(SimpleTestCase):
         augments that set by one entry without dropping or replacing the
         previously discovered watch entries.
         """
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as tempdir:
+            tempdir = Path(tempdir)
+            manage_py = tempdir / 'manage.py'
+            module_file = tempdir / 'app' / 'settings.py'
+            extra_file = tempdir / 'existing.py'
+            glob_dir = tempdir / 'watched'
+            watched_glob = glob_dir / 'match.py'
+            ignored_glob = glob_dir / 'ignore.txt'
+            glob_dir.mkdir()
+            module_file.parent.mkdir()
+            manage_py.write_text('')
+            module_file.write_text('')
+            extra_file.write_text('')
+            watched_glob.write_text('')
+            ignored_glob.write_text('')
+
+            expected_module = {module_file.resolve()}
+            expected_files = {extra_file.resolve()}
+            expected_globs = {watched_glob.resolve()}
+            baseline_expected = expected_module | expected_files | expected_globs
+
+            with mock.patch('django.utils.autoreload.sys.argv', [str(manage_py), 'runserver']):
+                with mock.patch(
+                    'django.utils.autoreload.iter_all_python_module_files',
+                    return_value=frozenset(expected_module),
+                ):
+                    reloader = autoreload.StatReloader()
+                    reloader.watch_file(extra_file)
+                    reloader.watch_dir(glob_dir, '*.py')
+                    watched_files = set(reloader.watched_files())
+                    self.assertEqual(watched_files, baseline_expected | {manage_py.resolve()})
 
 
 class ReloaderTests(SimpleTestCase):
