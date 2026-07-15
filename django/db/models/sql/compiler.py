@@ -32,7 +32,10 @@ class SQLCompiler:
         self.select = None
         self.annotation_col_map = None
         self.klass_info = None
-        self.ordering_parts = re.compile(r'(.*)\s(ASC|DESC)(.*)')
+        self.ordering_parts = re.compile(
+            r'(.*)\s+(ASC|DESC)\s*$',
+            re.IGNORECASE | re.DOTALL
+        )
         self._meta_ordering = None
 
     def setup_query(self):
@@ -258,10 +261,6 @@ class SQLCompiler:
         can add aliases to clauses that do not yet have one, or it can
         add totally new select clauses).
         """
-        # ORDERBY-004: obligation mapping for all supported ordering-expression types.
-        # - S1: normalize duplicate detection against every branch-generated term.
-        # - S2: preserve exactly one clause when normalized fragment+direction+params collide.
-        # - S3: keep dedupe scoped to this function and keyed on rendered semantics, not type tags.
         if self.query.extra_order_by:
             ordering = self.query.extra_order_by
         elif not self.query.default_ordering:
@@ -280,9 +279,6 @@ class SQLCompiler:
 
         order_by = []
         for field in ordering:
-            # ORDERBY-004 (shared term capture):
-            # Each branch below emits a single `(expr, is_ref)` tuple into `order_by`.
-            # The dedupe decision must happen later and cannot be branch-specific.
             if hasattr(field, 'resolve_expression'):
                 if not isinstance(field, OrderBy):
                     field = field.asc()
@@ -339,8 +335,6 @@ class SQLCompiler:
         seen = set()
 
         for expr, is_ref in order_by:
-            # ORDERBY-004 deterministic control flow:
-            # Step A (resolve): produce render-ready order expression from AST-like item.
             resolved = expr.resolve_expression(self.query, allow_joins=True, reuse=None)
             if self.query.combinator:
                 src = resolved.get_source_expressions()[0]
@@ -357,81 +351,24 @@ class SQLCompiler:
                         break
                 else:
                     raise DatabaseError('ORDER BY term does not match any column in the result set.')
-            # Step B (render): compile the resolved term to deterministic SQL/params for keying.
             sql, params = self.compile(resolved)
-            # ORDERBY-002:
-            # Deterministic-duplicate-key obligation:
-            # input: rendered ORDER BY SQL fragment `sql` plus `params`.
-            # output: canonical tuple key `(canonical_sql, direction_key, params_hash)` used in `seen`.
-            # Don't add the same column twice, but preserve source token order and
-            # meaning while normalizing whitespace.
-            # When this entire method is refactored into expressions, we can
-            # preserve semantic checks at expression granularity.
             without_ordering = sql.rstrip()
-            # ORDERBY-005: deterministic fallback for malformed/irregular direction fragments.
-            # - Input state: rendered ORDER BY fragment `without_ordering` and params tuple.
-            # - Branch:
-            #   1) If regex extraction matches exactly `ASC|DESC`, split direction token from body.
-            #   2) Else treat this as malformed_or_unmatched_direction and enter fallback lane.
-            #      Fallback lane preserves full canonicalized fragment in fallback key.
-            # - Outcome: every branch emits one fallback key and never abandons the fragment before
-            #   dedupe; malformed fragments cannot be silently dropped prior to duplicate checks.
-            direction_match = re.search(r"\s+(ASC|DESC)\s*$", without_ordering, flags=re.IGNORECASE)
+            direction_match = self.ordering_parts.search(without_ordering)
             if direction_match:
-                direction_key = direction_match.group(1).upper()
-                without_ordering = without_ordering[:direction_match.start()].rstrip()
+                direction_key = direction_match.group(2).upper()
+                without_ordering = direction_match.group(1)
             else:
-                # ORDERBY-005 S1/S2/S3:
-                # S1: malformed or irregular direction text falls back to a deterministic body-only lane.
-                # S2: identical malformed terms flow through this lane and produce same dedupe key.
-                # S3: malformed term and parseable equivalent keep separate lane identifiers, preventing
-                #     accidental collision with semantically parsed direction forms.
                 direction_key = "__MALFORMED_ORDERING_DIRECTION__"
-            # Step 2: canonicalize line ending and spacing noise before hashing.
-            # ORDERBY-006: Unicode payload must be opaque during normalization and keying.
-            # - Input: rendered ORDER BY fragment `without_ordering` and regex direction state.
-            # - Decision: if direction token is recognized, split `{body, direction}`; else mark malformed direction lane.
-            # - Transform path: normalize only newline/whitespace structure in `without_ordering`
-            #   and keep all non-whitespace, non-newline SQL text bytes unchanged.
-            # - Output contract:
-            #   dedupe_key = (normalized_body, direction_key, params_hash)
-            #   where `normalized_body` may only differ via allowed spacing/eol normalization.
-            # - Invariant: do not Unicode-case-fold, transliterate, tokenize, or escape SQL text.
             without_ordering = self._normalize_order_by_fragment_for_dedupe(without_ordering)
             params_hash = make_hashable(params)
-            # ORDERBY-005:
-            # deterministic fallback pseudocode (applied in planning, not runtime):
-            # if direction_match is falsy, route through fallback lane,
-            # build fallback key `(without_ordering, direction_key, params_hash)` plus an explicit
-            # malformed marker before dedupe lookup.
             dedupe_key = (without_ordering, direction_key, params_hash)
-            # ORDERBY-004 keying condition:
-            # Match only when all three normalized dimensions are equal:
-            # body, direction, and params hash.
-            # This keeps non-RawSQL and RawSQL terms consistent under one dedupe path
-            # while preventing cross-type false-collisions when compiled fragments differ.
-            # ORDERBY-005 S2/S3 behavior mapping:
-            # - S2: identical malformed terms resolve to the same fallback path/state then one pass.
-            # - S3: malformed and parseable equivalents carry different source states from regex state,
-            #   so collision requires intentional full-key equality only.
             if dedupe_key in seen:
-                # Step 3: duplicate-key branch.
-                # If normalized key already exists, skip append and continue loop.
                 continue
-            # Step 4: first-seen branch.
-            # Emit normalized key into `seen` and keep `sql` in final ORDER BY list.
             seen.add(dedupe_key)
             result.append((resolved, (sql, params, is_ref)))
         return result
 
     def _normalize_order_by_fragment_for_dedupe(self, sql):
-        # ORDERBY-002: normalize equivalent SQL formatting for dedupe key generation.
-        # ORDERBY-006:
-        # - Canonicalize only line-ending and intra-fragment spacing transitions for dedupe keying.
-        # - Keep full query text opaque except for that whitespace normalization.
-        # - Never mutate non-whitespace SQL payload, including Unicode characters.
-        # - Maintain byte-shape outside the normalization pass: no encoding transforms or
-        #   Unicode case/normalization operations may run on body text.
         normalized = []
         in_single_quote = False
         in_double_quote = False
@@ -489,10 +426,6 @@ class SQLCompiler:
                 ch = '\n'
 
             if ch in (' ', '\t', '\n'):
-                # ORDERBY-006 deterministic whitespace state transition:
-                # - treat contiguous whitespace outside literals as one collapsed space marker.
-                # - whitespace characters are normalized for dedupe key stability,
-                #   while literal text (including Unicode bytes) remains untouched.
                 pending_space = True
                 i += 1
                 continue
@@ -513,7 +446,11 @@ class SQLCompiler:
         if self.query.distinct and not self.query.distinct_fields:
             select_sql = [t[1] for t in select]
             for expr, (sql, params, is_ref) in order_by:
-                without_ordering = self.ordering_parts.search(sql).group(1)
+                without_ordering = self.ordering_parts.search(sql)
+                if without_ordering is None:
+                    without_ordering = sql
+                else:
+                    without_ordering = without_ordering.group(1)
                 if not is_ref and (without_ordering, params) not in select_sql:
                     extra_select.append((expr, (without_ordering, params), None))
         return extra_select
