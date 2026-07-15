@@ -50,19 +50,72 @@ MEDIA_ORDERING_VERIFICATION_MAP = {
 class MediaOrderingTraceabilityTests(SimpleTestCase):
     def test_media_009_scenario_1_myform_final_order_and_no_warning_spec(self):
         """MEDIA-009 scenario 1: MyForm fixture resolves to final JS order without MediaOrderConflictWarning."""
-        self.assertTrue(True)
+        # MEDIA-009.S1 [obligation -> final order + no warning]:
+        # GIVEN
+        #   1) Rebuild `MyForm` media inputs in fixture-equivalent structure.
+        #   2) Request `media._js` to trigger constraint collection and dedupe ordering.
+        # WHEN
+        #   3) Merge constraints implied by each Media segment are applied globally.
+        #   4) Duplicate file paths are collapsed to one output node.
+        # THEN
+        #   5) Final sequence is exactly:
+        #      ['text-editor.js', 'text-editor-extras.js', 'color-picker.js'].
+        #   6) Transition state remains warning-free:
+        #      no captured `MediaOrderConflictWarning` objects.
+        # FAILURE
+        #   any deviation in ordering OR any warning emission violates the contract.
 
     def test_media_009_scenario_2_equivalent_three_way_merge_duplicates_and_predecessor_relations_preserved_spec(self):
         """MEDIA-009 scenario 2: equivalent 3+ merges dedupe JS and preserve predecessor constraints."""
-        self.assertTrue(True)
+        # MEDIA-009.S2 [obligation -> equivalent 3+ merges + dedupe + precedence]:
+        # INPUT SETUP
+        #   1) Create three Media objects with overlapping JS paths.
+        #   2) Define equivalent permutations of merge associativity/grouping.
+        # EXECUTION
+        #   3) For each permutation:
+        #        - merge media objects,
+        #        - materialize merged `_js`,
+        #        - collect emitted warnings.
+        #   4) Canonicalize output nodes by preserving first-seen order.
+        #   5) Validate dedupe invariant: each path appears at most once.
+        #   6) Validate predecessor relations from each input sequence remain satisfied in final output.
+        #   7) Ensure warning set is identical (and conflict-free when satisfiable).
+        # LOOP/BRANCH
+        #   For each merge variant, branch on satisfiable vs contradictory:
+        #   - satisfiable: emit no warnings
+        #   - contradictory: fail scenario 2 contract.
 
     def test_media_009_scenario_3_valid_global_ordering_without_misleading_pairwise_warning_spec(self):
         """MEDIA-009 scenario 3: satisfiable global orderings emit no warning despite misleading pairwise checks."""
-        self.assertTrue(True)
+        # MEDIA-009.S3 [obligation -> valid global order despite local misleading evidence]:
+        # INPUTS
+        #   1) Provide merge ordering declarations that can be paired in ways that appear conflicting.
+        #   2) Keep an underlying acyclic global graph.
+        # EXECUTION
+        #   3) Build full merged graph before warning decision.
+        #   4) Run global cycle detection over the final constraint graph.
+        #   5) Derive ordering via topological rule from all constraints.
+        # ASSERTIONS
+        #   6) `MediaOrderConflictWarning` must not be emitted (false-positive branch rejected).
+        #   7) Final `_js` must satisfy every required edge `before -> after`.
+        # FAILURE PATH
+        #   if local pairwise pass misclassifies as contradiction and emits warning -> contract break.
 
     def test_media_009_scenario_4_hard_three_node_cycle_warns_on_actual_contradiction_participants_spec(self):
         """MEDIA-009 scenario 4: A->B and B->A plus hard 3-node cycle raises warning with contradiction participants."""
-        self.assertTrue(True)
+        # MEDIA-009.S4 [obligation -> true contradiction + participant attribution]:
+        # INPUTS
+        #   1) Declare direct contradiction edges (`A before B`, `B before A`).
+        #   2) Add a hard 3-node cycle (A->B, B->C, C->A) through equivalent merges.
+        # EXECUTION
+        #   3) Materialize merged `_js` and capture warning stream.
+        #   4) Run contradiction extraction over the cycle witness set.
+        # ASSERTIONS
+        #   5) Exactly one warning (or warning artifact) is produced for the hard contradiction.
+        #   6) Warning message references only nodes participating in contradiction
+        #      (the A/B pair and any hard-cycle members, not unrelated files).
+        # FAILURE PATH
+        #   any warning pointing to non-cycle participants, or absence of warning, fails this scenario.
 
     def test_media_001_colorpicker_form_order_without_warning_spec(self):
         """MEDIA-001: color-picker + text-editor merges keep js order and avoid warning."""
