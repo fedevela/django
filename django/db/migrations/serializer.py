@@ -48,7 +48,7 @@ class BaseSimpleSerializer(BaseSerializer):
 
 class ChoicesSerializer(BaseSerializer):
     def serialize(self):
-        return repr(self.value.value), set()
+        return serializer_factory(self.value.value).serialize()
 
 
 class DateTimeSerializer(BaseSerializer):

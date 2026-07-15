@@ -86,33 +86,6 @@ class OperationWriter:
 
         self.indent()
 
-        # MIG-300-005 [mixed defaults: enum-only member-name rewrite]:
-        # STATE:
-        #   arg stream may contain mixed default payloads (enum + non-enum).
-        # CONTROL FLOW:
-        #   for each positional arg:
-        #     - pass raw arg_value to _write() unchanged.
-        #     - _write() delegates through MigrationWriter.serialize on the value.
-        #   for each remaining keyword arg in signature order:
-        #     - same raw-pass-through path and same delegate boundary.
-        # DECISION:
-        #   per-element serializer dispatch remains type-based.
-        #   only values resolved to EnumSerializer become member-name syntax.
-        #   all others follow their existing serializer branch.
-        # ERROR PATH:
-        #   missing serializer for any arg is delegated to the existing serialize failure.
-        # MIG-300-006 [AC1/AC2/AC3]:
-        # REQUIREMENT-LOGIC:
-        #   - Preserve positional and keyword ordering; no additional enumeration
-        #     or regrouping pass exists in this phase.
-        #   - Route each arg through MigrationWriter.serialize unchanged.
-        #   - Keep serialized kwargs in operation signature order to avoid diff churn.
-        #   - Only args that resolve to enum serializer create enum-member syntax;
-        #     all other args keep existing serializer output text.
-        # TRANSITION:
-        #   serialized_arg -> _write() -> OperationWriter.buff line + import accumulation.
-        # FAILURE PATH:
-        #   unsupported defaults remain delegated to existing serialization errors.
         for i, arg in enumerate(args):
             arg_value = arg
             arg_name = operation_args[i]
@@ -163,69 +136,6 @@ class MigrationWriter:
         imports = set()
 
         # Deconstruct operations
-        # MIG-300-002 [locale-safe import path]:
-        # MIG-300-004 [stable repeated autogeneration under locale transitions]:
-        # AC1/AC2 LOGIC OBLIGATION:
-        #   - For each operation in self.migration.operations, serialize independently,
-        #     accumulate text+imports, and never infer locale at this boundary.
-        #   - Preserve deterministic operation order as provided by migration state.
-        #   - Keep enum-default expression text stable so rerun with different locale
-        #     does not alter emitted fragments.
-        # TRANSITION:
-        #   - write operation payload -> collect operation_string/operation_imports.
-        #   - merge all imports into one canonical set.
-        #   - join operation strings in source order for migrations to be byte-stable.
-        # SUCCESS (AC1):
-        #   - Output contains `EnumClass['MEMBER']` consistently across A->B->A locale runs.
-        # FAILURE PATH:
-        #   - any unstable enum representation would produce locale-variant fragments and
-        #     break migration import/replay checks.
-        # STATE: render each operation into migration source text.
-        # TRANSITION: for every operation arg/default in deconstructed args and kwargs,
-        # call MigrationWriter.serialize(...) to produce deterministic serial form.
-        # REQUIREMENT BINDING:
-        #   serialization must remain stable when import locale changes.
-        #   If any enum default is emitted as translated text, module import can fail
-        #   with ValueError; therefore import generation relies on member-name
-        #   references for enum defaults.
-        #
-        # MIG-300-003 [enum object identity across locale]:
-        # STATE INPUT:
-        #   - migration operations deconstructed from source model state.
-        #   - current process locale may differ from locale at migration execution time.
-        # DECISION:
-        #   - each serialized operation/default is emitted as plain Python AST-like
-        #     source and imported independently of active locale.
-        # BRANCH:
-        #   - when encountering enum-default expressions from EnumSerializer, generated
-        #     code references `module.Enum['MEMBER']`; this evaluates to existing enum
-        #     members at import execution time.
-        # ERROR PATH:
-        #   - locale-dependent serialized literals would raise mismatch/lookup errors
-        #     across locale switches.
-        # SUCCESS STATE:
-        #   - import/eval under a different locale still resolves to the same member object.
-        # MIG-300-006 [AC1/AC2/AC3]:
-        # REQUIREMENT-LOGIC:
-        #   - Preserve import scaffold shape and non-enum fragments unless enum-member
-        #     rendering requires enum-class import.
-        #   - Maintain operation iteration order and dependency ordering as source order
-        #     stable signal.
-        #   - Apply existing import normalization/composition steps only.
-        # DECISION:
-        #   - keep serialized non-enum argument forms from existing serializer branches.
-        #   - include `from django.db import migrations` or `from django.db import migrations, models`
-        #     based on current set-membership.
-        #   - route migration-file function imports into manual-porting notes only.
-        # STATE TRANSITIONS:
-        #   1) collect operation imports/text
-        #   2) add dependency-derived imports/references
-        #   3) move `migration_imports` and set `needs_manual_porting`
-        #   4) normalize base django db import entry
-        #   5) sort render for deterministic output shape
-        # FAILURE PATH:
-        #   no added recovery branch; unresolved serialization failures are surfaced
-        #   through existing writer/serializer exceptions.
         operations = []
         for operation in self.migration.operations:
             operation_string, operation_imports = OperationWriter(operation).serialize()
@@ -358,23 +268,6 @@ class MigrationWriter:
 
     @classmethod
     def serialize(cls, value):
-        # MIG-300-004 [AC2 deconstruction/reconstruction loopback]:
-        # STATE INPUT: abstract operation/field/default fragment `value`.
-        # DECISION:
-        #   - route value through serializer_factory(value) for deterministic serializer selection.
-        #   - return (string, imports) as canonical serialization contract.
-        # EFFECT:
-        #   - the serialized form is the deconstruction boundary consumed later by as_string.
-        #   - if the same deconstructed value is serialized twice, output must be identical.
-        # MIG-300-007 [non-plain enum-like defaults no enum-specific post-processing]:
-        # LOGIC OBLIGATION:
-        #   - Input is an already deconstructed migration value fragment.
-        #   - Primary branch is `serializer_factory(value).serialize()` only.
-        #   - Do not add enum-specific rewrite steps here after serializer_factory returns.
-        #   - Whatever serializer path serializer_factory selected must pass through untouched.
-        # SUCCESS CRITERION:
-        #   non-plain enum-like defaults retain their prior serialized syntax and do not
-        #   gain `module.Enum['MEMBER']` semantics.
         return serializer_factory(value).serialize()
 
     @classmethod
