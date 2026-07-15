@@ -3,6 +3,7 @@ import os
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 from django.conf import settings
 from django.core.files.base import ContentFile
@@ -68,6 +69,18 @@ UPLOAD_PERMISSION_VERIFICATION_MAP = {
 
 class FileUploadPermissionContractTests(SimpleTestCase):
     maxDiff = None
+
+    def _read_file_upload_permissions_section(self):
+        settings_path = (
+            Path(__file__).resolve().parents[2]
+            / "docs"
+            / "ref"
+            / "settings.txt"
+        )
+        settings_text = settings_path.read_text(encoding="utf-8")
+        start = settings_text.index(".. setting:: FILE_UPLOAD_PERMISSIONS")
+        end = settings_text.index(".. setting:: FILE_UPLOAD_TEMP_DIR", start)
+        return settings_text[start:end]
 
     @unittest.skipIf(sys.platform.startswith("win"), "Windows does not preserve POSIX permission semantics.")
     def test_DJ10914_001_default_file_upload_permissions_resolves_to_0o644_when_unset(self):
@@ -227,25 +240,29 @@ class FileUploadPermissionContractTests(SimpleTestCase):
         """
         GUID: DJ10914-004
 
-        Contract-style documentation verification placeholder.
+        The ``FILE_UPLOAD_PERMISSIONS`` section documents the effective default.
         """
-        # INPUT: docs section for FILE_UPLOAD_PERMISSIONS.
-        # IF section text includes explicit default "Default: ``0o644``" AND
-        #    includes "Django applies ``0o644``"
-        # THEN contract is represented as documented default.
-        # ELSE route to trace failure (documentation gap).
-        self.assertTrue(True)
+        section = self._read_file_upload_permissions_section()
+
+        self.assertIn("Default: ``0o644``", section)
+        self.assertIn("If you don't configure this setting, Django applies ``0o644``.", section)
+        self.assertIn("to set newly uploaded files to.", section)
 
     def test_DJ10914_005_file_upload_permissions_handler_dependent_warning_is_documented(self):
         """
         GUID: DJ10914-005
 
-        Contract-style documentation verification placeholder.
+        The docs warn that permission outcomes can vary by handler path without explicit config.
         """
-        # INPUT: docs section for FILE_UPLOAD_PERMISSIONS.
-        # IF section text states handler-dependent outcomes without explicit setting
-        #    (MemoryUploadedFile vs TemporaryUploadedFile)
-        #    AND prescribes explicit setting as deterministic control
-        # THEN warning requirement is satisfied.
-        # ELSE route to trace failure (warning gap).
-        self.assertTrue(True)
+        section = self._read_file_upload_permissions_section()
+
+        self.assertIn(
+            "If ``FILE_UPLOAD_PERMISSIONS`` is not explicitly configured, observed permission",
+            section,
+        )
+        self.assertIn("MemoryUploadedFile", section)
+        self.assertIn("TemporaryUploadedFile", section)
+        self.assertIn(
+            "To guarantee deterministic permissions, set ``FILE_UPLOAD_PERMISSIONS`` explicitly.",
+            section,
+        )
