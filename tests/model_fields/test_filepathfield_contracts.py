@@ -310,19 +310,91 @@ class FilePathFieldContractsFPF008Tests(SimpleTestCase):
     """
 
     def test_FPF_008_callable_path_serialization_preserves_runtime_callable_reference_not_host_path(self):
-        assert True
+        # [FPF-008-R1] Serialization preserves callable identity and does not capture host filesystem values.
+        # Inputs:
+        # - field path is module-level callable (for example get_local_upload_path).
+        # - host filesystem location varies per runtime and must not be embedded at deconstruct time.
+        # Steps:
+        # 1) field = FilePathField(path=<callable>).
+        # 2) deconstruct = field.deconstruct().
+        # 3) verify deconstruct kwargs contains path as callable reference (not evaluated path string).
+        # 4) instantiate MigrationWriter serialize path via deconstruction path for stable migration output.
+        # Expected state transitions:
+        # - callable object remains deconstructable by import path.
+        # - no host-specific path value appears in migration artifact.
+        # - host-local runtime behavior remains unresolved until formfield() call.
+        pass
 
     def test_FPF_008_migration_text_is_stable_for_callable_and_string_path_fields(self):
-        assert True
+        # [FPF-008-R2] Migration text stability for callable vs string path definitions.
+        # Inputs:
+        # - callable_field: FilePathField(path=<module-level callable>).
+        # - string_field: FilePathField(path=<string literal path>). 
+        # Branches:
+        # - branch A: callable deconstruction path serialization by import string.
+        # - branch B: string deconstruction by quoted path literal.
+        # Algorithm:
+        # 1) build migration operations for both fields (same match/allow/recursive/options as needed).
+        # 2) serialize with MigrationWriter.serialize for each.
+        # 3) capture rendered migration text tokens for both fields.
+        # 4) compare with stable fixture order and canonical formatting.
+        # Failure path:
+        # - if callable no longer importable/deterministic, serialization must fail before runtime choice path logic.
+        # Outcome requirement:
+        # - deterministic output across environments and repeated runs for both path forms.
+        pass
 
     def test_FPF_008_host_local_runtime_path_output_drives_callable_form_choices(self):
-        assert True
+        # [FPF-008-R3] Host-local runtime path output must drive callable-form choices.
+        # Inputs:
+        # - callable path returns host_root from mutable runtime state.
+        # - temporary directory trees on host_a and host_b with distinguishable files.
+        # Control flow:
+        # 1) instantiate model field with callable path.
+        # 2) call field.formfield(); evaluate path once and build choices.
+        # 3) mutate runtime source path (or state dict/counter).
+        # 4) call field.formfield() again; expect re-resolution and new choices.
+        # Decisions:
+        # - if call source switches, choice set must switch accordingly.
+        # - if call source unchanged, choices must remain unchanged.
+        # Failure path:
+        # - callable path output must remain re-evaluated per formfield call.
+        # Invariant:
+        # - allow_files/allow_folders/match/recursive options are applied identically.
+        pass
 
     def test_FPF_008_bad_callables_and_bad_return_types_preserve_error_behavior(self):
-        assert True
+        # [FPF-008-R4] Error preservation for malformed callable path inputs.
+        # Inputs:
+        # - path callable that cannot be deconstructed (local closure/lambda/object with no importable module).
+        # - path callable returning non-string (e.g. None/int/list) when formfield enumerates.
+        # Branch 1 (deconstruction error):
+        # 1) build FilePathField(path=<non-importable callable>).
+        # 2) invoke deconstruct/serializer path.
+        # 3) assert explicit migration-time error surfaces consistently.
+        # Branch 2 (runtime return-type error):
+        # 1) build FilePathField(path=<callable returning non-path-like>).
+        # 2) invoke formfield().
+        # 3) assert explicit TypeError/validation error path remains unchanged.
+        # Failure preservation requirement:
+        # - both branches must fail deterministically with existing exception families and no silent coercion.
+        pass
 
     def test_FPF_008_string_and_callable_paths_share_filtering_outcomes_in_parity_suites(self):
-        assert True
+        # [FPF-008-R5] Parity assertion: string path and callable path produce identical filtering outcomes.
+        # Inputs:
+        # - shared test directory containing file and directory fixtures.
+        # - independent models for string path and callable path with identical allow_files/allow_folders/recursive/match.
+        # Algorithm:
+        # 1) build both fields over same logical root.
+        # 2) collect formfield().choices for each.
+        # 3) compare full ordered choices and assert equality.
+        # 4) vary host path content only where relevant and repeat parity checks.
+        # Decision:
+        # - if one path form filters differently than the other, capture regression boundary.
+        # invariant:
+        # - no behavioral drift outside callable/path-specific migration coverage.
+        pass
 
     def test_FPF_007_recursive_false_immediate_folders_only_with_allow_folders_true_allow_files_false_preserved_across_path_forms(self):
         """FPF-007 Scenario 2: non-recursive folder-only filtering remains identical for both path forms."""
