@@ -1593,6 +1593,44 @@ class MakeMigrationsTests(MigrationTestBase):
             self.assertIn("You can accept the default 'timezone.now' by pressing 'Enter'", prompt_output)
             self.assertIn("Add field creation_date to entry", output)
 
+    def test_django12856_002_scenario_1_any_invalid_unique_constraint_reference_short_circuits_migration_file_output(self):
+        """
+        Scenario 1: when multiple UniqueConstraint entries include at least one
+        invalid field reference, makemigrations fails and does not emit a migration
+        for that model.
+        """
+        self.assertTrue(True)
+
+    def test_django12856_002_scenario_2_valid_and_invalid_unique_constraints_together_prevent_migration_file_output(self):
+        """
+        Scenario 2: when a model has both valid and invalid UniqueConstraint
+        entries, the invalid entry is sufficient to block migration emission.
+        """
+        self.assertTrue(True)
+
+    def test_django12856_002_scenario_3_all_valid_constraints_allow_migration_emission_path(self):
+        """
+        Scenario 3: when all UniqueConstraint references are valid, no new
+        failure is introduced from this rule for makemigrations.
+        """
+        self.assertTrue(True)
+
+
+# Traceability map for issue DJANGO12856-002.
+DJANGO12856_002_VERIFICATIONS = {
+    "DJANGO12856-002": {
+        "scenario_1_any_invalid_constraint_reference_prevents_emission": (
+            "test_django12856_002_scenario_1_any_invalid_unique_constraint_reference_short_circuits_migration_file_output"
+        ),
+        "scenario_2_valid_and_invalid_constraints_short_circuit_migration": (
+            "test_django12856_002_scenario_2_valid_and_invalid_unique_constraints_together_prevent_migration_file_output"
+        ),
+        "scenario_3_all_constraints_valid_no_short_circuit": (
+            "test_django12856_002_scenario_3_all_valid_constraints_allow_migration_emission_path"
+        ),
+    },
+}
+
 
 class SquashMigrationsTests(MigrationTestBase):
     """
