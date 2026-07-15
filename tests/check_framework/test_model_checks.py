@@ -229,6 +229,60 @@ class DuplicateDBTableCollisionContractTests(SimpleTestCase):
                 )
             ])
 
+    def test_DJANGO11630_005_non_managed_collision_preserves_preexisting_E028_behavior(self):
+        """DJANGO11630-005: non-managed additions do not create new models.E028 collisions."""
+        class ManagedAuditLog(models.Model):
+            class Meta:
+                db_table = 'legacy_log'
+
+        class UnmanagedAuditLog(models.Model):
+            class Meta:
+                managed = False
+                db_table = 'legacy_log'
+
+        self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [])
+
+    def test_DJANGO11630_005_proxy_collision_preserves_preexisting_E028_behavior(self):
+        """DJANGO11630-005: proxy model table-sharing preserves prior duplicate-table behavior."""
+        class LogRecord(models.Model):
+            class Meta:
+                db_table = 'record_table'
+
+        class ProxyRecord(LogRecord):
+            class Meta:
+                proxy = True
+
+        self.assertEqual(LogRecord._meta.db_table, ProxyRecord._meta.db_table)
+        self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [])
+
+    def test_DJANGO11630_005_concrete_managed_collision_takes_precedence_over_proxy_or_unmanaged_shadows(self):
+        """DJANGO11630-005: concrete managed collisions remain E028 when proxy/unmanaged share table."""
+        class CoreLog(models.Model):
+            class Meta:
+                db_table = 'record_table'
+
+        class DuplicateCoreLog(models.Model):
+            class Meta:
+                db_table = 'record_table'
+
+        class AuditLogProxy(CoreLog):
+            class Meta:
+                proxy = True
+
+        class AuditLogUnmanaged(models.Model):
+            class Meta:
+                managed = False
+                db_table = 'record_table'
+
+        self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+            Error(
+                "db_table 'record_table' is used by multiple models: "
+                "check_framework.CoreLog, check_framework.DuplicateCoreLog.",
+                obj='record_table',
+                id='models.E028',
+            )
+        ])
+
 
 @isolate_apps('check_framework', attr_name='apps')
 @override_system_checks([checks.model_checks.check_all_models])
@@ -246,18 +300,6 @@ class IndexNameTests(SimpleTestCase):
                 id='models.E029',
                 ),
             ])
-
-    def test_DJANGO11630_005_non_managed_collision_preserves_preexisting_E028_behavior(self):
-        """DJANGO11630-005: non-managed additions do not create new models.E028 collisions."""
-        pass
-
-    def test_DJANGO11630_005_proxy_collision_preserves_preexisting_E028_behavior(self):
-        """DJANGO11630-005: proxy model table-sharing preserves prior duplicate-table behavior."""
-        pass
-
-    def test_DJANGO11630_005_concrete_managed_collision_takes_precedence_over_proxy_or_unmanaged_shadows(self):
-        """DJANGO11630-005: concrete managed collisions remain E028 when proxy/unmanaged share table."""
-        pass
 
     def test_collision_in_different_models(self):
         index = models.Index(fields=['id'], name='foo')

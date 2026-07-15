@@ -50,11 +50,11 @@ def check_all_models(app_configs=None, **kwargs):
         #   if one or zero tracked models share the key -> pass.
         # Failure path:
         #   emit models.E028 and list only participating tracked labels for that effective alias/table key.
-        if len(model_labels) != 1:
+        if len(model_labels) > 1:
             errors.append(
                 Error(
                     "db_table '%s' is used by multiple models: %s."
-                    % (db_table, ', '.join(db_table_models[db_table])),
+                    % (db_table, ', '.join(model_labels)),
                     obj=db_table,
                     id='models.E028',
                 )
