@@ -35,19 +35,55 @@ AUTORELOAD_REQUIREMENT_TO_VERIFICATION = {
 class TestIterModulesAndFilesContractTests(SimpleTestCase):
     """Contract-oriented placeholders for AUTORELOAD-001."""
 
+    def _dummy_module_with_origin(self, origin):
+        spec = types.SimpleNamespace(
+            has_location=True,
+            loader=object(),
+            origin=origin,
+        )
+        module = types.ModuleType("autoreload_contract_module")
+        module.__spec__ = spec
+        return module
+
     def test_AUTORELOAD_001_iter_modules_and_files_skip_embedded_null_byte_path_entry(self):
         """
         Given one module path that raises ValueError: embedded null byte and one valid path,
         iter_modules_and_files() should skip the malformed path and keep the valid one.
         """
-        self.assertTrue(True)
+        tempfile_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tempfile_dir)
+        good_module_path = tempfile_dir / "valid.py"
+        good_module_path.touch()
+
+        malformed_module = self._dummy_module_with_origin("\x00bad.py")
+        valid_module = self._dummy_module_with_origin(str(good_module_path))
+        files = autoreload.iter_modules_and_files((malformed_module, valid_module), frozenset())
+
+        expected = good_module_path.resolve().absolute()
+        self.assertEqual(files, frozenset({expected}))
 
     def test_AUTORELOAD_001_iter_modules_and_files_continue_after_embedded_null_byte_failure(self):
         """
         Given an iterable containing a ValueError: embedded null byte path-resolution failure,
         iteration should continue and process remaining module paths.
         """
-        self.assertTrue(True)
+        tempfile_dir = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tempfile_dir)
+        valid_module_path = tempfile_dir / "valid.py"
+        valid_module_path.touch()
+        second_valid_module_path = tempfile_dir / "another_valid.py"
+        second_valid_module_path.touch()
+
+        modules = (
+            self._dummy_module_with_origin("\x00also_bad.py"),
+            self._dummy_module_with_origin(str(valid_module_path)),
+            self._dummy_module_with_origin(str(second_valid_module_path)),
+        )
+        files = autoreload.iter_modules_and_files(modules, frozenset())
+
+        self.assertIn(valid_module_path.resolve().absolute(), files)
+        self.assertIn(second_valid_module_path.resolve().absolute(), files)
+        self.assertEqual(len(files), 2)
 
 
 class TestIterModulesAndFiles(SimpleTestCase):

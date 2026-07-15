@@ -168,6 +168,12 @@ def iter_modules_and_files(modules, extra_files):
             # The module could have been removed, don't fail loudly if this
             # is the case.
             continue
+        except ValueError as exc:
+            # Skip only malformed candidates containing embedded null bytes and
+            # continue processing the remaining entries.
+            if "embedded null byte" in str(exc):
+                continue
+            raise
         # Step 3/3 (accumulation):
         # - add resolved_path to deduping results set.
         results.add(resolved_path)
