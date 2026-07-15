@@ -10,6 +10,10 @@ Requirement scope:
   - Route miss conversion contract in [`django/urls/resolvers.py`](django/urls/resolvers.py:260).
 - `DJ-RES-002`
   - Candidate-miss continuation contract in [`django/urls/resolvers.py`](django/urls/resolvers.py:570) and converter-level normalization in [`django/urls/resolvers.py`](django/urls/resolvers.py:286).
+- `DJ-RES-004`
+  - Converter `ValueError` miss contract in [`django/urls/resolvers.py`](django/urls/resolvers.py:290), preserving recoverable route-miss semantics.
+- `DJ-RES-005`
+  - Non-`Http404`/non-`ValueError` converter failure contract in [`django/urls/resolvers.py`](django/urls/resolvers.py:304) and upward exception propagation from [`django/urls/resolvers.py`](django/urls/resolvers.py:592).
 - `DJ-RES-006`
   - Success-path preservation contract in [`django/urls/resolvers.py`](django/urls/resolvers.py:595), ensuring first successful candidate is returned immediately.
 - `DJ-RES-007`
@@ -31,6 +35,9 @@ Requirement scope:
   - Boundary rule: a single candidate miss (`Resolver404`) is local; later candidates may still run.
 - `django/urls/resolvers.py:URLResolver.resolve()`
   - Owns immediate dispatch when a candidate succeeds; successful match short-circuits candidate iteration.
+- `django/urls/resolvers.py:RoutePattern.match()`
+  - Owns converter exception classification and local translation into match state.
+  - Boundary rule: `ValueError` and `Http404` are control-flow signals for match handling; other exceptions are not converted to match-miss signals.
 - `django/views/debug.py:technical_404_response`
   - Owns diagnostics rendering for routing misses.
   - Boundary rule: rendering layer must prefer converter-originated reason metadata when provided.
@@ -88,6 +95,16 @@ Requirement scope:
   - Module: [`django/core/handlers/exception.py`](django/core/handlers/exception.py)
   - Trigger: `get_exception_response` cannot resolve/execute 404 handler.
   - Required effect: delegate to `handle_uncaught_exception` as a controlled failure boundary.
+- Seam S-5: Exception taxonomy boundary for converter coercion
+  - Module: [`django/urls/resolvers.py`](django/urls/resolvers.py)
+  - Trigger: `converter.to_python(value)` invocation in `RoutePattern.match()`.
+  - Required effect:
+    - `ValueError` and `Http404` are converted to route-miss transitions only.
+    - Any other exception types are preserved and allowed to bubble toward handler pipeline for internal-failure routing.
+- Seam S-6: Non-`Resolver404` failure handling policy
+  - Module: [`django/urls/resolvers.py`](django/urls/resolvers.py)
+  - Trigger: candidate evaluation raises an exception not caught as `Resolver404`.
+  - Required effect: no remap to routing miss; upstream middleware/exception flow determines the 500 path.
 
 ## Dependency direction
 - `converters` → `RoutePattern.match()` (conversion outcome)
@@ -103,3 +120,7 @@ Requirement scope:
 - No admin or generic exception handling paths should be coupled to this seam.
 - `DJ-RES-003` requires explicit ownership of the non-debug 404 rendering boundary so converter-originated misses stay production-safe while preserving status 404.
 - For DJ-RES-002/006, candidate-loop ownership remains in `URLResolver.resolve()`; misses stay recoverable, first success remains terminal.
+- For Issue #103 (`DJ-RES-004`, `DJ-RES-005`), the seam policy must remain narrow:
+  - only `Http404` remains a miss remap in resolver control-flow.
+  - `ValueError` stays candidate-miss control-flow, not internal-failure.
+  - all other errors skip resolver remap and preserve internal error-path behavior.
