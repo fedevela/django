@@ -1,0 +1,106 @@
+REQ-138-007 — keep `get_<field>_display()` resolution deterministic across repeated calls
+======================================================================================
+
+Requirement
+-----------
+- REQ-138-007: Repeated calls to `get_<field>_display()` on the same model instance
+  must be deterministic and stable, with no helper identity drift or alternate
+  resolution path after class construction.
+
+Constraint scope
+----------------
+- Stable effective helper binding once field construction has completed.
+- No memoization or cross-instance caching requirements.
+- No runtime behavior changes beyond making resolution placement structurally explicit.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-007 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - `REQ_138_007_OBLIGATIONS[0..1]` and `REQ_ID_TO_VERIFICATION["REQ-138-007"]`
+    define verification intent and the two obligation targets:
+    - override-defined path stability
+    - generated-helper path stability
+- REQ-138-007 -> `django/db/models/fields/__init__.py` (`Field.contribute_to_class`)
+  - Pressure O1: resolve helper binding for `display_name = f"get_{self.name}_display"`
+    exactly once during contribution of a given field.
+  - Pressure O2: prevent regeneration or replacement when class-local method exists
+    (`display_name in cls.__dict__`).
+  - Pressure O3: prevent generation when inherited method exists (`hasattr(cls, display_name)`).
+  - Pressure O4: install generated `partialmethod(cls._get_FIELD_display, field=self)`
+    only once for the no-override branch, making runtime lookup deterministic.
+- REQ-138-007 -> `django/db/models/base.py` (`Model._get_FIELD_display`)
+  - Pressure O5: keep fallback execution deterministic for unchanged instance state by
+    reading `field.attname` and `field.flatchoices` each call and applying
+    `dict(...).get(value, value)` consistently.
+  - Pressure O6: avoid alternate mapping strategies in this function so per-call
+    behavior remains fixed once bound.
+
+File/module placement decisions
+-------------------------------
+- Construction boundary: `django/db/models/fields/__init__.py` owns one-time helper
+  identity resolution for fields with `choices`.
+- Fallback boundary: `django/db/models/base.py` owns label transformation when no
+  override path applies.
+- Verification boundary: `tests/model_fields/test_req138_001_display_overrides.py`
+  owns obligation-to-test mapping and named acceptance hooks.
+
+Ownership-boundary artifacts
+---------------------------
+- Boundary B1 (`Field.contribute_to_class`)
+  - Owner: `Field` class in `django/db/models/fields/__init__.py`.
+  - Responsibility: decide whether the class gains:
+    - user/local override, or
+    - inherited override, or
+    - generated helper.
+  - Boundary rule: do not re-run helper identity resolution during instance calls.
+- Boundary B2 (`Model._get_FIELD_display`)
+  - Owner: `Model` in `django/db/models/base.py`.
+  - Responsibility: single-path conversion from value to label/raw return for generated
+    helper callers.
+- Boundary B3 (`tests/model_fields/test_req138_001_display_overrides.py`)
+  - Owner: traceability artifact file.
+  - Responsibility: preserve stable obligation nomenclature and map each one to
+    implementation contracts.
+
+Interface/type/contract artifacts
+-------------------------------
+- Contract C1 (`contribute_to_class` helper resolution)
+  - `display_name = "get_%s_display" % self.name`.
+  - If `display_name in cls.__dict__`: keep local user method as effective helper.
+  - Else if `hasattr(cls, display_name)`: keep inherited helper as effective helper.
+  - Else: set `setattr(cls, display_name, partialmethod(cls._get_FIELD_display, field=self))`
+    once at contribution time.
+- Contract C2 (`_get_FIELD_display` fallback)
+  - `value = getattr(instance, field.attname)`.
+  - `choices = dict(field.flatchoices)`.
+  - return `force_str(choices.get(value, value), strings_only=True)` deterministically.
+
+Dependency-direction notes
+-------------------------
+1. Field metadata (`choices`, `name`) -> `Field.contribute_to_class`.
+2. `Field.contribute_to_class` -> class namespace binding for `get_<field>_display`.
+3. Stable class binding -> Python descriptor/MRO dispatch on instance calls.
+4. If generated helper bound -> `Model._get_FIELD_display(field=this_field)`.
+5. `_get_FIELD_display` -> `field.attname` and `field.flatchoices` -> returned display value.
+6. Repeated call path -> same method-object identity should remain from step 2/4 onward.
+
+Integration-seam skeletons
+--------------------------
+- Seam S1 (construction-time helper gate)
+  - Upstream: field contributor with `self.choices` and `self.name`.
+  - Downstream: bound method surface on `cls` for `get_<field>_display`.
+- Seam S2 (runtime fallback execution)
+  - Upstream: generated `get_<field>_display` invocation.
+  - Downstream: `Model._get_FIELD_display` deterministic mapping path.
+- Seam S3 (traceability seam)
+  - Upstream: requirement obligations in this file and the test constants block.
+  - Downstream: verification hooks in `REQ_ID_TO_VERIFICATION`.
+
+Completion status
+----------------
+- One architecture artifact added at
+  `docs/internals/req-138-007-display-resolution-determinism-architecture.txt`.
+- Both `REQ_138_007_OBLIGATIONS` are mapped to concrete ownership boundaries and
+  explicit integration seams.
+- Traceability remains requirement-driven through the existing `REQ_ID_TO_VERIFICATION`
+  entries in `tests/model_fields/test_req138_001_display_overrides.py`.
