@@ -734,6 +734,16 @@ class QuerySet:
         collector = Collector(using=del_query.db)
         collector.collect(del_query)
         deleted, _rows_count = collector.delete()
+        # DJ12747-001/002/003 Trace -> QuerySet.delete zero-match contract:
+        # - Input: QuerySet delete request with no combined/value query constraints.
+        # - Build a Collector, collect match set on same DB for write consistency.
+        # - Execute collector.delete() -> receives (X, Y).
+        # - Required deterministic behavior:
+        #   if X == 0:
+        #       Y must always be a dict with a single normalized key-presence policy,
+        #       independent of fast_delete-capable vs non-fast_delete model shape.
+        #       If Y is non-empty, every key must be model._meta.label and each value must be 0.
+        #   this keeps FK-capable and simple model paths equivalent for empty deletes.
 
         # Clear the result cache, in case this QuerySet gets reused.
         self._result_cache = None

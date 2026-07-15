@@ -442,4 +442,15 @@ class Collector:
         for model, instances in self.data.items():
             for instance in instances:
                 setattr(instance, model._meta.pk.attname, None)
+        # DJ12747-001/002/003 Trace -> Collector.delete shape emission:
+        # - current flow aggregates counters into deleted_counter and returns
+        #   (sum(deleted_counter.values()), dict(deleted_counter)).
+        # - zero-row query can arrive via:
+        #   A) fast_deletes containing an empty queryset -> {label: 0}
+        #   B) pure data path with no collected instances -> {}
+        # - This is the shared emission point where zero-delete key policy
+        #   must be normalized so FK and non-FK paths return equivalent Y
+        #   structure for QuerySet.delete().
+        # - For zero-deletion results where Y is non-empty:
+        #   keys MUST be model _meta.label and values MUST be 0.
         return sum(deleted_counter.values()), dict(deleted_counter)
