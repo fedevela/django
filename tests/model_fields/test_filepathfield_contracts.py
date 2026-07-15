@@ -1,7 +1,9 @@
-from django.test import SimpleTestCase
-from django.db import models
-import tempfile
+import os
 import shutil
+import tempfile
+
+from django.db import models
+from django.test import SimpleTestCase
 
 from .models import FilePathFieldCallablePathModel, get_local_upload_path
 
@@ -67,8 +69,68 @@ class FilePathFieldContractsFPF003Tests(SimpleTestCase):
 
     def test_FPF_003_runtime_callable_invocation_uses_current_host_path_for_choice_enumeration(self):
         """FPF-003 Scenario 1: evaluate callable path in host runtime when choices are requested."""
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as host_a_dir, tempfile.TemporaryDirectory() as host_b_dir:
+            alpha_file = os.path.join(host_a_dir, "alpha.txt")
+            beta_file = os.path.join(host_b_dir, "beta.txt")
+            with open(alpha_file, "w"):
+                pass
+            with open(beta_file, "w"):
+                pass
+
+            calls = []
+
+            def get_host_path():
+                path = host_a_dir if not calls else host_b_dir
+                calls.append(path)
+                return path
+
+            class FilePathFieldRuntimeCallableModel(models.Model):
+                file = models.FilePathField(path=get_host_path)
+
+                class Meta:
+                    app_label = "model_fields"
+
+            field = FilePathFieldRuntimeCallableModel._meta.get_field("file")
+
+            form_field = field.formfield()
+            self.assertEqual(calls, [host_a_dir])
+            self.assertIn((alpha_file, os.path.basename(alpha_file)), form_field.choices)
+            self.assertNotIn((beta_file, os.path.basename(beta_file)), form_field.choices)
+
+            form_field = field.formfield()
+            self.assertEqual(calls, [host_a_dir, host_b_dir])
+            self.assertIn((beta_file, os.path.basename(beta_file)), form_field.choices)
+            self.assertNotIn((alpha_file, os.path.basename(alpha_file)), form_field.choices)
 
     def test_FPF_003_host_locality_choices_observe_current_runtime_path_output(self):
         """FPF-003 Scenario 2: enumeration reflects host-local callable output."""
-        self.assertTrue(True)
+        with tempfile.TemporaryDirectory() as host_one_root, tempfile.TemporaryDirectory() as host_two_root:
+            host_one_file = os.path.join(host_one_root, "host-one.txt")
+            host_two_file = os.path.join(host_two_root, "host-two.txt")
+            with open(host_one_file, "w"):
+                pass
+            with open(host_two_file, "w"):
+                pass
+
+            runtime_state = {"host_root": host_one_root}
+
+            def get_host_path():
+                return runtime_state["host_root"]
+
+            class FilePathFieldRuntimeHostLocalModel(models.Model):
+                file = models.FilePathField(path=get_host_path)
+
+                class Meta:
+                    app_label = "model_fields"
+
+            field = FilePathFieldRuntimeHostLocalModel._meta.get_field("file")
+
+            runtime_state["host_root"] = host_one_root
+            first_form_field = field.formfield()
+            self.assertIn((host_one_file, os.path.basename(host_one_file)), first_form_field.choices)
+            self.assertNotIn((host_two_file, os.path.basename(host_two_file)), first_form_field.choices)
+
+            runtime_state["host_root"] = host_two_root
+            second_form_field = field.formfield()
+            self.assertIn((host_two_file, os.path.basename(host_two_file)), second_form_field.choices)
+            self.assertNotIn((host_one_file, os.path.basename(host_one_file)), second_form_field.choices)
