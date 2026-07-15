@@ -85,14 +85,40 @@ class AUTORELOADRequirementTraceabilityTests(SimpleTestCase):
         Given manage.py is part of StatReloader watched files and an initial snapshot exists,
         an edited manage.py must be identified by snapshot diff and mapped to reload-required.
         """
-        self.assertTrue(True)
+        reloader = autoreload.StatReloader()
+        reloader.SLEEP_TIME = 0
+        with tempfile.TemporaryDirectory() as temp_dir:
+            manage_script = Path(temp_dir) / 'manage.py'
+            manage_script.write_text('print("before")')
+            reloader.watch_file(manage_script.resolve())
+
+            with mock.patch.object(reloader, 'notify_file_changed') as notify_file_changed:
+                with mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset()):
+                    ticker = reloader.tick()
+                    next(ticker)
+
+                    updated_time = manage_script.stat().st_mtime + 2
+                    os.utime(manage_script, (updated_time, updated_time))
+                    next(ticker)
+
+                self.assertEqual(notify_file_changed.call_count, 1)
+                notify_file_changed.assert_called_once_with(manage_script.resolve())
 
     def test_AUTORELOAD_002_reloader_loop_uses_standard_statreloader_restart_workflow(self):
         """
         Given snapshot-detected manage.py changes, restart processing should use the
         existing StatReloader restart semantics with no new pathway.
         """
-        self.assertTrue(True)
+        with mock.patch.dict(os.environ, {autoreload.DJANGO_AUTORELOAD_ENV: 'false'}):
+            with mock.patch('django.utils.autoreload.sys.executable', '/usr/bin/python'):
+                with mock.patch('django.utils.autoreload.sys.argv', ['./manage.py', 'runserver']):
+                    with mock.patch('django.utils.autoreload.sys.warnoptions', ['default']):
+                        with mock.patch('django.utils.autoreload.subprocess.call', side_effect=[3, 0]) as mocked_call:
+                            with self.assertRaises(SystemExit) as exc:
+                                autoreload.run_with_reloader(lambda: None)
+
+        self.assertEqual(exc.exception.code, 0)
+        self.assertEqual(mocked_call.call_count, 2)
 
 
 class TestIterModulesAndFiles(SimpleTestCase):
