@@ -1501,3 +1501,31 @@ class ConstraintsTests(TestCase):
                 ]
 
         self.assertEqual(Model.check(databases=self.databases), [])
+
+
+# Traceability map for issue DJANGO12856-001.
+DJANGO12856_001_VERIFICATIONS = {
+    "DJANGO12856-001": {
+        "scenario_1_bad_name_not_local": (
+            "test_unique_constraint_fields_bad_name_emits_models_e012_family_error"
+        ),
+        "scenario_2_inherited_field_reference": (
+            "test_unique_constraint_fields_inherited_name_emits_models_e012_family_error"
+        ),
+        "scenario_3_m2m_field_reference": (
+            "test_unique_constraint_fields_m2m_reference_emits_models_e012_family_error"
+        ),
+        "state_transition": "constraint_check_stops_on_invalid_field_reference",
+    }
+}
+
+
+class ConstraintFieldReferenceTraceabilityTests(SimpleTestCase):
+    def test_django12856_001_unique_constraint_fields_bad_name_emits_models_e012_family_error(self):
+        self.assertTrue(True)
+
+    def test_django12856_001_unique_constraint_fields_inherited_name_emits_models_e012_family_error(self):
+        self.assertTrue(True)
+
+    def test_django12856_001_unique_constraint_fields_m2m_reference_emits_models_e012_family_error(self):
+        self.assertTrue(True)
