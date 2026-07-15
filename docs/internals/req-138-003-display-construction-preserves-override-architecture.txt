@@ -1,0 +1,85 @@
+REQ-138-003 — preserve user-defined `get_<field>_display()` during model class construction
+===================================================================================
+
+Requirement
+-----------
+- REQ-138-003: If `get_<field>_display()` already exists in the model class
+  namespace at class-construction time, Django must not overwrite it when injecting
+  field helpers.
+
+Constraint scope
+----------------
+- Preserve existing class-defined display helper behavior.
+- No runtime monkey-patching outside class construction.
+- No broad metaclass refactors.
+
+Requirement-to-architecture mapping
+----------------------------------
+- REQ-138-003 -> `django/db/models/fields/__init__.py`
+  - `Field.contribute_to_class()` owns class-construction-time helper decision for
+    `get_<field>_display` binding.
+  - Placement pressure: inspect only `cls.__dict__` to distinguish explicit class
+    namespace ownership from inherited behavior.
+- REQ-138-003 -> `django/db/models/base.py`
+  - `Model._get_FIELD_display()` remains the fallback implementation used only when
+    no model-defined helper is installed.
+  - Placement pressure: this boundary must stay a pure fallback map/format path.
+- REQ-138-003 -> `tests/model_fields/test_req138_001_display_overrides.py`
+  - `REQ_138_003_OBLIGATIONS` and `REQ_ID_TO_VERIFICATION` entries already map
+    behavior to test-case names for this requirement.
+
+Ownership and boundaries
+------------------------
+- Field contribution boundary (`Field.contribute_to_class`)
+  - Owns display-helper installation into model class during construction.
+  - Upstream: field has `choices` and concrete `name`.
+  - Downstream: attribute `get_<field>_display` may be attached to model class.
+- Model fallback boundary (`Model._get_FIELD_display`)
+  - Owns value-to-label resolution when no user-defined method exists.
+  - Keeps fallback contract stable (`mapped label` then `raw value`).
+- Verification boundary (`tests/model_fields/test_req138_001_display_overrides.py`)
+  - Owns acceptance mapping for obligations about constructor preservation and
+    post-init sentinel behavior.
+
+Interface/type contracts
+------------------------
+- Contract C1 (construction installation)
+  - `display_name = "get_%s_display" % self.name`.
+  - If `display_name` in `cls.__dict__`, no assignment is performed.
+  - Else assign `partialmethod(cls._get_FIELD_display, field=self)`.
+- Contract C2 (fallback seam)
+  - `Model._get_FIELD_display(self, field)` remains the executed path only when
+    no explicit method occupies the display helper slot.
+  - For unmapped values, return coerced raw value to avoid changing legacy
+    behavior.
+
+Dependency direction
+--------------------
+1. Field declaration and metadata -> `Field.contribute_to_class()`.
+2. `Field.contribute_to_class()` -> model class namespace decision edge
+   (`cls.__dict__` check).
+3. Constructor acceptance edge -> either leave explicit method in place or attach
+   helper.
+4. Runtime call -> class instance dispatch -> user-defined helper or fallback
+   contract (`_get_FIELD_display`) depending on namespace result.
+
+Integration seams / scaffolding
+------------------------------
+- Seam S1 (`Field.contribute_to_class` namespace-seal check)
+  - Upstream: model class being finalized.
+  - Downstream: `get_<field>_display` presence in `cls.__dict__` determines if
+    framework injection runs.
+- Seam S2 (`_get_FIELD_display` fallback execution)
+  - Upstream: call arrives only when no explicit helper is bound.
+  - Downstream: deterministic label mapping over `field.flatchoices`.
+- Seam S3 (`test mapping`)
+  - Upstream: requirement IDs from `REQ_ID_TO_VERIFICATION`.
+  - Downstream: executable checks for preservation and sentinel return.
+
+Architecture readiness check
+---------------------------
+- All three pseudocode obligations from `REQ-138-003_OBLIGATIONS` have structural
+  homes and can be implemented without touching unrelated construction paths.
+- Boundary ownership and dependency direction are explicit and coherent.
+- Traceability remains explicit through implementation and test artifacts.
+- Required architecture artifact has been created under `docs/internals`.
