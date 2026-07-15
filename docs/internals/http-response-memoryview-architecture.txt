@@ -1,0 +1,85 @@
+Issue #59 Memoryview normalization in HttpResponse (Architecture artifact)
+=====================================================================
+
+Status: Architecture-ready for implementation (stable boundaries defined, traceability preserved).
+Requirements: MEMVIEW-001, MEMVIEW-002, MEMVIEW-004
+
+Requirement-to-architecture map
+------------------------------
+- MEMVIEW-001 -> [django/http/response.py: HttpResponse.__init__]
+  - Owns constructor ingress of payload and raw-memoryview normalization contract.
+- MEMVIEW-002 -> [django/http/response.py: HttpResponse.__init__ + HttpResponse.content.setter]
+  - Owns handling of bytes-backed memoryview including empty payload as constructor input.
+  - Ownership is intentionally constructor-only for this issue.
+- MEMVIEW-004 -> [django/http/response.py: HttpResponse.content getter]
+  - Owns repeated read behavior contract for normalized memoryview-origin content.
+
+File/module placement decisions
+------------------------------
+- `django/http/response.py` (existing module)
+  - Remains the execution locus for both constructor-time payload acceptance
+    and public read path behavior.
+- `tests/responses/test_memoryview_traceability.py` (existing test artifact)
+  - Remains the verification seam; behavior checks are now required to be implemented
+    against public `HttpResponse(...)` and `.content`.
+
+Ownership and boundaries
+-----------------------
+- Boundary A: External input boundary (constructor API)
+  - Owner: `HttpResponse.__init__`.
+  - Responsibility: accept `content` parameter and collapse memoryview objects into a
+    stable, byte-normalized internal representation before state entry.
+- Boundary B: Internal state boundary
+  - Owner: `HttpResponse.content` storage (`self._container`) and setter.
+  - Responsibility: hold normalized segments as bytes-like storage units used by read/append semantics.
+- Boundary C: Read/contract boundary
+  - Owner: `HttpResponse.content` getter.
+  - Responsibility: present stable `bytes` on every access by assembling container state
+    deterministically.
+- Boundary D: Legacy assignment path boundary (out of scope of this issue)
+  - Owner: `HttpResponse.content` setter path and `write()`.
+  - Responsibility: unchanged behavior for runtime assignments and streaming-like appends.
+
+Interface / contract artifacts
+-----------------------------
+- Constructor normalization contract (`MEMVIEW-ARCH-INIT`):
+  - Input: `content` may be `memoryview`.
+  - Output: bytes payload for internal container when input is memoryview, including `memoryview(b"")`.
+  - Determinism rule: normalized value is a new immutable `bytes` object.
+- Read contract (`MEMVIEW-ARCH-READ`):
+  - Input: internal `self._container`.
+  - Output: `bytes` value from deterministic join.
+  - Stability rule: repeated getter calls return equal `bytes` objects for constructor-normalized memoryviews.
+- Failure contract:
+  - Conversion/type failures remain constructor-initialization failures (no deferred recovery in getter).
+
+Dependency-direction notes
+-------------------------
+- `HttpResponse.__init__` depends on constructor normalization branch before delegating payload to setter.
+- `HttpResponse.content` getter depends only on `self._container` state and does not re-interpret original constructor input.
+- `HttpResponse.content` setter remains downstream from request-level `__init__` behavior and must not
+  absorb constructor-specific branch logic.
+
+Integration-seam skeletons
+--------------------------
+- Constructor-only normalization seam:
+  - Location: constructor comment/pseudocode block in `django/http/response.py`.
+  - Purpose: one-way transformation from external `memoryview` -> internal bytes.
+- Deterministic read seam:
+  - Location: `HttpResponse.content` getter.
+  - Purpose: return stable assembled bytes for each access without state mutation.
+- Verification seam:
+  - Location: `tests/responses/test_memoryview_traceability.py`.
+  - Purpose: ensure each requirement ID has explicit test coverage name.
+
+Changed architecture artifact paths
+----------------------------------
+- Added: `docs/internals/http-response-memoryview-architecture.txt`
+- Used unchanged: `django/http/response.py`
+- Used unchanged: `tests/responses/test_memoryview_traceability.py`
+
+Completion status
+----------------
+- All traced obligations are assigned to explicit owners and seams.
+- Mapping and contracts preserve requirement IDs.
+- Structural artifacts are now present and implementation-safe (clear boundary and dependency direction).
