@@ -1090,6 +1090,16 @@ class FilePathField(ChoiceField):
         if self.match is not None:
             self.match_re = re.compile(self.match)
 
+        # FPF-004::O3 (non-callable string-path runtime semantics preservation):
+        # Input: resolved path string from model-formfield handoff.
+        # Decision:
+        # - recursive=False -> enumerate only immediate children with os.scandir(path)
+        # - recursive=True -> enumerate depth-first via os.walk(path)
+        # Branch behavior:
+        # - allow_files and allow_folders gate entry types before match filtering.
+        # - __pycache__ is intentionally excluded as existing legacy behavior.
+        # Output: append (abs_path, label) tuples exactly as current algorithm does.
+        # Error behavior: traversal/IO errors propagate as before; no string normalization performed here.
         # FPF-003::O2 (deterministic runtime enumeration):
         # - Input: concrete path string produced by model-field formfield() on this call.
         # - State transitions:

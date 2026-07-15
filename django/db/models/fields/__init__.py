@@ -1697,6 +1697,14 @@ class FilePathField(Field):
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
+        # FPF-004::O1 (string-path migration shape preservation):
+        # Input: model field metadata tuple from __init__ where path is stored unchanged.
+        # Decision:
+        # - if callable(path): keep function object in kwargs['path'] for callable serializer.
+        # - elif path is non-empty string: keep exact string literal in kwargs['path'].
+        # - else: omit path to preserve default-empty migration shape.
+        # Failure path:
+        # - no normalization/expansion errors are introduced here; no filesystem touch in deconstruction.
         if callable(self.path):
             # Preserve callable path metadata so migration serialization can emit
             # a stable importable reference.
@@ -1723,6 +1731,15 @@ class FilePathField(Field):
 
     def formfield(self, **kwargs):
         path = self.path() if callable(self.path) else self.path
+        # FPF-004::O2 (string/callable runtime parity):
+        # Input: stored path metadata (callable or literal string).
+        # Branch:
+        # - callable: invoke now, pass through returned value unchanged for runtime host-local behavior.
+        # - literal: pass literal string through unchanged to preserve existing enumeration behavior.
+        # Handoff:
+        # - resolved path enters forms.FilePathField, where directory traversal/choice generation occurs.
+        # Failure path:
+        # - callable invocation failures propagate unchanged from formfield construction boundary.
         # FPF-001::O2 (no eager resolution at module import):
         # This method is the defer point; avoid resolving callables during model import.
         # Expected runtime sequence (for implementation phase):
