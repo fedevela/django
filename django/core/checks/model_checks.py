@@ -62,6 +62,26 @@ def check_all_models(app_configs=None, **kwargs):
         for model_constraint in model._meta.constraints:
             constraints[model_constraint.name].append(model._meta.label)
     for db_table, model_labels in db_table_models.items():
+        # DBTABLE-002 and DBTABLE-003 logic obligations:
+        # INPUT: one shared db_table and all managed, non-proxy model labels
+        # collected for it, plus the configured database-router setting.
+        # IF fewer than two model labels share the table, emit no duplicate-table
+        # diagnostic and continue with the next table.
+        # IF two or more labels share the table AND routers are not configured,
+        # preserve the blocking models.E028 path below.
+        # IF two or more labels share the table AND routers are configured, emit
+        # a non-blocking diagnostic instead of models.E028; apply this branch
+        # identically whether the labels belong to one application (DBTABLE-003)
+        # or to different applications (DBTABLE-002).
+        # DBTABLE-004 diagnostic-content obligation for the routed branch:
+        # BUILD the diagnostic from the shared db_table and the complete list of
+        # conflicting model labels, without attempting to execute or prove router
+        # behavior.
+        # INCLUDE guidance that the user must verify database routing separates
+        # the conflicting models.
+        # OUTPUT: append exactly the selected duplicate-table diagnostic and then
+        # continue checking other tables; router uncertainty remains advisory and
+        # must not become models.E028 or silently suppress the collision.
         if len(model_labels) != 1 and not settings.DATABASE_ROUTERS:
             errors.append(
                 Error(
