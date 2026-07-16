@@ -1148,6 +1148,24 @@ class QuerySet:
         """
         Return a new QuerySet instance that will select only distinct results.
         """
+        # UNIONDIST-007 pseudocode:
+        # INPUT the current queryset state and zero or more requested field
+        # names.
+        # IF the query has a combinator, HAND OFF to the established combined-
+        # query rejection path; this obligation does not govern that state.
+        # ELSE preserve the non-combined path without raising the combined-
+        # query unsupported-operation exception.
+        # IF the non-combined query is sliced, FAIL through the established
+        # sliced-query assertion without changing that limitation.
+        # CLONE the non-combined queryset so the source remains unchanged.
+        # IF no field names were supplied, RECORD ordinary distinct state on
+        # the clone and defer evaluation to the existing backend/compiler path.
+        # ELSE RECORD the requested distinct fields on the clone and defer
+        # evaluation to that same path, which either produces the already-
+        # supported field-specific result or raises its established backend or
+        # query-shape limitation.
+        # OUTPUT the unevaluated clone; introduce no distinct semantics beyond
+        # those already defined for a non-combined queryset.
         self._not_support_combined_queries('distinct')
         assert not self.query.is_sliced, \
             "Cannot create distinct fields once a slice has been taken."
