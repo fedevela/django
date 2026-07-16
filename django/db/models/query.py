@@ -1380,6 +1380,12 @@ class QuerySet:
                 )
             )
 
+    # UNIONDIST-001, UNIONDIST-002, UNIONDIST-003, UNIONDIST-004 architecture:
+    # QuerySet.distinct() owns the public call boundary and delegates combined-
+    # query rejection to this guard, which owns the established exception and
+    # message contract. The dependency remains QuerySet operation -> guard ->
+    # query.combinator; combined distinct state must not reach Query or the SQL
+    # compiler.
     def _not_support_combined_queries(self, operation_name):
         if self.query.combinator:
             raise NotSupportedError(
