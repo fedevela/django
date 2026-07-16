@@ -416,6 +416,51 @@ class StumpJoke(models.Model):
     has_fooled_today = models.ManyToManyField(Character, limit_choices_to=today_callable_q, related_name="+")
 
 
+class LimitChoicesToTestModel(models.Model):
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ('pk',)
+
+    def __str__(self):
+        return self.name
+
+
+class LimitChoicesToTestModelRelation(models.Model):
+    model = models.ForeignKey(
+        LimitChoicesToTestModel,
+        models.CASCADE,
+        related_name='details',
+    )
+    is_allowed = models.BooleanField(default=False)
+    is_single = models.BooleanField(default=False)
+
+
+class LimitChoicesToTestModelForm(models.Model):
+    joined_choice = models.ForeignKey(
+        LimitChoicesToTestModel,
+        models.CASCADE,
+        limit_choices_to=(
+            models.Q(details__is_allowed=True) |
+            models.Q(name__startswith='Direct')
+        ),
+        related_name='+',
+    )
+    single_joined_choice = models.ForeignKey(
+        LimitChoicesToTestModel,
+        models.CASCADE,
+        limit_choices_to=models.Q(details__is_single=True),
+        related_name='+',
+    )
+    non_joined_choice = models.ForeignKey(
+        LimitChoicesToTestModel,
+        models.CASCADE,
+        limit_choices_to=models.Q(is_active=True),
+        related_name='+',
+    )
+
+
 # Model for #13776
 class Student(models.Model):
     character = models.ForeignKey(Character, models.CASCADE)

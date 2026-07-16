@@ -23,7 +23,9 @@ from .models import (
     CustomFieldForExclusionModel, DateTimePost, DerivedBook, DerivedPost,
     Document, ExplicitPK, FilePathModel, FlexibleDatePost, Homepage,
     ImprovedArticle, ImprovedArticleWithParentLink, Inventory,
-    NullableUniqueCharFieldModel, Person, Photo, Post, Price, Product,
+    LimitChoicesToTestModel, LimitChoicesToTestModelForm,
+    LimitChoicesToTestModelRelation, NullableUniqueCharFieldModel, Person,
+    Photo, Post, Price, Product,
     Publication, PublicationDefaults, StrictAssignmentAll,
     StrictAssignmentFieldSpecific, Student, StumpJoke, TextFile, Triple,
     Writer, WriterProfile, test_images,
@@ -2766,6 +2768,12 @@ class StumpJokeForm(forms.ModelForm):
         fields = '__all__'
 
 
+class LimitChoicesToTestForm(forms.ModelForm):
+    class Meta:
+        model = LimitChoicesToTestModelForm
+        fields = '__all__'
+
+
 class CustomFieldWithQuerysetButNoLimitChoicesTo(forms.Field):
     queryset = 42
 
@@ -2798,64 +2806,98 @@ class LimitChoicesToTests(TestCase):
             username='marley',
             last_action=datetime.datetime.today() - datetime.timedelta(days=1),
         )
+        cls.multiply_matched = LimitChoicesToTestModel.objects.create(
+            name='Shared label',
+        )
+        cls.other_eligible = LimitChoicesToTestModel.objects.create(
+            name='Shared label',
+        )
+        cls.directly_eligible = LimitChoicesToTestModel.objects.create(
+            name='Direct match',
+            is_active=False,
+        )
+        cls.ineligible = LimitChoicesToTestModel.objects.create(
+            name='Excluded',
+            is_active=False,
+        )
+        LimitChoicesToTestModelRelation.objects.create(
+            model=cls.multiply_matched,
+            is_allowed=True,
+            is_single=True,
+        )
+        LimitChoicesToTestModelRelation.objects.create(
+            model=cls.multiply_matched,
+            is_allowed=True,
+        )
+        LimitChoicesToTestModelRelation.objects.create(
+            model=cls.other_eligible,
+            is_allowed=True,
+            is_single=True,
+        )
+        LimitChoicesToTestModelRelation.objects.create(
+            model=cls.ineligible,
+        )
+
+    def _choice_values(self, field_name):
+        field = LimitChoicesToTestForm()[field_name].field
+        return [choice[0].value for choice in field.choices if choice[0]]
 
     def test_fkchoice_001_joined_q_multiple_matches_yield_one_choice(self):
         """
         GUID: FKCHOICE-001. A related instance with multiple joined Q matches
         occurs once in the generated ForeignKey field choices.
         """
-        # ARRANGE one related instance and multiple joined rows satisfying one
-        # Q-based limit_choices_to condition for that same instance.
-        # ACT by generating the ForeignKey form field and evaluating choices.
-        # ASSERT the instance identity occurs exactly once.
-        self.assertTrue(True)
+        values = self._choice_values('joined_choice')
+        self.assertEqual(values.count(self.multiply_matched.pk), 1)
 
     def test_fkchoice_002_joined_q_dedup_preserves_condition_membership(self):
         """
         GUID: FKCHOICE-002. Deduplicating joined Q matches preserves the
         condition's predicates, composition, joins, and eligible membership.
         """
-        # ARRANGE joined data spanning every logical branch of the supplied Q:
-        # at least one eligible instance per satisfied branch and instances
-        # failing the composed condition.
-        # ACT by evaluating the generated field's related-instance identities.
-        # ASSERT all and only condition-eligible identities remain, regardless
-        # of how many joined rows satisfy a branch.
-        self.assertTrue(True)
+        self.assertEqual(
+            self._choice_values('joined_choice'),
+            [
+                self.multiply_matched.pk,
+                self.other_eligible.pk,
+                self.directly_eligible.pk,
+            ],
+        )
 
     def test_fkchoice_003_same_label_distinct_instances_remain_choices(self):
         """
         GUID: FKCHOICE-003. Distinct eligible related instances with the same
         rendered label remain separate ForeignKey choices.
         """
-        # ARRANGE two eligible related instances whose string labels are equal.
-        # ACT by evaluating the generated ForeignKey choices.
-        # ASSERT both distinct model identities remain as separate choices.
-        self.assertTrue(True)
+        field = LimitChoicesToTestForm()['joined_choice'].field
+        shared_choices = [
+            (choice[0].value, choice[1])
+            for choice in field.choices
+            if choice[0] and choice[1] == 'Shared label'
+        ]
+        self.assertEqual(shared_choices, [
+            (self.multiply_matched.pk, 'Shared label'),
+            (self.other_eligible.pk, 'Shared label'),
+        ])
 
     def test_fkchoice_004_unaffected_conditions_retain_choice_behavior(self):
         """
         GUID: FKCHOICE-004. Non-joined conditions and joined conditions without
         duplicate matches retain their observable choice behavior.
         """
-        # ARRANGE a non-joined limit, a joined limit with one match per eligible
-        # identity, and their expected pre-dedup choice order and membership.
-        # ACT by evaluating each generated ForeignKey field.
-        # ASSERT each result has the same identities, multiplicity, and order as
-        # its existing observable behavior.
-        self.assertTrue(True)
+        expected = [self.multiply_matched.pk, self.other_eligible.pk]
+        self.assertEqual(self._choice_values('non_joined_choice'), expected)
+        self.assertEqual(self._choice_values('single_joined_choice'), expected)
 
     def test_fkchoice_005_duplicate_joined_match_regression_membership(self):
         """
         GUID: FKCHOICE-005. Regression data with duplicate joined matches
         yields one choice while other eligible and ineligible membership holds.
         """
-        # ARRANGE a multiply matched eligible instance, another eligible
-        # instance, and an ineligible instance under one joined Q condition.
-        # ACT by generating the ForeignKey field and collecting choice values.
-        # ASSERT the multiply matched identity occurs once, the other eligible
-        # identity occurs once, and the ineligible identity does not occur.
-        self.assertTrue(True)
+        values = self._choice_values('joined_choice')
+        self.assertEqual(values.count(self.multiply_matched.pk), 1)
+        self.assertIn(self.other_eligible.pk, values)
+        self.assertNotIn(self.ineligible.pk, values)
 
     def test_limit_choices_to_callable_for_fk_rel(self):
         """
