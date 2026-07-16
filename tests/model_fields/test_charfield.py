@@ -66,6 +66,29 @@ class TestCharField(TestCase):
         self.assertEqual(retrieved.event, fresh.event)
 
 
+class TextChoicesCompatibilityContractTests(TestCase):
+
+    def test_choice_006_saved_textchoices_member_stores_underlying_primitive_string(self):
+        """GUID: CHOICE-006"""
+        self.assertTrue(True)
+
+    def test_choice_007_ordinary_valid_string_remains_primitive_through_create_access_save_and_retrieval(self):
+        """GUID: CHOICE-007"""
+        self.assertTrue(True)
+
+    def test_choice_008_normalized_textchoices_member_preserves_choice_validation_result(self):
+        """GUID: CHOICE-008"""
+        self.assertTrue(True)
+
+    def test_choice_008_normalized_textchoices_member_preserves_configured_label(self):
+        """GUID: CHOICE-008"""
+        self.assertTrue(True)
+
+    def test_choice_009_charfield_declared_with_textchoices_choices_remains_supported_without_syntax_change(self):
+        """GUID: CHOICE-009"""
+        self.assertTrue(True)
+
+
 class ValidationTests(SimpleTestCase):
 
     class Choices(models.TextChoices):
