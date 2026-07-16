@@ -22,6 +22,8 @@ from django.db.migrations.writer import MigrationWriter
 
 
 class Command(BaseCommand):
+    # DJUC-002 architecture: BaseCommand.execute() owns the system-check
+    # boundary. Migration planning and writing remain downstream in handle().
     help = "Creates new migration(s) for apps."
 
     def add_arguments(self, parser):
