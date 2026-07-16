@@ -348,28 +348,63 @@ class OrderingTests(TestCase):
         ORM-001: A traversed ordering path ending in a foreign-key attname
         resolves to its stored column without expanding related ordering.
         """
-        self.assertTrue(True)
+        queryset = Reference.objects.order_by('article__author_id')
+        order_by = queryset.query.get_compiler(queryset.db).get_order_by()
+
+        self.assertEqual(len(order_by), 1)
+        expression = order_by[0][0]
+        self.assertEqual(expression.expression.target.column, 'author_id')
+        self.assertEqual(expression.expression.alias, Article._meta.db_table)
+
+    def _create_references_with_shuffled_authors(self):
+        authors = list(Author.objects.order_by('pk'))
+        articles = [self.a1, self.a2, self.a3, self.a4]
+        for article, author in zip(articles, reversed(authors)):
+            article.author = author
+            article.save(update_fields={'author'})
+            Reference.objects.create(article=article)
+        return articles
 
     def test_orm_002_traversed_fk_attname_orders_stored_value_ascending(self):
         """
         ORM-002: order_by("record__root_id") preserves ascending direction for
         the stored root_id value despite OneModel's descending ordering.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+
+        self.assertSequenceEqual(
+            list(Reference.objects.order_by('article__author_id').values_list('article', flat=True)),
+            [article.pk for article in reversed(articles)],
+        )
 
     def test_orm_003_traversed_fk_attname_orders_stored_value_descending(self):
         """
         ORM-003: order_by("-record__root_id") preserves descending direction
         for the stored root_id value despite OneModel's descending ordering.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+
+        self.assertSequenceEqual(
+            list(Reference.objects.order_by('-article__author_id').values_list('article', flat=True)),
+            [article.pk for article in articles],
+        )
 
     def test_orm_004_traversed_fk_attname_directions_add_no_self_join(self):
         """
         ORM-004: Ordering by either direction of record__root_id adds no join
         to the self-related OneModel row solely for ordering.
         """
-        self.assertTrue(True)
+        for direction in ('article__author_id', '-article__author_id'):
+            with self.subTest(direction=direction):
+                queryset = Reference.objects.order_by(direction)
+                queryset.query.get_compiler(queryset.db).get_order_by()
+                active_tables = [
+                    join.table_name
+                    for alias, join in queryset.query.alias_map.items()
+                    if queryset.query.alias_refcount[alias]
+                ]
+                self.assertEqual(active_tables.count(Article._meta.db_table), 1)
+                self.assertNotIn(Author._meta.db_table, active_tables)
 
     def test_order_by_f_expression(self):
         self.assertQuerysetEqual(
