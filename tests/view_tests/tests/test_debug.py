@@ -1251,19 +1251,63 @@ class ExceptionReporterFilterTests(ExceptionReportTestMixin, LoggingCaptureMixin
 
     def test_safe_001_get_safe_settings_masks_directly_nested_sensitive_value(self):
         """GUID: SAFE-001 - A directly nested sensitive value is masked."""
-        pass
+        reporter_filter = SafeExceptionReporterFilter()
+        with self.settings(FOOBAR={'nested': {'PASSWORD': 'secret'}}):
+            safe_settings = reporter_filter.get_safe_settings()
+        self.assertEqual(
+            safe_settings['FOOBAR'],
+            {'nested': {'PASSWORD': reporter_filter.cleansed_substitute}},
+        )
 
     def test_safe_001_get_safe_settings_masks_sensitive_values_in_lists_and_tuples(self):
         """GUID: SAFE-001 - Sensitive values in lists and tuples are masked."""
-        pass
+        reporter_filter = SafeExceptionReporterFilter()
+        setting = [
+            {'API_KEY': 'list secret'},
+            ({'AUTH_TOKEN': 'tuple secret'},),
+        ]
+        with self.settings(FOOBAR=setting):
+            safe_settings = reporter_filter.get_safe_settings()
+        self.assertEqual(
+            safe_settings['FOOBAR'],
+            [
+                {'API_KEY': reporter_filter.cleansed_substitute},
+                ({'AUTH_TOKEN': reporter_filter.cleansed_substitute},),
+            ],
+        )
 
     def test_safe_002_get_safe_settings_masks_sensitive_values_at_every_mixed_nesting_depth(self):
         """GUID: SAFE-002 - Finite mixed containers are traversed at every depth."""
-        pass
+        reporter_filter = SafeExceptionReporterFilter()
+        setting = {
+            'level_1': [
+                ({'level_4': [{'SECRET_KEY': 'deep secret'}]},),
+                {'PASSWORD': 'near secret'},
+            ],
+        }
+        with self.settings(FOOBAR=setting):
+            safe_settings = reporter_filter.get_safe_settings()
+        self.assertEqual(
+            safe_settings['FOOBAR'],
+            {
+                'level_1': [
+                    ({
+                        'level_4': [{
+                            'SECRET_KEY': reporter_filter.cleansed_substitute,
+                        }],
+                    },),
+                    {'PASSWORD': reporter_filter.cleansed_substitute},
+                ],
+            },
+        )
 
     def test_safe_006_get_safe_settings_treats_nested_strings_and_dictionary_keys_as_scalars(self):
         """GUID: SAFE-006 - Nested strings and dictionary keys remain scalar."""
-        pass
+        reporter_filter = SafeExceptionReporterFilter()
+        setting = {'ordinary_name': ['API_KEY', {'visible_name': 'TOKEN'}]}
+        with self.settings(FOOBAR=setting):
+            safe_settings = reporter_filter.get_safe_settings()
+        self.assertEqual(safe_settings['FOOBAR'], setting)
 
     def test_request_meta_filtering(self):
         request = self.rf.get('/', HTTP_SECRET_HEADER='super_secret')
