@@ -1930,6 +1930,27 @@ class Query(BaseExpression):
         # Column names from JOINs to check collisions with aliases (GEV-001,
         # GEV-002). Filters, joins, and expression correlation are unchanged
         # (GEV-003 through GEV-008).
+        #
+        # REGRESSION CONTAINMENT (GEV-009):
+        # INPUT: accept the existing selected fields, annotation expressions,
+        # correlated Subquery expressions, aggregate expressions, and alias
+        # grouping policy without changing their construction or resolution.
+        # FOR EACH selected annotation:
+        #     derive its grouping columns through the existing expression
+        #     protocol and preserve their order in the accumulated group.
+        #     IF its alias collides with a joined-table column:
+        #         suppress only that alias reference and derive the grouping
+        #         columns from the unchanged annotation expression.
+        #     ELSE:
+        #         preserve the existing alias-enabled grouping path.
+        # OUTPUT: retain the selected annotation and values() projection,
+        # correlated Subquery semantics, aggregate calculation, and complete
+        # grouping tuple expected by the existing relevant test coverage.
+        # FAILURE PATH: if an annotation implements the legacy grouping
+        # protocol, preserve its compatibility warning and fallback call;
+        # propagate all other expression-resolution failures unchanged.
+        # INVARIANT: the collision correction introduces no branch for queries
+        # whose selected annotation alias does not collide (GEV-009).
         if allow_aliases:
             column_names = set()
             seen_models = set()
