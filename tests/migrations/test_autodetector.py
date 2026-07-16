@@ -1502,13 +1502,26 @@ class AutodetectorTests(TestCase):
         overlapping-constraint and equivalent-declaration cases remain
         compatible when the existing migration coverage is executed.
         """
-        # ARCHITECTURE CONTRACT DJIX-009 (migration compatibility):
-        # AutodetectorTests owns this regression boundary. Its established test
-        # methods are the verification ports for operation shape, ordering,
-        # dependencies, state, and errors; this locus must not wrap or replace
-        # them. The production seam is confined to moved-index classification,
-        # while all unclaimed declarations retain their existing emitter paths.
-        pass
+        before = self.book.clone()
+        before.options['index_together'] = {('author', 'title')}
+        after = before.clone()
+        added_index = models.Index(
+            fields=['title'],
+            name='book_title_unrelated_idx',
+        )
+        after.options['indexes'] = [added_index]
+
+        changes = self.get_changes(
+            [self.author_empty, before],
+            [self.author_empty, after],
+        )
+
+        self.assertNumberMigrations(changes, 'otherapp', 1)
+        self.assertOperationTypes(changes, 'otherapp', 0, ['AddIndex'])
+        self.assertOperationAttributes(
+            changes, 'otherapp', 0, 0,
+            model_name='book', index=added_index,
+        )
 
     def test_index_together_to_non_equivalent_index_uses_schema_operations(self):
         before = self.book.clone()

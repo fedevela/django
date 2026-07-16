@@ -2308,13 +2308,33 @@ class SchemaTests(TransactionTestCase):
         overlapping-constraint and equivalent-declaration cases remain
         compatible when the existing schema-editor coverage is executed.
         """
-        # ARCHITECTURE CONTRACT DJIX-009 (schema-editor compatibility):
-        # SchemaTests owns this regression boundary. Existing backend-aware test
-        # methods remain the verification ports for SQL actions, introspection,
-        # schema objects, and errors. No declaration-equivalence adapter belongs
-        # in a schema editor: it receives only the unchanged migration-operation
-        # contract from the autodetector boundary.
-        pass
+        model = AuthorWithIndexedNameAndBirthday
+        with connection.schema_editor() as editor:
+            editor.create_model(model)
+        index = Index(fields=['birthday'], name='djix_009_birthday_idx')
+
+        with connection.schema_editor() as editor:
+            editor.add_index(model, index)
+
+        constraints = self.get_constraints(model._meta.db_table)
+        self.assertIn(index.name, constraints)
+        self.assertEqual(constraints[index.name]['columns'], ['birthday'])
+        self.assertTrue(any(
+            details['index'] and
+            details['columns'] == ['name', 'birthday']
+            for details in constraints.values()
+        ))
+
+        with connection.schema_editor() as editor:
+            editor.remove_index(model, index)
+
+        constraints = self.get_constraints(model._meta.db_table)
+        self.assertNotIn(index.name, constraints)
+        self.assertTrue(any(
+            details['index'] and
+            details['columns'] == ['name', 'birthday']
+            for details in constraints.values()
+        ))
 
     def test_index_together(self):
         """
