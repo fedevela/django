@@ -141,6 +141,28 @@ class ValidationError(Exception):
             self.params = params
             self.error_list = [self]
 
+    # ValidationError equality procedure (VEQ-001, VEQ-002, VEQ-009,
+    # VEQ-010, VEQ-011, VEQ-012):
+    #
+    # def __eq__(self, other):
+    #     IF self and other are the same object:                         # VEQ-009
+    #         RETURN true
+    #     IF other is not a ValidationError:                             # VEQ-011
+    #         RETURN false without inspecting ValidationError content
+    #     READ each error's message, code, and parameters without
+    #         formatting, normalizing, reordering, or assigning them     # VEQ-012
+    #     COMPARE the two messages, the two codes, and the two parameter
+    #         values using the same component-wise relation              # VEQ-001
+    #     IF every corresponding component is equivalent:
+    #         RETURN true
+    #     RETURN false when any corresponding component differs          # VEQ-002
+    #
+    # The component relation and branches are independent of operand
+    # position, so reversing two ValidationError operands preserves the
+    # result.                                                             # VEQ-010
+    # Neither the successful nor failure path modifies either error or
+    # any validation content reachable from it.                           # VEQ-012
+
     @property
     def message_dict(self):
         # Trigger an AttributeError if this ValidationError
