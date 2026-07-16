@@ -53,8 +53,8 @@ only the terminal destination selected after common generation and escaping.
 ### `tests/template_tests/syntax_tests/test_static.py`
 
 `ScriptNameStaticMediaContractTests` is the verification boundary. The four
-placeholders traced to `SCRIPTURL-003` and `SCRIPTURL-004` should be replaced
-during implementation with behavioral assertions covering:
+tests traced to `SCRIPTURL-003` and `SCRIPTURL-004` use rendered template syntax
+to provide behavioral assertions covering:
 
 1. direct rendering under a non-empty script prefix, including exactly-once
    placement before the configured static path;

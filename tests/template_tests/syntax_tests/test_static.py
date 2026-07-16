@@ -74,22 +74,54 @@ class StaticTagTests(SimpleTestCase):
 
 
 class ScriptNameStaticMediaContractTests(SimpleTestCase):
+    libraries = {'static': 'django.templatetags.static'}
 
+    @setup({'t': '{% load static %}{% static "admin/base.css" %}'})
+    @override_settings(INSTALLED_APPS=[], STATIC_URL='/static/')
     def test_scripturl_003_nonempty_script_name_direct_static_tag_renders_prefix_once_before_configured_static_path(self):
         """GUID: SCRIPTURL-003."""
-        self.assertTrue(True)
+        with override_script_prefix('/application/'):
+            output = self.engine.render_to_string('t')
+        self.assertEqual(output, '/application/static/admin/base.css')
+        self.assertEqual(output.count('/application/'), 1)
 
+    @setup({'t': '{% load static %}{% static "admin/base.css" %}'})
+    @override_settings(INSTALLED_APPS=[], STATIC_URL='/static/')
     def test_scripturl_003_absent_or_empty_script_name_direct_static_tag_preserves_existing_output(self):
         """GUID: SCRIPTURL-003."""
-        self.assertTrue(True)
+        for script_name in ('', '/'):
+            with self.subTest(script_name=script_name):
+                with override_script_prefix(script_name):
+                    output = self.engine.render_to_string('t')
+                self.assertEqual(output, '/static/admin/base.css')
 
+    @setup({
+        't': '{% load static %}'
+             '{% static "admin/base.css" as assigned_url %}'
+             '{% static "admin/base.css" %}|{{ assigned_url }}',
+    })
+    @override_settings(INSTALLED_APPS=[], STATIC_URL='/static/')
     def test_scripturl_004_assignment_static_tag_stores_same_url_as_direct_render_for_same_asset_and_request(self):
         """GUID: SCRIPTURL-004."""
-        self.assertTrue(True)
+        with override_script_prefix('/application/'):
+            output = self.engine.render_to_string('t')
+        direct_url, assigned_url = output.split('|')
+        self.assertEqual(direct_url, '/application/static/admin/base.css')
+        self.assertEqual(assigned_url, direct_url)
 
+    @setup({
+        't': '{% load static %}'
+             '{% static "admin/base.css" as assigned_url %}'
+             '{{ assigned_url }}',
+    })
+    @override_settings(INSTALLED_APPS=[], STATIC_URL='/static/')
     def test_scripturl_004_absent_or_empty_script_name_assignment_static_tag_preserves_existing_output(self):
         """GUID: SCRIPTURL-004."""
-        self.assertTrue(True)
+        for script_name in ('', '/'):
+            with self.subTest(script_name=script_name):
+                with override_script_prefix(script_name):
+                    output = self.engine.render_to_string('t')
+                self.assertEqual(output, '/static/admin/base.css')
 
     @override_settings(INSTALLED_APPS=[], STATIC_URL='/static/')
     def test_scripturl_001_nonempty_script_name_prefixes_relative_static_url_once_and_keeps_asset_path(self):
