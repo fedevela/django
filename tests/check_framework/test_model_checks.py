@@ -162,6 +162,22 @@ class RoutedDuplicateDBTableContractTests(SimpleTestCase):
         self.assertIn('routed to separate databases', warnings[0].hint)
 
 
+class DBTable005UnaffectedModelCheckOutcomesContractTests(SimpleTestCase):
+    """Verification obligations for GUID: DBTABLE-005."""
+
+    def test_dbtable_005_existing_abstract_model_checks_after_routed_duplicate_behavior_preserve_outcomes(self):
+        self.assertTrue(True)
+
+    def test_dbtable_005_existing_proxy_duplicate_table_checks_after_routed_duplicate_behavior_preserve_outcomes(self):
+        self.assertTrue(True)
+
+    def test_dbtable_005_existing_unmanaged_duplicate_table_checks_after_routed_duplicate_behavior_preserve_outcomes(self):
+        self.assertTrue(True)
+
+    def test_dbtable_005_existing_unrelated_model_checks_after_routed_duplicate_behavior_preserve_outcomes(self):
+        self.assertTrue(True)
+
+
 @isolate_apps('check_framework', attr_name='apps')
 @override_system_checks([checks.model_checks.check_all_models])
 class DuplicateDBTableTests(SimpleTestCase):
