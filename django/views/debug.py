@@ -85,6 +85,32 @@ class SafeExceptionReporterFilter:
         Cleanse an individual setting key/value of sensitive content. If the
         value is a dictionary, recursively cleanse the keys in that dictionary.
         """
+        # Pseudocode obligations for get_safe_settings() nested cleansing:
+        #
+        # GUID: SAFE-001 - Mask sensitive dictionary entries at any reached level.
+        # INPUT a dictionary-entry key and its associated value.
+        # IF the existing sensitive-key matcher accepts the key:
+        #     RETURN the established cleansed substitute without traversing value.
+        # OTHERWISE, delegate value handling to the container decisions below.
+        #
+        # GUID: SAFE-002 - Traverse every finite combination of supported containers.
+        # IF value is a dictionary:
+        #     FOR EACH key/value entry, recursively cleanse that entry.
+        #     RETURN a dictionary containing the cleansed entries.
+        # ELSE IF value is a list:
+        #     FOR EACH item, recursively cleanse it with no sensitive entry key.
+        #     RETURN a list containing the cleansed items in their original order.
+        # ELSE IF value is a tuple:
+        #     FOR EACH item, recursively cleanse it with no sensitive entry key.
+        #     RETURN a tuple containing the cleansed items in their original order.
+        # Each recursive handoff repeats sensitive-key matching before descending.
+        #
+        # GUID: SAFE-006 - Preserve scalar traversal boundaries.
+        # ELSE value is unsupported or scalar, including every string:
+        #     RETURN value unchanged; do not iterate it.
+        # Treat every dictionary key only as the key input to matching; never traverse it.
+        # IF sensitive-key matching rejects a non-regexable key with TypeError:
+        #     RETURN its associated value unchanged and do not descend.
         try:
             if self.hidden_settings.search(key):
                 cleansed = self.cleansed_substitute
