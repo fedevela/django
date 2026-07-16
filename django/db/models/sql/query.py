@@ -203,6 +203,12 @@ class Query(BaseExpression):
         self.annotation_select_mask = None
         self._annotation_select_cache = None
 
+        # UNIONDIST-005, UNIONDIST-006, UNIONDIST-008 architecture:
+        # Query owns the combined operand graph and its outer ordering;
+        # operand Query objects retain their select/annotation shape, while
+        # combinator and combinator_all carry the SQL set-semantics contract.
+        # QuerySet constructs this state and SQLCompiler consumes it, keeping
+        # combined-query preservation independent of distinct state.
         # Set combination attributes
         self.combinator = None
         self.combinator_all = False
