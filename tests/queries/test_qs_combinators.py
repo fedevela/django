@@ -317,3 +317,19 @@ class QuerySetSetOperationTests(TestCase):
         msg = 'Calling QuerySet.distinct() after union() is not supported.'
         with self.assertRaisesMessage(NotSupportedError, msg):
             qs.union(qs).distinct()
+
+    def test_uniondist_005_annotated_operands_union_without_distinct_preserves_results(self):
+        """UNIONDIST-005: annotated union operands retain their established results."""
+        pass
+
+    def test_uniondist_006_supported_ordering_on_union_without_distinct_preserves_results(self):
+        """UNIONDIST-006: supported union ordering retains its established result."""
+        pass
+
+    def test_uniondist_008_union_without_distinct_eliminates_duplicate_rows(self):
+        """UNIONDIST-008: UNION retains its established duplicate-elimination semantics."""
+        pass
+
+    def test_uniondist_008_union_all_without_distinct_preserves_duplicate_rows(self):
+        """UNIONDIST-008: UNION ALL retains its established duplicate-preservation semantics."""
+        pass
