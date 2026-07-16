@@ -1580,6 +1580,24 @@ class Model(metaclass=ModelBase):
             ]
 
         else:
+            # Pseudocode contract: preserve unique_together field-reference
+            # validation outcomes.
+            #
+            # GUID: DJUC-008
+            # GUID: DJUC-009
+            # INPUT: each structurally valid unique_together field-name group.
+            # FOR EACH field-name group, delegate to local-field validation:
+            #     FOR EACH referenced field name:
+            #         IF the name does not resolve to a forward model field:
+            #             APPEND models.E012 identifying the nonexistent field.
+            #         ELSE IF the resolved field is a ManyToManyField:
+            #             APPEND its established models.E013 error.
+            #         ELSE IF another established local-field rule rejects it:
+            #             APPEND that rule's established error outcome.
+            #         ELSE:
+            #             APPEND no error for the valid field reference.
+            # RETURN all accumulated errors; an entirely valid declaration
+            # returns an empty error collection.
             errors = []
             for fields in cls._meta.unique_together:
                 errors.extend(cls._check_local_fields(fields, "unique_together"))
