@@ -2781,6 +2781,12 @@ class StumpJokeWithCustomFieldForm(forms.ModelForm):
 class LimitChoicesToTests(TestCase):
     """
     Tests the functionality of ``limit_choices_to``.
+
+    FKCHOICE-001 / FKCHOICE-002 / FKCHOICE-003 / FKCHOICE-004 / FKCHOICE-005
+    architecture seam: joined-match fixtures and identity-based choice
+    observations belong in this existing integration-test owner. They exercise
+    generated ModelForm fields through the public test surface, without test
+    hooks in the runtime helper or a separate deduplication test API.
     """
     @classmethod
     def setUpTestData(cls):

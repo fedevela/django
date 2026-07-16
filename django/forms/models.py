@@ -95,9 +95,23 @@ def model_to_dict(instance, fields=None, exclude=None):
     return data
 
 
+# FKCHOICE-001 / FKCHOICE-002 / FKCHOICE-003 / FKCHOICE-004
+# Architecture contract:
+# * This form-layer helper owns the queryset transformation. Model fields keep
+#   supplying limit_choices_to unchanged, and ModelChoiceField keeps owning
+#   instance-valued choices and labels.
+# * The transformation boundary is the existing queryset plus the resolved
+#   limit_choices_to expression. Its result is assigned back through the
+#   existing formfield.queryset seam; no new field or public API is required.
+# * Dependency direction is forms.models -> ORM queryset/query-expression
+#   primitives. The ORM and model-field layers must not depend on forms or
+#   acquire form-choice-specific deduplication behavior.
+# * Both integration paths remain the existing callers below: fields_for_model
+#   for direct field generation and BaseModelForm.__init__ for per-form callable
+#   evaluation. Identity correlation belongs inside this helper so both paths
+#   receive identical joined-condition semantics.
 def apply_limit_choices_to_to_formfield(formfield):
     """Apply limit_choices_to to the formfield's queryset if needed."""
-    # FKCHOICE-001 / FKCHOICE-002 / FKCHOICE-003 / FKCHOICE-004
     # Logic obligation: filter choices by related-instance eligibility without
     # allowing the number of joined matches to determine choice multiplicity.
     #
