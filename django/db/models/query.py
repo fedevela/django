@@ -1148,6 +1148,12 @@ class QuerySet:
         """
         Return a new QuerySet instance that will select only distinct results.
         """
+        # UNIONDIST-007 architecture:
+        # This method owns the non-combined distinct() entry point and the
+        # boundary with _not_support_combined_queries(). Past that boundary,
+        # state flows QuerySet -> Query.add_distinct_fields() -> SQLCompiler
+        # -> backend distinct_sql(); those existing owners retain ordinary
+        # distinct semantics, field resolution, and backend limitations.
         # UNIONDIST-007 pseudocode:
         # INPUT the current queryset state and zero or more requested field
         # names.
