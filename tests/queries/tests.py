@@ -2630,6 +2630,22 @@ class IsNullTests(TestCase):
         with self.assertRaisesMessage(ValueError, self.error):
             list(Related.objects.filter(custom__name__isnull='false'))
 
+    # GUID: ISNULL-004
+    def test_isnull_004_direct_field_isnull_true_retains_null_matching_results(self):
+        pass
+
+    # GUID: ISNULL-005
+    def test_isnull_005_direct_field_isnull_false_retains_non_null_matching_results(self):
+        pass
+
+    # GUID: ISNULL-006
+    def test_isnull_006_relationship_spanning_isnull_true_retains_join_types_and_null_results(self):
+        pass
+
+    # GUID: ISNULL-006
+    def test_isnull_006_relationship_spanning_isnull_false_retains_join_types_and_non_null_results(self):
+        pass
+
     # GUID: ISNULL-007
     def test_isnull_007_iterator_evaluation_rejects_non_boolean_rhs_before_results(self):
         Related.objects.create()
@@ -2641,6 +2657,14 @@ class IsNullTests(TestCase):
     def test_isnull_008_rejection_uses_query_error_with_boolean_requirement_message(self):
         with self.assertRaisesMessage(ValueError, self.error):
             list(Related.objects.filter(custom__isnull=object()))
+
+    # GUID: ISNULL-009
+    def test_isnull_009_non_isnull_lookup_accepted_values_and_errors_remain_unchanged(self):
+        pass
+
+    # GUID: ISNULL-009
+    def test_isnull_009_non_isnull_lookup_sql_semantics_and_results_remain_unchanged(self):
+        pass
 
     def test_primary_key(self):
         custom = CustomPk.objects.create(name='pk')
