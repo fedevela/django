@@ -1927,6 +1927,18 @@ class Query(BaseExpression):
         primary key, and the query would be equivalent, the optimization
         will be made automatically.
         """
+        # Architecture contract (GEV-001 through GEV-008): this method owns
+        # the boundary between the query's participating-table namespace and
+        # expression-level grouping. ``alias_map`` and model field metadata
+        # supply that namespace as read-only inputs; annotation expressions
+        # remain responsible for materializing grouping columns through
+        # ``get_group_by_cols(alias=...)``. A colliding alias crosses that
+        # existing contract as ``None``, keeping the resolution internal to
+        # SQL query construction and introducing no public API (GEV-001,
+        # GEV-002, GEV-008). ``where``, join objects, and the Subquery tree are
+        # outside this ownership boundary and must pass through unchanged
+        # (GEV-003 through GEV-007). ``SQLCompiler`` consumes the resulting
+        # ``self.group_by`` tuple downstream; it does not own collision policy.
         # Pseudocode contract for ambiguous annotation grouping:
         #
         # INPUT (GEV-005, GEV-006, GEV-007): retain the query's existing
