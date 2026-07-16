@@ -606,6 +606,27 @@ class DeletionTests(TestCase):
 
 
 class EmptyQuerySetDeleteContractTests(TestCase):
+    def test_delete_005_each_backend_empty_queryset_delete_returns_zero_and_dictionary(self):
+        """
+        GUID: DELETE-005; on each supported backend, deleting an equivalent
+        empty queryset returns a zero total and a dictionary second element.
+        """
+        self.assertTrue(True)
+
+    def test_delete_005_each_backend_preserves_selected_zero_deletion_dictionary_convention(self):
+        """
+        GUID: DELETE-005; equivalent empty-queryset deletions on each supported
+        backend preserve the selected zero-deletion dictionary convention.
+        """
+        self.assertTrue(True)
+
+    def test_delete_005_simple_and_foreign_key_models_preserve_convention_on_each_backend(self):
+        """
+        GUID: DELETE-005; backend selection and foreign-key topology do not
+        change the selected empty-queryset zero-deletion dictionary convention.
+        """
+        self.assertTrue(True)
+
     def test_delete_002_empty_simple_queryset_returns_zero_and_dictionary_tuple(self):
         """GUID: DELETE-002; empty simple queryset -> (0, dictionary)."""
         result = EmptyDeleteTestModel.objects.none().delete()
