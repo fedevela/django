@@ -3,8 +3,10 @@ from datetime import datetime
 from math import ceil
 from operator import attrgetter
 
+from django.contrib.auth.models import User
 from django.core.exceptions import FieldError
 from django.db import connection
+from django.db.models import Max
 from django.db.models.expressions import Exists, OuterRef
 from django.db.models.functions import Substr
 from django.test import TestCase, skipUnlessDBFeature
@@ -960,34 +962,86 @@ class LookupTests(TestCase):
 
 class GroupedAggregateExactLookupContractTests(TestCase):
 
+    def grouped_max_ids(self):
+        return User.objects.filter(email__isnull=True).values(
+            'email',
+        ).annotate(
+            m=Max('id'),
+        ).values('m')
+
+    def exact_lookup_rhs(self):
+        queryset = User.objects.filter(id=self.grouped_max_ids()[:1])
+        sql = str(queryset.query)
+        return queryset.query.where.children[0].rhs, sql
+
+    def assert_grouped_by_email(self, query):
+        self.assertEqual(len(query.group_by), 1)
+        self.assertEqual(query.group_by[0].target.name, 'email')
+
+    def assert_max_id_annotation(self, query):
+        annotation = query.annotation_select['m']
+        self.assertIsInstance(annotation, Max)
+        self.assertEqual(annotation.source_expressions[0].target.name, 'id')
+
+    def assert_email_isnull_filter(self, query):
+        condition = query.where.children[0]
+        self.assertEqual(condition.lookup_name, 'isnull')
+        self.assertEqual(condition.lhs.target.name, 'email')
+        self.assertIs(condition.rhs, True)
+
     def test_django_11797_001_exact_lookup_preserves_group_by_email_not_id(self):
         """DJANGO-11797-001: Exact lookup preserves GROUP BY email, not id."""
-        self.assertTrue(True)
+        query, sql = self.exact_lookup_rhs()
+        self.assert_grouped_by_email(query)
+        self.assertIn('GROUP BY', sql)
 
     def test_django_11797_002_exact_lookup_selects_projected_max_id_not_pk(self):
         """DJANGO-11797-002: The subquery selects projected Max('id'), not pk."""
-        self.assertTrue(True)
+        query, sql = self.exact_lookup_rhs()
+        self.assert_max_id_annotation(query)
+        self.assertIn('MAX(', sql)
 
     def test_django_11797_003_exact_lookup_subquery_remains_single_column(self):
         """DJANGO-11797-003: The exact-lookup subquery remains single-column."""
-        self.assertTrue(True)
+        query, _ = self.exact_lookup_rhs()
+        selected = len(query.select) + len(query.annotation_select)
+        self.assertEqual(selected, 1)
 
     def test_django_11797_004_filter_subquery_preserves_email_isnull(self):
         """DJANGO-11797-004: Conversion preserves email__isnull=True."""
-        self.assertTrue(True)
+        query, sql = self.exact_lookup_rhs()
+        self.assert_email_isnull_filter(query)
+        self.assertIn(' IS NULL', sql)
 
     def test_django_11797_005_filter_subquery_preserves_max_id_expression(self):
         """DJANGO-11797-005: Conversion preserves the Max('id') expression."""
-        self.assertTrue(True)
+        query, _ = self.exact_lookup_rhs()
+        self.assert_max_id_annotation(query)
 
     def test_django_11797_006_exact_lookup_preserves_limit_one(self):
         """DJANGO-11797-006: Embedding the sliced queryset preserves LIMIT 1."""
-        self.assertTrue(True)
+        query, sql = self.exact_lookup_rhs()
+        self.assertTrue(query.has_limit_one())
+        self.assertIn('LIMIT 1', sql)
 
     def test_django_11797_007_standalone_selects_max_id_and_groups_by_email(self):
         """DJANGO-11797-007: Standalone SQL selects Max('id') by email."""
-        self.assertTrue(True)
+        query = self.grouped_max_ids().query
+        sql = str(query)
+        self.assert_max_id_annotation(query)
+        self.assert_grouped_by_email(query)
+        self.assert_email_isnull_filter(query)
+        self.assertIn('MAX(', sql)
+        self.assertIn('GROUP BY', sql)
 
     def test_django_11797_008_slice_preserves_query_and_adds_limit_one(self):
         """DJANGO-11797-008: Slicing preserves semantics and adds LIMIT 1."""
-        self.assertTrue(True)
+        query = self.grouped_max_ids()[:1].query
+        sql = str(query)
+        self.assert_max_id_annotation(query)
+        self.assert_grouped_by_email(query)
+        self.assert_email_isnull_filter(query)
+        self.assertTrue(query.has_limit_one())
+        self.assertIn('MAX(', sql)
+        self.assertIn('GROUP BY', sql)
+        self.assertIn('LIMIT 1', sql)

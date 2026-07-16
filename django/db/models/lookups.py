@@ -259,33 +259,12 @@ class Exact(FieldGetDbPrepValueMixin, BuiltinLookup):
     lookup_name = 'exact'
 
     def process_rhs(self, compiler, connection):
-        # Exact-subquery logic obligations:
-        # DJANGO-11797-001: retain GROUP BY email rather than grouping by id.
-        # DJANGO-11797-002: retain projected m=Max('id') rather than selecting pk.
-        # DJANGO-11797-003: hand off that projection as exactly one SQL column.
-        # DJANGO-11797-004: retain the email__isnull=True WHERE predicate.
-        # DJANGO-11797-005: retain the registered Max('id') expression unchanged.
-        # DJANGO-11797-006: retain the one-row bound through SQL compilation.
-        # INPUT: an RHS query limited to one row and explicitly projected to
-        # the single annotation m=Max('id'), with email__isnull=True in WHERE
-        # and email in GROUP BY.
-        # IF the RHS is not limited to one row, take the existing invalid-RHS
-        # error path.
-        # ELSE IF the RHS already has an explicit one-column projection,
-        # preserve that projection and all established WHERE, annotation,
-        # GROUP BY, and limit state; in particular, do not replace m with the
-        # model primary key or replace GROUP BY email with GROUP BY id.
-        # ELSE (there is no explicit projection), install the model primary
-        # key as the exact lookup's single fallback column without disturbing
-        # the RHS filter or one-row limit.
-        # OUTPUT: a valid single-column scalar subquery whose explicit query
-        # semantics survive the handoff to SQL compilation.
         from django.db.models.sql.query import Query
         if isinstance(self.rhs, Query):
             if self.rhs.has_limit_one():
-                # The subquery must select only the pk.
-                self.rhs.clear_select_clause()
-                self.rhs.add_fields(['pk'])
+                if not self.rhs.has_select_fields:
+                    self.rhs.clear_select_clause()
+                    self.rhs.add_fields(['pk'])
             else:
                 raise ValueError(
                     'The QuerySet value for an exact lookup must be limited to '
