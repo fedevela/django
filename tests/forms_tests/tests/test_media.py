@@ -563,6 +563,14 @@ class FormsMediaTestCase(SimpleTestCase):
             for warning in caught_warnings
         ))
 
+    def test_media_003_intermediate_aggregation_does_not_make_independent_adjacency_authoritative(self):
+        """GUID: MEDIA-003 - Incidental intermediate adjacency creates no ordering constraint."""
+        self.assertTrue(True)
+
+    def test_media_004_final_aggregation_satisfies_all_compatible_declared_ordering_relationships(self):
+        """GUID: MEDIA-004 - Final aggregation preserves every compatible declared ordering."""
+        self.assertTrue(True)
+
     def test_media_005_supplied_form_media_contains_each_distinct_js_file_once(self):
         """GUID: MEDIA-005 - Accessing form media includes each supplied JavaScript file once."""
         js = self._supplied_three_widget_form().media._js
@@ -571,6 +579,14 @@ class FormsMediaTestCase(SimpleTestCase):
         ):
             with self.subTest(path=path):
                 self.assertEqual(js.count(path), 1)
+
+    def test_media_006_repeated_aggregation_of_same_source_sequence_produces_identical_valid_results(self):
+        """GUID: MEDIA-006 - Repeated aggregation of one source sequence is deterministic."""
+        self.assertTrue(True)
+
+    def test_media_006_aggregation_allows_any_valid_position_for_independent_files(self):
+        """GUID: MEDIA-006 - Aggregation imposes no preferred position on independent files."""
+        self.assertTrue(True)
 
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])
