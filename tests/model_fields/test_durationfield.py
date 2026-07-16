@@ -66,35 +66,6 @@ class TestSerialization(SimpleTestCase):
 
 
 class TestValidation(SimpleTestCase):
-
-    def test_DUR_001_invalid_value_message_reports_corrected_expected_format(self):
-        """GUID: DUR-001 - invalid message reports [DD] [[HH:]MM:]ss[.uuuuuu]."""
-        self.assertTrue(True)
-
-    def test_DUR_002_repository_expectations_omit_obsolete_duration_format(self):
-        """GUID: DUR-002 - no definition or expectation retains [DD] [HH:[MM:]]ss[.uuuuuu]."""
-        self.assertTrue(True)
-
-    def test_DUR_006_corrected_message_preserves_translation_and_validation(self):
-        """GUID: DUR-006 - correction preserves translation and validation delivery."""
-        self.assertTrue(True)
-
-    def test_DUR_007_validation_test_asserts_corrected_expected_format(self):
-        """GUID: DUR-007 - validation test expects [DD] [[HH:]MM:]ss[.uuuuuu]."""
-        self.assertTrue(True)
-
-    # Pseudocode — GUID: DUR-007 (verifies DUR-001, DUR-002, DUR-006)
-    # ARRANGE a DurationField and an input rejected by existing duration parsing.
-    # ACT by cleaning the input and CAPTURE the existing ValidationError.
-    # ASSERT the error retains the "invalid" code and interpolates the input.
-    # ASSERT the rendered message reports "[DD] [[HH:]MM:]ss[.uuuuuu]".
-    # FAIL if the rendered message contains the superseded expected-format text
-    # or bypasses the existing translation or validation-message mechanisms.
-    # Architecture — GUID: DUR-001, DUR-002, DUR-006, DUR-007
-    # This existing validation test is the integration-contract owner: exercise
-    # DurationField.clean(), observe the ValidationError raised by to_python(),
-    # and assert the rendered default "invalid" message. No parser-level or
-    # form-field seam is required for this message-only correction.
     def test_invalid_string(self):
         field = models.DurationField()
         with self.assertRaises(exceptions.ValidationError) as cm:
@@ -103,7 +74,7 @@ class TestValidation(SimpleTestCase):
         self.assertEqual(
             cm.exception.message % cm.exception.params,
             "'not a datetime' value has an invalid format. "
-            "It must be in [DD] [HH:[MM:]]ss[.uuuuuu] format."
+            "It must be in [DD] [[HH:]MM:]ss[.uuuuuu] format."
         )
 
 
