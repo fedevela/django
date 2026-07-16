@@ -140,39 +140,58 @@ class TestIterModulesAndFiles(SimpleTestCase):
         fake_main = types.ModuleType('__main__')
         self.assertEqual(autoreload.iter_modules_and_files((fake_main,), frozenset()), frozenset())
 
-    # Pseudocode — deterministic regression coverage (STAT-001, STAT-002,
-    # STAT-003, STAT-004, STAT-005, STAT-006):
-    # ARRANGE one ordinary candidate and one failing candidate.
-    # PATCH Path.resolve so the failing candidate raises
-    # ValueError("embedded null byte") and ordinary candidates resolve normally.
-    # INVOKE iter_modules_and_files with both candidates.
-    # VERIFY no ValueError escapes, the failing candidate is absent, every
-    # successful candidate remains present, and each returned value is a Path.
-    # INVOKE the same discovery flow with ordinary candidates only.
-    # VERIFY its watched-file collection retains the established result.
+    def discover_with_unresolvable_path(self):
+        valid_path = self.temporary_file('valid.py')
+        valid_path.touch()
+        failing_path = self.temporary_file('embedded-null.py')
+        valid_path_resolved = valid_path.resolve()
+        original_resolve = Path.resolve
+
+        def resolve(path, *args, **kwargs):
+            if path == failing_path:
+                raise ValueError('embedded null byte')
+            return original_resolve(path, *args, **kwargs)
+
+        self.clear_autoreload_caches()
+        with mock.patch.object(Path, 'resolve', autospec=True, side_effect=resolve) as mocked_resolve:
+            result = autoreload.iter_modules_and_files(
+                (), frozenset((failing_path, valid_path)),
+            )
+        return result, valid_path_resolved, failing_path, mocked_resolve
+
     def test_stat_001_value_error_during_candidate_resolution_is_suppressed(self):
         """STAT-001: A candidate resolution ValueError isn't propagated."""
-        self.assertTrue(True)
+        result, _, _, _ = self.discover_with_unresolvable_path()
+        self.assertIsInstance(result, frozenset)
 
     def test_stat_002_candidate_raising_value_error_is_excluded(self):
         """STAT-002: A candidate raising ValueError is excluded."""
-        self.assertTrue(True)
+        result, _, failing_path, _ = self.discover_with_unresolvable_path()
+        self.assertNotIn(failing_path, result)
 
     def test_stat_003_valid_candidates_survive_another_resolution_failure(self):
         """STAT-003: Resolved candidates survive another candidate's failure."""
-        self.assertTrue(True)
+        result, valid_path, _, _ = self.discover_with_unresolvable_path()
+        self.assertIn(valid_path, result)
 
     def test_stat_004_successfully_resolved_files_remain_path_instances(self):
         """STAT-004: Successfully resolved files remain pathlib.Path instances."""
-        self.assertTrue(True)
+        result, _, _, _ = self.discover_with_unresolvable_path()
+        self.assertTrue(all(isinstance(path, Path) for path in result))
 
     def test_stat_005_embedded_null_value_error_is_simulated_deterministically(self):
         """STAT-005: Path.resolve() deterministically raises an embedded-null ValueError."""
-        self.assertTrue(True)
+        _, _, failing_path, mocked_resolve = self.discover_with_unresolvable_path()
+        self.assertIn(mock.call(failing_path, strict=True), mocked_resolve.call_args_list)
 
     def test_stat_006_ordinary_resolvable_paths_remain_unchanged(self):
         """STAT-006: Ordinary resolvable paths retain existing behavior."""
-        self.assertTrue(True)
+        filename = self.temporary_file('ordinary.py')
+        filename.touch()
+        self.assertEqual(
+            autoreload.iter_modules_and_files((), frozenset((filename,))),
+            frozenset((filename.resolve(),)),
+        )
 
 
 class TestCommonRoots(SimpleTestCase):

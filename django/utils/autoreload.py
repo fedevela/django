@@ -110,9 +110,8 @@ def _resolve_path(filename):
 
     This private seam owns candidate-to-Path conversion and resolution for
     STAT-001, STAT-002, and STAT-004. Candidate-resolution failures selected
-    by module-discovery policy are represented by None here; the implementation
-    phase must add ValueError to that policy. This boundary is also where
-    automated coverage patches Path.resolve() for STAT-005.
+    by module-discovery policy are represented by None here. This boundary is
+    also where automated coverage patches Path.resolve() for STAT-005.
 
     The caller owns aggregation, so it can retain other successful candidates
     (STAT-003) without changing its frozen collection contract (STAT-006).
@@ -120,9 +119,9 @@ def _resolve_path(filename):
     path = Path(filename)
     try:
         return path.resolve(strict=True).absolute()
-    except FileNotFoundError:
-        # The module could have been removed, don't fail loudly if this is the
-        # case.
+    except (FileNotFoundError, ValueError):
+        # The module could have been removed or its path may be unresolvable.
+        # Don't fail loudly in either case.
         return None
 
 
