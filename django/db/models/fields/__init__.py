@@ -764,6 +764,19 @@ class Field(RegisterLookupMixin):
             if not getattr(cls, self.attname, None):
                 setattr(cls, self.attname, self.descriptor_class(self))
         if self.choices is not None:
+            # PSEUDOCODE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-005]:
+            #   INPUT the choice field currently being contributed and its
+            #   destination model class.
+            #   DERIVE the generated get_<field>_display method name.
+            #   IF the destination class explicitly defines that method:
+            #       PRESERVE the explicit model-level override.
+            #   ELSE:
+            #       INSTALL a display method bound to this contributed field,
+            #       replacing any method merely inherited from an abstract
+            #       parent so child-only, relabeled, and retained values all
+            #       consult the child's effective choices.
+            #   FOR a field without an abstract-inheritance override, retain
+            #   the same generated-method binding and resolution path.
             if not hasattr(cls, 'get_%s_display' % self.name):
                 setattr(
                     cls,

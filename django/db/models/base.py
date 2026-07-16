@@ -944,6 +944,17 @@ class Model(metaclass=ModelBase):
     delete.alters_data = True
 
     def _get_FIELD_display(self, field):
+        # PSEUDOCODE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-004,
+        # DJANGO-005]:
+        #   INPUT the instance and the effective field bound by the generated
+        #   get_<field>_display method.
+        #   READ the stored value from the effective field's attribute name.
+        #   FLATTEN the effective field's choices and map hashable values to
+        #   their configured labels.
+        #   IF the stored value is present in that map:
+        #       RETURN its effective-field label, coerced from a lazy string.
+        #   ELSE:
+        #       RETURN the stored value unchanged.
         value = getattr(self, field.attname)
         choices_dict = dict(make_hashable(field.flatchoices))
         # force_str() to coerce lazy strings.

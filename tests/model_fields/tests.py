@@ -199,6 +199,21 @@ class GetFieldDisplayTests(SimpleTestCase):
 
 class AbstractInheritedChoiceFieldDisplayContractTests(SimpleTestCase):
 
+    # PSEUDOCODE [DJANGO-006]:
+    #   DEFINE an abstract parent with a choice field containing retained and
+    #   relabeled candidate values.
+    #   DEFINE a child that overrides the same-named field with effective
+    #   choices containing the retained value, a replacement label for the
+    #   parent value, and a child-only value.
+    #   FOR each configured child value required by DJANGO-001 through
+    #   DJANGO-003:
+    #       BUILD a child instance, invoke get_<field>_display, and VERIFY the
+    #       label comes from the child's effective field.
+    #   BUILD a child instance with an unmatched stored value and VERIFY that
+    #   get_<field>_display returns that value unchanged [DJANGO-004].
+    #   DEFINE a model whose choice field is not overridden; VERIFY configured
+    #   and unmatched values retain their existing outcomes [DJANGO-005].
+
     def test_django_001_child_only_value_uses_child_effective_field_label(self):
         """GUID: DJANGO-001"""
         self.assertTrue(True)
