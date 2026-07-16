@@ -16,10 +16,6 @@ class StaticFilesHandlerMixin:
     """
     Common methods used by WSGI and ASGI handlers.
     """
-    # Architecture contract (GUID: ASGI-STATIC-007): this mixin owns the
-    # protocol-independent synchronous static-file boundary (path translation,
-    # lookup, serving, and Http404 conversion). Protocol handlers may select
-    # this boundary, but must not redefine its response behavior.
     # May be used to differentiate between handler types (e.g. in a
     # request_finished signal)
     handles_files = True
@@ -33,15 +29,6 @@ class StaticFilesHandlerMixin:
         utils.check_settings()
         return settings.STATIC_URL
 
-    # Pseudocode contract (GUID: ASGI-STATIC-007):
-    # INPUT: a synchronous request path and the configured static base URL.
-    # IF the path isn't within that base URL, preserve the caller's existing
-    # non-static handoff; otherwise remove the base URL, translate the remainder
-    # to a filesystem path, and perform the established static-file lookup.
-    # IF lookup and serving succeed, return the existing synchronous file
-    # response unchanged.
-    # IF serving raises Http404, translate it through response_for_exception()
-    # and return the established synchronous not-found response.
     def _should_handle(self, path):
         """
         Check if the path should be handled. Ignore the path if:
@@ -67,28 +54,23 @@ class StaticFilesHandlerMixin:
         except Http404 as e:
             return response_for_exception(request, e)
 
+    async def get_response_async(self, request):
+        try:
+            return await sync_to_async(self.serve)(request)
+        except Http404 as e:
+            return await sync_to_async(response_for_exception)(request, e)
+
 
 class StaticFilesHandler(StaticFilesHandlerMixin, WSGIHandler):
     """
     WSGI middleware that intercepts calls to the static files directory, as
     defined by the STATIC_URL setting, and serves those files.
     """
-    # Architecture contract (GUID: ASGI-STATIC-008): this adapter owns only the
-    # WSGI routing seam. Non-static requests depend on the injected application;
-    # static requests depend on WSGIHandler and the shared synchronous boundary.
     def __init__(self, application):
         self.application = application
         self.base_url = urlparse(self.get_base_url())
         super().__init__()
 
-    # Pseudocode contract (GUID: ASGI-STATIC-008):
-    # INPUT: the WSGI environ and start_response callback.
-    # DERIVE the request path using the existing WSGI path normalization.
-    # IF the path isn't static, call the wrapped WSGI application with the
-    # original inputs and return its iterable unchanged.
-    # OTHERWISE enter the existing WSGI handler flow so static lookup produces
-    # the established status, headers, body iterable, and not-found response.
-    # OUTPUT: exactly the response contract selected by the existing branch.
     def __call__(self, environ, start_response):
         if not self._should_handle(get_path_info(environ)):
             return self.application(environ, start_response)
@@ -100,24 +82,9 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
     ASGI application which wraps another and intercepts requests for static
     files, passing them off to Django's static file serving.
     """
-    # Architecture contract (GUID: ASGI-STATIC-001, ASGI-STATIC-004):
-    # * ASGIHandler owns the HTTP request/response lifecycle and enters this
-    #   subclass through the get_response_async() override seam.
-    # * This wrapper owns static response acquisition; its dependency points
-    #   through an async adapter to StaticFilesHandlerMixin.get_response(), not
-    #   to BaseHandler._middleware_chain, which this wrapper doesn't initialize.
-    # * This wrapper owns static/non-static scope selection. The non-static
-    #   branch depends only on the injected application and returns its result;
-    #   the wrapped application has no dependency on this static-files handler.
     def __init__(self, application):
         self.application = application
         self.base_url = urlparse(self.get_base_url())
-
-    # Preserve the synchronous static response contract while adapting response
-    # acquisition to ASGI (GUID: ASGI-STATIC-002, ASGI-STATIC-003,
-    # ASGI-STATIC-005).
-    async def get_response_async(self, request):
-        return await sync_to_async(self.get_response)(request)
 
     async def __call__(self, scope, receive, send):
         if scope['type'] == 'http' and self._should_handle(scope['path']):
