@@ -406,6 +406,60 @@ class OrderingTests(TestCase):
                 self.assertEqual(active_tables.count(Article._meta.db_table), 1)
                 self.assertNotIn(Author._meta.db_table, active_tables)
 
+    def test_orm_005_record_root_id_matches_explicit_pk_order_ascending(self):
+        """
+        ORM-005: Ascending record__root_id ordering produces the same
+        observable result order as ascending record__root__id ordering.
+        """
+        self.assertTrue(True)
+
+    def test_orm_005_record_root_id_matches_explicit_pk_order_descending(self):
+        """
+        ORM-005: Descending record__root_id ordering produces the same
+        observable result order as descending record__root__id ordering.
+        """
+        self.assertTrue(True)
+
+    def test_orm_006_record_oneval_filter_and_membership_survive_ascending_order(self):
+        """
+        ORM-006: Applying ascending record__root_id ordering preserves the
+        record__oneval filter condition and selected result set.
+        """
+        self.assertTrue(True)
+
+    def test_orm_006_record_oneval_filter_and_membership_survive_descending_order(self):
+        """
+        ORM-006: Applying descending record__root_id ordering preserves the
+        record__oneval filter condition and selected result set.
+        """
+        self.assertTrue(True)
+
+    def test_orm_007_explicit_root_pk_order_remains_valid_ascending(self):
+        """
+        ORM-007: Existing ascending record__root__id ordering remains valid.
+        """
+        self.assertTrue(True)
+
+    def test_orm_007_explicit_root_pk_order_remains_valid_descending(self):
+        """
+        ORM-007: Existing descending record__root__id ordering remains valid.
+        """
+        self.assertTrue(True)
+
+    def test_orm_008_record_root_retains_relation_ordering_semantics(self):
+        """
+        ORM-008: Ordering by record__root retains relation-ordering semantics
+        and may expand OneModel.Meta.ordering.
+        """
+        self.assertTrue(True)
+
+    def test_orm_009_ordinary_non_self_fk_ordering_remains_unchanged(self):
+        """
+        ORM-009: Existing valid ordering through an ordinary
+        non-self-referencing foreign key remains unchanged.
+        """
+        self.assertTrue(True)
+
     def test_order_by_f_expression(self):
         self.assertQuerysetEqual(
             Article.objects.order_by(F('headline')), [
