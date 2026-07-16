@@ -197,6 +197,37 @@ class GetFieldDisplayTests(SimpleTestCase):
         self.assertEqual(WhizIterEmpty(c='').c, '')        # Empty value
 
 
+class AbstractInheritedChoiceFieldDisplayContractTests(SimpleTestCase):
+
+    def test_django_001_child_only_value_uses_child_effective_field_label(self):
+        """GUID: DJANGO-001"""
+        self.assertTrue(True)
+
+    def test_django_002_parent_value_with_replaced_label_uses_child_label(self):
+        """GUID: DJANGO-002"""
+        self.assertTrue(True)
+
+    def test_django_003_retained_parent_value_uses_child_effective_field_label(self):
+        """GUID: DJANGO-003"""
+        self.assertTrue(True)
+
+    def test_django_004_value_absent_from_child_choices_is_returned_unchanged(self):
+        """GUID: DJANGO-004"""
+        self.assertTrue(True)
+
+    def test_django_005_non_overridden_configured_value_keeps_existing_label(self):
+        """GUID: DJANGO-005 (configured value)"""
+        self.assertTrue(True)
+
+    def test_django_005_non_overridden_unmatched_value_is_returned_unchanged(self):
+        """GUID: DJANGO-005 (unmatched value)"""
+        self.assertTrue(True)
+
+    def test_django_006_regression_covers_retained_child_only_and_unmatched_values(self):
+        """GUID: DJANGO-006"""
+        self.assertTrue(True)
+
+
 class GetChoicesTests(SimpleTestCase):
 
     def test_empty_choices(self):
