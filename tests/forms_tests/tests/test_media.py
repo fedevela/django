@@ -565,11 +565,46 @@ class FormsMediaTestCase(SimpleTestCase):
 
     def test_media_003_intermediate_aggregation_does_not_make_independent_adjacency_authoritative(self):
         """GUID: MEDIA-003 - Incidental intermediate adjacency creates no ordering constraint."""
-        self.assertTrue(True)
+        media = Media(js=['a.js', 'b.js']) + Media(js=['c.js'])
+        intermediate = media._js
+        c_index = intermediate.index('c.js')
+        if c_index:
+            later_declaration = ['c.js', intermediate[c_index - 1]]
+        else:
+            later_declaration = [intermediate[1], 'c.js']
+
+        # Reverse an adjacency involving independent c.js. If the resolved
+        # intermediate order were treated as a declaration, this would create
+        # a cycle. Only the original source lists are authoritative.
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')
+            merged = media + Media(js=later_declaration)
+            js = merged._js
+        self.assertFalse(any(
+            issubclass(warning.category, MediaOrderConflictWarning)
+            for warning in caught_warnings
+        ))
+        self.assertLess(js.index('a.js'), js.index('b.js'))
+        self.assertLess(
+            js.index(later_declaration[0]),
+            js.index(later_declaration[1]),
+        )
 
     def test_media_004_final_aggregation_satisfies_all_compatible_declared_ordering_relationships(self):
         """GUID: MEDIA-004 - Final aggregation preserves every compatible declared ordering."""
-        self.assertTrue(True)
+        media = (
+            Media(js=['a.js', 'b.js']) +
+            Media(js=['c.js', 'a.js']) +
+            Media(js=['b.js', 'd.js'])
+        )
+        js = media._js
+        for before, after in (
+            ('a.js', 'b.js'),
+            ('c.js', 'a.js'),
+            ('b.js', 'd.js'),
+        ):
+            with self.subTest(before=before, after=after):
+                self.assertLess(js.index(before), js.index(after))
 
     def test_media_005_supplied_form_media_contains_each_distinct_js_file_once(self):
         """GUID: MEDIA-005 - Accessing form media includes each supplied JavaScript file once."""
@@ -582,11 +617,32 @@ class FormsMediaTestCase(SimpleTestCase):
 
     def test_media_006_repeated_aggregation_of_same_source_sequence_produces_identical_valid_results(self):
         """GUID: MEDIA-006 - Repeated aggregation of one source sequence is deterministic."""
-        self.assertTrue(True)
+        def aggregate():
+            return (
+                Media(js=['a.js', 'b.js']) +
+                Media(js=['c.js']) +
+                Media(js=['b.js', 'd.js'])
+            )._js
+
+        results = [aggregate() for _ in range(5)]
+        self.assertTrue(all(result == results[0] for result in results[1:]))
+        for result in results:
+            self.assertLess(result.index('a.js'), result.index('b.js'))
+            self.assertLess(result.index('b.js'), result.index('d.js'))
 
     def test_media_006_aggregation_allows_any_valid_position_for_independent_files(self):
         """GUID: MEDIA-006 - Aggregation imposes no preferred position on independent files."""
-        self.assertTrue(True)
+        results = (
+            (Media(js=['a.js', 'b.js']) + Media(js=['c.js']))._js,
+            (Media(js=['c.js']) + Media(js=['a.js', 'b.js']))._js,
+        )
+        for result in results:
+            self.assertEqual(set(result), {'a.js', 'b.js', 'c.js'})
+            self.assertLess(result.index('a.js'), result.index('b.js'))
+        self.assertNotEqual(
+            results[0].index('c.js'),
+            results[1].index('c.js'),
+        )
 
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])
