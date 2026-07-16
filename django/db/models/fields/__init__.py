@@ -610,25 +610,6 @@ class Field(RegisterLookupMixin):
         Validate value and raise ValidationError if necessary. Subclasses
         should override this to provide validation logic.
         """
-        # Pseudocode -- GUID: CHOICE-008, CHOICE-009
-        #
-        # PRESERVE_CONFIGURED_CHOICE_CONTRACT(value):
-        #     INPUT the choices collection supplied by an unchanged field
-        #     declaration using TextChoices.choices or IntegerChoices.choices.
-        #     RETAIN every configured (primitive_value, label) pair without
-        #     requiring different declaration syntax or rewriting either item.
-        #     IF value is a supported member of the configured choice enum:
-        #         normalized_value = the member's underlying primitive value.
-        #     ELSE:
-        #         normalized_value = value.
-        #     Evaluate choice membership for value and normalized_value against
-        #     the same retained primitive keys, including keys inside optgroups.
-        #     REQUIRE both membership results to be identical.
-        #     IF normalized_value matches a configured key:
-        #         RETURN the same configured label associated with that key.
-        #     ELSE:
-        #         FOLLOW the existing invalid-choice failure path with the
-        #         existing error code, message, and rejected-value parameter.
         if not self.editable:
             # Skip validation for non-editable fields.
             return
@@ -985,21 +966,8 @@ class BooleanField(Field):
         return super().formfield(**{**defaults, **kwargs})
 
 
-# Architecture boundary -- GUID: CHOICE-006, CHOICE-007, CHOICE-008, CHOICE-009
-#
-# CharField owns text-choice normalization through its existing conversion and
-# database-preparation contracts. This private descriptor is only the model
-# assignment seam: it may depend on CharField.to_python(), while the generic
-# DeferredAttribute and Model construction boundaries remain choice-agnostic.
-# Ordinary strings bypass enum normalization (CHOICE-007), and get_prep_value()
-# remains the persistence handoff that guarantees primitive storage
-# (CHOICE-006). Field.validate(), contribute_to_class(), and the configured
-# choices collection remain the shared validation, label, and declaration
-# boundaries; normalization must not mutate or replace them (CHOICE-008,
-# CHOICE-009).
 class _CharFieldDeferredAttribute(DeferredAttribute):
     def __set__(self, instance, value):
-        # GUID: CHOICE-001, CHOICE-002, CHOICE-004
         if self.field.choices is not None and isinstance(value, TextChoices):
             value = self.field.to_python(value)
         instance.__dict__[self.field.attname] = value
@@ -1048,27 +1016,6 @@ class CharField(Field):
     def get_internal_type(self):
         return "CharField"
 
-    # Pseudocode -- GUID: CHOICE-006, CHOICE-007
-    #
-    # NORMALIZE_TEXT_CHOICE_LIFECYCLE_VALUE(value):
-    #     IF this CharField has configured choices AND value is a TextChoices
-    #     member:
-    #         candidate = the member's underlying primitive string.
-    #     ELSE:
-    #         candidate = value, preserving an ordinary valid string unchanged.
-    #     Route candidate through the existing CharField conversion contract.
-    #     IF conversion or choice validation fails:
-    #         PROPAGATE the existing lifecycle-appropriate failure.
-    #     normalized_value = the resulting primitive string (or allowed None).
-    #     RETURN normalized_value; never return the TextChoices member object.
-    #
-    # ASSIGNMENT/ACCESS TRANSITION (CHOICE-007):
-    #     Normalize before the model attribute stores an enum member; store and
-    #     expose the primitive string. For an ordinary valid string, preserve its
-    #     exact primitive type and value.
-    # PERSISTENCE TRANSITION (CHOICE-006, CHOICE-007):
-    #     Normalize the value handed to database preparation, then persist only
-    #     the primitive string. On retrieval, expose that same primitive string.
     def to_python(self, value):
         if self.choices is not None and isinstance(value, TextChoices):
             return value.value
@@ -1762,18 +1709,8 @@ class FloatField(Field):
         })
 
 
-# Architecture boundary -- GUID: CHOICE-006, CHOICE-007, CHOICE-008, CHOICE-009
-#
-# IntegerField mirrors the text-field ownership boundary: its private
-# descriptor delegates supported enum assignments to IntegerField.to_python(),
-# and its existing preparation path owns the primitive database handoff.
-# Ordinary integers retain the generic assignment path (CHOICE-007). Validation,
-# configured labels, and IntegerChoices.choices declaration syntax stay owned by
-# the unchanged shared Field boundaries above (CHOICE-008, CHOICE-009); neither
-# this descriptor nor IntegerField may rewrite the choices collection.
 class _IntegerFieldDeferredAttribute(DeferredAttribute):
     def __set__(self, instance, value):
-        # GUID: CHOICE-003, CHOICE-005
         if self.field.choices is not None and isinstance(value, IntegerChoices):
             value = self.field.to_python(value)
         instance.__dict__[self.field.attname] = value
@@ -1848,29 +1785,6 @@ class IntegerField(Field):
     def get_internal_type(self):
         return "IntegerField"
 
-    # Pseudocode -- GUID: CHOICE-006, CHOICE-007
-    #
-    # NORMALIZE_INTEGER_CHOICE_LIFECYCLE_VALUE(value):
-    #     IF this IntegerField has configured choices AND value is an
-    #     IntegerChoices member:
-    #         candidate = the member's underlying primitive integer.
-    #     ELSE:
-    #         candidate = value, preserving an ordinary valid integer unchanged.
-    #     IF candidate is None:
-    #         RETURN None through the existing nullable-value path.
-    #     ATTEMPT the existing IntegerField integer conversion.
-    #     IF conversion or choice validation fails:
-    #         PROPAGATE the existing lifecycle-appropriate failure.
-    #     normalized_value = the resulting primitive integer.
-    #     RETURN normalized_value; never return the IntegerChoices member object.
-    #
-    # ASSIGNMENT/ACCESS TRANSITION (CHOICE-007):
-    #     Normalize before the model attribute stores an enum member; store and
-    #     expose the primitive integer. For an ordinary valid integer, preserve
-    #     its exact primitive type and value.
-    # PERSISTENCE TRANSITION (CHOICE-006, CHOICE-007):
-    #     Normalize the value handed to database preparation, then persist only
-    #     the primitive integer. On retrieval, expose that same primitive integer.
     def to_python(self, value):
         if self.choices is not None and isinstance(value, IntegerChoices):
             return value.value
