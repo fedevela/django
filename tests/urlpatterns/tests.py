@@ -70,15 +70,22 @@ class SimplifiedURLTests(SimpleTestCase):
 
     def test_url_001_absent_optional_named_format_is_omitted_and_preserves_html_default(self):
         """GUID: URL-001."""
-        self.assertTrue(True)
+        match = resolve('/module/')
+        self.assertNotIn('format', match.kwargs)
+        response = match.func(None, *match.args, **match.kwargs)
+        self.assertEqual(response.content, b'html')
 
     def test_url_002_absent_optional_named_format_dispatches_without_args_or_type_error(self):
         """GUID: URL-002."""
-        self.assertTrue(True)
+        match = resolve('/module/')
+        self.assertEqual(match.args, ())
+        response = self.client.get('/module/')
+        self.assertEqual(response.status_code, 200)
 
     def test_url_004_absent_optional_named_format_nested_captures_are_not_positional_args(self):
         """GUID: URL-004 (absent-value behavior)."""
-        self.assertTrue(True)
+        match = resolve('/module/')
+        self.assertEqual(match.args, ())
 
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')
