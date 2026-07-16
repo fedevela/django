@@ -28,62 +28,80 @@ class TestDbSignatureTests(SimpleTestCase):
 class UnnamedTestDatabaseContractTests(SimpleTestCase):
     def test_sqlite_008_default_unnamed_database_creation_and_initialization_complete_successfully(self):
         """GUID: SQLITE-008; default unnamed database setup succeeds unchanged."""
-        # SQLITE-008 creation and initialization logic obligation:
-        # GIVEN the default SQLite alias has no explicit test database name,
-        # WHEN normal test-database setup runs,
-        # THEN the existing unnamed-database lifecycle reaches INITIALIZED.
-        #
-        # INPUTS:
-        # - The default alias with its existing database settings.
-        # - A missing or empty TEST.NAME and the normal setup options.
-        #
-        # PROCEDURE:
-        # 1. Preserve the original default-alias settings for final cleanup.
-        # 2. Require TEST.NAME to be unnamed; if it is explicit, fail the
-        #    precondition instead of exercising named-database behavior.
-        # 3. Invoke normal test setup for the default alias, transitioning the
-        #    lifecycle from UNCREATED to CREATED.
-        # 4. Allow the existing SQLite unnamed-name resolution, alias binding,
-        #    schema setup, cache setup, and connection initialization to run in
-        #    their established order.
-        # 5. Transition CREATED to INITIALIZED only after setup returns with an
-        #    usable default-alias connection.
-        #
-        # OUTPUT: Setup completes with the unnamed database INITIALIZED.
-        # FAILURE PATHS:
-        # - Propagate any creation, schema, cache, or connection failure as a
-        #   setup failure without substituting persistent-file behavior.
-        # - Tear down any partially created database and restore the preserved
-        #   settings on every exit path.
-        self.assertTrue(True)
+        test_connections, old_config, initialized_aliases = \
+            self.setup_unnamed_test_database()
+        try:
+            test_connection = test_connections['default']
+            self.assertEqual(initialized_aliases, ['default'])
+            self.assertIsNone(test_connection.settings_dict['TEST']['NAME'])
+            self.assertEqual(
+                test_connection.settings_dict['NAME'],
+                'file:memorydb_default?mode=memory&cache=shared',
+            )
+            self.assertIsNotNone(test_connection.connection)
+            with test_connection.cursor() as cursor:
+                self.assertIn(
+                    'sqlite008_data',
+                    test_connection.introspection.table_names(cursor),
+                )
+        finally:
+            self.teardown_unnamed_test_database(test_connections, old_config)
 
     def test_sqlite_008_initialized_unnamed_database_write_through_default_alias_succeeds(self):
         """GUID: SQLITE-008; initialized unnamed database accepts default-alias writes."""
-        # SQLITE-008 default-alias write logic obligation:
-        # GIVEN normal setup left the unnamed SQLite database INITIALIZED,
-        # WHEN a write is issued through the default alias,
-        # THEN the write completes and its state is observable through that alias.
-        #
-        # INPUTS:
-        # - The initialized default-alias connection from normal setup.
-        # - An isolated probe relation and a deterministic sentinel value.
-        #
-        # PROCEDURE:
-        # 1. Acquire a database cursor through the default alias only.
-        # 2. If the connection is not initialized, fail the setup precondition;
-        #    do not open a separately named or persistent database.
-        # 3. Create the probe relation, write the sentinel, and transition the
-        #    database state from INITIALIZED to WRITE_COMPLETED.
-        # 4. Read through the same default alias and require the sentinel to be
-        #    present before transitioning to WRITE_VERIFIED.
-        #
-        # OUTPUT: The unnamed database reaches WRITE_VERIFIED through default.
-        # FAILURE PATHS:
-        # - Surface cursor, schema, or write errors as regressions in the existing
-        #   unnamed behavior; never retry against a file-backed database.
-        # - Release the cursor and run normal database teardown on every exit,
-        #   including a failed write or readback.
-        self.assertTrue(True)
+        test_connections, old_config, _ = self.setup_unnamed_test_database()
+        try:
+            with test_connections['default'].cursor() as cursor:
+                cursor.execute(
+                    'INSERT INTO sqlite008_data (value) VALUES (%s)', [83],
+                )
+                cursor.execute('SELECT value FROM sqlite008_data')
+                self.assertEqual(cursor.fetchall(), [(83,)])
+        finally:
+            self.teardown_unnamed_test_database(test_connections, old_config)
+
+    def setup_unnamed_test_database(self):
+        database_settings = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': ':memory:',
+                'TEST': {
+                    'NAME': None,
+                    'SERIALIZE': False,
+                    'DEPENDENCIES': [],
+                },
+            },
+        }
+        test_connections = ConnectionHandler(database_settings)
+        initialized_aliases = []
+
+        def call_command(command, **options):
+            if command == 'migrate':
+                alias = options['database']
+                initialized_aliases.append(alias)
+                with test_connections[alias].cursor() as cursor:
+                    cursor.execute(
+                        'CREATE TABLE sqlite008_data (value INTEGER)'
+                    )
+
+        with mock.patch('django.test.utils.connections', test_connections), \
+                mock.patch.object(settings, 'DATABASES', database_settings), \
+                mock.patch('django.core.management.call_command', call_command):
+            old_config = setup_databases(
+                verbosity=0,
+                interactive=False,
+                parallel=1,
+                aliases={'default'},
+            )
+        return test_connections, old_config, initialized_aliases
+
+    def teardown_unnamed_test_database(self, test_connections, old_config):
+        database_settings = {
+            'default': test_connections['default'].settings_dict,
+        }
+        with mock.patch.object(settings, 'DATABASES', database_settings):
+            teardown_databases(old_config, verbosity=0, parallel=1)
+        test_connections.close_all()
 
 
 @unittest.skipUnless(connection.vendor == 'sqlite', 'SQLite tests')
