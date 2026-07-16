@@ -1021,6 +1021,13 @@ class MigrationAutodetector:
             new_index_together = new_model_state.options.get('index_together') or set()
             moved_indexes = []
             for index in add_idx:
+                # DJIX-009 containment boundary: Only the equivalent declaration
+                # shape below belongs to the moved-index reconciliation seam.
+                # Every other index remains owned by the established added and
+                # removed index emitters; constraint discovery remains outside
+                # this seam entirely. Consequently schema editors depend only on
+                # the emitted operation contract and need no declaration-move
+                # knowledge.
                 fields = tuple(index.fields)
                 if (
                     index.__class__ is models.Index and
@@ -1227,6 +1234,9 @@ class MigrationAutodetector:
             key for key, indexes in self.altered_indexes.items()
             if indexes['moved_indexes']
         }
+        # DJIX-009 dependency boundary: Models not claimed by the specialized
+        # reconciliation path continue through the pre-existing together-option
+        # emitter without an adapter, wrapper, or schema-editor branch.
         self._generate_altered_foo_together(
             operations.AlterIndexTogether,
             self.kept_model_keys - moved_model_keys,

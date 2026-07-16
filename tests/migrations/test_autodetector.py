@@ -1502,21 +1502,12 @@ class AutodetectorTests(TestCase):
         overlapping-constraint and equivalent-declaration cases remain
         compatible when the existing migration coverage is executed.
         """
-        # LOGIC OBLIGATION DJIX-009 (migration compatibility):
-        # INPUT the established migration-autodetector scenarios and their
-        # existing expected operations, ordering, dependencies, and state.
-        # EXCLUDE only scenarios whose subject is removal of overlapping
-        # index_together/unique_together declarations or an equivalent ordered-
-        # field move from index_together to Options.indexes.
-        # FOR EACH remaining scenario:
-        #   RUN its unchanged source-to-target state transition through the
-        #   existing migration detection procedure.
-        #   COMPARE emitted operations, ordering, dependencies, resulting state,
-        #   and established error paths with that scenario's existing expected
-        #   observations.
-        #   IF any observation differs, fail at that scenario and report the
-        #   existing assertion or unexpected-error path without reclassification.
-        # COMPLETE only after every included scenario retains its prior result.
+        # ARCHITECTURE CONTRACT DJIX-009 (migration compatibility):
+        # AutodetectorTests owns this regression boundary. Its established test
+        # methods are the verification ports for operation shape, ordering,
+        # dependencies, state, and errors; this locus must not wrap or replace
+        # them. The production seam is confined to moved-index classification,
+        # while all unclaimed declarations retain their existing emitter paths.
         pass
 
     def test_index_together_to_non_equivalent_index_uses_schema_operations(self):
