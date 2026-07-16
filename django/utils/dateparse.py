@@ -143,6 +143,12 @@ def parse_duration(value):
     # NORMALIZE the sign and fractional components through the existing rules.
     # RETURN the same timedelta assembled from those components, so every input
     # accepted before the message correction retains its previous parsed value.
+    # Regression flow — GUID: DUR-008
+    # RECEIVE each duration value exercised by the existing parsing coverage.
+    # ATTEMPT the same ordered format matches and component normalization above.
+    # IF a format matches, RETURN its existing timedelta value unchanged.
+    # OTHERWISE, RETURN no parsed value through the existing failure path, so
+    # callers retain their established invalid-input behavior.
     match = (
         standard_duration_re.match(value) or
         iso8601_duration_re.match(value) or

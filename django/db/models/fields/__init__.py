@@ -1589,6 +1589,19 @@ class DurationField(Field):
     # to django.utils.dateparse.parse_duration and owns translation of an
     # unsuccessful parse into this field's existing "invalid" validation
     # condition. The parser remains independent of the model-field layer.
+    # Regression flow — GUID: DUR-008
+    # RECEIVE the values exercised by existing persistence, serialization, and
+    # querying coverage without changing their accepted representations.
+    # FOR Python conversion, HAND OFF strings to the duration parser; RETURN
+    # null and timedelta inputs unchanged; PRESERVE the existing invalid path.
+    # FOR database writes and query parameters, IF the backend stores native
+    # durations, PASS the value through; OTHERWISE, CONVERT it to microseconds.
+    # FOR database reads, IF native duration storage is unavailable, APPLY the
+    # backend duration converter before returning the field value.
+    # FOR serialization, READ the value from the object; RETURN an empty string
+    # for null or the existing duration string for a timedelta.
+    # FOR form construction, HAND OFF to forms.DurationField with caller
+    # overrides intact. Any failed conversion follows its existing error path.
     empty_strings_allowed = False
     default_error_messages = {
         'invalid': _("'%(value)s' value has an invalid format. It must be in "

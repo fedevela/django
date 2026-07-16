@@ -473,11 +473,20 @@ class DurationField(Field):
     }
 
     def prepare_value(self, value):
+        # Regression flow — GUID: DUR-008
+        # IF the form value is a timedelta, RETURN its existing duration string.
+        # OTHERWISE, RETURN the value unchanged for the existing rendering path.
         if isinstance(value, datetime.timedelta):
             return duration_string(value)
         return value
 
     def to_python(self, value):
+        # Regression flow — GUID: DUR-008
+        # IF the submitted value is empty, RETURN null; IF it is already a
+        # timedelta, RETURN it unchanged. OTHERWISE, HAND OFF its string form to
+        # the duration parser. IF parsing overflows, RAISE the existing overflow
+        # error; IF no duration is parsed, RAISE the existing invalid error;
+        # OTHERWISE, RETURN the parsed timedelta.
         if value in self.empty_values:
             return None
         if isinstance(value, datetime.timedelta):
