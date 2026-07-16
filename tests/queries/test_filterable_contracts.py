@@ -8,6 +8,8 @@ from .models import FilterableModel, FilterableModelChild
 class ModelInstanceFilterabilityContractTests(TestCase):
     @classmethod
     def setUpTestData(cls):
+        # DJANGO-006 fixture boundary: false_model is the FK filter input and
+        # false_children is the expected-result source owned by this test case.
         cls.false_model = FilterableModel.objects.create(filterable=False)
         cls.true_model = FilterableModel.objects.create(filterable=True)
         cls.false_children = [
@@ -64,6 +66,9 @@ class ModelInstanceFilterabilityContractTests(TestCase):
 
     def test_django_006_filter_by_related_instance_with_filterable_false_evaluates_and_returns_expected_record(self):
         """DJANGO-006: The FK filter evaluates and returns the expected record."""
+        # Architecture seam (DJANGO-006): this method owns queryset creation
+        # through the model manager, evaluation, and comparison with the
+        # setUpTestData() result boundary above.
         # Pseudocode contract (DJANGO-006):
         # GIVEN a persisted related-model instance whose user-defined
         # `filterable` field is False, AND a persisted child record whose
