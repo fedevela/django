@@ -812,6 +812,11 @@ class MigrationAutodetector:
 
     # MIGPK-001, MIGPK-006, MIGPK-007 ownership: this is the sole field-rename
     # detection boundary and producer of renamed_fields for downstream comparison.
+    # MIGPK-007 architecture contract: renamed_fields is the internal handoff from
+    # rename detection to relation comparison. Its key is the destination field
+    # identity (app_label, model_name, new_name), and its value is the source field
+    # name. Field classes stay outside this contract; generate_altered_fields is its
+    # consumer, while RenameField.state_forwards exclusively owns state-graph updates.
     def generate_renamed_fields(self):
         """Work out renamed fields."""
         self.renamed_fields = {}
