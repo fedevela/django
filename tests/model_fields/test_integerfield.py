@@ -216,7 +216,10 @@ class IntegerChoicesLifecycleTests(TestCase):
         #   3. If its exact type is not int, fail the regression check.
         #   4. If it does not equal Number.ONE.value, fail the check.
         # OUTPUT: The fresh field exposes the underlying primitive integer.
-        pass
+        instance = IntegerChoicesModel(number=Number.ONE)
+
+        self.assertIs(type(instance.number), int)
+        self.assertEqual(instance.number, Number.ONE.value)
 
     def test_choice_010_retrieved_integerfield_created_with_integerchoices_member_has_primitive_int_type_and_value(self):
         """GUID: CHOICE-010"""
@@ -229,7 +232,11 @@ class IntegerChoicesLifecycleTests(TestCase):
         #   4. If its exact type is not int, fail the regression check.
         #   5. If it does not equal Number.ONE.value, fail the check.
         # OUTPUT: The retrieved field exposes the underlying primitive integer.
-        pass
+        created = IntegerChoicesModel.objects.create(number=Number.ONE)
+        retrieved = IntegerChoicesModel.objects.get(pk=created.pk)
+
+        self.assertIs(type(retrieved.number), int)
+        self.assertEqual(retrieved.number, Number.ONE.value)
 
 
 class IntegerChoicesCompatibilityContractTests(TestCase):

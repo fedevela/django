@@ -81,7 +81,10 @@ class TestCharField(TestCase):
         #   3. If its exact type is not str, fail the regression check.
         #   4. If it does not equal Event.CARNIVAL.value, fail the check.
         # OUTPUT: The fresh field exposes the underlying primitive text value.
-        pass
+        instance = TextChoicesModel(event=Event.CARNIVAL)
+
+        self.assertIs(type(instance.event), str)
+        self.assertEqual(instance.event, Event.CARNIVAL.value)
 
     def test_choice_010_retrieved_charfield_created_with_textchoices_member_has_primitive_str_type_and_text_value(self):
         """GUID: CHOICE-010"""
@@ -94,7 +97,11 @@ class TestCharField(TestCase):
         #   4. If its exact type is not str, fail the regression check.
         #   5. If it does not equal Event.CARNIVAL.value, fail the check.
         # OUTPUT: The retrieved field exposes the underlying primitive text.
-        pass
+        created = TextChoicesModel.objects.create(event=Event.CARNIVAL)
+        retrieved = TextChoicesModel.objects.get(pk=created.pk)
+
+        self.assertIs(type(retrieved.event), str)
+        self.assertEqual(retrieved.event, Event.CARNIVAL.value)
 
 
 class TextChoicesCompatibilityContractTests(TestCase):
