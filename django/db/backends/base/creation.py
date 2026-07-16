@@ -126,12 +126,12 @@ class BaseDatabaseCreation:
         the serialize_db_to_string() method.
         """
         # Architecture contract — GUID: SRB-001, SRB-002, SRB-003, SRB-004,
-        # SRB-005, SRB-006.
+        # SRB-005, SRB-006, SRB-007, SRB-008, SRB-009.
         # This method owns one complete-graph restoration operation. Its
         # connection owns the operation alias; serializers.deserialize() is the
         # alias-bound input port and DeserializedObject.save() is the alias-bound
         # persistence port. Neither port may select a different alias or own the
-        # operation's commit boundary (SRB-005).
+        # operation's commit boundary (SRB-005, SRB-007, SRB-008).
         #
         # transaction.atomic() is the all-or-nothing boundary around every save
         # and final integrity check for that operation (SRB-004). The connection
@@ -139,6 +139,18 @@ class BaseDatabaseCreation:
         # dependency direction is creation orchestration -> alias-bound serializer
         # and persistence ports -> connection backend; backend-specific constraint
         # mechanics remain behind BaseDatabaseWrapper's existing API.
+        #
+        # TransactionTestCase._fixture_setup() owns the serialized-rollback
+        # lifecycle trigger and passes the captured stream through this method on
+        # the selected connection. This method owns restoration of both ordinary
+        # and foreign-key-unsafe streams without distinguishing their topology
+        # (SRB-007, SRB-008).
+        #
+        # serialize_db_to_string() and serializers.sort_dependencies() retain
+        # ownership of capture ordering and natural-key dependency ordering. The
+        # stream is an opaque, ordered input at this boundary: restoration may
+        # defer database constraint validation, but must not reorder it or acquire
+        # a dependency on serializer ordering policy (SRB-009).
         # Pseudocode contract — GUID: SRB-001, SRB-002, SRB-003, SRB-004,
         # SRB-005, SRB-006.
         # SRB-004 -> test_srb_004_failure_after_object_processed_commits_no_restored_objects.
