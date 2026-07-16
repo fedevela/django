@@ -1138,14 +1138,7 @@ class QuerySet:
         """
         Return a new QuerySet instance that will select only distinct results.
         """
-        # UNIONDIST-001, UNIONDIST-002, UNIONDIST-003, UNIONDIST-004:
-        # IF this queryset has a combinator (including an annotated or ordered
-        # union), reject the operation through the combined-query guard using
-        # "distinct" as its operation name; propagate its NotSupportedError
-        # and operation-identifying message immediately, before cloning,
-        # recording field_names, constructing SQL, or evaluating the query.
-        # OTHERWISE continue with the ordinary distinct() flow below, whether
-        # field_names is empty or contains field-specific distinct targets.
+        self._not_support_combined_queries('distinct')
         assert not self.query.is_sliced, \
             "Cannot create distinct fields once a slice has been taken."
         obj = self._chain()

@@ -289,16 +289,31 @@ class QuerySetSetOperationTests(TestCase):
 
     def test_uniondist_001_parameterless_distinct_on_union_raises_unsupported_operation(self):
         """UNIONDIST-001: union().distinct() raises the unsupported-operation exception."""
-        self.assertTrue(True)
+        qs = Number.objects.all()
+        msg = 'Calling QuerySet.distinct() after union() is not supported.'
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            qs.union(qs).distinct()
 
     def test_uniondist_002_field_distinct_on_union_raises_unsupported_operation(self):
         """UNIONDIST-002: union().distinct(*fields) raises the unsupported-operation exception."""
-        self.assertTrue(True)
+        qs = Number.objects.all()
+        msg = 'Calling QuerySet.distinct() after union() is not supported.'
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            qs.union(qs).distinct('num')
 
     def test_uniondist_003_annotated_union_field_distinct_raises_when_called(self):
         """UNIONDIST-003: annotated union distinct(*fields) is rejected at call time."""
-        self.assertTrue(True)
+        qs1 = Number.objects.annotate(name=Value('first'))
+        qs2 = Number.objects.annotate(name=Value('second'))
+        union = qs1.union(qs2).order_by('name')
+        msg = 'Calling QuerySet.distinct() after union() is not supported.'
+        with self.assertNumQueries(0):
+            with self.assertRaisesMessage(NotSupportedError, msg):
+                union.distinct('name')
 
     def test_uniondist_004_union_distinct_error_identifies_unsupported_operation(self):
         """UNIONDIST-004: the union distinct() error identifies the unsupported operation."""
-        self.assertTrue(True)
+        qs = Number.objects.all()
+        msg = 'Calling QuerySet.distinct() after union() is not supported.'
+        with self.assertRaisesMessage(NotSupportedError, msg):
+            qs.union(qs).distinct()
