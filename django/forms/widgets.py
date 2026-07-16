@@ -192,6 +192,28 @@ class Media:
         try:
             return stable_topological_sort(all_items, dependency_graph)
         except CyclicDependencyError:
+            # Conflict-reporting pseudocode (GUID: MEDIA-007, MEDIA-008):
+            #
+            # report_declared_order_conflict(dependency_graph, all_items):
+            #     ENTER this path only when the graph made solely from source-
+            #         declared relationships cannot be topologically ordered
+            #         (GUID: MEDIA-007)
+            #     DO NOT treat adjacency chosen for an intermediate or final
+            #         order as a relationship; a compatible declaration graph
+            #         completes above and emits no conflict warning
+            #         (GUID: MEDIA-007)
+            #
+            #     TRACE a directed cycle through authoritative declared edges,
+            #         visiting candidate files and edges in stable first-seen
+            #         order so the selected evidence is deterministic
+            #     COLLECT the distinct files on that cycle; exclude files that
+            #         are merely upstream or downstream of the contradiction
+            #     FORMAT one warning payload that names every collected cycle
+            #         participant, including both files for A-before-B plus
+            #         B-before-A (GUID: MEDIA-008)
+            #     EMIT MediaOrderConflictWarning with that payload
+            #     RETURN the existing deterministic first-seen fallback order;
+            #         these requirements impose no complete conflict order
             warnings.warn(
                 'Detected duplicate Media files in an opposite order: {}'.format(
                     ', '.join(repr(item_list) for item_list in lists)
