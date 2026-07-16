@@ -7,6 +7,12 @@ from django.test import SimpleTestCase, TestCase
 from .models import Event, Post, TextChoicesModel
 
 
+# Architecture boundary -- GUID: CHOICE-010
+#
+# This test case owns text-choice lifecycle evidence. TextChoicesModel is the
+# fixture contract, with direct construction and ORM retrieval kept as separate
+# integration seams so fresh assignment and database materialization cannot
+# satisfy one another's regression obligation.
 class TestCharField(TestCase):
 
     def test_max_length_passed_to_formfield(self):

@@ -182,6 +182,12 @@ class PositiveIntegerFieldTests(IntegerFieldTests):
             p.save()
 
 
+# Architecture boundary -- GUID: CHOICE-010
+#
+# This test case owns integer-choice lifecycle evidence. IntegerChoicesModel is
+# the fixture contract, with direct construction and ORM retrieval kept as
+# separate integration seams so fresh assignment and database materialization
+# cannot satisfy one another's regression obligation.
 class IntegerChoicesLifecycleTests(TestCase):
 
     def test_choice_003_fresh_integerfield_initialized_with_integerchoices_member_exposes_primitive_int(self):

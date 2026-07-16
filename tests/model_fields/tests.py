@@ -103,6 +103,12 @@ class BasicFieldTests(SimpleTestCase):
         self.assertEqual(path, 'model_fields.tests.Nested.Field')
 
 
+# Architecture boundary -- GUID: CHOICE-011
+#
+# Existing choice metadata, validation, and form-field behavior remains owned
+# by this suite. The normal test runner is the non-regression integration seam;
+# normalization-specific lifecycle coverage must depend on the field-specific
+# test modules instead of duplicating this suite's behavioral contracts.
 class ChoicesTests(SimpleTestCase):
 
     @classmethod
