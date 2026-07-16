@@ -38,6 +38,13 @@ RFC1123_DATE = re.compile(r'^\w{3}, %s %s %s %s GMT$' % (__D, __M, __Y, __T))
 RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))
 ASCTIME_DATE = re.compile(r'^\w{3} %s %s %s %s$' % (__M, __D2, __T, __Y))
 
+# RFC 850 year-resolution architecture (HTTPDATE-001..HTTPDATE-004):
+# parse_http_date() owns format dispatch and the call-time calendar-year read.
+# The RFC850_DATE branch owns candidate construction and applies this window;
+# the shared datetime construction below remains the validation boundary for all
+# supported HTTP-date formats.
+_RFC850_YEAR_WINDOW = 50
+
 RFC3986_GENDELIMS = ":/?#[]@"
 RFC3986_SUBDELIMS = "!$&'()*+,;="
 
@@ -175,6 +182,11 @@ def parse_http_date(date):
         raise ValueError("%r is not in a valid HTTP date format" % date)
     try:
         year = int(m.group('year'))
+        # Integration seam: use ``regex is RFC850_DATE`` to isolate the rolling
+        # century contract from four-digit RFC 1123 and asctime years. Read
+        # datetime.datetime.now().year here, at the parser boundary, and keep
+        # the resolver's inputs limited to that year and the matched RFC 850
+        # year digits.
         # RFC 850 two-digit-year resolution pseudocode:
         # - HTTPDATE-001: When RFC850_DATE supplied the matched year, read the
         #   calendar year at call time; combine its century with the supplied
