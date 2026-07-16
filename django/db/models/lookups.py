@@ -461,6 +461,7 @@ class Range(FieldGetDbPrepValueIterableMixin, BuiltinLookup):
 class IsNull(BuiltinLookup):
     lookup_name = 'isnull'
     prepare_rhs = False
+    can_use_none_as_rhs = True
 
     # Architecture boundary [GUID: ISNULL-001, ISNULL-002, ISNULL-003,
     # ISNULL-007, ISNULL-008]: this registered lookup owns its RHS contract at
@@ -470,22 +471,11 @@ class IsNull(BuiltinLookup):
     # query-value error. Validation therefore belongs here, not in fields,
     # join construction, backend operations, or iterator adapters.
     def as_sql(self, compiler, connection):
-        # Pseudocode — strict ``isnull`` RHS contract.
-        # [GUID: ISNULL-001] INPUT the lookup RHS when compilation (including
-        # deferred evaluation) hands this lookup to SQL generation.
-        # [GUID: ISNULL-002] IF the RHS is not an instance of bool — including
-        # truthy or falsey integers, None, strings, and arbitrary objects — DO
-        # NOT enter either null-semantics branch and DO NOT coerce the value.
-        # [GUID: ISNULL-003] APPLY that single type decision here after lookup
-        # path resolution so direct-field and relationship-spanning lookups
-        # follow the same transition and failure path.
-        # [GUID: ISNULL-008] ON type failure, RAISE the existing query-value
-        # error with a message stating that an ``__isnull`` value must be
-        # boolean; TERMINATE compilation without returning SQL or parameters.
-        # [GUID: ISNULL-007] THEREFORE, when iterator-based evaluation requests
-        # compilation, propagate the error before yielding the first result.
-        # OTHERWISE the RHS is bool: compile the LHS, select IS NULL only for
-        # True or IS NOT NULL only for False, and return the SQL and parameters.
+        # GUID: ISNULL-001, ISNULL-002, ISNULL-003, ISNULL-007, ISNULL-008
+        if not isinstance(self.rhs, bool):
+            raise ValueError(
+                'The QuerySet value for an isnull lookup must be True or False.'
+            )
         sql, params = compiler.compile(self.lhs)
         if self.rhs:
             return "%s IS NULL" % sql, params

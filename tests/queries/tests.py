@@ -2598,33 +2598,49 @@ class ToFieldTests(TestCase):
 
 
 class IsNullTests(TestCase):
+    error = 'The QuerySet value for an isnull lookup must be True or False.'
+
     # GUID: ISNULL-001
     def test_isnull_001_non_boolean_rhs_rejected_during_compilation_or_evaluation(self):
-        pass
+        query = Related.objects.filter(custom__isnull=1)
+        with self.assertRaisesMessage(ValueError, self.error):
+            str(query.query)
 
     # GUID: ISNULL-002
     def test_isnull_002_truthy_non_boolean_rhs_not_coerced_to_true(self):
-        pass
+        for value in (1, 'yes', object()):
+            with self.subTest(value=value):
+                with self.assertRaisesMessage(ValueError, self.error):
+                    list(Related.objects.filter(custom__isnull=value))
 
     # GUID: ISNULL-002
     def test_isnull_002_falsey_non_boolean_rhs_not_coerced_to_false(self):
-        pass
+        for value in (0, None, ''):
+            with self.subTest(value=value):
+                with self.assertRaisesMessage(ValueError, self.error):
+                    list(Related.objects.filter(custom__isnull=value))
 
     # GUID: ISNULL-003
     def test_isnull_003_direct_field_non_boolean_rhs_rejected(self):
-        pass
+        with self.assertRaisesMessage(ValueError, self.error):
+            list(Related.objects.filter(custom_id__isnull='false'))
 
     # GUID: ISNULL-003
     def test_isnull_003_relationship_spanning_non_boolean_rhs_rejected(self):
-        pass
+        with self.assertRaisesMessage(ValueError, self.error):
+            list(Related.objects.filter(custom__name__isnull='false'))
 
     # GUID: ISNULL-007
     def test_isnull_007_iterator_evaluation_rejects_non_boolean_rhs_before_results(self):
-        pass
+        Related.objects.create()
+        results = Related.objects.filter(custom__isnull=1).iterator()
+        with self.assertRaisesMessage(ValueError, self.error):
+            next(results)
 
     # GUID: ISNULL-008
     def test_isnull_008_rejection_uses_query_error_with_boolean_requirement_message(self):
-        pass
+        with self.assertRaisesMessage(ValueError, self.error):
+            list(Related.objects.filter(custom__isnull=object()))
 
     def test_primary_key(self):
         custom = CustomPk.objects.create(name='pk')
