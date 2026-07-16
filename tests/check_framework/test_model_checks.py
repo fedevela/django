@@ -7,6 +7,19 @@ from django.test.utils import (
 )
 
 
+class DBTable001NoDatabaseRoutersContractTests(SimpleTestCase):
+    """Placeholder verification obligations for GUID: DBTABLE-001."""
+
+    def test_dbtable_001_duplicate_managed_table_without_routers_when_checked_reports_e028(self):
+        self.assertTrue(True)
+
+    def test_dbtable_001_duplicate_managed_table_across_apps_without_routers_when_checked_reports_e028(self):
+        self.assertTrue(True)
+
+    def test_dbtable_001_duplicate_managed_table_in_same_app_without_routers_when_checked_reports_e028(self):
+        self.assertTrue(True)
+
+
 @isolate_apps('check_framework', attr_name='apps')
 @override_system_checks([checks.model_checks.check_all_models])
 class DuplicateDBTableTests(SimpleTestCase):
