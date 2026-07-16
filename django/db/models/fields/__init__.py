@@ -1778,6 +1778,37 @@ class IntegerField(Field):
     def get_internal_type(self):
         return "IntegerField"
 
+    # Pseudocode -- GUID: CHOICE-003, CHOICE-005
+    #
+    # NORMALIZE_INTEGER_CHOICE_VALUE(value, lifecycle_source):
+    #     IF value is None:
+    #         RETURN None through the existing nullable-value path.
+    #     IF this IntegerField has choices AND value is an IntegerChoices member:
+    #         candidate = the member's underlying value.
+    #     ELSE:
+    #         candidate = value.
+    #     ATTEMPT to convert candidate through the existing IntegerField integer
+    #     conversion contract.
+    #     IF conversion raises TypeError or ValueError:
+    #         PROPAGATE the existing lifecycle-appropriate conversion error.
+    #     normalized_value = the conversion result.
+    #     ASSERT type(normalized_value) is int.
+    #     RETURN normalized_value, never the IntegerChoices member object.
+    #
+    # FRESH-INSTANCE HANDOFF (CHOICE-003):
+    #     BEFORE storing a constructor-supplied field value on the model instance,
+    #     route it through NORMALIZE_INTEGER_CHOICE_VALUE(..., "initialization").
+    #     STORE and EXPOSE the returned primitive int on immediate field access.
+    #     ASSERT the exposed value equals the member's underlying integer value.
+    #
+    # PERSISTENCE/RETRIEVAL TRANSITION (CHOICE-005):
+    #     Route the fresh value entering persistence through the same normalization.
+    #     Persist the returned primitive int using the existing database path.
+    #     On database materialization, normalize the returned column value before it
+    #     is stored on the retrieved model instance.
+    #     ASSERT the retrieved value has exact type int and equals the primitive int
+    #     exposed by the fresh instance; propagate existing persistence and
+    #     conversion failures without substituting an IntegerChoices member.
     def to_python(self, value):
         if value is None:
             return value
