@@ -222,6 +222,59 @@ class ValidationError(Exception):
     # __eq__ invokes compare_structured_content before the scalar procedure
     # whenever either operand represents list or dictionary content.
 
+    # ValidationError hashing and behavior-preservation procedure (VEQ-013,
+    # VEQ-014, VEQ-015):
+    #
+    # equality_hash(value):
+    #     REQUEST the value's native hash
+    #     IF the request returns an integer:
+    #         RETURN that integer
+    #     IF the request reports that the value is unhashable:
+    #         CONTINUE by its equality shape below
+    #     IF value is a mapping:
+    #         RECURSIVELY represent every key/value pair with equality_hash
+    #         COMBINE the pairs without depending on mapping order
+    #         RETURN the hash of that representation
+    #     IF value is an ordered collection:
+    #         RECURSIVELY represent its values in their equality order
+    #         RETURN the hash of that representation
+    #     IF value is an unordered collection:
+    #         RECURSIVELY represent its values without depending on order
+    #         RETURN the hash of that representation
+    #     OTHERWISE:
+    #         RETURN a shared neutral hash token; do not use object identity,
+    #             formatting, or mutation as a fallback
+    #     The helper is total for content accepted by ValidationError, so an
+    #     unhashable nested value cannot escape as a hashing exception.       # VEQ-013
+    #
+    # error_collection_hash(errors):
+    #     COMPUTE the hash of each normalized leaf error
+    #     COMBINE the leaf hashes as an order-independent multiset, retaining
+    #         duplicate occurrence counts
+    #     RETURN the resulting integer
+    #
+    # def __hash__(self):
+    #     IF self owns an error_dict:
+    #         FOR each field and normalized error list:
+    #             PAIR equality_hash(field) with
+    #                 error_collection_hash(error list)
+    #         COMBINE all field pairs without depending on field insertion
+    #             order and RETURN the resulting integer                  # VEQ-014
+    #     IF self represents normalized list content rather than a scalar:
+    #         RETURN error_collection_hash(self.error_list)               # VEQ-014
+    #     COMPUTE equality_hash for self.message, self.code, and self.params
+    #     RETURN the integer hash of the combined scalar components        # VEQ-013
+    #     Because each branch uses the same component equivalence and the
+    #     same permitted ordering rules as __eq__, equal independent,
+    #     structured, or nested errors reach identical hash values.        # VEQ-014
+    #
+    # Hashing only reads error_dict, error_list, message, code, and params.
+    # It does not assign normalized state, alter Exception.args, catch or
+    # replace raised ValidationError instances, or call message_dict,
+    # messages, update_error_dict, __iter__, __str__, or __repr__. Thus the
+    # existing raising, collection, display, and serialization paths retain
+    # their inputs, transitions, outputs, and failure behavior.            # VEQ-015
+
     @staticmethod
     def _error_list_equal(left, right):
         if len(left) != len(right):
