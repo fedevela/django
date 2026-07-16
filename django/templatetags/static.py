@@ -2,7 +2,6 @@ from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
 from django import template
 from django.apps import apps
-from django.urls import get_script_prefix
 from django.utils.encoding import iri_to_uri
 from django.utils.html import conditional_escape
 
@@ -11,6 +10,8 @@ register = template.Library()
 
 def _url_with_script_prefix(url):
     """Add the current script prefix to an application-relative URL."""
+    from django.urls import get_script_prefix
+
     parsed = urlsplit(url)
     if parsed.scheme or parsed.netloc:
         return url

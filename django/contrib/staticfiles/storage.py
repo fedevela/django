@@ -62,6 +62,28 @@ class StaticFilesStorage(FileSystemStorage):
     #     ON failure while generating or parsing the existing storage URL:
     #         propagate the existing exception without returning a partial URL
 
+    def url(self, name):
+        """Return the URL for this static file with the script prefix."""
+        from django.urls import get_script_prefix
+
+        url = super().url(name)
+        parsed = urlsplit(url)
+        if parsed.scheme or parsed.netloc:
+            return url
+
+        script_prefix = get_script_prefix()
+        if not script_prefix or script_prefix == '/':
+            return url
+
+        script_path = script_prefix.rstrip('/')
+        if (parsed.path == script_path or
+                parsed.path.startswith(script_path + '/')):
+            return url
+
+        path = '%s/%s' % (script_path, parsed.path.lstrip('/'))
+        return urlunsplit((parsed.scheme, parsed.netloc, path,
+                           parsed.query, parsed.fragment))
+
     def path(self, name):
         if not self.location:
             raise ImproperlyConfigured("You're using the staticfiles app "

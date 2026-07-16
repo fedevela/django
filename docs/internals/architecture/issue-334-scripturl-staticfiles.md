@@ -64,8 +64,7 @@ direct `StaticFilesStorage.url()` callers.
 ### `tests/staticfiles_tests/test_storage.py`
 
 `ScriptNameStaticFilesStorageContractTests` is the traced verification seam.
-During implementation, its four placeholders should become behavioral tests
-that cover:
+Its four behavioral tests cover:
 
 1. a non-empty prefix appearing exactly once in staticfiles-generated output;
 2. absent, empty, and root-equivalent prefixes preserving existing output;
@@ -74,9 +73,9 @@ that cover:
 4. direct `StaticFilesStorage.url()` compatibility for absent, empty, and root
    prefix state.
 
-Tests should use `override_script_prefix` so sequential calls demonstrate that
-the storage object does not cache request state. At least one path should enter
-through `staticfiles_storage` and one should instantiate or subclass
+The tests use `override_script_prefix` so sequential calls demonstrate that
+the storage object does not cache request state. One path enters through
+`staticfiles_storage` and another instantiates
 `StaticFilesStorage` directly, preserving the distinction between
 `SCRIPTURL-005` and `SCRIPTURL-007`.
 
@@ -118,7 +117,7 @@ tag to be byte-for-byte identical; each seam independently preserves the
 ## Implementation readiness
 
 Both requirements have a concrete owner, integration seam, dependency
-direction, and traced verification locus. The implementation delta is confined
-to the `StaticFilesStorage.url(name)` override and conversion of the four
-placeholders in `tests/staticfiles_tests/test_storage.py`; no public API or
-topology expansion is required.
+direction, and traced verification locus. The implementation is confined to
+the `StaticFilesStorage.url(name)` override and the four behavioral tests in
+`tests/staticfiles_tests/test_storage.py`; no public API or topology expansion
+is required.

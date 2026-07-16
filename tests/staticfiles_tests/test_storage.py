@@ -13,6 +13,7 @@ from django.contrib.staticfiles.management.commands.collectstatic import (
 )
 from django.core.management import call_command
 from django.test import SimpleTestCase, override_settings
+from django.test.utils import override_script_prefix
 
 from .cases import CollectionTestCase
 from .settings import TEST_ROOT
@@ -25,21 +26,56 @@ def hashed_file_path(test, path):
 
 class ScriptNameStaticFilesStorageContractTests(SimpleTestCase):
 
+    @override_settings(STATIC_URL='/static/')
     def test_scripturl_005_nonempty_script_name_staticfiles_url_prefixes_once_before_configured_static_base(self):
         """GUID: SCRIPTURL-005."""
-        self.assertTrue(True)
+        with override_script_prefix('/application/'):
+            url = storage.staticfiles_storage.url('admin/base.css')
+        self.assertEqual(url, '/application/static/admin/base.css')
+        self.assertEqual(url.count('/application/'), 1)
 
+    @override_settings(STATIC_URL='/static/')
     def test_scripturl_005_absent_or_empty_script_name_staticfiles_url_preserves_existing_output(self):
         """GUID: SCRIPTURL-005."""
-        self.assertTrue(True)
+        for script_name in ('', '/'):
+            with self.subTest(script_name=script_name):
+                with override_script_prefix(script_name):
+                    url = storage.staticfiles_storage.url('admin/base.css')
+                self.assertEqual(url, '/static/admin/base.css')
 
     def test_scripturl_007_nonempty_script_name_staticfiles_storage_url_prefixes_once_and_preserves_static_base_and_asset_path(self):
         """GUID: SCRIPTURL-007."""
-        self.assertTrue(True)
+        static_storage = storage.StaticFilesStorage(
+            location=TEST_ROOT,
+            base_url='/assets/versioned/',
+        )
+        with override_script_prefix('/tenant/'):
+            url = static_storage.url('css/project/site.css')
+        self.assertEqual(
+            url,
+            '/tenant/assets/versioned/css/project/site.css',
+        )
+        self.assertEqual(url.count('/tenant/'), 1)
 
     def test_scripturl_007_absent_or_empty_script_name_staticfiles_storage_url_preserves_existing_output(self):
         """GUID: SCRIPTURL-007."""
-        self.assertTrue(True)
+        static_storage = storage.StaticFilesStorage(
+            location=TEST_ROOT,
+            base_url='/assets/versioned/',
+        )
+        with override_script_prefix('/tenant/'):
+            self.assertEqual(
+                static_storage.url('css/project/site.css'),
+                '/tenant/assets/versioned/css/project/site.css',
+            )
+        for script_name in ('', '/'):
+            with self.subTest(script_name=script_name):
+                with override_script_prefix(script_name):
+                    url = static_storage.url('css/project/site.css')
+                self.assertEqual(
+                    url,
+                    '/assets/versioned/css/project/site.css',
+                )
 
 
 class TestHashedFiles:
