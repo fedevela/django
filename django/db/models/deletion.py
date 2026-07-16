@@ -377,6 +377,42 @@ class Collector:
         self.data = {model: self.data[model] for model in sorted_models}
 
     def delete(self):
+        # PSEUDOCODE CONTRACT — GUID: DELETE-004
+        #
+        # FUNCTION report_nonzero_deletions(collected_objects, fast_deletes):
+        #     deleted_by_model := empty counter keyed by model label
+        #
+        #     IF exactly one collected object can be deleted directly:
+        #         direct_count := delete that object's primary key
+        #         RETURN (direct_count,
+        #                 {object model's _meta.label: direct_count})
+        #     END IF
+        #
+        #     BEGIN atomic deletion:
+        #         FOR EACH fast-delete queryset, including cascade targets:
+        #             deleted_count := delete the queryset
+        #             add deleted_count to deleted_by_model under the
+        #                 queryset model's _meta.label
+        #         END FOR
+        #
+        #         FOR EACH collected model in deletion order:
+        #             deleted_count := delete its collected primary keys
+        #             add deleted_count to deleted_by_model under that
+        #                 model's _meta.label
+        #         END FOR
+        #     ON deletion failure:
+        #         roll back according to the existing transaction rules
+        #         propagate the failure; do not return partial counts
+        #     END atomic deletion
+        #
+        #     total_deleted := sum every count in deleted_by_model
+        #     RETURN (total_deleted, plain dictionary of deleted_by_model)
+        # END FUNCTION
+        #
+        # INVARIANTS:
+        #     direct-only total equals its direct model-label count
+        #     cascade total equals the sum of all affected model-label counts
+        #     every affected model is keyed by its own _meta.label
         # sort instance collections
         for model, instances in self.data.items():
             self.data[model] = sorted(instances, key=attrgetter("pk"))

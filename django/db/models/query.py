@@ -712,10 +712,14 @@ class QuerySet:
 
     def delete(self):
         """Delete the records in the current QuerySet."""
-        # PSEUDOCODE CONTRACT — GUID: DELETE-001, DELETE-002, DELETE-003
+        # PSEUDOCODE CONTRACT — GUID: DELETE-001, DELETE-002, DELETE-003,
+        # DELETE-004
         #
         # FUNCTION normalize_delete_result(total_deleted, deleted_by_model):
         #     IF total_deleted IS NOT 0:
+        #         # DELETE-004: Preserve Collector's combined direct and
+        #         # cascaded total and its model-label counts without
+        #         # normalizing or discarding any nonzero deletion data.
         #         RETURN (total_deleted, deleted_by_model)
         #     END IF
         #
