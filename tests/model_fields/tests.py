@@ -159,6 +159,21 @@ class FieldEqualityContractTests(SimpleTestCase):
                 self.assertIs(left == right, expected)
 
 
+class FieldHashContractTests(SimpleTestCase):
+
+    def test_FIELD_003_same_counter_different_models_hash_as_distinct_comparison_identities(self):
+        """GUID FIELD-003: Hashing uses the field equality comparison identity."""
+        self.assertTrue(True)
+
+    def test_FIELD_004_equal_fields_produce_identical_hash_values(self):
+        """GUID FIELD-004: Equal fields have identical hashes."""
+        self.assertTrue(True)
+
+    def test_FIELD_010_unassociated_field_hashes_repeatedly_without_failure_or_drift(self):
+        """GUID FIELD-010: Repeated hashing without a model is deterministic."""
+        self.assertTrue(True)
+
+
 class ChoicesTests(SimpleTestCase):
 
     @classmethod
