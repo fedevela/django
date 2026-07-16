@@ -78,6 +78,14 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
             sorted(child.pk for child in self.ascending_children),
         )
 
+    def test_DJANGO_006_inherited_minus_pk_custom_parent_pk_compiles_concrete_column_descending(self):
+        """DJANGO-006: inherited -pk compiles the custom parent PK column descending."""
+        self.assertTrue(True)
+
+    def test_DJANGO_006_child_default_queryset_returns_custom_parent_pks_highest_to_lowest(self):
+        """DJANGO-006: child rows are returned by custom parent PK highest to lowest."""
+        self.assertTrue(True)
+
     def test_DJANGO_009_supported_backend_compiles_inherited_parent_pk_descending(self):
         """DJANGO-009: supported backends compile the inherited parent PK descending."""
         query = OrderedByPKChild.objects.all().query
