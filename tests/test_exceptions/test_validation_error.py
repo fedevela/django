@@ -1,3 +1,4 @@
+import pickle
 import unittest
 from copy import deepcopy
 
@@ -145,28 +146,95 @@ class ValidationErrorEqualityContractTests(unittest.TestCase):
 class ValidationErrorHashingAndBehaviorContractTests(unittest.TestCase):
     # VEQ-013
     def test_veq_013_requesting_validation_error_hash_returns_integer_without_error(self):
-        self.assertTrue(True)
+        error = ValidationError(
+            'Invalid value: %(value)s', code='invalid',
+            params={'value': ['example'], 'context': {'source': 'test'}},
+        )
+
+        self.assertIsInstance(hash(error), int)
 
     # VEQ-014
     def test_veq_014_independently_created_equal_errors_have_identical_hashes(self):
-        self.assertTrue(True)
+        first = ValidationError(
+            'Invalid value: %(value)s', code='invalid',
+            params={
+                'value': ['example'],
+                'context': {'source': 'test'},
+                'flags': {'first', 'second'},
+            },
+        )
+        second = ValidationError(
+            'Invalid value: %(value)s', code='invalid',
+            params={
+                'flags': frozenset({'second', 'first'}),
+                'context': {'source': 'test'},
+                'value': ['example'],
+            },
+        )
+
+        self.assertEqual(first, second)
+        self.assertEqual(hash(first), hash(second))
 
     # VEQ-014
     def test_veq_014_equal_reordered_nested_errors_have_identical_hashes(self):
-        self.assertTrue(True)
+        required = ValidationError('Required', code='required')
+        invalid = ValidationError('Invalid', code='invalid')
+        first = ValidationError({
+            'name': ValidationError([[required], ValidationError([invalid])]),
+            NON_FIELD_ERRORS: ValidationError([required, invalid, required]),
+        })
+        second = ValidationError({
+            NON_FIELD_ERRORS: ValidationError([required, required, invalid]),
+            'name': ValidationError([invalid, ValidationError([[required]])]),
+        })
+
+        self.assertEqual(first, second)
+        self.assertEqual(hash(first), hash(second))
 
     # VEQ-015
     def test_veq_015_equality_and_hashing_preserve_validation_error_raising(self):
-        self.assertTrue(True)
+        error = ValidationError('Invalid', code='invalid')
+        hash(error)
+
+        with self.assertRaises(ValidationError) as raised:
+            raise error
+
+        self.assertIs(raised.exception, error)
+        self.assertEqual(raised.exception.code, 'invalid')
 
     # VEQ-015
     def test_veq_015_equality_and_hashing_preserve_validation_error_collection(self):
-        self.assertTrue(True)
+        error = ValidationError({'name': ['Required'], 'email': ['Invalid']})
+        hash(error)
+
+        collected = error.update_error_dict({'name': [ValidationError('Existing')]})
+
+        self.assertEqual(
+            {field: [item.message for item in errors]
+             for field, errors in collected.items()},
+            {'name': ['Existing', 'Required'], 'email': ['Invalid']},
+        )
 
     # VEQ-015
     def test_veq_015_equality_and_hashing_preserve_validation_error_display(self):
-        self.assertTrue(True)
+        error = ValidationError(
+            'Invalid value: %(value)s', params={'value': 'example'},
+        )
+        hash(error)
+
+        self.assertEqual(str(error), "['Invalid value: example']")
+        self.assertEqual(repr(error), "ValidationError(['Invalid value: example'])")
 
     # VEQ-015
     def test_veq_015_equality_and_hashing_preserve_validation_error_serialization(self):
-        self.assertTrue(True)
+        error = ValidationError(
+            'Invalid value: %(value)s', code='invalid',
+            params={'value': ['example']},
+        )
+        hash(error)
+
+        restored = pickle.loads(pickle.dumps(error))
+
+        self.assertEqual(restored, error)
+        self.assertEqual(restored.args, error.args)
+        self.assertEqual(restored.messages, error.messages)
