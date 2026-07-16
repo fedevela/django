@@ -242,21 +242,6 @@ class Field(RegisterLookupMixin):
             return []
 
     def _check_choices(self):
-        # Choice-value length pseudocode:
-        #
-        # CHOICE-003 — INPUT: supported flat or named-group choices and the
-        # field's max_length. Traverse every choice entry. For a flat entry,
-        # pass its stored value to the length comparison; for a named group,
-        # traverse every nested entry and pass each nested stored value. Do not
-        # stop after a fitting value: retain the greatest relevant length seen.
-        # CHOICE-006 — At each entry, separate the stored value from its
-        # human-readable label. Compare only meaningfully length-comparable
-        # stored values; never pass label length into the maximum calculation.
-        # CHOICE-005 — After traversal, compare the greatest relevant stored-
-        # value length with max_length. Preserve success when every value is
-        # shorter than max_length or the greatest length equals max_length.
-        # Transition to the choice-length failure path only when the greatest
-        # relevant stored-value length is greater than max_length.
         if not self.choices:
             return []
 
@@ -308,9 +293,16 @@ class Field(RegisterLookupMixin):
 
     def _check_choice_value_length(self):
         """
-        Check that max_length can contain the longest choice value.
+        Check structurally valid choices through the choice-length seam.
 
-        GUID: CHOICE-001, CHOICE-002, CHOICE-004.
+        Architecture contract for CHOICE-001, CHOICE-002, CHOICE-003,
+        CHOICE-004, CHOICE-005, and CHOICE-006: _check_choices() owns choice
+        structure validation and calls this seam only after validation succeeds.
+        This seam consumes flatchoices as the adapter for both flat choices and
+        named groups, evaluates every meaningfully length-comparable stored
+        value, and excludes human-readable labels. It owns the inclusive
+        max_length boundary and the fields.E009 result; a failure is returned
+        only when the greatest stored-value length is greater than max_length.
         """
         choice_max_length = 0
         for value, _ in self.flatchoices:
