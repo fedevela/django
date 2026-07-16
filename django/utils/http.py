@@ -38,11 +38,13 @@ RFC1123_DATE = re.compile(r'^\w{3}, %s %s %s %s GMT$' % (__D, __M, __Y, __T))
 RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))
 ASCTIME_DATE = re.compile(r'^\w{3} %s %s %s %s$' % (__M, __D2, __T, __Y))
 
-# RFC 850 year-resolution architecture (HTTPDATE-001..HTTPDATE-004):
+# HTTP-date year-resolution architecture (HTTPDATE-001..HTTPDATE-006):
 # parse_http_date() owns format dispatch and the call-time calendar-year read.
 # The RFC850_DATE branch owns candidate construction and applies this window;
-# the shared datetime construction below remains the validation boundary for all
-# supported HTTP-date formats.
+# its datetime.datetime.now dependency is the controlled-time seam for threshold
+# verification (HTTPDATE-006). RFC1123_DATE and ASCTIME_DATE bypass that branch,
+# preserving their four-digit years before all formats rejoin the shared datetime
+# construction and validation boundary (HTTPDATE-005).
 _RFC850_YEAR_WINDOW = 50
 
 RFC3986_GENDELIMS = ":/?#[]@"
