@@ -61,6 +61,25 @@ def check_all_models(app_configs=None, **kwargs):
     #     OTHERWISE, leave routed-duplicate handling outside DBTABLE-001.
     # OUTPUT: preserve the accumulated model-check errors, including E028 for
     # duplicate managed tables both within one app and across different apps.
+    # DBTABLE-005 unaffected-outcome logic obligation:
+    # INPUT: use the existing model selection above without adding abstract
+    # models or otherwise changing which models enter the system-check pass.
+    # FOR EACH selected model:
+    #   IF it is managed and is not a proxy, include it in duplicate-table
+    #   grouping; OTHERWISE, skip only that grouping step so unmanaged and proxy
+    #   models retain their existing no-collision outcome.
+    #   REGARDLESS of duplicate-table eligibility, execute the pre-existing
+    #   overridden-check validation, model.check() handoff, and index and
+    #   constraint collection in their current order.
+    #   IF check() is not an inherited class method, append the existing E020;
+    #   OTHERWISE, append every result returned by model.check() unchanged.
+    # AFTER grouping, allow router configuration to select the diagnostic only
+    # for an actual duplicate-table group; it must not alter model selection,
+    # grouping eligibility, or any model.check() result.
+    # THEN evaluate index and constraint collisions from their independent
+    # collectors with the existing identifiers, messages, and ordering.
+    # OUTPUT: return the same abstract, proxy, unmanaged, and unrelated-check
+    # outcomes that this flow would produce without routed-duplicate handling.
     for model in models:
         if model._meta.managed and not model._meta.proxy:
             db_table_models[model._meta.db_table].append(model._meta.label)
