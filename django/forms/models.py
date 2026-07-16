@@ -1146,6 +1146,9 @@ class ModelChoiceIteratorValue:
         return self.value == other
 
 
+# DJ13158-005 architecture boundary: ModelChoiceIterator owns the read-only
+# QuerySet-to-choice projection. It consumes the field's configured QuerySet
+# through the ORM's evaluation interface; query composition remains ORM-owned.
 class ModelChoiceIterator:
     def __init__(self, field):
         self.field = field
@@ -1300,6 +1303,11 @@ class ModelChoiceField(ChoiceField):
         return str(self.prepare_value(initial_value)) != str(data_value)
 
 
+# DJ13158-003, DJ13158-007 architecture boundary: this field owns the cleaning
+# contract for empty and submitted selections. clean() is the empty-selection
+# boundary; _check_values() is the membership-resolution seam. Any support for
+# combined QuerySets belongs behind these existing private seams, preserving the
+# dependency direction from forms to the QuerySet API and adding no public API.
 class ModelMultipleChoiceField(ModelChoiceField):
     """A MultipleChoiceField whose choices are a model QuerySet."""
     widget = SelectMultiple
