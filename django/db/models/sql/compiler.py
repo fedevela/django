@@ -749,6 +749,29 @@ class SQLCompiler:
         #     terminate the recursive ordering cycle.
         # ELSE: trim unnecessary joins and RETURN the resolved target ordering.
 
+        # ORM-005, ORM-006, ORM-007, ORM-008, ORM-009 pseudocode:
+        # INPUT: an already-filtered query, a normalized ordering path, and its
+        # explicit ASC or DESC direction.
+        # IF the path terminates at a relation attname (for example, root_id):
+        #     select the relation's stored primary-key value as the ordering
+        #     target and preserve the explicit direction;
+        #     produce the same observable sequence as ordering by the explicit
+        #     related primary-key traversal in that direction (ORM-005);
+        #     preserve the existing filter predicate and result membership,
+        #     changing only the ordering applied to those results (ORM-006).
+        # ELSE IF the path explicitly traverses to the related primary key:
+        #     resolve that primary-key target and preserve its explicit ASC or
+        #     DESC direction without changing its valid behavior (ORM-007).
+        # ELSE IF the path terminates at the relation name rather than its
+        # attname:
+        #     retain relation-ordering semantics and recursively expand the
+        #     related model's ordering, subject to cycle detection (ORM-008).
+        # APPLY the same terminal-attname and relation-name decisions to an
+        # ordinary non-self-referencing foreign key; do not make self-reference
+        # a condition of either branch or alter its valid ordering (ORM-009).
+        # OUTPUT: ordering expressions only; HAND OFF the query's pre-existing
+        # filtering state and selected result set unchanged.
+
         # If we get to this point and the field is a relation to another model,
         # append the default ordering for that model unless it is the pk
         # shortcut or the attribute name of the field that is specified.
