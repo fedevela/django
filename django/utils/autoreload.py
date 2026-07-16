@@ -105,6 +105,27 @@ def iter_all_python_module_files():
     return iter_modules_and_files(modules, frozenset(_error_files))
 
 
+def _resolve_path(filename):
+    """Resolve one watched-file candidate at its failure boundary.
+
+    This private seam owns candidate-to-Path conversion and resolution for
+    STAT-001, STAT-002, and STAT-004. Candidate-resolution failures selected
+    by module-discovery policy are represented by None here; the implementation
+    phase must add ValueError to that policy. This boundary is also where
+    automated coverage patches Path.resolve() for STAT-005.
+
+    The caller owns aggregation, so it can retain other successful candidates
+    (STAT-003) without changing its frozen collection contract (STAT-006).
+    """
+    path = Path(filename)
+    try:
+        return path.resolve(strict=True).absolute()
+    except FileNotFoundError:
+        # The module could have been removed, don't fail loudly if this is the
+        # case.
+        return None
+
+
 @functools.lru_cache(maxsize=1)
 def iter_modules_and_files(modules, extra_files):
     """Iterate through all modules needed to be watched."""
@@ -147,12 +168,8 @@ def iter_modules_and_files(modules, extra_files):
     for filename in itertools.chain(sys_file_paths, extra_files):
         if not filename:
             continue
-        path = Path(filename)
-        try:
-            resolved_path = path.resolve(strict=True).absolute()
-        except FileNotFoundError:
-            # The module could have been removed, don't fail loudly if this
-            # is the case.
+        resolved_path = _resolve_path(filename)
+        if resolved_path is None:
             continue
         results.add(resolved_path)
     return frozenset(results)
