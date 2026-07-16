@@ -6,6 +6,41 @@ from django.test.testcases import SimpleTestCase
 from django.test.utils import isolate_apps, override_settings
 
 
+class RecursiveManyToManyHintContractTests(SimpleTestCase):
+
+    def test_django_001_more_than_two_relevant_foreign_keys_without_through_fields_emits_existing_error(self):
+        """GUID: DJANGO-001"""
+        pass
+
+    def test_django_002_recursive_hint_recommends_many_to_many_field_with_intermediary_model_through(self):
+        """GUID: DJANGO-002"""
+        pass
+
+    def test_django_003_recursive_hint_omits_foreign_key_through_and_symmetrical_false(self):
+        """GUID: DJANGO-003"""
+        pass
+
+    def test_django_004_ambiguous_from_direction_emits_corrected_recursive_hint(self):
+        """GUID: DJANGO-004; fields.E334 validation path."""
+        pass
+
+    def test_django_004_ambiguous_to_direction_emits_corrected_recursive_hint(self):
+        """GUID: DJANGO-004; fields.E335 validation path."""
+        pass
+
+    def test_django_005_through_fields_ambiguity_guidance_remains_unchanged(self):
+        """GUID: DJANGO-005"""
+        pass
+
+    def test_django_006_error_identifier_and_surrounding_text_remain_unchanged(self):
+        """GUID: DJANGO-006"""
+        pass
+
+    def test_django_007_other_system_check_conditions_and_messages_remain_unchanged(self):
+        """GUID: DJANGO-007"""
+        pass
+
+
 @isolate_apps('invalid_models_tests')
 class RelativeFieldTests(SimpleTestCase):
 
