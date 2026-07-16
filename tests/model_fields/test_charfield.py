@@ -67,10 +67,27 @@ class TestCharField(TestCase):
 
     def test_choice_010_fresh_charfield_with_textchoices_member_has_primitive_str_type_and_text_value(self):
         """GUID: CHOICE-010"""
+        # LOGIC OBLIGATION: Verify normalization on a fresh text-choice model.
+        # INPUT: Event.CARNIVAL as the member assigned to the model field.
+        # FLOW:
+        #   1. Construct an unsaved TextChoicesModel with that member.
+        #   2. Read the field value from the fresh instance.
+        #   3. If its exact type is not str, fail the regression check.
+        #   4. If it does not equal Event.CARNIVAL.value, fail the check.
+        # OUTPUT: The fresh field exposes the underlying primitive text value.
         pass
 
     def test_choice_010_retrieved_charfield_created_with_textchoices_member_has_primitive_str_type_and_text_value(self):
         """GUID: CHOICE-010"""
+        # LOGIC OBLIGATION: Verify normalization after text-choice persistence.
+        # INPUT: Event.CARNIVAL as the member used to create the stored model.
+        # FLOW:
+        #   1. Create and persist a TextChoicesModel with that member.
+        #   2. Retrieve a separate instance using the persisted primary key.
+        #   3. Read the field value from the retrieved instance.
+        #   4. If its exact type is not str, fail the regression check.
+        #   5. If it does not equal Event.CARNIVAL.value, fail the check.
+        # OUTPUT: The retrieved field exposes the underlying primitive text.
         pass
 
 

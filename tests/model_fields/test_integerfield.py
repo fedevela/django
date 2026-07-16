@@ -202,10 +202,27 @@ class IntegerChoicesLifecycleTests(TestCase):
 
     def test_choice_010_fresh_integerfield_with_integerchoices_member_has_primitive_int_type_and_value(self):
         """GUID: CHOICE-010"""
+        # LOGIC OBLIGATION: Verify normalization on a fresh integer-choice model.
+        # INPUT: Number.ONE as the member assigned to the model field.
+        # FLOW:
+        #   1. Construct an unsaved IntegerChoicesModel with that member.
+        #   2. Read the field value from the fresh instance.
+        #   3. If its exact type is not int, fail the regression check.
+        #   4. If it does not equal Number.ONE.value, fail the check.
+        # OUTPUT: The fresh field exposes the underlying primitive integer.
         pass
 
     def test_choice_010_retrieved_integerfield_created_with_integerchoices_member_has_primitive_int_type_and_value(self):
         """GUID: CHOICE-010"""
+        # LOGIC OBLIGATION: Verify normalization after integer-choice persistence.
+        # INPUT: Number.ONE as the member used to create the stored model.
+        # FLOW:
+        #   1. Create and persist an IntegerChoicesModel with that member.
+        #   2. Retrieve a separate instance using the persisted primary key.
+        #   3. Read the field value from the retrieved instance.
+        #   4. If its exact type is not int, fail the regression check.
+        #   5. If it does not equal Number.ONE.value, fail the check.
+        # OUTPUT: The retrieved field exposes the underlying primitive integer.
         pass
 
 

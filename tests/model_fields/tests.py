@@ -149,6 +149,16 @@ class ChoicesTests(SimpleTestCase):
 
     def test_choice_011_existing_choice_field_tests_unrelated_to_normalization_continue_to_pass(self):
         """GUID: CHOICE-011"""
+        # LOGIC OBLIGATION: Preserve pre-existing choice-field behavior.
+        # INPUT: The relevant choice-field tests that do not verify CHOICE-010.
+        # FLOW:
+        #   1. Hand the unchanged tests to the normal test-suite runner.
+        #   2. For each completed test, retain its pass, failure, or error state.
+        #   3. If any test fails or errors, report that test and fail the
+        #      non-regression verification.
+        #   4. Otherwise, mark the non-regression obligation satisfied only
+        #      after every relevant unrelated test has passed.
+        # OUTPUT: Existing unrelated choice-field behavior remains intact.
         pass
 
 
