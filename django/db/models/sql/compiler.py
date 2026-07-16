@@ -724,6 +724,14 @@ class SQLCompiler:
         pieces = name.split(LOOKUP_SEP)
         field, targets, alias, joins, path, opts, transform_function = self._setup_joins(pieces, opts, alias)
 
+        # ORM-001/002/003/004 architecture boundary:
+        # ``find_ordering_name()`` owns selection of a terminal relation
+        # attname and preservation of its OrderBy direction. ``_setup_joins()``
+        # remains the resolution port to Query, and ``Query.trim_joins()``
+        # remains the sole owner of removing joins made unnecessary by that
+        # selection. Related-model ordering is a fallback beyond this seam,
+        # not a responsibility of terminal-attname resolution.
+
         # ORM-001, ORM-002, ORM-003, ORM-004 pseudocode:
         # INPUT: the normalized ordering path, its explicit direction, the
         # resolved field and targets, and the joins accumulated for the path.
