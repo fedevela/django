@@ -242,6 +242,21 @@ class Field(RegisterLookupMixin):
             return []
 
     def _check_choices(self):
+        # Choice-value length pseudocode:
+        #
+        # CHOICE-003 — INPUT: supported flat or named-group choices and the
+        # field's max_length. Traverse every choice entry. For a flat entry,
+        # pass its stored value to the length comparison; for a named group,
+        # traverse every nested entry and pass each nested stored value. Do not
+        # stop after a fitting value: retain the greatest relevant length seen.
+        # CHOICE-006 — At each entry, separate the stored value from its
+        # human-readable label. Compare only meaningfully length-comparable
+        # stored values; never pass label length into the maximum calculation.
+        # CHOICE-005 — After traversal, compare the greatest relevant stored-
+        # value length with max_length. Preserve success when every value is
+        # shorter than max_length or the greatest length equals max_length.
+        # Transition to the choice-length failure path only when the greatest
+        # relevant stored-value length is greater than max_length.
         if not self.choices:
             return []
 
