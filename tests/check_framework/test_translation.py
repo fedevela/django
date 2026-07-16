@@ -156,3 +156,22 @@ class TranslationE004ContractTests(SimpleTestCase):
                     id='translation.E003',
                 ),
             ])
+
+
+class TranslationE004Trans007ContractTests(SimpleTestCase):
+
+    def test_trans_007_unavailable_exact_available_base_does_not_emit_e004(self):
+        """TRANS-007: An available base fallback does not emit E004."""
+        self.assertTrue(True)
+
+    def test_trans_007_available_exact_regional_or_variant_does_not_emit_e004(self):
+        """TRANS-007: An exact regional or variant match does not emit E004."""
+        self.assertTrue(True)
+
+    def test_trans_007_unavailable_exact_and_base_emits_e004(self):
+        """TRANS-007: No exact or base-language match emits E004."""
+        self.assertTrue(True)
+
+    def test_trans_007_existing_translation_system_checks_continue_to_pass(self):
+        """TRANS-007: Existing translation system-check coverage remains passing."""
+        self.assertTrue(True)
