@@ -462,6 +462,13 @@ class IsNull(BuiltinLookup):
     lookup_name = 'isnull'
     prepare_rhs = False
 
+    # Architecture boundary [GUID: ISNULL-001, ISNULL-002, ISNULL-003,
+    # ISNULL-007, ISNULL-008]: this registered lookup owns its RHS contract at
+    # the as_sql() compilation seam. Field/path resolution supplies the same
+    # IsNull instance for direct and relationship-spanning lookups; SQLCompiler
+    # and QuerySet iteration depend on this seam and propagate its existing
+    # query-value error. Validation therefore belongs here, not in fields,
+    # join construction, backend operations, or iterator adapters.
     def as_sql(self, compiler, connection):
         # Pseudocode — strict ``isnull`` RHS contract.
         # [GUID: ISNULL-001] INPUT the lookup RHS when compilation (including
