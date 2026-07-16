@@ -732,6 +732,19 @@ class SQLCompiler:
         # selection. Related-model ordering is a fallback beyond this seam,
         # not a responsibility of terminal-attname resolution.
 
+        # ORM-005/006/007/008/009 architecture boundary:
+        # ``find_ordering_name()`` owns the distinction between a terminal
+        # relation attname, an explicit related-primary-key traversal, and a
+        # relation name that delegates to related-model ordering. It consumes
+        # Query's resolved path without owning or mutating filtering state
+        # (ORM-006). Terminal-attname equivalence and direction stay inside
+        # this ordering-expression seam (ORM-005), while explicit primary-key
+        # traversal remains on the generic resolution path (ORM-007) and
+        # relation-name expansion remains the recursive fallback (ORM-008).
+        # These boundaries are relation-topology neutral: self-referencing and
+        # ordinary foreign keys use the same resolution and trimming ports
+        # (ORM-009).
+
         # ORM-001, ORM-002, ORM-003, ORM-004 pseudocode:
         # INPUT: the normalized ordering path, its explicit direction, the
         # resolved field and targets, and the joins accumulated for the path.
