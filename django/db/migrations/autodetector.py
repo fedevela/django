@@ -666,6 +666,26 @@ class MigrationAutodetector:
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
+                # ORDER-006 migration-generation pseudocode
+                # INPUT: each declared index from the new model, including
+                # independent created_at and updated_at indexes and any index
+                # that references the synthetic _order field.
+                # FOR every declared index:
+                #     copy the ordinary model and related-field prerequisites;
+                #     IF its fields contain _order:
+                #         add the ordering-field prerequisite;
+                #     ELSE:
+                #         retain only the ordinary prerequisites without
+                #         discarding, merging, or rewriting the index;
+                #     emit one AddIndex carrying the unchanged declaration.
+                # ON an invalid declaration or unresolved prerequisite:
+                #     propagate migration-generation failure rather than
+                #     silently omitting an unrelated index.
+                # OUTPUT: generated operations retain separate AddIndex
+                # operations for created_at and updated_at alongside the
+                # _order-referencing AddIndex.
+                # VERIFIES:
+                # - test_order_006_new_ordered_model_migration_retains_created_at_and_updated_at_indexes
                 # ORDER-002 architecture contract: generate_created_models()
                 # owns the integration seam between generated AddIndex and
                 # AlterOrderWithRespectTo operations. The private dependency

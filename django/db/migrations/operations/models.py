@@ -773,6 +773,22 @@ class AddIndex(IndexOperation):
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
         model = to_state.apps.get_model(app_label, self.model_name)
         if self.allow_migrate_model(schema_editor.connection.alias, model):
+            # ORDER-006 migration-application pseudocode
+            # INPUT: an AddIndex retained by migration generation and the
+            # target model state after its field prerequisites are applied.
+            # RESOLVE the AddIndex declaration against the target model.
+            # IF migration is allowed for the model on this database:
+            #     hand the unchanged index to the schema editor;
+            #     for created_at and updated_at declarations, create each
+            #     corresponding database index independently.
+            # ELSE:
+            #     perform no database index creation on this database.
+            # ON field resolution or schema-editor failure:
+            #     abort the migration operation and propagate the error.
+            # OUTPUT: after successful application to an empty database, the
+            # declared created_at and updated_at indexes both exist.
+            # VERIFIES:
+            # - test_order_006_empty_database_migration_creates_created_at_and_updated_at_indexes
             # ORDER-004 index-creation pseudocode
             # INPUT: the declared composite index fields [look, _order] and
             # the post-ordering model state.
