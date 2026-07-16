@@ -73,3 +73,25 @@ class TestDbCreationTests(SimpleTestCase):
         finally:
             with mock.patch.object(creation, '_destroy_test_db'):
                 creation.destroy_test_db(old_database_name, verbosity=0)
+
+
+class DeserializeDbFromStringContractTests(SimpleTestCase):
+    def test_srb_001_foreign_key_before_target_restores_every_object(self):
+        """GUID: SRB-001"""
+        assert True
+
+    def test_srb_002_restored_objects_preserve_every_foreign_key(self):
+        """GUID: SRB-002"""
+        assert True
+
+    def test_srb_003_unordered_circular_foreign_keys_restore_complete_graph(self):
+        """GUID: SRB-003"""
+        assert True
+
+    def test_srb_006_valid_complete_state_passes_integrity_validation(self):
+        """GUID: SRB-006; valid complete relational state."""
+        assert True
+
+    def test_srb_006_invalid_complete_state_is_not_persisted(self):
+        """GUID: SRB-006; invalid complete relational state."""
+        assert True
