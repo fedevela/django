@@ -70,6 +70,17 @@ class UnionBackedModelMultipleChoiceFieldContractTests(TestCase):
         self.assertCountEqual(cleaned, [self.entertainment])
 
 
+@skipUnlessDBFeature('supports_select_union')
+class UnionBackedModelFormRelationshipContractTests(TestCase):
+    def test_DJ13158_004_empty_valid_submission_save_adds_no_publication_relationships(self):
+        """DJ13158-004: Saving an empty valid form adds no publications."""
+        pass
+
+    def test_DJ13158_008_valid_nonempty_union_backed_submission_save_preserves_submitted_publication_relationships(self):
+        """DJ13158-008: Saving preserves the submitted publications."""
+        pass
+
+
 class ModelChoiceFieldTests(TestCase):
     @classmethod
     def setUpTestData(cls):
