@@ -513,23 +513,13 @@ class Field(RegisterLookupMixin):
         name, path, args, kwargs = self.deconstruct()
         return self.__class__(*args, **kwargs)
 
-    # FIELD-001, FIELD-002, FIELD-007, FIELD-009 architecture: Field owns the
-    # equality boundary; model association is comparison input, not delegated
-    # model behavior. __hash__ remains the set-collision boundary, and
-    # FieldEqualityContractTests is the integration contract seam.
     def __eq__(self, other):
-        # FIELD-001, FIELD-002, FIELD-007, FIELD-009 pseudocode:
-        # IF other is not a Field, RETURN NotImplemented.
-        # IF the creation counters differ, RETURN false.
-        # FIELD-009: Read each associated model with an absence-safe lookup.
-        # FIELD-007, FIELD-009: IF the models are the same, including when both
-        # are absent, RETURN true to preserve established equality behavior.
-        # FIELD-001, FIELD-002: OTHERWISE, RETURN false so fields attached to
-        # different concrete models compare unequal and remain distinct when a
-        # set resolves their collision.
         # Needed for @total_ordering
         if isinstance(other, Field):
-            return self.creation_counter == other.creation_counter
+            return (
+                self.creation_counter == other.creation_counter and
+                getattr(self, 'model', None) is getattr(other, 'model', None)
+            )
         return NotImplemented
 
     def __lt__(self, other):

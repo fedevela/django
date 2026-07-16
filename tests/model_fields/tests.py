@@ -1,3 +1,4 @@
+import copy
 import pickle
 
 from django import forms
@@ -105,17 +106,57 @@ class BasicFieldTests(SimpleTestCase):
 
 class FieldEqualityContractTests(SimpleTestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+
+        class AbstractModel(models.Model):
+            field = models.IntegerField()
+
+            class Meta:
+                abstract = True
+
+        class ConcreteModelA(AbstractModel):
+            pass
+
+        class ConcreteModelB(AbstractModel):
+            pass
+
+        cls.field_a = ConcreteModelA._meta.get_field('field')
+        cls.field_b = ConcreteModelB._meta.get_field('field')
+
     def test_FIELD_001_copied_abstract_field_associated_with_different_models_compares_unequal(self):
-        pass
+        self.assertEqual(self.field_a.creation_counter, self.field_b.creation_counter)
+        self.assertIsNot(self.field_a.model, self.field_b.model)
+        self.assertNotEqual(self.field_a, self.field_b)
 
     def test_FIELD_002_copied_fields_with_same_counter_and_different_models_remain_distinct_in_set(self):
-        pass
+        self.assertEqual(len({self.field_a, self.field_b}), 2)
 
     def test_FIELD_007_fields_with_same_counter_and_same_model_retain_established_equality(self):
-        pass
+        field_copy = copy.copy(self.field_a)
+
+        self.assertEqual(self.field_a.creation_counter, field_copy.creation_counter)
+        self.assertIs(self.field_a.model, field_copy.model)
+        self.assertEqual(self.field_a, field_copy)
 
     def test_FIELD_009_fields_without_associated_model_compare_repeatedly_without_failure_or_drift(self):
-        pass
+        field = models.Field()
+        field_copy = copy.copy(field)
+        associated_field_copy = copy.copy(field)
+        associated_field_copy.model = self.field_a.model
+        other_field = models.Field()
+        comparisons = (
+            (field, field, True),
+            (field, field_copy, True),
+            (field, associated_field_copy, False),
+            (field, other_field, False),
+        )
+
+        for left, right, expected in comparisons:
+            with self.subTest(left=left, right=right):
+                self.assertIs(left == right, expected)
+                self.assertIs(left == right, expected)
 
 
 class ChoicesTests(SimpleTestCase):
