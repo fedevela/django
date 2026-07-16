@@ -159,23 +159,71 @@ class CharFieldTests(SimpleTestCase):
 
     def test_choice_003_model_checks_evaluate_every_stored_value_and_report_later_oversized_value(self):
         """GUID: CHOICE-003"""
-        pass
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=3,
+                choices=[('one', 'One'), ('oversized', 'Oversized')],
+            )
+
+        field = Model._meta.get_field('field')
+        self.assertEqual(Model.check(), [
+            Error(
+                "'max_length' is too small to fit the longest value in "
+                "'choices' (9 characters).",
+                obj=field,
+                id='fields.E009',
+            ),
+        ])
 
     def test_choice_003_model_checks_evaluate_named_group_stored_values_and_report_oversized_value(self):
         """GUID: CHOICE-003"""
-        pass
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=3,
+                choices=[
+                    ('Group', (('one', 'One'), ('oversized', 'Oversized'))),
+                ],
+            )
+
+        field = Model._meta.get_field('field')
+        self.assertEqual(Model.check(), [
+            Error(
+                "'max_length' is too small to fit the longest value in "
+                "'choices' (9 characters).",
+                obj=field,
+                id='fields.E009',
+            ),
+        ])
 
     def test_choice_005_model_checks_do_not_report_when_all_stored_values_are_shorter_than_max_length(self):
         """GUID: CHOICE-005"""
-        pass
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=4,
+                choices=[('one', 'One'), ('two', 'Two')],
+            )
+
+        self.assertEqual(Model.check(), [])
 
     def test_choice_005_model_checks_do_not_report_when_longest_stored_value_equals_max_length(self):
         """GUID: CHOICE-005"""
-        pass
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=3,
+                choices=[('one', 'One'), ('two', 'Two')],
+            )
+
+        self.assertEqual(Model.check(), [])
 
     def test_choice_006_model_checks_ignore_label_longer_than_max_length_when_stored_value_fits(self):
         """GUID: CHOICE-006"""
-        pass
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=2,
+                choices=[('ok', 'A human-readable label longer than max_length')],
+            )
+
+        self.assertEqual(Model.check(), [])
 
     def test_missing_max_length(self):
         class Model(models.Model):
