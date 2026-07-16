@@ -192,6 +192,32 @@ class Media:
         #     GUARANTEE identical source lists in identical sequence produce the
         #         same valid output because graph construction and tie-breaking
         #         use stable source and first-seen order (GUID: MEDIA-006)
+        #
+        # Compatibility contract (GUID: MEDIA-009):
+        #
+        # preserve_small_aggregation_compatibility(source_lists):
+        #     INPUT the retained declarations from one or two Media objects
+        #
+        #     DETERMINE whether the case depends on an ordering constraint that
+        #         was created by aggregation rather than declared by a source
+        #     IF it depends on such a false constraint:
+        #         APPLY the corrected general aggregation flow above
+        #         DO NOT preserve the defective collection, order, deduplication,
+        #             or warning result as a compatibility requirement
+        #     ELSE IF exactly one Media object supplied a declaration:
+        #         RETURN the same distinct file collection in declared order
+        #         EMIT the same warnings as the existing one-object result
+        #     ELSE IF exactly two Media objects supplied declarations:
+        #         PRESERVE the existing union of their files
+        #         PRESERVE the existing order of files constrained by either
+        #             declaration and the existing placement of unconstrained
+        #             files
+        #         COLLAPSE duplicates exactly as in the existing result
+        #         EMIT a conflict warning exactly when the existing nondefective
+        #             result emits one; otherwise emit no conflict warning
+        #     ELSE:
+        #         APPLY the corrected general aggregation flow without a
+        #             MEDIA-009 compatibility guarantee
         dependency_graph = defaultdict(set)
         all_items = OrderedSet()
         for item_list in filter(None, lists):
