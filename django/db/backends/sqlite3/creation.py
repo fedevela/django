@@ -29,6 +29,19 @@ class DatabaseCreation(BaseDatabaseCreation):
     # Post-setup writes remain owned by the alias-bound DatabaseWrapper, making
     # this return boundary the integration seam exercised by the SQLite tests.
     #
+    # GUID: SQLITE-005 -- Alias isolation is owned across two existing seams.
+    # test_db_signature() supplies the SQLite database identity used by
+    # get_unique_databases_and_mirrors(), which must keep distinct named test
+    # databases in separate setup groups. This hook then supplies only this
+    # connection's physical database name to BaseDatabaseCreation.create_test_db().
+    # The base creation flow retains ownership of binding that name to the
+    # connection alias and passes the same alias to migration, synchronization,
+    # and cache setup. Test reads and writes remain owned by that alias-bound
+    # DatabaseWrapper. Dependencies therefore flow from test-runner grouping to
+    # this backend's identity/file policy, then back through the base lifecycle;
+    # neither backend creation nor later operations may substitute the peer
+    # alias's name or connection.
+    #
     # GUID: SQLITE-004, SQLITE-006 -- Architecture contract for named database
     # reuse. This override owns the decision to preserve and admit the existing
     # SQLite file, but must not own connection or transaction state. After this
