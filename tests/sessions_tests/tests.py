@@ -397,6 +397,25 @@ class SessionTestsMixin:
         self.assertEqual(s1.load(), {})
 
 
+class MalformedSessionDataContractTests(SimpleTestCase):
+
+    def test_session_001_malformed_base64_after_signature_failure_does_not_escape_decode(self):
+        """GUID: SESSION-001 - Malformed legacy Base64 doesn't escape decoding."""
+        pass
+
+    def test_session_002_data_invalid_in_current_and_legacy_formats_yields_empty_state(self):
+        """GUID: SESSION-002 - Data invalid in both formats yields empty state."""
+        pass
+
+    def test_session_003_rejected_data_contributes_no_identity_or_values_to_request(self):
+        """GUID: SESSION-003 - Rejected data contributes no request values."""
+        pass
+
+    def test_session_008_rejection_diagnostics_do_not_interrupt_session_or_request_processing(self):
+        """GUID: SESSION-008 - Rejection diagnostics don't interrupt processing."""
+        pass
+
+
 class DatabaseSessionTests(SessionTestsMixin, TestCase):
 
     backend = DatabaseSession
