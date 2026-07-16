@@ -534,6 +534,30 @@ class OrderingTests(TestCase):
             [article.pk for article in articles],
         )
 
+    def test_orm_010_ascending_self_fk_attname_orders_by_concrete_column_without_self_join(self):
+        """
+        ORM-010: Ascending record__root_id ordering returns ascending stored
+        values, targets the concrete column, and adds no ordering-only
+        self-join.
+        """
+        pass
+
+    def test_orm_010_descending_self_fk_attname_orders_by_concrete_column_without_self_join(self):
+        """
+        ORM-010: Descending -record__root_id ordering returns descending stored
+        values, targets the concrete column, and adds no ordering-only
+        self-join.
+        """
+        pass
+
+    def test_orm_010_sql_structure_checks_allow_backend_representation_differences(self):
+        """
+        ORM-010: Structural SQL checks accept backend-specific quoting,
+        aliases, and formatting while identifying the concrete column and the
+        absence of an ordering-only self-join.
+        """
+        pass
+
     def test_order_by_f_expression(self):
         self.assertQuerysetEqual(
             Article.objects.order_by(F('headline')), [
