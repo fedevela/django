@@ -65,10 +65,29 @@ class TestSerialization(SimpleTestCase):
         self.assertEqual(instance.field, datetime.timedelta(days=1, hours=1))
 
 
-class TestDUR008RegressionCoverage(SimpleTestCase):
+class TestDUR008RegressionCoverage(TestCase):
     def test_dur_008_existing_durationfield_behavior_tests_continue_to_pass(self):
         """GUID: DUR-008 - parsing, persistence, serialization, querying, and forms."""
-        self.assertTrue(True)
+        value = '1 02:03:04.000005'
+        duration = datetime.timedelta(
+            days=1, hours=2, minutes=3, seconds=4, microseconds=5,
+        )
+        model_field = models.DurationField()
+
+        self.assertEqual(model_field.clean(value, None), duration)
+
+        instance = DurationModel.objects.create(field=duration)
+        instance.refresh_from_db()
+        self.assertEqual(instance.field, duration)
+        self.assertTrue(DurationModel.objects.filter(field=duration).exists())
+
+        data = serializers.serialize('json', [instance])
+        deserialized = list(serializers.deserialize('json', data))[0].object
+        self.assertEqual(deserialized.field, duration)
+
+        form_field = model_field.formfield()
+        self.assertEqual(form_field.clean(value), duration)
+        self.assertEqual(form_field.prepare_value(duration), value)
 
 
 class TestValidation(SimpleTestCase):
