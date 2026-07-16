@@ -1232,12 +1232,6 @@ class ManyToManyField(RelatedField):
 
         return warnings
 
-    # Architecture boundary (GUIDs: DJANGO-001, DJANGO-002, DJANGO-003,
-    # DJANGO-004, DJANGO-005, DJANGO-006, DJANGO-007): this private checker
-    # remains the sole owner of ambiguous intermediary diagnostics. The E334
-    # and E335 branches share an in-method hint seam whose only intermediary
-    # naming dependency is relationship_model_name; message, object, error ID,
-    # trigger, ordering, and all other checks remain outside that seam.
     def _check_relationship_model(self, from_model=None, **kwargs):
         if hasattr(self.remote_field.through, '_meta'):
             qualified_model_name = "%s.%s" % (
@@ -1274,27 +1268,6 @@ class ManyToManyField(RelatedField):
             relationship_model_name = self.remote_field.through._meta.object_name
             self_referential = from_model == to_model
 
-            # Pseudocode contract for ambiguous intermediary relationships:
-            # INPUT: resolved source model, target model, intermediary model,
-            #        and the optional through_fields selection.
-            # DJANGO-001: IF the relevant foreign-key count exceeds the
-            # allowed count AND through_fields is absent, THEN append the
-            # existing ambiguous-intermediary-model error.
-            # DJANGO-002 / DJANGO-003: WHEN an E334 or E335 ambiguity error
-            # needs the recursive-relationship hint, THEN describe a
-            # ManyToManyField from "self" using relationship_model_name as
-            # its through argument; do not describe a ForeignKey and do not
-            # add a symmetry option.
-            # DJANGO-004: APPLY that same hint construction independently to
-            # both directional branches: excess source foreign keys -> E334;
-            # excess target foreign keys -> E335.
-            # DJANGO-005 / DJANGO-006: FOR either ambiguity branch, preserve
-            # the existing through_fields guidance, error identifier, error
-            # object, and surrounding diagnostic text; replace only the hint.
-            # DJANGO-007: OTHERWISE preserve every check condition and every
-            # diagnostic; continue collecting errors in the existing order.
-            # OUTPUT: return the accumulated system-check errors after all
-            # existing relationship and through_fields validations run.
             # Count foreign keys in intermediate model
             if self_referential:
                 seen_self = sum(
@@ -1337,7 +1310,7 @@ class ManyToManyField(RelatedField):
                              "through_fields keyword argument.") % (self, from_model_name),
                             hint=(
                                 'If you want to create a recursive relationship, '
-                                'use ForeignKey("%s", symmetrical=False, through="%s").'
+                                'use ManyToManyField("%s", through="%s").'
                             ) % (
                                 RECURSIVE_RELATIONSHIP_CONSTANT,
                                 relationship_model_name,
@@ -1357,7 +1330,7 @@ class ManyToManyField(RelatedField):
                             "through_fields keyword argument." % (self, to_model_name),
                             hint=(
                                 'If you want to create a recursive relationship, '
-                                'use ForeignKey("%s", symmetrical=False, through="%s").'
+                                'use ManyToManyField("%s", through="%s").'
                             ) % (
                                 RECURSIVE_RELATIONSHIP_CONSTANT,
                                 relationship_model_name,
