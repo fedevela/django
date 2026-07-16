@@ -120,6 +120,11 @@ class MigrationAutodetector:
         # Then go through that list, order it, and split into migrations to
         # resolve dependencies caused by M2Ms and FKs.
         self.generated_operations = {}
+        # DJIX-007 / DJIX-008 architecture boundary: altered_indexes is the
+        # model-local reconciliation contract between index discovery and the
+        # remove/alter-together/add emitters. Equivalent index_together and
+        # Options.indexes declarations belong here, before any emitter owns a
+        # physical schema action.
         self.altered_indexes = {}
         self.altered_constraints = {}
 
@@ -988,6 +993,18 @@ class MigrationAutodetector:
                     self._generate_added_field(app_label, model_name, field_name)
 
     def create_altered_indexes(self):
+        # DJIX-007 / DJIX-008 integration seam:
+        # - This method owns cross-declaration index identity. Its identity
+        #   contract is the model plus ordered fields and plain non-unique
+        #   semantics; a physical index name isn't part of that contract.
+        # - generate_removed_indexes(), generate_altered_index_together(), and
+        #   generate_added_indexes() depend on this reconciliation and must not
+        #   independently classify a consumed equivalent declaration.
+        # - Equivalent moves require state convergence without schema churn.
+        #   SeparateDatabaseAndState is the existing operation port for that
+        #   handoff: the target declaration belongs to its state side while its
+        #   database side remains empty. BaseDatabaseSchemaEditor therefore
+        #   remains only a downstream physical-mutation boundary.
         option_name = operations.AddIndex.option_name
         for app_label, model_name in sorted(self.kept_model_keys):
             old_model_name = self.renamed_models.get((app_label, model_name), model_name)
