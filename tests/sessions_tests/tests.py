@@ -7,6 +7,7 @@ import unittest
 from datetime import timedelta
 from http import cookies
 from pathlib import Path
+from unittest import mock
 
 from django.conf import settings
 from django.contrib.sessions.backends.base import UpdateError
@@ -399,21 +400,58 @@ class SessionTestsMixin:
 
 class MalformedSessionDataContractTests(SimpleTestCase):
 
+    def setUp(self):
+        self.session = CookieSession()
+
     def test_session_001_malformed_base64_after_signature_failure_does_not_escape_decode(self):
         """GUID: SESSION-001 - Malformed legacy Base64 doesn't escape decoding."""
-        pass
+        self.assertEqual(self.session.decode('a'), {})
 
     def test_session_002_data_invalid_in_current_and_legacy_formats_yields_empty_state(self):
         """GUID: SESSION-002 - Data invalid in both formats yields empty state."""
-        pass
+        invalid_session = base64.b64encode(b'not-a-session').decode('ascii')
 
+        self.assertEqual(self.session.decode(invalid_session), {})
+
+    @override_settings(
+        SESSION_ENGINE='django.contrib.sessions.backends.signed_cookies',
+    )
     def test_session_003_rejected_data_contributes_no_identity_or_values_to_request(self):
         """GUID: SESSION-003 - Rejected data contributes no request values."""
-        pass
+        serialized = JSONSerializer().dumps({
+            '_auth_user_id': '1',
+            'stored_value': 'must be discarded',
+        })
+        rejected_session = base64.b64encode(
+            b'invalid-hash:' + serialized,
+        ).decode('ascii')
+        request = RequestFactory().get('/')
+        request.COOKIES[settings.SESSION_COOKIE_NAME] = rejected_session
+
+        SessionMiddleware(lambda request: HttpResponse()).process_request(request)
+
+        with self.assertLogs(
+            'django.security.SuspiciousSession', 'WARNING',
+        ):
+            self.assertNotIn('_auth_user_id', request.session)
+            self.assertNotIn('stored_value', request.session)
+            self.assertEqual(dict(request.session), {})
 
     def test_session_008_rejection_diagnostics_do_not_interrupt_session_or_request_processing(self):
         """GUID: SESSION-008 - Rejection diagnostics don't interrupt processing."""
-        pass
+        rejected_session = base64.b64encode(
+            b'invalid-hash:{"stored_value":"must be discarded"}',
+        ).decode('ascii')
+        logger = mock.Mock()
+        logger.warning.side_effect = RuntimeError('diagnostic failure')
+
+        with mock.patch(
+            'django.contrib.sessions.backends.base.logging.getLogger',
+            return_value=logger,
+        ):
+            self.assertEqual(self.session.decode(rejected_session), {})
+
+        logger.warning.assert_called_once_with('Session data corrupted')
 
 
 class DatabaseSessionTests(SessionTestsMixin, TestCase):

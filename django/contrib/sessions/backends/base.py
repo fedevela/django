@@ -167,8 +167,8 @@ class SessionBase:
         #         TRY to report the rejection.
         #         IF reporting fails, contain that failure and continue loading.
         #     RETURN the empty result so request processing can continue.
-        encoded_data = base64.b64decode(session_data.encode('ascii'))
         try:
+            encoded_data = base64.b64decode(session_data.encode('ascii'))
             # could produce ValueError if there is no ':'
             hash, serialized = encoded_data.split(b':', 1)
             expected_hash = self._hash(serialized)
@@ -180,8 +180,13 @@ class SessionBase:
             # ValueError, SuspiciousOperation, unpickling exceptions. If any of
             # these happen, just return an empty dictionary (an empty session).
             if isinstance(e, SuspiciousOperation):
-                logger = logging.getLogger('django.security.%s' % e.__class__.__name__)
-                logger.warning(str(e))
+                try:
+                    logger = logging.getLogger(
+                        'django.security.%s' % e.__class__.__name__,
+                    )
+                    logger.warning(str(e))
+                except Exception:
+                    pass
             return {}
 
     def update(self, dict_):
