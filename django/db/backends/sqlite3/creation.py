@@ -14,6 +14,15 @@ class DatabaseCreation(BaseDatabaseCreation):
             database_name == ':memory:' or 'mode=memory' in database_name
         )
 
+    # GUID: SQLITE-008 -- Architecture contract for the default unnamed test
+    # database. This SQLite hook owns only the translation from an absent
+    # TEST.NAME to the alias-scoped shared-memory URI. The returned name is the
+    # integration seam into BaseDatabaseCreation.create_test_db(), which owns
+    # closing and rebinding the default alias, schema and cache setup, and final
+    # connection initialization. Writes after setup remain owned by that same
+    # alias-bound DatabaseWrapper. Dependencies must continue in that direction;
+    # this backend must not introduce a persistent-file path, a second
+    # connection, or SQLite-specific lifecycle wiring for the unnamed case.
     def _get_test_db_name(self):
         test_database_name = self.connection.settings_dict['TEST']['NAME'] or ':memory:'
         if test_database_name == ':memory:':
