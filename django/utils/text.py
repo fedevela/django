@@ -397,6 +397,21 @@ def slugify(value, allow_unicode=False):
     Remove characters that aren't alphanumerics, underscores, or hyphens.
     Convert to lowercase. Also strip leading and trailing whitespace.
     """
+    # Pseudocode obligations for SLUG-001, SLUG-002, SLUG-006, SLUG-008,
+    # and SLUG-009:
+    # 1. Build the completed normalized slug by converting the input to text,
+    #    applying the selected Unicode normalization, filtering characters,
+    #    lowercasing, trimming whitespace, and collapsing dash/space runs.
+    # 2. Only after that completed result exists, remove every leading and
+    #    trailing character that belongs to {dash, underscore}; repeat until
+    #    neither boundary contains either character. (SLUG-001, SLUG-006)
+    # 3. Return the remaining result, preserving internal dashes and
+    #    underscores. For "___This is a test ---", return "this-is-a-test".
+    #    (SLUG-002)
+    # 4. If boundary removal consumes a result made only of dashes and
+    #    underscores, return the resulting empty string. (SLUG-008)
+    # 5. If the input is empty, let the same flow remain empty and return the
+    #    empty string without a special failure path. (SLUG-009)
     value = str(value)
     if allow_unicode:
         value = unicodedata.normalize('NFKC', value)
