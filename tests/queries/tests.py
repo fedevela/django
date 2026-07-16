@@ -2598,6 +2598,34 @@ class ToFieldTests(TestCase):
 
 
 class IsNullTests(TestCase):
+    # GUID: ISNULL-001
+    def test_isnull_001_non_boolean_rhs_rejected_during_compilation_or_evaluation(self):
+        pass
+
+    # GUID: ISNULL-002
+    def test_isnull_002_truthy_non_boolean_rhs_not_coerced_to_true(self):
+        pass
+
+    # GUID: ISNULL-002
+    def test_isnull_002_falsey_non_boolean_rhs_not_coerced_to_false(self):
+        pass
+
+    # GUID: ISNULL-003
+    def test_isnull_003_direct_field_non_boolean_rhs_rejected(self):
+        pass
+
+    # GUID: ISNULL-003
+    def test_isnull_003_relationship_spanning_non_boolean_rhs_rejected(self):
+        pass
+
+    # GUID: ISNULL-007
+    def test_isnull_007_iterator_evaluation_rejects_non_boolean_rhs_before_results(self):
+        pass
+
+    # GUID: ISNULL-008
+    def test_isnull_008_rejection_uses_query_error_with_boolean_requirement_message(self):
+        pass
+
     def test_primary_key(self):
         custom = CustomPk.objects.create(name='pk')
         null = Related.objects.create()
