@@ -118,10 +118,11 @@ class SessionBase:
 
     def decode(self, session_data):
         # Architecture seam — GUID: SESSION-001, SESSION-002, SESSION-004,
-        # SESSION-007
-        # This method owns format selection only. The current-format decoder
-        # delegates rejected input unchanged to the legacy compatibility
-        # boundary, whose contract is to return a session mapping.
+        # SESSION-005, SESSION-007
+        # This method owns format selection and the current-format success
+        # contract. Its decoded mapping crosses the public boundary unchanged;
+        # only rejected input is delegated unchanged to the private legacy
+        # compatibility boundary, whose contract is to return a session mapping.
         # Pseudocode — GUID: SESSION-001
         # TRY to validate and decode session_data as the current signed format.
         # IF current-format validation or decoding fails:
@@ -167,10 +168,11 @@ class SessionBase:
     def _legacy_decode(self, session_data):
         # RemovedInDjango40Warning: pre-Django 3.1 format will be invalid.
         # Compatibility boundary — GUID: SESSION-001, SESSION-002, SESSION-003,
-        # SESSION-007
+        # SESSION-006, SESSION-007
         # Input normalization, Base64 parsing, integrity checking, and payload
-        # deserialization belong to this single rejection boundary. No partial
-        # payload crosses it: every rejected candidate is represented by the
+        # deserialization belong to this single compatibility boundary. A valid
+        # supported legacy mapping crosses it unchanged; no partial rejected
+        # payload crosses it, and every rejected candidate is represented by the
         # same empty session mapping returned to decode(). This private boundary
         # is depended on by decode(); request-layer consumers depend only on the
         # mapping contract exposed by decode(), never on legacy format details.
