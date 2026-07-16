@@ -6,17 +6,33 @@ from .models import Number, ReservedName
 
 
 class QuerySetDistinctContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        Number.objects.bulk_create([
+            Number(num=1),
+            Number(num=1),
+            Number(num=2),
+        ])
+
     def test_uniondist_007_non_combined_parameterless_distinct_preserves_behavior(self):
         """UNIONDIST-007: non-combined distinct() preserves existing behavior."""
-        self.assertTrue(True)
+        queryset = Number.objects.values_list('num', flat=True).order_by('num')
+        self.assertSequenceEqual(queryset.distinct(), [1, 2])
 
+    @skipUnlessDBFeature('can_distinct_on_fields')
     def test_uniondist_007_non_combined_supported_field_distinct_preserves_behavior(self):
         """UNIONDIST-007: supported non-combined distinct(field) preserves behavior."""
-        self.assertTrue(True)
+        queryset = Number.objects.order_by('num', 'pk').distinct('num')
+        self.assertSequenceEqual(
+            queryset.values_list('num', flat=True),
+            [1, 2],
+        )
 
     def test_uniondist_007_non_combined_limited_field_distinct_preserves_limitations(self):
         """UNIONDIST-007: existing non-combined distinct(field) limits remain unchanged."""
-        self.assertTrue(True)
+        msg = 'Cannot create distinct fields once a slice has been taken.'
+        with self.assertRaisesMessage(AssertionError, msg):
+            Number.objects.all()[:1].distinct('num')
 
 
 @skipUnlessDBFeature('supports_select_union')
