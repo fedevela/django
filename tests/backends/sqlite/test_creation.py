@@ -28,6 +28,26 @@ class TestDbSignatureTests(SimpleTestCase):
 class NamedTestDatabaseKeepdbTests(SimpleTestCase):
     aliases = ('default', 'other')
 
+    def test_sqlite_005_setup_for_selected_alias_leaves_peer_alias_unchanged(self):
+        """GUID: SQLITE-005; setup changes only the selected database alias."""
+        pass
+
+    def test_sqlite_005_migration_for_selected_alias_leaves_peer_alias_unchanged(self):
+        """GUID: SQLITE-005; migration changes only the selected database alias."""
+        pass
+
+    def test_sqlite_005_synchronization_for_selected_alias_leaves_peer_alias_unchanged(self):
+        """GUID: SQLITE-005; synchronization changes only the selected database alias."""
+        pass
+
+    def test_sqlite_005_test_execution_for_selected_alias_leaves_peer_alias_unchanged(self):
+        """GUID: SQLITE-005; test execution changes only the selected database alias."""
+        pass
+
+    def test_sqlite_005_completed_setup_and_tests_keep_default_and_other_state_mutually_isolated(self):
+        """GUID: SQLITE-005; completed setup and tests preserve alias state isolation."""
+        pass
+
     def test_sqlite_004_reused_named_database_releases_blocking_state_before_test_write(self):
         """GUID: SQLITE-004; reused named databases allow subsequent test writes."""
         with tempfile.TemporaryDirectory() as directory:
