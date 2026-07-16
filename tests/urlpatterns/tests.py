@@ -89,15 +89,27 @@ class SimplifiedURLTests(SimpleTestCase):
 
     def test_url_003_url_004_present_html_is_format_keyword_without_nested_positional_args(self):
         """GUID: URL-003, URL-004 (present html value)."""
-        self.assertTrue(True)
+        match = resolve('/module/html')
+        self.assertEqual(match.kwargs, {'format': 'html'})
+        self.assertEqual(match.args, ())
+        response = self.client.get('/module/html')
+        self.assertEqual(response.content, b'html')
 
     def test_url_003_url_004_present_json_is_format_keyword_without_nested_positional_args(self):
         """GUID: URL-003, URL-004 (present json value)."""
-        self.assertTrue(True)
+        match = resolve('/module/json')
+        self.assertEqual(match.kwargs, {'format': 'json'})
+        self.assertEqual(match.args, ())
+        response = self.client.get('/module/json')
+        self.assertEqual(response.content, b'json')
 
     def test_url_003_url_004_present_xml_is_format_keyword_without_nested_positional_args(self):
         """GUID: URL-003, URL-004 (present xml value)."""
-        self.assertTrue(True)
+        match = resolve('/module/xml')
+        self.assertEqual(match.kwargs, {'format': 'xml'})
+        self.assertEqual(match.args, ())
+        response = self.client.get('/module/xml')
+        self.assertEqual(response.content, b'xml')
 
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')
