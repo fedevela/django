@@ -421,6 +421,15 @@ class MigrationAutodetector:
                 operation.name_lower == dependency[1].lower() and
                 (operation.order_with_respect_to or "").lower() != dependency[2].lower()
             )
+        # ORDER-001 dependency-resolution pseudocode
+        # INPUT: a dependency emitted for a newly created model's index that
+        # references the synthetic ``_order`` field.
+        # IF the candidate operation is AlterOrderWithRespectTo for the same
+        # model and it sets a non-empty order_with_respect_to value:
+        #     resolve the dependency to that operation.
+        # ELSE:
+        #     leave the dependency unresolved so sorting cannot place the
+        #     _order-dependent AddIndex before the field-introducing operation.
         # Field is removed and part of an index/unique_together
         elif dependency[2] is not None and dependency[3] == "foo_together_change":
             return (
@@ -619,6 +628,24 @@ class MigrationAutodetector:
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
+                # ORDER-001 generation pseudocode
+                # INPUTS: this newly created model's declared index, its
+                # order_with_respect_to option, and related_dependencies.
+                # START with an independent copy of related_dependencies.
+                # IF order_with_respect_to is set AND index.fields references
+                # ``_order`` (alone or as one field of a composite index):
+                #     add a dependency on the same model's successful
+                #     AlterOrderWithRespectTo operation.
+                # ELSE:
+                #     preserve the existing dependencies unchanged.
+                # EMIT AddIndex with the resulting dependency set; sorting must
+                # place its resolved prerequisites first.
+                # FAILURE: if the field-introducing operation is absent or
+                # cannot be resolved, do not permit an early _order reference;
+                # propagate the existing unresolved-dependency failure.
+                # VERIFIES:
+                # - test_order_001_new_order_with_respect_to_model_places_alter_before_each_order_index
+                # - test_order_001_composite_look_order_index_has_no_early_order_reference
                 self.add_operation(
                     app_label,
                     operations.AddIndex(
