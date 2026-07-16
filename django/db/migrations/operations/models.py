@@ -598,6 +598,19 @@ class AlterOrderWithRespectTo(ModelOptionOperation):
         to_model = to_state.apps.get_model(app_label, self.name)
         if self.allow_migrate_model(schema_editor.connection.alias, to_model):
             from_model = from_state.apps.get_model(app_label, self.name)
+            # ORDER-003 forward-transition pseudocode
+            # INPUTS: model states immediately before and after applying
+            # order_with_respect_to.
+            # IF the target state enables relative ordering and the source
+            # state does not:
+            #     resolve the target model's synthetic _order field;
+            #     provide an initialization value when it has no default;
+            #     add that field to the existing table.
+            # ON field resolution or schema-editor failure:
+            #     propagate the error and leave this operation unapplied.
+            # OUTPUT: the table contains the implicit _order column.
+            # VERIFIES:
+            # - test_order_003_applied_order_with_respect_to_migration_creates_order_column
             # Remove a field if we need to
             if from_model._meta.order_with_respect_to and not to_model._meta.order_with_respect_to:
                 schema_editor.remove_field(from_model, from_model._meta.get_field("_order"))
@@ -754,6 +767,18 @@ class AddIndex(IndexOperation):
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
         model = to_state.apps.get_model(app_label, self.model_name)
         if self.allow_migrate_model(schema_editor.connection.alias, model):
+            # ORDER-004 index-creation pseudocode
+            # INPUT: the declared composite index fields [look, _order] and
+            # the post-ordering model state.
+            # RESOLVE each field in declaration order to its database column:
+            #     look -> the foreign-key storage column;
+            #     _order -> the previously created implicit ordering column.
+            # CREATE one index using that same first-to-second column order.
+            # ON a missing field, missing column, or schema-editor failure:
+            #     abort this operation and propagate the database error.
+            # OUTPUT: the database index orders look before _order.
+            # VERIFIES:
+            # - test_order_004_applied_composite_index_uses_look_then_order_columns
             schema_editor.add_index(model, self.index)
 
     def database_backwards(self, app_label, schema_editor, from_state, to_state):

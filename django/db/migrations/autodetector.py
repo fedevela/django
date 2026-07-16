@@ -666,6 +666,22 @@ class MigrationAutodetector:
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
+                # ORDER-002 migration-application pseudocode
+                # INPUTS: a new model with order_with_respect_to and a
+                # declared index whose fields include the synthetic _order.
+                # COPY the model and related-field prerequisites for AddIndex.
+                # IF the index references _order:
+                #     require the matching AlterOrderWithRespectTo operation.
+                # SORT operations so table creation and the related field are
+                # followed by _order creation, then by index creation.
+                # APPLY the sorted operations to the empty database in order.
+                # ON any unresolved prerequisite or database error:
+                #     abort migration application and propagate the error;
+                #     never attempt AddIndex against a missing _order column.
+                # OUTPUT: a successfully applied migration with every index
+                # prerequisite present.
+                # VERIFIES:
+                # - test_order_002_generated_order_index_migration_applies_to_empty_database
                 dependencies = related_dependencies.copy()
                 # ORDER-001: _order is created by AlterOrderWithRespectTo.
                 if order_with_respect_to and any(

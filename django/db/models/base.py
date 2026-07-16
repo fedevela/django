@@ -2037,6 +2037,21 @@ class Model(metaclass=ModelBase):
 # ORDERING METHODS #########################
 
 def method_set_order(self, ordered_obj, id_list, using=None):
+    # ORDER-005 relation-ordering pseudocode
+    # INPUTS: one parent instance, its related ordered model, and an ordered
+    # list of related primary keys.
+    # RESOLVE the order_with_respect_to field and derive a filter identifying
+    # only rows related to this parent (look).
+    # FOR each primary key in input order:
+    #     map its zero-based position to that row's _order value.
+    # UPDATE the mapped _order values within the relation-scoped queryset.
+    # WHEN order is retrieved, rebuild the same parent filter and return its
+    # primary keys under the model's _order ordering.
+    # ON query construction or database-write failure:
+    #     propagate the error; do not report a preserved order.
+    # OUTPUT: set then get preserves relative order independently per look.
+    # VERIFIES:
+    # - test_order_005_applied_migration_preserves_order_relative_to_look
     if using is None:
         using = DEFAULT_DB_ALIAS
     order_wrt = ordered_obj._meta.order_with_respect_to
