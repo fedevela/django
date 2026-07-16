@@ -738,6 +738,14 @@ class SQLCompiler:
         #      evaluation to follow their established control flow.
         #   FAILURE: preserve existing FieldError propagation, including the
         #      infinite-loop guard; introduce no fallback that masks regressions.
+        #
+        # DJANGO-007/DJANGO-008 -- Architecture boundary:
+        # Direction normalization belongs to ``get_order_dir()`` and field-path
+        # resolution belongs to ``_setup_joins()``. This method owns the single
+        # integration seam between related-model ordering expansion and direct
+        # concrete-target construction. Any ``pk`` correction must remain at
+        # that seam: it must bypass relation expansion without changing the
+        # shared ``trim_joins()``/``OrderBy`` path or inheritance machinery.
         name, order = get_order_dir(name, default_order)
         descending = order == 'DESC'
         pieces = name.split(LOOKUP_SEP)
