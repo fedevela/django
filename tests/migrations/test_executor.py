@@ -1,11 +1,15 @@
+from contextlib import contextmanager
 from unittest import mock
 
 from django.apps.registry import apps as global_apps
-from django.db import DatabaseError, connection
+from django.db import DatabaseError, connection, models
+from django.db.migrations.autodetector import MigrationAutodetector
 from django.db.migrations.exceptions import InvalidMigrationPlan
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.graph import MigrationGraph
 from django.db.migrations.recorder import MigrationRecorder
+from django.db.migrations.state import ModelState, ProjectState
+from django.db.migrations.writer import MigrationWriter
 from django.test import (
     SimpleTestCase, modify_settings, override_settings, skipUnlessDBFeature,
 )
@@ -23,6 +27,81 @@ class ExecutorTests(MigrationTestBase):
     """
 
     available_apps = ["migrations", "migrations2", "django.contrib.auth", "django.contrib.contenttypes"]
+
+    @contextmanager
+    def applied_order_with_respect_to_migration(self):
+        app_label = "orderwrt"
+        from_state = ProjectState()
+        to_state = ProjectState()
+        look_state = ModelState(app_label, "Look", [
+            ("id", models.AutoField(primary_key=True)),
+        ])
+        ordered_model_state = ModelState(app_label, "OrderedModel", [
+            ("id", models.AutoField(primary_key=True)),
+            ("look", models.ForeignKey("orderwrt.Look", models.CASCADE)),
+            ("created_at", models.DateTimeField(auto_now_add=True)),
+            ("updated_at", models.DateTimeField(auto_now=True)),
+        ], options={
+            "order_with_respect_to": "look",
+            "indexes": [
+                models.Index(fields=["created_at"], name="created_at_idx"),
+                models.Index(fields=["updated_at"], name="updated_at_idx"),
+                models.Index(fields=["look", "_order"], name="look_order_idx"),
+            ],
+        })
+        to_state.add_model(look_state.clone())
+        to_state.add_model(ordered_model_state.clone())
+        detected_migration = MigrationAutodetector(
+            from_state, to_state,
+        )._detect_changes()[app_label][0]
+        namespace = {}
+        exec(MigrationWriter(detected_migration).as_string(), namespace)
+        migration = namespace["Migration"](
+            detected_migration.name, detected_migration.app_label,
+        )
+        executor = MigrationExecutor(connection)
+        state = executor.apply_migration(from_state.clone(), migration)
+        try:
+            yield state
+        finally:
+            executor.unapply_migration(from_state, migration)
+
+    def test_order_002_generated_order_index_migration_applies_to_empty_database(self):
+        """ORDER-002: Applying the generated migration doesn't reference a missing _order."""
+        with self.applied_order_with_respect_to_migration():
+            self.assertTableExists("orderwrt_orderedmodel")
+
+    def test_order_003_applied_order_with_respect_to_migration_creates_order_column(self):
+        """ORDER-003: Applying the generated migration creates the implicit _order column."""
+        with self.applied_order_with_respect_to_migration():
+            self.assertColumnExists("orderwrt_orderedmodel", "_order")
+
+    def test_order_004_applied_composite_index_uses_look_then_order_columns(self):
+        """ORDER-004: The applied composite index contains look followed by _order."""
+        with self.applied_order_with_respect_to_migration():
+            self.assertIndexExists("orderwrt_orderedmodel", ["look_id", "_order"])
+
+    def test_order_005_applied_migration_preserves_order_relative_to_look(self):
+        """ORDER-005: Applied order_with_respect_to behavior preserves order per look."""
+        with self.applied_order_with_respect_to_migration() as state:
+            Look = state.apps.get_model("orderwrt", "Look")
+            OrderedModel = state.apps.get_model("orderwrt", "OrderedModel")
+            look = Look.objects.create()
+            first = OrderedModel.objects.create(look=look)
+            second = OrderedModel.objects.create(look=look)
+
+            look.set_orderedmodel_order([second.pk, first.pk])
+
+            self.assertSequenceEqual(
+                look.get_orderedmodel_order(),
+                [second.pk, first.pk],
+            )
+
+    def test_order_006_empty_database_migration_creates_created_at_and_updated_at_indexes(self):
+        """ORDER-006: Applying the migration creates created_at and updated_at indexes."""
+        with self.applied_order_with_respect_to_migration():
+            self.assertIndexExists("orderwrt_orderedmodel", ["created_at"])
+            self.assertIndexExists("orderwrt_orderedmodel", ["updated_at"])
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_run(self):
