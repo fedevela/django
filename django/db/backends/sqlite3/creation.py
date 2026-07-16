@@ -3,6 +3,7 @@ import shutil
 import sys
 from pathlib import Path
 
+from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.backends.base.creation import BaseDatabaseCreation
 
 
@@ -14,63 +15,15 @@ class DatabaseCreation(BaseDatabaseCreation):
             database_name == ':memory:' or 'mode=memory' in database_name
         )
 
-    # GUID: SQLITE-008 -- Architecture contract for the default unnamed test
-    # database. This SQLite hook owns only the translation from an absent
-    # TEST.NAME to the alias-scoped shared-memory URI. The returned name is the
-    # integration seam into BaseDatabaseCreation.create_test_db(), which owns
-    # closing and rebinding the default alias, schema and cache setup, and final
-    # connection initialization. Writes after setup remain owned by that same
-    # alias-bound DatabaseWrapper. Dependencies must continue in that direction;
-    # this backend must not introduce a persistent-file path, a second
-    # connection, or SQLite-specific lifecycle wiring for the unnamed case.
     def _get_test_db_name(self):
         test_database_name = self.connection.settings_dict['TEST']['NAME'] or ':memory:'
         if test_database_name == ':memory:':
             return 'file:memorydb_%s?mode=memory&cache=shared' % self.connection.alias
         return test_database_name
 
-    # GUID: SQLITE-003 -- Architecture contract for named keepdb creation.
-    # This backend override owns SQLite file-name and replacement policy only.
-    # BaseDatabaseCreation.create_test_db() owns the downstream alias binding,
-    # schema initialization, and connection establishment. The dependency must
-    # continue from this override into that base flow for every alias; creation
-    # must not open, initialize, or share another alias's connection here.
-    # Post-setup writes remain owned by the alias-bound DatabaseWrapper, making
-    # this return boundary the integration seam exercised by the SQLite tests.
-    #
-    # GUID: SQLITE-005 -- Alias isolation is owned across two existing seams.
-    # test_db_signature() supplies the SQLite database identity used by
-    # get_unique_databases_and_mirrors(), which must keep distinct named test
-    # databases in separate setup groups. This hook then supplies only this
-    # connection's physical database name to BaseDatabaseCreation.create_test_db().
-    # The base creation flow retains ownership of binding that name to the
-    # connection alias and passes the same alias to migration, synchronization,
-    # and cache setup. Test reads and writes remain owned by that alias-bound
-    # DatabaseWrapper. Dependencies therefore flow from test-runner grouping to
-    # this backend's identity/file policy, then back through the base lifecycle;
-    # neither backend creation nor later operations may substitute the peer
-    # alias's name or connection.
-    #
-    # GUID: SQLITE-004, SQLITE-006 -- Architecture contract for named database
-    # reuse. This override owns the decision to preserve and admit the existing
-    # SQLite file, but must not own connection or transaction state. After this
-    # hook returns, BaseDatabaseCreation.create_test_db() owns the close/rebind
-    # boundary and the normal migration and synchronization flow. The resulting
-    # alias-bound DatabaseWrapper owns post-setup writes to the preserved file.
-    #
-    # GUID: SQLITE-007 -- Repeated reuse crosses the same boundary on every run:
-    # BaseDatabaseCreation.destroy_test_db() closes the active wrapper before
-    # preserving the file, and the next create_test_db() call re-enters here.
-    # Dependencies therefore point from the test-runner lifecycle through the
-    # base creation contract into this SQLite preservation policy, never from
-    # this hook to a retained connection from an earlier run.
     def _create_test_db(self, verbosity, autoclobber, keepdb=False):
         test_database_name = self._get_test_db_name()
 
-        # GUID: SQLITE-003 -- Returning a named database, even when its file is
-        # missing, lets the base creation flow bind it to this alias, initialize
-        # it, and open the connection that creates the SQLite file. Database
-        # errors remain visible to the test runner.
         if keepdb:
             return test_database_name
         if not self.is_in_memory_db(test_database_name):
@@ -130,7 +83,11 @@ class DatabaseCreation(BaseDatabaseCreation):
                 sys.exit(2)
 
     def _destroy_test_db(self, test_database_name, verbosity):
-        if test_database_name and not self.is_in_memory_db(test_database_name):
+        if self.is_in_memory_db(test_database_name):
+            # DatabaseWrapper.close() ignores in-memory databases to prevent
+            # accidental data loss. Test database destruction is intentional.
+            BaseDatabaseWrapper.close(self.connection)
+        elif test_database_name:
             # Remove the SQLite database file
             os.remove(test_database_name)
 
@@ -147,8 +104,5 @@ class DatabaseCreation(BaseDatabaseCreation):
         if self.is_in_memory_db(test_database_name):
             sig.append(self.connection.alias)
         else:
-            # GUID: SQLITE-001, SQLITE-002, SQLITE-005 -- Named test databases
-            # must remain distinct so multiple aliases aren't configured as
-            # mirrors and setup remains routed to each alias's own database.
             sig.append(test_database_name)
         return tuple(sig)
