@@ -1124,6 +1124,12 @@ class Query(BaseExpression):
 
     def check_filterable(self, expression):
         """Raise an error if expression cannot be used in a WHERE clause."""
+        # Architecture boundary (DJANGO-001, DJANGO-004, DJANGO-005):
+        # django.db.models.expressions.BaseExpression owns the filterability
+        # contract. This query-construction boundary enforces that contract
+        # and recursively traverses its expression dependencies; ordinary
+        # model instances remain owned by the relation-validation path in
+        # build_filter().
         # Pseudocode contract (DJANGO-001, DJANGO-004, DJANGO-005):
         # INPUT: a candidate value encountered while building a filter.
         # IF the candidate is ordinary model data rather than a query
@@ -1279,6 +1285,11 @@ class Query(BaseExpression):
         if check_filterable:
             self.check_filterable(value)
 
+        # Integration seam (DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-004):
+        # RHS classification feeds the existing relation boundary below.
+        # check_related_objects() owns related-model compatibility, and
+        # build_lookup() owns predicate construction; neither depends on a
+        # model instance's user-defined filterable attribute.
         # Pseudocode contract (DJANGO-001, DJANGO-002, DJANGO-003):
         # ON successful RHS filterability classification, continue through the
         # existing relation-type validation and foreign-key lookup construction
