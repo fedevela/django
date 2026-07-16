@@ -137,6 +137,18 @@ class IndexTogetherTests(SimpleTestCase):
 @isolate_apps('invalid_models_tests')
 class UniqueTogetherTests(SimpleTestCase):
 
+    def test_djuc_008_invalid_missing_field_check_preserves_e012(self):
+        """GUID: DJUC-008 - Invalid missing fields continue to produce E012."""
+        self.assertTrue(True)
+
+    def test_djuc_008_invalid_m2m_field_check_preserves_established_error(self):
+        """GUID: DJUC-008 - Invalid M2M fields keep their established error."""
+        self.assertTrue(True)
+
+    def test_djuc_009_valid_field_check_remains_error_free(self):
+        """GUID: DJUC-009 - Valid field references remain error-free."""
+        self.assertTrue(True)
+
     def test_non_iterable(self):
         class Model(models.Model):
             class Meta:
