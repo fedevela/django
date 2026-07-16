@@ -810,8 +810,8 @@ class MigrationAutodetector:
                 ),
             )
 
-    # MIGPK-001, MIGPK-006 ownership: this is the sole field-rename detection
-    # boundary and producer of renamed_fields for downstream comparison.
+    # MIGPK-001, MIGPK-006, MIGPK-007 ownership: this is the sole field-rename
+    # detection boundary and producer of renamed_fields for downstream comparison.
     def generate_renamed_fields(self):
         """Work out renamed fields."""
         self.renamed_fields = {}
@@ -839,10 +839,13 @@ class MigrationAutodetector:
                             old_field_dec[0:2] == field_dec[0:2] and
                             dict(old_field_dec[2], db_column=old_db_column) == field_dec[2])):
                         if self.questioner.ask_rename(model_name, rem_field_name, field_name, field):
-                            # MIGPK-001, MIGPK-006 -- custom-primary-key rename flow:
-                            # INPUT: equivalent old/new field definitions whose names differ.
+                            # MIGPK-001, MIGPK-006, MIGPK-007 -- custom-primary-key
+                            # rename flow:
+                            # INPUT: equivalent old/new field definitions whose names differ;
+                            # the definitions may use any otherwise-supported field type.
                             # DECISION: after rename confirmation, classify the transition as
-                            # a rename rather than independent removal and addition.
+                            # a rename rather than independent removal and addition; base the
+                            # decision on definition equivalence, never on CharField identity.
                             # TRANSITION: emit RenameField(old name -> new name), reconcile the
                             # field-key sets, and record new name -> old name for later relation
                             # comparison.
@@ -922,9 +925,9 @@ class MigrationAutodetector:
             ],
         )
 
-    # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005 integration seam: consume
-    # rename metadata here, at relation deconstruction and operation emission;
-    # RenameField.state_forwards owns the later project-state reconciliation.
+    # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005, MIGPK-007 integration seam:
+    # consume rename metadata here, at relation deconstruction and operation
+    # emission; RenameField.state_forwards owns later project-state reconciliation.
     def generate_altered_fields(self):
         """
         Make AlterField operations, or possibly RemovedField/AddField if alter
@@ -941,7 +944,8 @@ class MigrationAutodetector:
             # Implement any model renames on relations; these are handled by RenameModel
             # so we need to exclude them from the comparison
             if hasattr(new_field, "remote_field") and getattr(new_field.remote_field, "model", None):
-                # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005 -- implicit-FK flow:
+                # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005, MIGPK-007 --
+                # implicit-FK flow:
                 # INPUT: old/new relation definitions plus the recorded target-field
                 # rename map produced by generate_renamed_fields().
                 # DECISION: determine whether a changed target name is the implicit
@@ -958,6 +962,8 @@ class MigrationAutodetector:
                 # FAILURE PATH: reject any candidate operation/state representation whose
                 # to_field still names the removed primary-key field; do not serialize or
                 # hand off a partially normalized relation.
+                # TYPE INVARIANT: execute the same rename-map lookup and relation handoff
+                # for CharField and every equivalent supported custom-primary-key type.
                 rename_key = (
                     new_field.remote_field.model._meta.app_label,
                     new_field.remote_field.model._meta.model_name,
