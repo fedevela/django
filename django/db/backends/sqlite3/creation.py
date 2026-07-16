@@ -138,7 +138,8 @@ class DatabaseCreation(BaseDatabaseCreation):
         if self.is_in_memory_db(test_database_name):
             sig.append(self.connection.alias)
         else:
-            # GUID: SQLITE-001, SQLITE-002 -- Named test databases must remain
-            # distinct so multiple aliases aren't configured as mirrors.
+            # GUID: SQLITE-001, SQLITE-002, SQLITE-005 -- Named test databases
+            # must remain distinct so multiple aliases aren't configured as
+            # mirrors and setup remains routed to each alias's own database.
             sig.append(test_database_name)
         return tuple(sig)

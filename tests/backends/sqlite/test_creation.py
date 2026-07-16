@@ -30,130 +30,141 @@ class NamedTestDatabaseKeepdbTests(SimpleTestCase):
 
     def test_sqlite_005_setup_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; setup changes only the selected database alias."""
-        # SQLITE-005 setup logic obligation:
-        # GIVEN default and other resolve to distinct SQLite test databases,
-        # WHEN setup targets one selected alias,
-        # THEN only that alias transitions from UNSET_UP to SET_UP and the peer
-        # alias retains its pre-setup state.
-        #
-        # INPUTS:
-        # - The selected alias, its distinct database name, and the peer alias.
-        # - A peer-state marker captured before setup begins.
-        #
-        # PROCEDURE:
-        # 1. Resolve the selected alias to its own connection and database name.
-        # 2. If both aliases resolve to the same database, fail before setup.
-        # 3. Capture the peer marker, run setup only for the selected alias, and
-        #    transition that alias to SET_UP.
-        # 4. Read the peer through its own alias and require its marker and setup
-        #    state to equal the captured values.
-        #
-        # OUTPUT: The selected alias is SET_UP; the peer remains UNCHANGED.
-        # FAILURE PATHS:
-        # - Fail on a shared database identity or any peer-state mutation.
-        # - Close both alias-bound connections on every exit path.
-        pass
+        for selected_alias, peer_alias in (self.aliases, self.aliases[::-1]):
+            with self.subTest(selected_alias=selected_alias), \
+                    tempfile.TemporaryDirectory() as directory:
+                database_settings = self.get_named_test_database_settings(directory)
+                test_connections = ConnectionHandler(database_settings)
+                with test_connections[peer_alias].cursor() as cursor:
+                    cursor.execute('CREATE TABLE peer_state (value INTEGER)')
+                    cursor.execute('INSERT INTO peer_state VALUES (37)')
+
+                old_config = None
+                try:
+                    old_config, migrated_aliases = self.setup_test_databases(
+                        test_connections,
+                        database_settings,
+                        {selected_alias},
+                    )
+                    self.assertEqual(migrated_aliases, [selected_alias])
+                    self.assertTrue(Path(
+                        database_settings[selected_alias]['TEST']['NAME']
+                    ).is_file())
+                    self.assertFalse(Path(
+                        database_settings[peer_alias]['TEST']['NAME']
+                    ).exists())
+                    with test_connections[peer_alias].cursor() as cursor:
+                        cursor.execute('SELECT value FROM peer_state')
+                        self.assertEqual(cursor.fetchall(), [(37,)])
+                finally:
+                    if old_config is not None:
+                        self.preserve_named_test_databases(
+                            test_connections, old_config, database_settings,
+                        )
+                    else:
+                        test_connections.close_all()
 
     def test_sqlite_005_migration_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; migration changes only the selected database alias."""
-        # SQLITE-005 migration logic obligation:
-        # GIVEN isolated alias databases and an unapplied migration for each,
-        # WHEN migration executes for one selected alias,
-        # THEN only its schema and migration history transition to MIGRATED.
-        #
-        # INPUTS:
-        # - A selected alias, a peer alias, and equivalent pending migration work.
-        # - The peer schema and migration-history snapshots taken before execution.
-        #
-        # PROCEDURE:
-        # 1. Bind the migration executor to the selected alias connection.
-        # 2. Apply the pending migration and record the selected alias as MIGRATED.
-        # 3. Inspect schema and migration history through the peer alias.
-        # 4. Require both peer snapshots to remain unchanged and the migration to
-        #    remain unapplied there.
-        #
-        # OUTPUT: Selected is MIGRATED; peer remains UNMIGRATED_AND_UNCHANGED.
-        # FAILURE PATHS:
-        # - Fail if executor state or schema changes appear through the peer.
-        # - Roll back or close only the connection associated with each alias.
-        pass
+        for selected_alias, peer_alias in (self.aliases, self.aliases[::-1]):
+            with self.subTest(selected_alias=selected_alias), \
+                    tempfile.TemporaryDirectory() as directory:
+                connections, old_config, database_settings, migrated_aliases = \
+                    self.setup_named_test_databases(directory, {selected_alias})
+                try:
+                    self.assertEqual(migrated_aliases, [selected_alias])
+                    with connections[selected_alias].cursor() as cursor:
+                        cursor.execute('SELECT name FROM keepdb_migrations')
+                        self.assertEqual(cursor.fetchall(), [('initial',)])
+                    self.assertNotIn(
+                        'keepdb_migrations', self.table_names(connections[peer_alias]),
+                    )
+                finally:
+                    self.preserve_named_test_databases(
+                        connections, old_config, database_settings,
+                    )
 
     def test_sqlite_005_synchronization_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; synchronization changes only the selected database alias."""
-        # SQLITE-005 synchronization logic obligation:
-        # GIVEN isolated alias databases and an unsynchronized model,
-        # WHEN synchronization targets one selected alias,
-        # THEN its table state transitions to SYNCHRONIZED without creating or
-        # changing that table in the peer database.
-        #
-        # INPUTS:
-        # - The selected and peer aliases and a model eligible for synchronization.
-        # - A peer table-state snapshot captured before synchronization.
-        #
-        # PROCEDURE:
-        # 1. Route synchronization to the selected alias connection.
-        # 2. Create the eligible table only in the selected database and transition
-        #    the selected alias to SYNCHRONIZED.
-        # 3. Inspect table state through each alias independently.
-        # 4. Require the table through selected and the original snapshot through
-        #    peer, without substituting either alias's connection.
-        #
-        # OUTPUT: Selected is SYNCHRONIZED; peer remains UNCHANGED.
-        # FAILURE PATHS:
-        # - Fail if the table is absent from selected or appears/changes in peer.
-        # - Release both alias-bound schema contexts on every exit path.
-        pass
+        for selected_alias, peer_alias in (self.aliases, self.aliases[::-1]):
+            with self.subTest(selected_alias=selected_alias), \
+                    tempfile.TemporaryDirectory() as directory:
+                connections, old_config, database_settings, _ = \
+                    self.setup_named_test_databases(directory, {selected_alias})
+                try:
+                    self.assertIn(
+                        'keepdb_data', self.table_names(connections[selected_alias]),
+                    )
+                    self.assertNotIn(
+                        'keepdb_data', self.table_names(connections[peer_alias]),
+                    )
+                finally:
+                    self.preserve_named_test_databases(
+                        connections, old_config, database_settings,
+                    )
 
     def test_sqlite_005_test_execution_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; test execution changes only the selected database alias."""
-        # SQLITE-005 test-execution logic obligation:
-        # GIVEN both aliases are set up and contain distinct state markers,
-        # WHEN a test operation explicitly uses one selected alias,
-        # THEN its read/write effects remain confined to that alias.
-        #
-        # INPUTS:
-        # - A selected alias, a peer alias, and distinguishable initial markers.
-        # - A test write value unique to the selected alias.
-        #
-        # PROCEDURE:
-        # 1. Capture both initial markers through their respective connections.
-        # 2. Execute the test write using the selected alias and transition it from
-        #    READY to TEST_MUTATED.
-        # 3. Read back through selected and require its marker plus the test value.
-        # 4. Read through peer and require exactly its initial marker with no test
-        #    value, leaving it READY_AND_UNCHANGED.
-        #
-        # OUTPUT: The test mutation is visible only through selected.
-        # FAILURE PATHS:
-        # - Fail on missing selected state or any leaked value in the peer.
-        # - Restore/close each alias independently even if the test write fails.
-        pass
+        for selected_alias, peer_alias in (self.aliases, self.aliases[::-1]):
+            with self.subTest(selected_alias=selected_alias), \
+                    tempfile.TemporaryDirectory() as directory:
+                connections, old_config, database_settings, _ = \
+                    self.setup_named_test_databases(directory)
+                try:
+                    initial_values = {selected_alias: 11, peer_alias: 22}
+                    for alias, value in initial_values.items():
+                        with connections[alias].cursor() as cursor:
+                            cursor.execute(
+                                'INSERT INTO keepdb_data (value) VALUES (%s)', [value],
+                            )
+                    with connections[selected_alias].cursor() as cursor:
+                        cursor.execute(
+                            'INSERT INTO keepdb_data (value) VALUES (%s)', [99],
+                        )
+                        cursor.execute('SELECT value FROM keepdb_data ORDER BY value')
+                        self.assertEqual(cursor.fetchall(), [(11,), (99,)])
+                    with connections[peer_alias].cursor() as cursor:
+                        cursor.execute('SELECT value FROM keepdb_data')
+                        self.assertEqual(cursor.fetchall(), [(22,)])
+                finally:
+                    self.preserve_named_test_databases(
+                        connections, old_config, database_settings,
+                    )
 
     def test_sqlite_005_completed_setup_and_tests_keep_default_and_other_state_mutually_isolated(self):
         """GUID: SQLITE-005; completed setup and tests preserve alias state isolation."""
-        # SQLITE-005 final-isolation logic obligation:
-        # GIVEN setup, migration, synchronization, and test operations have run
-        # for both default and other, WHEN final state is inspected per alias,
-        # THEN each database contains all and only the state assigned to it.
-        #
-        # INPUTS:
-        # - Distinct expected state sets for default and other.
-        # - The completed lifecycle state of both alias-bound databases.
-        #
-        # PROCEDURE:
-        # 1. For each alias in deterministic order, inspect schema, migration
-        #    history, synchronized tables, and test data through that alias only.
-        # 2. Compare the observed state with that alias's complete expected set.
-        # 3. Compare it with the peer's expected-only set and require an empty
-        #    intersection.
-        # 4. Transition each alias from OPERATIONS_COMPLETE to ISOLATION_VERIFIED
-        #    only after both inclusion and exclusion checks succeed.
-        #
-        # OUTPUT: default and other are both ISOLATION_VERIFIED.
-        # FAILURE PATHS:
-        # - Fail on missing local state, unexpected peer state, or shared identity.
-        # - Preserve the first mismatch and close both connections during cleanup.
-        pass
+        with tempfile.TemporaryDirectory() as directory:
+            connections, old_config, database_settings, migrated_aliases = \
+                self.setup_named_test_databases(directory)
+            expected_values = {'default': 101, 'other': 202}
+            try:
+                self.assertCountEqual(migrated_aliases, self.aliases)
+                database_names = set()
+                for alias, value in expected_values.items():
+                    with connections[alias].cursor() as cursor:
+                        cursor.execute('PRAGMA database_list')
+                        database_names.add(cursor.fetchone()[2])
+                        cursor.execute('SELECT name FROM keepdb_migrations')
+                        self.assertEqual(cursor.fetchall(), [('initial',)])
+                        cursor.execute(
+                            'INSERT INTO keepdb_data (value) VALUES (%s)', [value],
+                        )
+                self.assertEqual(len(database_names), len(self.aliases))
+
+                observed_values = {}
+                for alias, value in expected_values.items():
+                    with connections[alias].cursor() as cursor:
+                        cursor.execute('SELECT value FROM keepdb_data')
+                        observed_values[alias] = {row[0] for row in cursor.fetchall()}
+                    self.assertEqual(observed_values[alias], {value})
+                    peer_expected_values = set(expected_values.values()) - {value}
+                    self.assertTrue(
+                        observed_values[alias].isdisjoint(peer_expected_values)
+                    )
+            finally:
+                self.preserve_named_test_databases(
+                    connections, old_config, database_settings,
+                )
 
     def test_sqlite_004_reused_named_database_releases_blocking_state_before_test_write(self):
         """GUID: SQLITE-004; reused named databases allow subsequent test writes."""
@@ -245,14 +256,23 @@ class NamedTestDatabaseKeepdbTests(SimpleTestCase):
                 'TEST': {
                     'NAME': str(Path(directory) / ('%s.sqlite3' % alias)),
                     'SERIALIZE': False,
+                    'DEPENDENCIES': [],
                 },
             }
             for alias in self.aliases
         }
 
-    def setup_named_test_databases(self, directory):
+    def setup_named_test_databases(self, directory, aliases=None):
         database_settings = self.get_named_test_database_settings(directory)
         test_connections = ConnectionHandler(database_settings)
+        if aliases is None:
+            aliases = set(self.aliases)
+        old_config, migrated_aliases = self.setup_test_databases(
+            test_connections, database_settings, aliases,
+        )
+        return test_connections, old_config, database_settings, migrated_aliases
+
+    def setup_test_databases(self, test_connections, database_settings, aliases):
         migrated_aliases = []
 
         def call_command(command, **options):
@@ -279,9 +299,13 @@ class NamedTestDatabaseKeepdbTests(SimpleTestCase):
                 interactive=False,
                 keepdb=True,
                 parallel=1,
-                aliases=set(self.aliases),
+                aliases=aliases,
             )
-        return test_connections, old_config, database_settings, migrated_aliases
+        return old_config, migrated_aliases
+
+    def table_names(self, connection):
+        with connection.cursor() as cursor:
+            return connection.introspection.table_names(cursor)
 
     def preserve_named_test_databases(self, test_connections, old_config, database_settings):
         with mock.patch.object(settings, 'DATABASES', database_settings):
