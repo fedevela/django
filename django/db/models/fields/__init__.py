@@ -529,6 +529,13 @@ class Field(RegisterLookupMixin):
         return NotImplemented
 
     def __hash__(self):
+        # FIELD-003, FIELD-004, FIELD-010 pseudocode:
+        # model_identity = the associated model object, or a stable null
+        #                  identity when this field has no model attribute.
+        # comparison_identity = (creation_counter, model_identity).
+        # Return the hash of comparison_identity so fields equal by __eq__
+        # share a hash, different model identities remain represented, and an
+        # unassociated field can be hashed repeatedly without an error or drift.
         return hash(self.creation_counter)
 
     def __deepcopy__(self, memodict):
