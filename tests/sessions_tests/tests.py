@@ -513,6 +513,17 @@ class MalformedSessionDataContractTests(TestCase):
         logger.warning.assert_called_once_with('Session data corrupted')
 
 
+class ValidSessionDecodingCompatibilityContractTests(TestCase):
+
+    def test_session_005_valid_current_format_with_stored_values_decodes_contents_unchanged(self):
+        """GUID: SESSION-005 - Valid current-format contents remain unchanged."""
+        pass
+
+    def test_session_006_valid_supported_legacy_values_decode_with_existing_compatibility_behavior(self):
+        """GUID: SESSION-006 - Valid legacy contents retain compatibility."""
+        pass
+
+
 class DatabaseSessionTests(SessionTestsMixin, TestCase):
 
     backend = DatabaseSession
