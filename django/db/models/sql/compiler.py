@@ -703,6 +703,27 @@ class SQLCompiler:
         not be) and column name for ordering by the given 'name' parameter.
         The 'name' is of the form 'field1__field2__...__fieldN'.
         """
+        # DJANGO-006 -- Logic obligations:
+        #   test_DJANGO_006_inherited_minus_pk_custom_parent_pk_compiles_concrete_column_descending
+        #   test_DJANGO_006_child_default_queryset_returns_custom_parent_pks_highest_to_lowest
+        #
+        # Pseudocode:
+        #   INPUT inherited ordering name ``-pk`` and child model options.
+        #   1. Split the direction prefix from ``pk`` and retain DESC as the
+        #      ordering state independently of field-path resolution.
+        #   2. Resolve the ``pk`` alias from the child options. If the child's
+        #      primary key is its multi-table parent link, follow that link to
+        #      its target field on the parent.
+        #   3. If that target is the parent's custom primary key, carry its
+        #      concrete field and database column forward; do not substitute
+        #      an implicit ``id`` column or expand the parent's ordering.
+        #   4. Trim only joins that do not change the resolved concrete target,
+        #      then create one OrderBy for that target with DESC still set.
+        #   5. Hand the OrderBy to SQL compilation; emit the resolved custom
+        #      parent column descending so evaluated child rows flow from the
+        #      highest custom primary-key value to the lowest.
+        #   FAILURE: propagate unresolved-path, invalid-target, and compilation
+        #      errors; never fall back to a guessed column or lose DESC.
         name, order = get_order_dir(name, default_order)
         descending = order == 'DESC'
         pieces = name.split(LOOKUP_SEP)
