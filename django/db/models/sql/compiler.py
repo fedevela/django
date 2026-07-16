@@ -703,6 +703,24 @@ class SQLCompiler:
         not be) and column name for ordering by the given 'name' parameter.
         The 'name' is of the form 'field1__field2__...__fieldN'.
         """
+        # DJANGO-004, DJANGO-005 -- Logic obligation: preserve ascending order
+        # when a child inherits ``Meta.ordering = ["pk"]`` from its parent.
+        #
+        # Pseudocode:
+        #   INPUT inherited ordering name ``pk``, child model options, and the
+        #      default ascending direction.
+        #   1. Parse the unsigned name as ASC and retain a non-descending state.
+        #   2. Resolve ``pk`` through the child's multi-table parent link to the
+        #      parent model's concrete primary-key target and table alias.
+        #   3. Because the requested name is the ``pk`` shortcut, bypass the
+        #      related parent model's Meta.ordering expansion.
+        #   4. Trim inheritance joins without replacing the concrete target,
+        #      then emit one OrderBy carrying the non-descending state.
+        #   5. Hand that OrderBy to SQL compilation, which renders the parent's
+        #      concrete primary-key column ascending; queryset evaluation must
+        #      preserve that order from the lowest parent key to the highest.
+        #   FAILURE: propagate path-resolution and compilation errors; never
+        #      expand parent ordering or invert the retained ascending state.
         name, order = get_order_dir(name, default_order)
         descending = order == 'DESC'
         pieces = name.split(LOOKUP_SEP)
