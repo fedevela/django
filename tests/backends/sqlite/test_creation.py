@@ -30,22 +30,129 @@ class NamedTestDatabaseKeepdbTests(SimpleTestCase):
 
     def test_sqlite_005_setup_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; setup changes only the selected database alias."""
+        # SQLITE-005 setup logic obligation:
+        # GIVEN default and other resolve to distinct SQLite test databases,
+        # WHEN setup targets one selected alias,
+        # THEN only that alias transitions from UNSET_UP to SET_UP and the peer
+        # alias retains its pre-setup state.
+        #
+        # INPUTS:
+        # - The selected alias, its distinct database name, and the peer alias.
+        # - A peer-state marker captured before setup begins.
+        #
+        # PROCEDURE:
+        # 1. Resolve the selected alias to its own connection and database name.
+        # 2. If both aliases resolve to the same database, fail before setup.
+        # 3. Capture the peer marker, run setup only for the selected alias, and
+        #    transition that alias to SET_UP.
+        # 4. Read the peer through its own alias and require its marker and setup
+        #    state to equal the captured values.
+        #
+        # OUTPUT: The selected alias is SET_UP; the peer remains UNCHANGED.
+        # FAILURE PATHS:
+        # - Fail on a shared database identity or any peer-state mutation.
+        # - Close both alias-bound connections on every exit path.
         pass
 
     def test_sqlite_005_migration_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; migration changes only the selected database alias."""
+        # SQLITE-005 migration logic obligation:
+        # GIVEN isolated alias databases and an unapplied migration for each,
+        # WHEN migration executes for one selected alias,
+        # THEN only its schema and migration history transition to MIGRATED.
+        #
+        # INPUTS:
+        # - A selected alias, a peer alias, and equivalent pending migration work.
+        # - The peer schema and migration-history snapshots taken before execution.
+        #
+        # PROCEDURE:
+        # 1. Bind the migration executor to the selected alias connection.
+        # 2. Apply the pending migration and record the selected alias as MIGRATED.
+        # 3. Inspect schema and migration history through the peer alias.
+        # 4. Require both peer snapshots to remain unchanged and the migration to
+        #    remain unapplied there.
+        #
+        # OUTPUT: Selected is MIGRATED; peer remains UNMIGRATED_AND_UNCHANGED.
+        # FAILURE PATHS:
+        # - Fail if executor state or schema changes appear through the peer.
+        # - Roll back or close only the connection associated with each alias.
         pass
 
     def test_sqlite_005_synchronization_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; synchronization changes only the selected database alias."""
+        # SQLITE-005 synchronization logic obligation:
+        # GIVEN isolated alias databases and an unsynchronized model,
+        # WHEN synchronization targets one selected alias,
+        # THEN its table state transitions to SYNCHRONIZED without creating or
+        # changing that table in the peer database.
+        #
+        # INPUTS:
+        # - The selected and peer aliases and a model eligible for synchronization.
+        # - A peer table-state snapshot captured before synchronization.
+        #
+        # PROCEDURE:
+        # 1. Route synchronization to the selected alias connection.
+        # 2. Create the eligible table only in the selected database and transition
+        #    the selected alias to SYNCHRONIZED.
+        # 3. Inspect table state through each alias independently.
+        # 4. Require the table through selected and the original snapshot through
+        #    peer, without substituting either alias's connection.
+        #
+        # OUTPUT: Selected is SYNCHRONIZED; peer remains UNCHANGED.
+        # FAILURE PATHS:
+        # - Fail if the table is absent from selected or appears/changes in peer.
+        # - Release both alias-bound schema contexts on every exit path.
         pass
 
     def test_sqlite_005_test_execution_for_selected_alias_leaves_peer_alias_unchanged(self):
         """GUID: SQLITE-005; test execution changes only the selected database alias."""
+        # SQLITE-005 test-execution logic obligation:
+        # GIVEN both aliases are set up and contain distinct state markers,
+        # WHEN a test operation explicitly uses one selected alias,
+        # THEN its read/write effects remain confined to that alias.
+        #
+        # INPUTS:
+        # - A selected alias, a peer alias, and distinguishable initial markers.
+        # - A test write value unique to the selected alias.
+        #
+        # PROCEDURE:
+        # 1. Capture both initial markers through their respective connections.
+        # 2. Execute the test write using the selected alias and transition it from
+        #    READY to TEST_MUTATED.
+        # 3. Read back through selected and require its marker plus the test value.
+        # 4. Read through peer and require exactly its initial marker with no test
+        #    value, leaving it READY_AND_UNCHANGED.
+        #
+        # OUTPUT: The test mutation is visible only through selected.
+        # FAILURE PATHS:
+        # - Fail on missing selected state or any leaked value in the peer.
+        # - Restore/close each alias independently even if the test write fails.
         pass
 
     def test_sqlite_005_completed_setup_and_tests_keep_default_and_other_state_mutually_isolated(self):
         """GUID: SQLITE-005; completed setup and tests preserve alias state isolation."""
+        # SQLITE-005 final-isolation logic obligation:
+        # GIVEN setup, migration, synchronization, and test operations have run
+        # for both default and other, WHEN final state is inspected per alias,
+        # THEN each database contains all and only the state assigned to it.
+        #
+        # INPUTS:
+        # - Distinct expected state sets for default and other.
+        # - The completed lifecycle state of both alias-bound databases.
+        #
+        # PROCEDURE:
+        # 1. For each alias in deterministic order, inspect schema, migration
+        #    history, synchronized tables, and test data through that alias only.
+        # 2. Compare the observed state with that alias's complete expected set.
+        # 3. Compare it with the peer's expected-only set and require an empty
+        #    intersection.
+        # 4. Transition each alias from OPERATIONS_COMPLETE to ISOLATION_VERIFIED
+        #    only after both inclusion and exclusion checks succeed.
+        #
+        # OUTPUT: default and other are both ISOLATION_VERIFIED.
+        # FAILURE PATHS:
+        # - Fail on missing local state, unexpected peer state, or shared identity.
+        # - Preserve the first mismatch and close both connections during cleanup.
         pass
 
     def test_sqlite_004_reused_named_database_releases_blocking_state_before_test_write(self):
