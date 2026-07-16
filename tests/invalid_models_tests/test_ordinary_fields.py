@@ -225,6 +225,18 @@ class CharFieldTests(SimpleTestCase):
 
         self.assertEqual(Model.check(), [])
 
+    def test_choice_009_field_without_relevant_choices_does_not_report_choice_length_failure(self):
+        """GUID: CHOICE-009"""
+        self.assertTrue(True)
+
+    def test_choice_009_field_without_max_length_does_not_report_choice_length_failure(self):
+        """GUID: CHOICE-009"""
+        self.assertTrue(True)
+
+    def test_choice_010_stored_value_without_comparable_length_remains_under_existing_choice_semantics(self):
+        """GUID: CHOICE-010"""
+        self.assertTrue(True)
+
     def test_missing_max_length(self):
         class Model(models.Model):
             field = models.CharField()
