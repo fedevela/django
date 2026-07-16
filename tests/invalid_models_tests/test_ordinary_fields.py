@@ -305,11 +305,47 @@ class CharFieldTests(SimpleTestCase):
 
     def test_choice_007_malformed_choices_model_checks_complete_without_length_check_crash(self):
         """GUID: CHOICE-007"""
-        self.assertTrue(True)
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=2,
+                choices=[('oversized', 'Oversized', 'Malformed')],
+            )
+
+        field = Model._meta.get_field('field')
+        with mock.patch.object(
+            field,
+            '_check_choice_value_length',
+            wraps=field._check_choice_value_length,
+        ) as length_check:
+            self.assertEqual(Model.check(), [
+                Error(
+                    "'choices' must be an iterable containing (actual value, "
+                    "human readable name) tuples.",
+                    obj=field,
+                    id='fields.E005',
+                ),
+            ])
+        length_check.assert_not_called()
 
     def test_choice_008_existing_invalid_choice_failure_remains_observable_when_length_check_runs(self):
         """GUID: CHOICE-008"""
-        self.assertTrue(True)
+        class Model(models.Model):
+            field = models.CharField(max_length=2, choices='oversized')
+
+        field = Model._meta.get_field('field')
+        with mock.patch.object(
+            field,
+            '_check_choice_value_length',
+            wraps=field._check_choice_value_length,
+        ) as length_check:
+            self.assertEqual(Model.check(), [
+                Error(
+                    "'choices' must be an iterable (e.g., a list or tuple).",
+                    obj=field,
+                    id='fields.E004',
+                ),
+            ])
+        length_check.assert_not_called()
 
     def test_non_iterable_choices_two_letters(self):
         """Two letters isn't a valid choice pair."""

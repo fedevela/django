@@ -243,22 +243,10 @@ class Field(RegisterLookupMixin):
 
     def _check_choices(self):
         """
-        Own choice-structure validation and its error paths.
+        Check choice structure before checking the length of choice values.
 
-        Architecture contract for CHOICE-007 and CHOICE-008: malformed or
-        otherwise structurally invalid choices terminate here with the existing
-        fields.E004 or fields.E005 result. Only structurally valid choices may
-        cross the dependency boundary into _check_choice_value_length().
+        GUID: CHOICE-007, CHOICE-008.
         """
-        # Pseudocode — GUID: CHOICE-007, GUID: CHOICE-008
-        # INPUT: the field's choices and the existing choice-validation rules.
-        # IF choices are malformed or already invalid:
-        #     RETURN the applicable existing fields.E004 or fields.E005 error;
-        #     DO NOT hand the invalid structure to the length-check seam.
-        # ELSE choices are structurally valid:
-        #     HAND OFF to _check_choice_value_length() and RETURN its result.
-        # OUTCOME: model checks complete, and pre-existing failures remain
-        # observable without requiring a length result for unsafe input.
         if not self.choices:
             return []
 
