@@ -29,6 +29,15 @@ class StaticFilesHandlerMixin:
         utils.check_settings()
         return settings.STATIC_URL
 
+    # Pseudocode contract (GUID: ASGI-STATIC-007):
+    # INPUT: a synchronous request path and the configured static base URL.
+    # IF the path isn't within that base URL, preserve the caller's existing
+    # non-static handoff; otherwise remove the base URL, translate the remainder
+    # to a filesystem path, and perform the established static-file lookup.
+    # IF lookup and serving succeed, return the existing synchronous file
+    # response unchanged.
+    # IF serving raises Http404, translate it through response_for_exception()
+    # and return the established synchronous not-found response.
     def _should_handle(self, path):
         """
         Check if the path should be handled. Ignore the path if:
@@ -65,6 +74,14 @@ class StaticFilesHandler(StaticFilesHandlerMixin, WSGIHandler):
         self.base_url = urlparse(self.get_base_url())
         super().__init__()
 
+    # Pseudocode contract (GUID: ASGI-STATIC-008):
+    # INPUT: the WSGI environ and start_response callback.
+    # DERIVE the request path using the existing WSGI path normalization.
+    # IF the path isn't static, call the wrapped WSGI application with the
+    # original inputs and return its iterable unchanged.
+    # OTHERWISE enter the existing WSGI handler flow so static lookup produces
+    # the established status, headers, body iterable, and not-found response.
+    # OUTPUT: exactly the response contract selected by the existing branch.
     def __call__(self, environ, start_response):
         if not self._should_handle(get_path_info(environ)):
             return self.application(environ, start_response)

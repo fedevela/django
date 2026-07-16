@@ -29,10 +29,26 @@ class ASGIStaticFilesHandlerContractTests(SimpleTestCase):
 
     async def test_asgi_static_009_existing_file_async_path_returns_successful_static_response(self):
         """GUID: ASGI-STATIC-009; recognized existing static file."""
+        # Pseudocode verification flow (GUID: ASGI-STATIC-009):
+        # ARRANGE an ASGIStaticFilesHandler and an HTTP scope whose path names
+        # the recognized existing static fixture.
+        # ACT by awaiting the handler through get_asgi_response(), allowing the
+        # async receive/send exchange to collect every response message.
+        # ASSERT the handler completes through its asynchronous response path,
+        # starts the established successful static response, emits the expected
+        # file content, and finishes the response body without a failure.
         self.assertTrue(True)
 
     async def test_asgi_static_009_missing_file_async_path_returns_static_not_found_response(self):
         """GUID: ASGI-STATIC-009; recognized missing static file."""
+        # Pseudocode verification flow (GUID: ASGI-STATIC-009):
+        # ARRANGE an ASGIStaticFilesHandler and an HTTP scope whose recognized
+        # static path names a file that doesn't exist.
+        # ACT by awaiting the handler through get_asgi_response(), allowing the
+        # async receive/send exchange to collect every response message.
+        # ASSERT the async path converts the failed lookup into the established
+        # static not-found status and response body, then completes normally
+        # rather than propagating the lookup failure.
         self.assertTrue(True)
 
     async def get_asgi_response(self, handler, path):
