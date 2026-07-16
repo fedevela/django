@@ -398,6 +398,25 @@ def slugify(value, allow_unicode=False):
     Convert to lowercase. Also strip leading and trailing whitespace, dashes,
     and underscores.
     """
+    # Pseudocode obligations for SLUG-003, SLUG-004, SLUG-005, and SLUG-007:
+    # 1. Convert the input to text, then follow the established Unicode branch:
+    #    preserve compatible Unicode when allowed; otherwise normalize and
+    #    reduce to ASCII. Do not alter either branch. (SLUG-007)
+    # 2. Lowercase the normalized text, remove only the established disallowed
+    #    characters, and trim surrounding whitespace. (SLUG-004, SLUG-007)
+    # 3. Apply the established dash-and-whitespace collapsing step so whitespace
+    #    between meaningful words becomes an internal hyphen; retain valid
+    #    internal dashes and underscores in the completed slug. (SLUG-003,
+    #    SLUG-005)
+    # 4. After the completed slug exists, repeatedly remove only dashes and
+    #    underscores at its leading and trailing boundaries. Do not inspect or
+    #    remove matching characters from internal positions. (SLUG-003,
+    #    SLUG-004, SLUG-005, SLUG-007)
+    # 5. Return the boundary-stripped result. Preserve its lowercase words,
+    #    internal separator hyphens, internal dashes or underscores, and the
+    #    content produced by the selected Unicode branch.
+    # Failure path: introduce no recovery branch; conversion or normalization
+    # failures continue through the established exception behavior.
     value = str(value)
     if allow_unicode:
         value = unicodedata.normalize('NFKC', value)
