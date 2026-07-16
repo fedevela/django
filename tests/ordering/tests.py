@@ -21,6 +21,10 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.children = [OrderedByPKChild.objects.create() for _ in range(3)]
+        cls.custom_pk_children = [
+            OrderedByCustomPKChild.objects.create(custom_pk=pk)
+            for pk in (30, 10, 20)
+        ]
         cls.ascending_children = [
             OrderedByPKAscendingChild.objects.create(pk=pk) for pk in (3, 1, 2)
         ]
@@ -80,11 +84,28 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
 
     def test_DJANGO_006_inherited_minus_pk_custom_parent_pk_compiles_concrete_column_descending(self):
         """DJANGO-006: inherited -pk compiles the custom parent PK column descending."""
-        self.assertTrue(True)
+        query = OrderedByCustomPKChild.objects.all().query
+        compiler = query.get_compiler(connection=connection)
+        order_by = compiler.get_order_by()
+        self.assertEqual(len(order_by), 1)
+        expression, (sql, params, is_ref) = order_by[0]
+        parent_link = OrderedByCustomPKChild._meta.pk
+        self.assertIs(expression.expression.target, parent_link)
+        self.assertIs(parent_link.target_field, OrderedByCustomPKParent._meta.pk)
+        self.assertEqual(parent_link.target_field.column, 'custom_pk')
+        self.assertIs(expression.descending, True)
+        self.assertTrue(sql.endswith(' DESC'))
+        self.assertEqual(params, [])
+        self.assertIs(is_ref, False)
 
     def test_DJANGO_006_child_default_queryset_returns_custom_parent_pks_highest_to_lowest(self):
         """DJANGO-006: child rows are returned by custom parent PK highest to lowest."""
-        self.assertTrue(True)
+        self.assertSequenceEqual(
+            list(OrderedByCustomPKChild.objects.values_list('pk', flat=True)),
+            sorted(
+                (child.pk for child in self.custom_pk_children), reverse=True,
+            ),
+        )
 
     def test_DJANGO_009_supported_backend_compiles_inherited_parent_pk_descending(self):
         """DJANGO-009: supported backends compile the inherited parent PK descending."""
