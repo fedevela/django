@@ -161,17 +161,43 @@ class FieldEqualityContractTests(SimpleTestCase):
 
 class FieldHashContractTests(SimpleTestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        field = models.Field()
+        cls.field_a = copy.copy(field)
+        cls.field_a.model = Foo
+        cls.field_b = copy.copy(field)
+        cls.field_b.model = Bar
+
     def test_FIELD_003_same_counter_different_models_hash_as_distinct_comparison_identities(self):
         """GUID FIELD-003: Hashing uses the field equality comparison identity."""
-        self.assertTrue(True)
+        self.assertEqual(self.field_a.creation_counter, self.field_b.creation_counter)
+        self.assertIsNot(self.field_a.model, self.field_b.model)
+        self.assertEqual(
+            hash(self.field_a),
+            hash((self.field_a.creation_counter, self.field_a.model)),
+        )
+        self.assertEqual(
+            hash(self.field_b),
+            hash((self.field_b.creation_counter, self.field_b.model)),
+        )
+        self.assertNotEqual(hash(self.field_a), hash(self.field_b))
 
     def test_FIELD_004_equal_fields_produce_identical_hash_values(self):
         """GUID FIELD-004: Equal fields have identical hashes."""
-        self.assertTrue(True)
+        field_copy = copy.copy(self.field_a)
+
+        self.assertEqual(self.field_a, field_copy)
+        self.assertEqual(hash(self.field_a), hash(field_copy))
 
     def test_FIELD_010_unassociated_field_hashes_repeatedly_without_failure_or_drift(self):
         """GUID FIELD-010: Repeated hashing without a model is deterministic."""
-        self.assertTrue(True)
+        field = models.Field()
+        expected_hash = hash((field.creation_counter, None))
+
+        self.assertEqual(hash(field), expected_hash)
+        self.assertEqual(hash(field), expected_hash)
 
 
 class ChoicesTests(SimpleTestCase):
