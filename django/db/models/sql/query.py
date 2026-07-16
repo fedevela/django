@@ -1951,6 +1951,16 @@ class Query(BaseExpression):
         # propagate all other expression-resolution failures unchanged.
         # INVARIANT: the collision correction introduces no branch for queries
         # whose selected annotation alias does not collide (GEV-009).
+        # Architecture contract (GEV-009): ``set_values()`` owns projection
+        # and annotation masking upstream; this method owns only grouping
+        # alias policy and assembly of ``self.group_by``. Annotation and
+        # Subquery expressions remain responsible for grouping-column
+        # derivation through ``get_group_by_cols(alias=...)``. The legacy
+        # signature fallback is a compatibility adapter at that boundary.
+        # ``SQLCompiler`` consumes the completed tuple downstream and must not
+        # duplicate collision policy. Thus annotations, correlations,
+        # aggregates, and joins cross this seam as existing expression objects
+        # rather than acquiring new GEV-009-specific dependencies.
         if allow_aliases:
             column_names = set()
             seen_models = set()
