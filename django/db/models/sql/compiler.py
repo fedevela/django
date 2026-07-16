@@ -703,6 +703,29 @@ class SQLCompiler:
         not be) and column name for ordering by the given 'name' parameter.
         The 'name' is of the form 'field1__field2__...__fieldN'.
         """
+        # DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-009 -- Logic obligation:
+        # preserve an inherited primary-key alias's direction from resolution
+        # through backend compilation and queryset evaluation.
+        #
+        # Pseudocode:
+        #   INPUT ordering name, starting model options, and default direction.
+        #   1. Separate the requested direction from the field path and retain
+        #      whether the resulting OrderBy expression is descending.
+        #   2. Resolve the path. If its terminal token is the ``pk`` shortcut
+        #      and resolution crosses a multi-table inheritance parent link,
+        #      treat that link as access to the concrete parent primary-key
+        #      target, not as a request for the related model's ordering.
+        #   3. For that shortcut, bypass expansion of the parent's Meta.ordering,
+        #      trim the inheritance joins to the concrete primary-key target,
+        #      and emit an OrderBy carrying the retained descending state.
+        #   4. Otherwise, preserve normal related-model ordering expansion;
+        #      recurse with the effective direction and reject a repeated join
+        #      path as an infinite ordering loop.
+        #   5. Hand the resolved OrderBy to the active backend compiler. It must
+        #      render the concrete parent primary-key column with DESC so row
+        #      evaluation yields parent primary keys from highest to lowest.
+        #   FAILURE: propagate invalid-path errors and the ordering-loop error;
+        #      never silently discard or invert the retained ``-pk`` direction.
         name, order = get_order_dir(name, default_order)
         descending = order == 'DESC'
         pieces = name.split(LOOKUP_SEP)
