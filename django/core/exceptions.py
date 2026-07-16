@@ -173,6 +173,17 @@ class ValidationError(Exception):
     # Neither the successful nor failure path modifies either error or
     # any validation content reachable from it.                           # VEQ-012
 
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if not isinstance(other, ValidationError):
+            return False
+        return (
+            self.message == other.message and
+            self.code == other.code and
+            self.params == other.params
+        )
+
     @property
     def message_dict(self):
         # Trigger an AttributeError if this ValidationError

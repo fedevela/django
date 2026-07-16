@@ -1,4 +1,5 @@
 import unittest
+from copy import deepcopy
 
 from django.core.exceptions import ValidationError
 
@@ -19,32 +20,73 @@ class TestValidationError(unittest.TestCase):
 class ValidationErrorEqualityContractTests(unittest.TestCase):
     # VEQ-001
     def test_veq_001_independent_errors_with_equivalent_content_compare_equal(self):
-        pass
+        first = ValidationError(
+            'Invalid value: %(value)s', code='invalid',
+            params={'value': 'example'},
+        )
+        second = ValidationError(
+            'Invalid value: %(value)s', code='invalid',
+            params={'value': 'example'},
+        )
+
+        self.assertEqual(first, second)
 
     # VEQ-002
     def test_veq_002_errors_with_different_messages_compare_unequal(self):
-        pass
+        first = ValidationError('First message', code='invalid', params={'value': 1})
+        second = ValidationError('Second message', code='invalid', params={'value': 1})
+
+        self.assertNotEqual(first, second)
 
     # VEQ-002
     def test_veq_002_errors_with_different_codes_compare_unequal(self):
-        pass
+        first = ValidationError('Message', code='first', params={'value': 1})
+        second = ValidationError('Message', code='second', params={'value': 1})
+
+        self.assertNotEqual(first, second)
 
     # VEQ-002
     def test_veq_002_errors_with_different_parameters_compare_unequal(self):
-        pass
+        first = ValidationError('Message', code='invalid', params={'value': 1})
+        second = ValidationError('Message', code='invalid', params={'value': 2})
+
+        self.assertNotEqual(first, second)
 
     # VEQ-009
     def test_veq_009_error_compared_with_itself_compares_equal(self):
-        pass
+        error = ValidationError('Message', code='invalid', params={'value': 1})
+
+        self.assertEqual(error, error)
 
     # VEQ-010
     def test_veq_010_reversing_error_operands_preserves_equality_result(self):
-        pass
+        first = ValidationError('Message', code='invalid', params={'value': 1})
+        equivalent = ValidationError('Message', code='invalid', params={'value': 1})
+        different = ValidationError('Different', code='invalid', params={'value': 1})
+
+        self.assertEqual(first == equivalent, equivalent == first)
+        self.assertEqual(first == different, different == first)
 
     # VEQ-011
     def test_veq_011_unrelated_object_in_either_operand_order_compares_unequal_without_error(self):
-        pass
+        error = ValidationError('Message')
+        unrelated = object()
+
+        self.assertFalse(error == unrelated)
+        self.assertFalse(unrelated == error)
 
     # VEQ-012
     def test_veq_012_comparison_preserves_both_errors_and_validation_content(self):
-        pass
+        first = ValidationError(
+            'Message', code='invalid', params={'values': ['first', 'second']},
+        )
+        second = ValidationError(
+            'Message', code='invalid', params={'values': ['first', 'second']},
+        )
+        first_snapshot = deepcopy(first.__dict__)
+        second_snapshot = deepcopy(second.__dict__)
+
+        self.assertEqual(first, second)
+
+        self.assertEqual(first.__dict__, first_snapshot)
+        self.assertEqual(second.__dict__, second_snapshot)
