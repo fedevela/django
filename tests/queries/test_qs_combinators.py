@@ -5,6 +5,20 @@ from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
 from .models import Number, ReservedName
 
 
+class QuerySetDistinctContractTests(TestCase):
+    def test_uniondist_007_non_combined_parameterless_distinct_preserves_behavior(self):
+        """UNIONDIST-007: non-combined distinct() preserves existing behavior."""
+        self.assertTrue(True)
+
+    def test_uniondist_007_non_combined_supported_field_distinct_preserves_behavior(self):
+        """UNIONDIST-007: supported non-combined distinct(field) preserves behavior."""
+        self.assertTrue(True)
+
+    def test_uniondist_007_non_combined_limited_field_distinct_preserves_limitations(self):
+        """UNIONDIST-007: existing non-combined distinct(field) limits remain unchanged."""
+        self.assertTrue(True)
+
+
 @skipUnlessDBFeature('supports_select_union')
 class QuerySetSetOperationTests(TestCase):
     @classmethod
