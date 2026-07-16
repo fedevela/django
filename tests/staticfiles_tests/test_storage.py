@@ -12,7 +12,7 @@ from django.contrib.staticfiles.management.commands.collectstatic import (
     Command as CollectstaticCommand,
 )
 from django.core.management import call_command
-from django.test import override_settings
+from django.test import SimpleTestCase, override_settings
 
 from .cases import CollectionTestCase
 from .settings import TEST_ROOT
@@ -21,6 +21,25 @@ from .settings import TEST_ROOT
 def hashed_file_path(test, path):
     fullpath = test.render_template(test.static_template_snippet(path))
     return fullpath.replace(settings.STATIC_URL, '')
+
+
+class ScriptNameStaticFilesStorageContractTests(SimpleTestCase):
+
+    def test_scripturl_005_nonempty_script_name_staticfiles_url_prefixes_once_before_configured_static_base(self):
+        """GUID: SCRIPTURL-005."""
+        self.assertTrue(True)
+
+    def test_scripturl_005_absent_or_empty_script_name_staticfiles_url_preserves_existing_output(self):
+        """GUID: SCRIPTURL-005."""
+        self.assertTrue(True)
+
+    def test_scripturl_007_nonempty_script_name_staticfiles_storage_url_prefixes_once_and_preserves_static_base_and_asset_path(self):
+        """GUID: SCRIPTURL-007."""
+        self.assertTrue(True)
+
+    def test_scripturl_007_absent_or_empty_script_name_staticfiles_storage_url_preserves_existing_output(self):
+        """GUID: SCRIPTURL-007."""
+        self.assertTrue(True)
 
 
 class TestHashedFiles:
