@@ -1232,6 +1232,12 @@ class ManyToManyField(RelatedField):
 
         return warnings
 
+    # Architecture boundary (GUIDs: DJANGO-001, DJANGO-002, DJANGO-003,
+    # DJANGO-004, DJANGO-005, DJANGO-006, DJANGO-007): this private checker
+    # remains the sole owner of ambiguous intermediary diagnostics. The E334
+    # and E335 branches share an in-method hint seam whose only intermediary
+    # naming dependency is relationship_model_name; message, object, error ID,
+    # trigger, ordering, and all other checks remain outside that seam.
     def _check_relationship_model(self, from_model=None, **kwargs):
         if hasattr(self.remote_field.through, '_meta'):
             qualified_model_name = "%s.%s" % (
