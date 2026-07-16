@@ -1598,6 +1598,11 @@ class Model(metaclass=ModelBase):
             #             APPEND no error for the valid field reference.
             # RETURN all accumulated errors; an entirely valid declaration
             # returns an empty error collection.
+            # Architecture boundary (GUID: DJUC-008, DJUC-009): this method
+            # owns unique_together's container validation; _check_local_fields
+            # remains the shared owner of field resolution and its established
+            # error contracts. Keep that dependency directed through this
+            # delegation seam.
             errors = []
             for fields in cls._meta.unique_together:
                 errors.extend(cls._check_local_fields(fields, "unique_together"))
