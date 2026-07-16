@@ -173,6 +173,45 @@ class ValidationError(Exception):
     # Neither the successful nor failure path modifies either error or
     # any validation content reachable from it.                           # VEQ-012
 
+    # Structured ValidationError equality procedure (VEQ-003, VEQ-004,
+    # VEQ-005, VEQ-006, VEQ-007, VEQ-008):
+    #
+    # equivalent_error_collection(left_errors, right_errors):
+    #     IF the collections have different lengths:
+    #         RETURN false because duplicate occurrence counts differ     # VEQ-007
+    #     MARK every right-side occurrence as unmatched
+    #     FOR each normalized leaf error in left_errors:
+    #         FIND an unmatched equivalent leaf error in right_errors
+    #             using the scalar message, code, and params procedure
+    #         IF no such occurrence exists:
+    #             RETURN false
+    #         MARK that one right-side occurrence as matched
+    #     RETURN true; collection order has not affected the result       # VEQ-003
+    #
+    # compare_structured_content(self, other):
+    #     DETERMINE whether each operand owns an error_dict
+    #     IF exactly one operand owns an error_dict:
+    #         RETURN false because their normalized structures differ
+    #     IF both operands own an error_dict:
+    #         IF their field-key sets differ:
+    #             RETURN false; errors cannot move between fields         # VEQ-006
+    #         FOR each field key, independent of dictionary iteration
+    #             or insertion order:                                    # VEQ-005
+    #             COMPARE the corresponding normalized error lists with
+    #                 equivalent_error_collection
+    #             IF a corresponding collection differs:
+    #                 RETURN false
+    #         RETURN true, including when the corresponding field is
+    #             NON_FIELD_ERRORS and only error order differs           # VEQ-004
+    #     COMPARE the operands' normalized error_lists with
+    #         equivalent_error_collection
+    #     RETURN that result; constructor-flattened nested content is
+    #         therefore compared by corresponding normalized collections,
+    #         ignoring only their permitted ordering                      # VEQ-008
+    #
+    # __eq__ invokes compare_structured_content before the scalar procedure
+    # whenever either operand represents list or dictionary content.
+
     def __eq__(self, other):
         if self is other:
             return True
