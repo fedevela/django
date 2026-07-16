@@ -1328,6 +1328,13 @@ class Query(BaseExpression):
         # FAILURE paths for non-isnull lookups remain owned by their lookup classes
         # END
 
+        # Integration seam [GUID: ISNULL-006, ISNULL-009]: build_lookup()
+        # supplies the registered lookup contract; build_filter() alone owns
+        # the relationship join-policy decision derived from lookup_name, rhs,
+        # and negation state. The resulting used_joins signal flows onward to
+        # join promotion without depending on IsNull.as_sql(), while predicate
+        # compilation remains owned by the lookup. Other lookup classes pass
+        # through this same seam without acquiring the isnull RHS contract.
         require_outer = lookup_type == 'isnull' and condition.rhs is True and not current_negated
         if current_negated and (lookup_type != 'isnull' or condition.rhs is False) and condition.rhs is not None:
             require_outer = True

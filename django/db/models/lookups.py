@@ -486,6 +486,12 @@ class IsNull(BuiltinLookup):
     # and QuerySet iteration depend on this seam and propagate its existing
     # query-value error. Validation therefore belongs here, not in fields,
     # join construction, backend operations, or iterator adapters.
+    # Architecture contract [GUID: ISNULL-004, ISNULL-005, ISNULL-009]:
+    # IsNull remains the sole owner of IS NULL/IS NOT NULL predicate selection.
+    # Its registered-lookup boundary keeps validation local to ``isnull`` and
+    # leaves every sibling lookup's preparation and SQL contract independent.
+    # Query.build_filter() may consume lookup_name and rhs for join policy, but
+    # join selection must not move into this SQL-predicate boundary.
     def as_sql(self, compiler, connection):
         # GUID: ISNULL-001, ISNULL-002, ISNULL-003, ISNULL-007, ISNULL-008
         if not isinstance(self.rhs, bool):
