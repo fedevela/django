@@ -94,6 +94,10 @@ class SyndicationFeed:
         def to_str(s):
             return str(s) if s is not None else s
         categories = categories and [to_str(c) for c in categories]
+        # Architecture (COMMENTS-002, COMMENTS-007): this normalized item
+        # record is the comments integration seam. Concrete feed generators
+        # own its format-specific representation; upstream callers only supply
+        # the resolved value.
         self.items.append({
             'title': to_str(title),
             'link': iri_to_uri(link),
@@ -233,6 +237,7 @@ class RssUserland091Feed(RssFeed):
     _version = "0.91"
 
     def add_item_elements(self, handler, item):
+        # Architecture owner (COMMENTS-007): RSS 0.91 serialization boundary.
         # Pseudocode (COMMENTS-007):
         # INPUT: an item that may contain a resolved direct comments value.
         # PRESERVE the RSS 0.91 field set; do not map comments to an element.
@@ -251,6 +256,7 @@ class Rss201rev2Feed(RssFeed):
     _version = "2.0"
 
     def add_item_elements(self, handler, item):
+        # Architecture owner (COMMENTS-002, COMMENTS-007): RSS 2.0 boundary.
         # Pseudocode (COMMENTS-002, COMMENTS-007):
         # INPUT: an RSS 2.0 item carrying the resolved direct comments value.
         # SERIALIZE the established RSS 2.0 fields in their existing order.
@@ -354,6 +360,7 @@ class Atom1Feed(SyndicationFeed):
             handler.endElement("entry")
 
     def add_item_elements(self, handler, item):
+        # Architecture owner (COMMENTS-007): Atom serialization boundary.
         # Pseudocode (COMMENTS-007):
         # INPUT: an item that may contain a resolved direct comments value.
         # PRESERVE the Atom field set; do not map comments to an entry element.
