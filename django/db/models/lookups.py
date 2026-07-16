@@ -1,5 +1,6 @@
 import itertools
 import math
+import warnings
 from copy import copy
 
 from django.core.exceptions import EmptyResultSet
@@ -9,6 +10,7 @@ from django.db.models.fields import (
 )
 from django.db.models.query_utils import RegisterLookupMixin
 from django.utils.datastructures import OrderedSet
+from django.utils.deprecation import RemovedInDjango40Warning
 from django.utils.functional import cached_property
 
 
@@ -461,42 +463,14 @@ class Range(FieldGetDbPrepValueIterableMixin, BuiltinLookup):
 class IsNull(BuiltinLookup):
     lookup_name = 'isnull'
     prepare_rhs = False
-    can_use_none_as_rhs = True
 
-    # Pseudocode [GUID: ISNULL-004, ISNULL-005, ISNULL-009]:
-    # INPUT resolved left-hand expression, lookup RHS, compiler, connection
-    # IF this registered lookup was not selected for an "isnull" lookup
-    #     HAND OFF to the selected lookup's own preparation and SQL path unchanged
-    # IF RHS is not the boolean singleton True or False
-    #     FAIL with the isnull-specific query-value error before returning SQL
-    # COMPILE the left-hand expression through the existing compiler
-    # IF RHS is True
-    #     OUTPUT the existing "IS NULL" predicate and compiled parameters
-    #     PRESERVE the established direct-field null-matching result set
-    # ELSE  # RHS is False
-    #     OUTPUT the existing "IS NOT NULL" predicate and compiled parameters
-    #     PRESERVE the established direct-field non-null-matching result set
-    # DO NOT change accepted values, errors, SQL, or results for any other lookup
-    # END
-
-    # Architecture boundary [GUID: ISNULL-001, ISNULL-002, ISNULL-003,
-    # ISNULL-007, ISNULL-008]: this registered lookup owns its RHS contract at
-    # the as_sql() compilation seam. Field/path resolution supplies the same
-    # IsNull instance for direct and relationship-spanning lookups; SQLCompiler
-    # and QuerySet iteration depend on this seam and propagate its existing
-    # query-value error. Validation therefore belongs here, not in fields,
-    # join construction, backend operations, or iterator adapters.
-    # Architecture contract [GUID: ISNULL-004, ISNULL-005, ISNULL-009]:
-    # IsNull remains the sole owner of IS NULL/IS NOT NULL predicate selection.
-    # Its registered-lookup boundary keeps validation local to ``isnull`` and
-    # leaves every sibling lookup's preparation and SQL contract independent.
-    # Query.build_filter() may consume lookup_name and rhs for join policy, but
-    # join selection must not move into this SQL-predicate boundary.
     def as_sql(self, compiler, connection):
-        # GUID: ISNULL-001, ISNULL-002, ISNULL-003, ISNULL-007, ISNULL-008
         if not isinstance(self.rhs, bool):
-            raise ValueError(
-                'The QuerySet value for an isnull lookup must be True or False.'
+            warnings.warn(
+                'Using a non-boolean value for an isnull lookup is deprecated, '
+                'use True or False instead.',
+                RemovedInDjango40Warning,
+                stacklevel=2,
             )
         sql, params = compiler.compile(self.lhs)
         if self.rhs:
