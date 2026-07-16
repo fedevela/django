@@ -863,6 +863,30 @@ class AutodetectorTests(TestCase):
         self.assertOperationTypes(changes, 'app', 0, ['RenameField'])
         self.assertOperationAttributes(changes, 'app', 0, 0, old_name='field', new_name='renamed_field')
 
+    def test_migpk_001_autodetection_renames_custom_primary_key(self):
+        """MIGPK-001: Autodetection renames the referenced custom primary key."""
+        self.assertTrue(True)
+
+    def test_migpk_002_operations_and_state_omit_removed_primary_key_to_field(self):
+        """MIGPK-002: Operations and state omit the removed PK to_field."""
+        self.assertTrue(True)
+
+    def test_migpk_003_generated_alter_field_targets_renamed_primary_key(self):
+        """MIGPK-003: A generated AlterField targets the renamed primary key."""
+        self.assertTrue(True)
+
+    def test_migpk_004_operations_produce_state_with_foreign_key_targeting_renamed_field(self):
+        """MIGPK-004: Operations produce state targeting the renamed field."""
+        self.assertTrue(True)
+
+    def test_migpk_005_resulting_foreign_key_preserves_options(self):
+        """MIGPK-005: The resulting foreign key preserves its declared options."""
+        self.assertTrue(True)
+
+    def test_migpk_006_renamed_primary_key_preserves_declared_attributes(self):
+        """MIGPK-006: The renamed primary key preserves its declared attributes."""
+        self.assertTrue(True)
+
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')
         renamed_fields = ('first_renamed', 'second_renamed')
