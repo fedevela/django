@@ -176,6 +176,24 @@ class RegexPattern(CheckURLMixin):
         #   collections for resolver/dispatch handoff; for ``/module/`` this
         #   invokes the compatible view with neither unexpected positional
         #   arguments nor an absent ``format`` keyword (URL-002).
+        # GUID: URL-003, URL-004 (present-value behavior)
+        # PSEUDOCODE:
+        # - INPUT a path matched by the reported pattern with an explicit
+        #   ``format`` capture.
+        # - Read named captures and all captures from the same regex match.
+        # - IF the named ``format`` value is ``html``, preserve
+        #   ``format = 'html'`` in keyword arguments (URL-003).
+        # - ELSE IF it is ``json``, preserve ``format = 'json'`` in keyword
+        #   arguments (URL-003).
+        # - ELSE IF it is ``xml``, preserve ``format = 'xml'`` in keyword
+        #   arguments (URL-003).
+        # - For every explicit-value branch, because the expression defines a
+        #   named capture, discard the positional capture collection entirely;
+        #   never expose the nested capture for that value (URL-004).
+        # - HAND OFF the unmatched path, empty positional arguments, and the
+        #   single named ``format`` value to resolver/view dispatch.
+        # - FAILURE PATH: IF the regex does not match, return no resolution
+        #   result and perform no argument handoff.
         match = self.regex.search(path)
         if match:
             # If there are any named groups, use those as kwargs, ignoring
