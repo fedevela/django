@@ -703,6 +703,12 @@ class SQLCompiler:
         not be) and column name for ordering by the given 'name' parameter.
         The 'name' is of the form 'field1__field2__...__fieldN'.
         """
+        # Architecture boundary (DJANGO-004, DJANGO-005): this method owns the
+        # conversion of an inherited ordering name into a backend-neutral
+        # OrderBy contract. Query.setup_joins() supplies the parent-link target
+        # topology; the relation-ordering branch below is the seam that keeps
+        # the ``pk`` shortcut on its concrete target; and get_order_by() plus
+        # backend compilers consume the resulting ascending OrderBy instance.
         # DJANGO-004, DJANGO-005 -- Logic obligation: preserve ascending order
         # when a child inherits ``Meta.ordering = ["pk"]`` from its parent.
         #

@@ -66,6 +66,12 @@ class OrderedByPKChild(OrderedByPKParent):
     pass
 
 
+# Architecture fixture seam (DJANGO-004, DJANGO-005): the ascending control
+# belongs here as a distinct multi-table parent/child pair beside the existing
+# descending pair. Its parent owns ``ordering = ('pk',)`` and its child owns no
+# Meta override, keeping ordering inheritance separate from compiler behavior.
+
+
 class Reference(models.Model):
     article = models.ForeignKey(OrderedByAuthorArticle, models.CASCADE)
 
