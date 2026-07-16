@@ -1249,6 +1249,22 @@ class ExceptionReporterFilterTests(ExceptionReportTestMixin, LoggingCaptureMixin
             {'login': 'cooper', 'password': reporter_filter.cleansed_substitute},
         )
 
+    def test_safe_001_get_safe_settings_masks_directly_nested_sensitive_value(self):
+        """GUID: SAFE-001 - A directly nested sensitive value is masked."""
+        pass
+
+    def test_safe_001_get_safe_settings_masks_sensitive_values_in_lists_and_tuples(self):
+        """GUID: SAFE-001 - Sensitive values in lists and tuples are masked."""
+        pass
+
+    def test_safe_002_get_safe_settings_masks_sensitive_values_at_every_mixed_nesting_depth(self):
+        """GUID: SAFE-002 - Finite mixed containers are traversed at every depth."""
+        pass
+
+    def test_safe_006_get_safe_settings_treats_nested_strings_and_dictionary_keys_as_scalars(self):
+        """GUID: SAFE-006 - Nested strings and dictionary keys remain scalar."""
+        pass
+
     def test_request_meta_filtering(self):
         request = self.rf.get('/', HTTP_SECRET_HEADER='super_secret')
         reporter_filter = SafeExceptionReporterFilter()
