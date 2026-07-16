@@ -141,97 +141,6 @@ class ValidationError(Exception):
             self.params = params
             self.error_list = [self]
 
-    # Equality architecture (VEQ-001, VEQ-002, VEQ-009, VEQ-010, VEQ-011,
-    # VEQ-012): ValidationError.__eq__ owns the value-comparison boundary and
-    # belongs here, beside the state established by __init__. Its value
-    # contract is the stored message, code, and params triplet; the type gate
-    # remains inside that method so unrelated operands cannot enter the state
-    # comparison boundary. The dependency direction is from equality to this
-    # stored state only -- not through message_dict, messages, __iter__, or any
-    # normalization/presentation helper. This keeps comparison read-only and
-    # prevents equality from acquiring mutation or formatting dependencies.
-
-    # ValidationError equality procedure (VEQ-001, VEQ-002, VEQ-009,
-    # VEQ-010, VEQ-011, VEQ-012):
-    #
-    # def __eq__(self, other):
-    #     IF self and other are the same object:                         # VEQ-009
-    #         RETURN true
-    #     IF other is not a ValidationError:                             # VEQ-011
-    #         RETURN false without inspecting ValidationError content
-    #     READ each error's message, code, and parameters without
-    #         formatting, normalizing, reordering, or assigning them     # VEQ-012
-    #     COMPARE the two messages, the two codes, and the two parameter
-    #         values using the same component-wise relation              # VEQ-001
-    #     IF every corresponding component is equivalent:
-    #         RETURN true
-    #     RETURN false when any corresponding component differs          # VEQ-002
-    #
-    # The component relation and branches are independent of operand
-    # position, so reversing two ValidationError operands preserves the
-    # result.                                                             # VEQ-010
-    # Neither the successful nor failure path modifies either error or
-    # any validation content reachable from it.                           # VEQ-012
-
-    # Structured equality architecture (VEQ-003, VEQ-004, VEQ-005, VEQ-006,
-    # VEQ-007, VEQ-008): __init__ remains the normalization boundary and
-    # __eq__ owns comparison of its error_dict/error_list products. Mapping
-    # keys define field ownership; each mapped list is a separate occurrence
-    # collection, with NON_FIELD_ERRORS flowing through that same contract.
-    # Any collection-matching seam is a private implementation detail colocated
-    # with ValidationError, and depends inward on normalized leaf equality. It
-    # must not depend on dict/list insertion order, presentation properties,
-    # formatted messages, hashing, or mutation, and must not become public API.
-
-    # Structured ValidationError equality procedure (VEQ-003, VEQ-004,
-    # VEQ-005, VEQ-006, VEQ-007, VEQ-008):
-    #
-    # equivalent_error_collection(left_errors, right_errors):
-    #     IF the collections have different lengths:
-    #         RETURN false because duplicate occurrence counts differ     # VEQ-007
-    #     MARK every right-side occurrence as unmatched
-    #     FOR each normalized leaf error in left_errors:
-    #         FIND an unmatched equivalent leaf error in right_errors
-    #             using the scalar message, code, and params procedure
-    #         IF no such occurrence exists:
-    #             RETURN false
-    #         MARK that one right-side occurrence as matched
-    #     RETURN true; collection order has not affected the result       # VEQ-003
-    #
-    # compare_structured_content(self, other):
-    #     DETERMINE whether each operand owns an error_dict
-    #     IF exactly one operand owns an error_dict:
-    #         RETURN false because their normalized structures differ
-    #     IF both operands own an error_dict:
-    #         IF their field-key sets differ:
-    #             RETURN false; errors cannot move between fields         # VEQ-006
-    #         FOR each field key, independent of dictionary iteration
-    #             or insertion order:                                    # VEQ-005
-    #             COMPARE the corresponding normalized error lists with
-    #                 equivalent_error_collection
-    #             IF a corresponding collection differs:
-    #                 RETURN false
-    #         RETURN true, including when the corresponding field is
-    #             NON_FIELD_ERRORS and only error order differs           # VEQ-004
-    #     COMPARE the operands' normalized error_lists with
-    #         equivalent_error_collection
-    #     RETURN that result; constructor-flattened nested content is
-    #         therefore compared by corresponding normalized collections,
-    #         ignoring only their permitted ordering                      # VEQ-008
-    #
-    # __eq__ invokes compare_structured_content before the scalar procedure
-    # whenever either operand represents list or dictionary content.
-
-    # Hashing architecture (VEQ-013, VEQ-014, VEQ-015):
-    # ValidationError.__hash__ owns the hash boundary and belongs beside
-    # __eq__, consuming the same scalar or normalized collection state without
-    # changing it. Any value-normalization or collection-combination seam is a
-    # private implementation detail colocated with ValidationError; dependency
-    # flows from hashing to the equality contract and its error_dict/error_list
-    # products, never from equality back to hashing. The boundary must not
-    # depend on presentation, serialization, collection, or raising paths and
-    # must not introduce a public helper or alter their existing contracts.
-
     @staticmethod
     def _error_list_equal(left, right):
         if len(left) != len(right):
@@ -250,7 +159,7 @@ class ValidationError(Exception):
         if self is other:
             return True
         if not isinstance(other, ValidationError):
-            return False
+            return NotImplemented
         self_has_error_dict = hasattr(self, 'error_dict')
         other_has_error_dict = hasattr(other, 'error_dict')
         if self_has_error_dict or other_has_error_dict:
