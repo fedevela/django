@@ -117,7 +117,8 @@ class SessionBase:
         )
 
     def decode(self, session_data):
-        # Architecture seam — GUID: SESSION-001, SESSION-002
+        # Architecture seam — GUID: SESSION-001, SESSION-002, SESSION-004,
+        # SESSION-007
         # This method owns format selection only. The current-format decoder
         # delegates rejected input unchanged to the legacy compatibility
         # boundary, whose contract is to return a session mapping.
@@ -128,6 +129,18 @@ class SessionBase:
         #     IF legacy decoding encounters malformed Base64 or any other
         #     rejection condition, contain that failure and return empty state.
         # NEVER allow the legacy decoding failure to escape into request handling.
+        # Pseudocode — GUID: SESSION-004, SESSION-007
+        # INPUT: persisted session_data presented while loading a request.
+        # TRY current-format validation and decoding.
+        # IF current-format validation fails:
+        #     HAND OFF the unchanged candidate to legacy decoding.
+        #     IF legacy decoding rejects incorrectly padded Base64:
+        #         RECEIVE an empty session mapping, not a decoding exception.
+        # RETURN the decoded mapping or empty mapping to the request session.
+        # CONTINUE request dispatch with that mapping so site access remains
+        # available and an authentication attempt can establish fresh state.
+        # FAILURE INVARIANT: no contained session-decoding failure becomes an
+        # HTTP 500 that ends either request path.
         try:
             return signing.loads(session_data, salt=self.key_salt, serializer=self.serializer)
         # RemovedInDjango40Warning: when the deprecation ends, handle here
@@ -151,14 +164,15 @@ class SessionBase:
         # Diagnostic boundary — GUID: SESSION-008
         # Rejection reporting is an internal, best-effort dependency of this
         # boundary and must not participate in its result or escape to callers.
-        # Pseudocode — GUID: SESSION-001, SESSION-002, SESSION-003, SESSION-008
+        # Pseudocode — GUID: SESSION-001, SESSION-002, SESSION-003, SESSION-007,
+        # SESSION-008
         # INPUT: session_data rejected by current-format decoding.
         # TRY:
         #     Base64-decode session_data and split its digest from its payload.
         #     Validate the digest before deserializing the payload.
         #     IF every legacy-format step succeeds, return the decoded state.
-        # ON malformed Base64, malformed structure, invalid digest, or payload
-        # deserialization failure:
+        # ON malformed or incorrectly padded Base64, malformed structure,
+        # invalid digest, or payload deserialization failure:
         #     TRANSITION to rejected state; do not propagate the failure.
         #     DISCARD the entire candidate payload, including authentication
         #     identity and every other stored value.
