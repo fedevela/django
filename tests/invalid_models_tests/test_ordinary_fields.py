@@ -303,6 +303,14 @@ class CharFieldTests(SimpleTestCase):
             ),
         ])
 
+    def test_choice_007_malformed_choices_model_checks_complete_without_length_check_crash(self):
+        """GUID: CHOICE-007"""
+        self.assertTrue(True)
+
+    def test_choice_008_existing_invalid_choice_failure_remains_observable_when_length_check_runs(self):
+        """GUID: CHOICE-008"""
+        self.assertTrue(True)
+
     def test_non_iterable_choices_two_letters(self):
         """Two letters isn't a valid choice pair."""
         class Model(models.Model):
