@@ -1,6 +1,6 @@
 from math import ceil
 
-from django.db import connection, models
+from django.db import connection, connections, models
 from django.db.models import ProtectedError, RestrictedError
 from django.db.models.deletion import Collector
 from django.db.models.sql.constants import GET_ITERATOR_CHUNK_SIZE
@@ -8,9 +8,9 @@ from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
 
 from .models import (
     B1, B2, B3, MR, A, Avatar, B, Base, Child, DeleteBottom, DeleteTop,
-    GenericB1, GenericB2, GenericDeleteBottom, HiddenUser, HiddenUserProfile,
-    M, M2MFrom, M2MTo, MRNull, Origin, P, Parent, R, RChild, RChildChild,
-    Referrer, S, T, User, create_a, get_default_r,
+    EmptyDeleteTestModel, GenericB1, GenericB2, GenericDeleteBottom, HiddenUser,
+    HiddenUserProfile, M, M2MFrom, M2MTo, MRNull, Origin, P, Parent, R, RChild,
+    RChildChild, Referrer, S, T, User, create_a, get_default_r,
 )
 
 
@@ -603,6 +603,133 @@ class DeletionTests(TestCase):
                     ctx.captured_queries[0]['sql'],
                 )
                 signal.disconnect(receiver, sender=Referrer)
+
+
+class EmptyQuerySetDeleteContractTests(TestCase):
+    databases = '__all__'
+
+    def test_delete_005_each_backend_empty_queryset_delete_returns_zero_and_dictionary(self):
+        """
+        GUID: DELETE-005; on each configured backend, deleting an equivalent
+        empty queryset returns a zero total and a dictionary second element.
+        """
+        for alias in connections:
+            with self.subTest(database=alias):
+                deleted, deleted_by_model = (
+                    EmptyDeleteTestModel.objects.using(alias).all().delete()
+                )
+                self.assertEqual(deleted, 0)
+                self.assertIsInstance(deleted_by_model, dict)
+
+    def test_delete_005_each_backend_preserves_selected_zero_deletion_dictionary_convention(self):
+        """
+        GUID: DELETE-005; equivalent empty-queryset deletions on each configured
+        backend preserve the selected zero-deletion dictionary convention.
+        """
+        for alias in connections:
+            with self.subTest(database=alias):
+                result = EmptyDeleteTestModel.objects.using(alias).all().delete()
+                self.assertEqual(result, (0, {}))
+
+    def test_delete_005_simple_and_foreign_key_models_preserve_convention_on_each_backend(self):
+        """
+        GUID: DELETE-005; backend selection and foreign-key topology do not
+        change the selected empty-queryset zero-deletion dictionary convention.
+        """
+        for alias in connections:
+            for model in (EmptyDeleteTestModel, Avatar):
+                with self.subTest(database=alias, model=model._meta.label):
+                    result = model.objects.using(alias).all().delete()
+                    self.assertEqual(result, (0, {}))
+
+    def test_delete_002_empty_simple_queryset_returns_zero_and_dictionary_tuple(self):
+        """GUID: DELETE-002; empty simple queryset -> (0, dictionary)."""
+        result = EmptyDeleteTestModel.objects.none().delete()
+
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], 0)
+        self.assertIsInstance(result[1], dict)
+
+    def test_delete_002_empty_related_queryset_returns_zero_and_dictionary_tuple(self):
+        """GUID: DELETE-002; empty related queryset -> (0, dictionary)."""
+        result = Avatar.objects.none().delete()
+
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], 0)
+        self.assertIsInstance(result[1], dict)
+
+    def test_delete_001_delete_003_simple_and_related_empty_querysets_use_same_permitted_dictionary_convention(self):
+        """
+        GUID: DELETE-001, DELETE-003; simple and related empty querysets use
+        the same empty dictionary or applicable model-label-to-zero convention.
+        """
+        simple_result = EmptyDeleteTestModel.objects.none().delete()
+        related_result = Avatar.objects.none().delete()
+
+        self.assertEqual(simple_result, (0, {}))
+        self.assertEqual(related_result, (0, {}))
+
+    def test_delete_003_repeated_empty_queryset_deletions_preserve_selected_dictionary_convention(self):
+        """
+        GUID: DELETE-003; repeated empty-queryset deletes preserve the selected
+        dictionary convention for both model categories.
+        """
+        for queryset in (
+            EmptyDeleteTestModel.objects.none(),
+            Avatar.objects.none(),
+        ):
+            with self.subTest(model=queryset.model._meta.label):
+                self.assertEqual(queryset.delete(), (0, {}))
+                self.assertEqual(queryset.delete(), (0, {}))
+
+
+class NonzeroQuerySetDeleteContractTests(TestCase):
+    def test_delete_004_direct_only_deletion_reports_total_and_model_label_count(self):
+        """GUID: DELETE-004; direct deletion -> total and model-label count."""
+        EmptyDeleteTestModel.objects.bulk_create([
+            EmptyDeleteTestModel(),
+            EmptyDeleteTestModel(),
+        ])
+
+        deleted, deleted_by_model = EmptyDeleteTestModel.objects.all().delete()
+
+        self.assertEqual(deleted, 2)
+        self.assertEqual(deleted_by_model, {
+            EmptyDeleteTestModel._meta.label: 2,
+        })
+
+    def test_delete_004_cascading_deletion_reports_combined_direct_and_cascaded_total(self):
+        """GUID: DELETE-004; cascading deletion -> combined deletion total."""
+        avatar = Avatar.objects.create()
+        User.objects.bulk_create([
+            User(avatar=avatar),
+            User(avatar=avatar),
+        ])
+
+        deleted, deleted_by_model = Avatar.objects.filter(pk=avatar.pk).delete()
+
+        self.assertEqual(deleted, 3)
+        self.assertEqual(deleted, sum(deleted_by_model.values()))
+
+    def test_delete_004_multimodel_cascade_reports_accurate_counts_by_each_model_label(self):
+        """GUID: DELETE-004; multi-model cascade -> counts by model label."""
+        avatar_1 = Avatar.objects.create()
+        avatar_2 = Avatar.objects.create()
+        User.objects.bulk_create([
+            User(avatar=avatar_1),
+            User(avatar=avatar_1),
+            User(avatar=avatar_2),
+        ])
+
+        deleted, deleted_by_model = Avatar.objects.all().delete()
+
+        self.assertEqual(deleted, 5)
+        self.assertEqual(deleted_by_model, {
+            Avatar._meta.label: 2,
+            User._meta.label: 3,
+        })
 
 
 class FastDeleteTests(TestCase):
