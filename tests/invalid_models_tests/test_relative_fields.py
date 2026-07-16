@@ -7,6 +7,116 @@ from django.test.utils import isolate_apps, override_settings
 
 
 @isolate_apps('invalid_models_tests')
+class RecursiveManyToManyHintContractTests(SimpleTestCase):
+
+    def check_ambiguous_relationship(self, direction='to', through_fields=None):
+        class Person(models.Model):
+            pass
+
+        field_kwargs = {
+            'through': 'AmbiguousRelationship',
+            'related_name': 'related_groups',
+        }
+        if through_fields is not None:
+            field_kwargs['through_fields'] = through_fields
+
+        class Group(models.Model):
+            members = models.ManyToManyField(Person, **field_kwargs)
+
+        class AmbiguousRelationship(models.Model):
+            group = models.ForeignKey(Group, models.CASCADE, related_name='+')
+            person = models.ForeignKey(Person, models.CASCADE, related_name='+')
+            if direction == 'from':
+                other_group = models.ForeignKey(Group, models.CASCADE, related_name='+')
+            else:
+                other_person = models.ForeignKey(Person, models.CASCADE, related_name='+')
+
+        field = Group._meta.get_field('members')
+        return field, field.check(from_model=Group)
+
+    def expected_ambiguity_error(self, field, direction):
+        if direction == 'from':
+            relation = "from 'Group'"
+            error_id = 'fields.E334'
+        else:
+            relation = "to 'Person'"
+            error_id = 'fields.E335'
+        return Error(
+            "The model is used as an intermediate model by "
+            "'invalid_models_tests.Group.members', but it has more than one "
+            "foreign key %s, which is ambiguous. You must specify which "
+            "foreign key Django should use via the through_fields keyword "
+            "argument." % relation,
+            hint=(
+                'If you want to create a recursive relationship, use '
+                'ManyToManyField("self", through="AmbiguousRelationship").'
+            ),
+            obj=field,
+            id=error_id,
+        )
+
+    def test_django_001_more_than_two_relevant_foreign_keys_without_through_fields_emits_existing_error(self):
+        """GUID: DJANGO-001"""
+        field, errors = self.check_ambiguous_relationship()
+        self.assertEqual(errors, [self.expected_ambiguity_error(field, 'to')])
+
+    def test_django_002_recursive_hint_recommends_many_to_many_field_with_intermediary_model_through(self):
+        """GUID: DJANGO-002"""
+        _, errors = self.check_ambiguous_relationship()
+        self.assertEqual(
+            errors[0].hint,
+            'If you want to create a recursive relationship, use '
+            'ManyToManyField("self", through="AmbiguousRelationship").',
+        )
+
+    def test_django_003_recursive_hint_omits_foreign_key_through_and_symmetrical_false(self):
+        """GUID: DJANGO-003"""
+        _, errors = self.check_ambiguous_relationship()
+        self.assertNotIn('ForeignKey', errors[0].hint)
+        self.assertNotIn('symmetrical=False', errors[0].hint)
+
+    def test_django_004_ambiguous_from_direction_emits_corrected_recursive_hint(self):
+        """GUID: DJANGO-004; fields.E334 validation path."""
+        field, errors = self.check_ambiguous_relationship(direction='from')
+        self.assertEqual(errors, [self.expected_ambiguity_error(field, 'from')])
+
+    def test_django_004_ambiguous_to_direction_emits_corrected_recursive_hint(self):
+        """GUID: DJANGO-004; fields.E335 validation path."""
+        field, errors = self.check_ambiguous_relationship(direction='to')
+        self.assertEqual(errors, [self.expected_ambiguity_error(field, 'to')])
+
+    def test_django_005_through_fields_ambiguity_guidance_remains_unchanged(self):
+        """GUID: DJANGO-005"""
+        _, errors = self.check_ambiguous_relationship()
+        self.assertIn(
+            'You must specify which foreign key Django should use via the '
+            'through_fields keyword argument.',
+            errors[0].msg,
+        )
+
+    def test_django_006_error_identifier_and_surrounding_text_remain_unchanged(self):
+        """GUID: DJANGO-006"""
+        field, errors = self.check_ambiguous_relationship()
+        self.assertEqual(errors[0].id, 'fields.E335')
+        self.assertEqual(errors[0].obj, field)
+        self.assertEqual(
+            errors[0].msg,
+            "The model is used as an intermediate model by "
+            "'invalid_models_tests.Group.members', but it has more than one "
+            "foreign key to 'Person', which is ambiguous. You must specify "
+            "which foreign key Django should use via the through_fields "
+            "keyword argument.",
+        )
+
+    def test_django_007_other_system_check_conditions_and_messages_remain_unchanged(self):
+        """GUID: DJANGO-007"""
+        _, errors = self.check_ambiguous_relationship(
+            through_fields=('group', 'person'),
+        )
+        self.assertEqual(errors, [])
+
+
+@isolate_apps('invalid_models_tests')
 class RelativeFieldTests(SimpleTestCase):
 
     def test_valid_foreign_key_without_accessor(self):
@@ -152,7 +262,7 @@ class RelativeFieldTests(SimpleTestCase):
                 "keyword argument.",
                 hint=(
                     'If you want to create a recursive relationship, use '
-                    'ForeignKey("self", symmetrical=False, through="AmbiguousRelationship").'
+                    'ManyToManyField("self", through="AmbiguousRelationship").'
                 ),
                 obj=field,
                 id='fields.E335',

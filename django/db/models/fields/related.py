@@ -1267,6 +1267,7 @@ class ManyToManyField(RelatedField):
                 to_model_name = to_model._meta.object_name
             relationship_model_name = self.remote_field.through._meta.object_name
             self_referential = from_model == to_model
+
             # Count foreign keys in intermediate model
             if self_referential:
                 seen_self = sum(
@@ -1309,7 +1310,7 @@ class ManyToManyField(RelatedField):
                              "through_fields keyword argument.") % (self, from_model_name),
                             hint=(
                                 'If you want to create a recursive relationship, '
-                                'use ForeignKey("%s", symmetrical=False, through="%s").'
+                                'use ManyToManyField("%s", through="%s").'
                             ) % (
                                 RECURSIVE_RELATIONSHIP_CONSTANT,
                                 relationship_model_name,
@@ -1329,7 +1330,7 @@ class ManyToManyField(RelatedField):
                             "through_fields keyword argument." % (self, to_model_name),
                             hint=(
                                 'If you want to create a recursive relationship, '
-                                'use ForeignKey("%s", symmetrical=False, through="%s").'
+                                'use ManyToManyField("%s", through="%s").'
                             ) % (
                                 RECURSIVE_RELATIONSHIP_CONSTANT,
                                 relationship_model_name,
