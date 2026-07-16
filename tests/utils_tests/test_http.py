@@ -362,7 +362,11 @@ class HttpDateProcessingTests(unittest.TestCase):
         #   without applying RFC 850 century resolution.
         # - If parsing raises or the timestamp differs, report this
         #   non-regression obligation as failed.
-        self.assertTrue(True)
+        parsed = parse_http_date('Sun, 06 Nov 1994 08:49:37 GMT')
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(1994, 11, 6, 8, 49, 37),
+        )
 
     def test_httpdate_005_asctime_full_year_parsing_remains_unchanged(self):
         """GUID: HTTPDATE-005; asctime full-year parsing is preserved."""
@@ -374,7 +378,11 @@ class HttpDateProcessingTests(unittest.TestCase):
         #   without applying RFC 850 century resolution.
         # - If parsing raises or the timestamp differs, report this
         #   non-regression obligation as failed.
-        self.assertTrue(True)
+        parsed = parse_http_date('Sun Nov  6 08:49:37 1994')
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(1994, 11, 6, 8, 49, 37),
+        )
 
     def test_httpdate_006_year_69_in_2020_selects_2069_below_50_year_threshold(self):
         """GUID: HTTPDATE-006; below-threshold RFC 850 obligation."""
@@ -385,7 +393,7 @@ class HttpDateProcessingTests(unittest.TestCase):
         # - Because distance is less than 50, retain 2069.
         # - Verify the timestamp represents 2069-11-06 08:49:37 UTC; if the
         #   parser raises or resolves another year, report failure.
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2020, 69, 2069)
 
     def test_httpdate_006_year_70_in_2020_selects_2070_at_50_year_boundary(self):
         """GUID: HTTPDATE-006; exact-boundary RFC 850 obligation."""
@@ -397,7 +405,7 @@ class HttpDateProcessingTests(unittest.TestCase):
         #   the historical fixed-split result 1970.
         # - Verify the timestamp represents 2070-11-06 08:49:37 UTC; if the
         #   parser raises or resolves another year, report failure.
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2020, 70, 2070)
 
     def test_httpdate_006_year_71_in_2020_selects_1971_above_50_year_threshold(self):
         """GUID: HTTPDATE-006; above-threshold RFC 850 obligation."""
@@ -408,7 +416,7 @@ class HttpDateProcessingTests(unittest.TestCase):
         # - Because distance is greater than 50, subtract 100 and select 1971.
         # - Verify the timestamp represents 1971-11-06 08:49:37 UTC; if the
         #   parser raises or resolves another year, report failure.
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2020, 71, 1971)
 
     def test_httpdate_006_same_rfc850_year_on_opposite_threshold_sides_uses_each_call_year(self):
         """GUID: HTTPDATE-006; rolling-threshold call-time obligation."""
@@ -423,7 +431,8 @@ class HttpDateProcessingTests(unittest.TestCase):
         #   69/70 mapping.
         # - If either call raises, either result differs, or both calls resolve
         #   through the same fixed mapping, report failure.
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2019, 70, 1970)
+        self.assertParsedRFC850Year(2020, 70, 2070)
 
     def test_parsing_asctime(self):
         parsed = parse_http_date('Sun Nov  6 08:49:37 1994')
