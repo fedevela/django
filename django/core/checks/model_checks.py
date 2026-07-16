@@ -17,6 +17,19 @@ def check_all_models(app_configs=None, **kwargs):
         models = apps.get_models()
     else:
         models = chain.from_iterable(app_config.get_models() for app_config in app_configs)
+    # DBTABLE-001 logic obligation:
+    # INPUT: the models selected for system checks and the configured database
+    # routers.
+    # FOR EACH selected model:
+    #   IF the model is managed and is not a proxy, group its label by db_table;
+    #   application boundaries do not change this grouping decision.
+    # AFTER grouping:
+    #   FOR EACH db_table whose group contains more than one model label:
+    #     IF no database routers are configured, append models.E028 for that
+    #     db_table and include every colliding label in the diagnostic.
+    #     OTHERWISE, leave routed-duplicate handling outside DBTABLE-001.
+    # OUTPUT: preserve the accumulated model-check errors, including E028 for
+    # duplicate managed tables both within one app and across different apps.
     for model in models:
         if model._meta.managed and not model._meta.proxy:
             db_table_models[model._meta.db_table].append(model._meta.label)
