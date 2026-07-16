@@ -688,7 +688,16 @@ class SyndicationCommentsContractTests(TestCase):
         # THEN select the item's comments elements
         # AND require exactly one comments element containing the resolved URL
         # OTHERWISE fail for omission, duplication, or an unresolved value.
-        self.assertTrue(True)
+        doc = self.render_direct_comments_feed(feedgenerator.Rss201rev2Feed)
+        comments = doc.getElementsByTagName('item')[0].getElementsByTagName(
+            'comments',
+        )
+
+        self.assertEqual(len(comments), 1)
+        self.assertEqual(
+            comments[0].firstChild.wholeText,
+            'https://example.com/comments/?a=1&b=2',
+        )
 
     def test_comments_008_without_comments_preserves_established_omission_or_default(self):
         """GUID: COMMENTS-008 - Absent comments preserve established behavior."""
@@ -699,7 +708,15 @@ class SyndicationCommentsContractTests(TestCase):
         # WHEN that feed is rendered and its first item is parsed
         # THEN require the established omission of the comments element
         # OTHERWISE fail because the no-comments behavior has changed.
-        self.assertTrue(True)
+        feed = self.get_feed(self.CommentsFeed(['first']))
+
+        self.assertIsNone(feed.items[0]['comments'])
+
+        doc = minidom.parseString(feed.writeString('utf-8'))
+        comments = doc.getElementsByTagName('item')[0].getElementsByTagName(
+            'comments',
+        )
+        self.assertEqual(len(comments), 0)
 
     def test_comments_008_without_direct_comments_extra_kwargs_comments_render_without_duplicate_keyword(self):
         """GUID: COMMENTS-008 - Indirect comments remain compatible."""
@@ -711,4 +728,22 @@ class SyndicationCommentsContractTests(TestCase):
         # WHEN that feed is rendered and its first item is parsed
         # THEN require exactly one comments element containing the indirect URL
         # OTHERWISE fail for construction error, duplication, or value loss.
-        self.assertTrue(True)
+        class ExtraCommentsFeed(self.CommentsFeed):
+            def item_extra_kwargs(self, item):
+                return {'comments': 'https://example.com/extra/%s/' % item}
+
+        feed = self.get_feed(ExtraCommentsFeed(['first']))
+
+        self.assertEqual(
+            feed.items[0]['comments'], 'https://example.com/extra/first/',
+        )
+
+        doc = minidom.parseString(feed.writeString('utf-8'))
+        comments = doc.getElementsByTagName('item')[0].getElementsByTagName(
+            'comments',
+        )
+        self.assertEqual(len(comments), 1)
+        self.assertEqual(
+            comments[0].firstChild.wholeText,
+            'https://example.com/extra/first/',
+        )
