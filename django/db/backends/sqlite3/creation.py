@@ -28,6 +28,20 @@ class DatabaseCreation(BaseDatabaseCreation):
     # must not open, initialize, or share another alias's connection here.
     # Post-setup writes remain owned by the alias-bound DatabaseWrapper, making
     # this return boundary the integration seam exercised by the SQLite tests.
+    #
+    # GUID: SQLITE-004, SQLITE-006 -- Architecture contract for named database
+    # reuse. This override owns the decision to preserve and admit the existing
+    # SQLite file, but must not own connection or transaction state. After this
+    # hook returns, BaseDatabaseCreation.create_test_db() owns the close/rebind
+    # boundary and the normal migration and synchronization flow. The resulting
+    # alias-bound DatabaseWrapper owns post-setup writes to the preserved file.
+    #
+    # GUID: SQLITE-007 -- Repeated reuse crosses the same boundary on every run:
+    # BaseDatabaseCreation.destroy_test_db() closes the active wrapper before
+    # preserving the file, and the next create_test_db() call re-enters here.
+    # Dependencies therefore point from the test-runner lifecycle through the
+    # base creation contract into this SQLite preservation policy, never from
+    # this hook to a retained connection from an earlier run.
     def _create_test_db(self, verbosity, autoclobber, keepdb=False):
         test_database_name = self._get_test_db_name()
 
