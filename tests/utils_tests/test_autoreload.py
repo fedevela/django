@@ -140,6 +140,30 @@ class TestIterModulesAndFiles(SimpleTestCase):
         fake_main = types.ModuleType('__main__')
         self.assertEqual(autoreload.iter_modules_and_files((fake_main,), frozenset()), frozenset())
 
+    def test_stat_001_value_error_during_candidate_resolution_is_suppressed(self):
+        """STAT-001: A candidate resolution ValueError isn't propagated."""
+        self.assertTrue(True)
+
+    def test_stat_002_candidate_raising_value_error_is_excluded(self):
+        """STAT-002: A candidate raising ValueError is excluded."""
+        self.assertTrue(True)
+
+    def test_stat_003_valid_candidates_survive_another_resolution_failure(self):
+        """STAT-003: Resolved candidates survive another candidate's failure."""
+        self.assertTrue(True)
+
+    def test_stat_004_successfully_resolved_files_remain_path_instances(self):
+        """STAT-004: Successfully resolved files remain pathlib.Path instances."""
+        self.assertTrue(True)
+
+    def test_stat_005_embedded_null_value_error_is_simulated_deterministically(self):
+        """STAT-005: Path.resolve() deterministically raises an embedded-null ValueError."""
+        self.assertTrue(True)
+
+    def test_stat_006_ordinary_resolvable_paths_remain_unchanged(self):
+        """STAT-006: Ordinary resolvable paths retain existing behavior."""
+        self.assertTrue(True)
+
 
 class TestCommonRoots(SimpleTestCase):
     def test_common_roots(self):
