@@ -713,7 +713,7 @@ class QuerySet:
     def delete(self):
         """Delete the records in the current QuerySet."""
         # PSEUDOCODE CONTRACT — GUID: DELETE-001, DELETE-002, DELETE-003,
-        # DELETE-004
+        # DELETE-004, DELETE-005
         #
         # FUNCTION normalize_delete_result(total_deleted, deleted_by_model):
         #     IF total_deleted IS NOT 0:
@@ -735,6 +735,34 @@ class QuerySet:
         #     # every call; do not retain path-specific or prior-call state.
         #     RETURN result
         # END FUNCTION
+        #
+        # DELETE-005 BACKEND-CONSISTENCY FLOW:
+        #     INPUT equivalent empty querysets for simple and
+        #         foreign-key-participating model configurations
+        #     selected_convention := the single zero-deletion dictionary
+        #         convention used by normalize_delete_result
+        #
+        #     FOR EACH supported database backend:
+        #         (backend_total, backend_deleted_by_model) := collect and
+        #             delete the queryset through its selected backend
+        #         IF that collection or deletion raises an error:
+        #             propagate the backend error without manufacturing a
+        #                 successful zero-deletion result
+        #         END IF
+        #
+        #         backend_result := normalize_delete_result(
+        #             backend_total, backend_deleted_by_model)
+        #         REQUIRE backend_result.total IS 0
+        #         REQUIRE backend_result.deleted_by_model IS a dictionary
+        #         REQUIRE backend_result.deleted_by_model EQUALS
+        #             selected_convention
+        #     END FOR
+        #
+        #     DO NOT branch normalization by backend capabilities, backend
+        #         identity, or the queryset model's foreign-key topology
+        #     OUTPUT the same selected zero-deletion dictionary convention
+        #         for every equivalent empty-queryset deletion
+        # END FLOW
         #
         # DELETE FLOW:
         #     collect and delete the queryset using the existing procedure
