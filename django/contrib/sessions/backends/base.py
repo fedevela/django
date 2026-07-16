@@ -117,6 +117,13 @@ class SessionBase:
         )
 
     def decode(self, session_data):
+        # Pseudocode — GUID: SESSION-001
+        # TRY to validate and decode session_data as the current signed format.
+        # IF current-format validation or decoding fails:
+        #     HAND OFF the unchanged session_data to supported legacy decoding.
+        #     IF legacy decoding encounters malformed Base64 or any other
+        #     rejection condition, contain that failure and return empty state.
+        # NEVER allow the legacy decoding failure to escape into request handling.
         try:
             return signing.loads(session_data, salt=self.key_salt, serializer=self.serializer)
         # RemovedInDjango40Warning: when the deprecation ends, handle here
@@ -132,6 +139,22 @@ class SessionBase:
 
     def _legacy_decode(self, session_data):
         # RemovedInDjango40Warning: pre-Django 3.1 format will be invalid.
+        # Pseudocode — GUID: SESSION-001, SESSION-002, SESSION-003, SESSION-008
+        # INPUT: session_data rejected by current-format decoding.
+        # TRY:
+        #     Base64-decode session_data and split its digest from its payload.
+        #     Validate the digest before deserializing the payload.
+        #     IF every legacy-format step succeeds, return the decoded state.
+        # ON malformed Base64, malformed structure, invalid digest, or payload
+        # deserialization failure:
+        #     TRANSITION to rejected state; do not propagate the failure.
+        #     DISCARD the entire candidate payload, including authentication
+        #     identity and every other stored value.
+        #     SET result to an empty session state.
+        #     IF rejection is diagnostically reportable:
+        #         TRY to report the rejection.
+        #         IF reporting fails, contain that failure and continue loading.
+        #     RETURN the empty result so request processing can continue.
         encoded_data = base64.b64decode(session_data.encode('ascii'))
         try:
             # could produce ValueError if there is no ':'
