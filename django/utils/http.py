@@ -198,7 +198,12 @@ def parse_http_date(date):
         #   two digits.
         # - Continue with the shared month/day/time construction below; let its
         #   existing exception path reject invalid date components.
-        if year < 100:
+        if regex is RFC850_DATE:
+            current_year = datetime.datetime.now().year
+            year += current_year - current_year % 100
+            if year - current_year > _RFC850_YEAR_WINDOW:
+                year -= 100
+        elif year < 100:
             if year < 70:
                 year += 2000
             else:

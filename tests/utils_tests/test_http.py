@@ -1,5 +1,6 @@
 import unittest
 from datetime import datetime
+from unittest import mock
 
 from django.test import SimpleTestCase, ignore_warnings
 from django.utils.datastructures import MultiValueDict
@@ -308,6 +309,21 @@ class ETagProcessingTests(unittest.TestCase):
 
 
 class HttpDateProcessingTests(unittest.TestCase):
+    def assertParsedRFC850Year(self, current_year, encoded_year, expected_year):
+        class MockDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(current_year, 1, 1, tzinfo=tz)
+
+        with mock.patch('django.utils.http.datetime.datetime', MockDateTime):
+            parsed = parse_http_date(
+                'Sunday, 06-Nov-%02d 08:49:37 GMT' % encoded_year
+            )
+        self.assertEqual(
+            datetime.utcfromtimestamp(parsed),
+            datetime(expected_year, 11, 6, 8, 49, 37),
+        )
+
     def test_http_date(self):
         t = 1167616461.0
         self.assertEqual(http_date(t), 'Mon, 01 Jan 2007 01:54:21 GMT')
@@ -322,19 +338,19 @@ class HttpDateProcessingTests(unittest.TestCase):
 
     def test_httpdate_001_rfc850_two_digit_year_uses_call_time_current_century_candidate(self):
         """GUID: HTTPDATE-001."""
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2068, 69, 2069)
 
     def test_httpdate_002_rfc850_candidate_less_than_50_years_ahead_is_retained(self):
         """GUID: HTTPDATE-002."""
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2020, 69, 2069)
 
     def test_httpdate_003_rfc850_candidate_more_than_50_years_ahead_subtracts_100_years(self):
         """GUID: HTTPDATE-003."""
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2020, 71, 1971)
 
     def test_httpdate_004_rfc850_candidate_exactly_50_years_ahead_is_retained(self):
         """GUID: HTTPDATE-004."""
-        self.assertTrue(True)
+        self.assertParsedRFC850Year(2020, 70, 2070)
 
     def test_parsing_asctime(self):
         parsed = parse_http_date('Sun Nov  6 08:49:37 1994')
