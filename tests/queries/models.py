@@ -38,6 +38,14 @@ class Tag(models.Model):
         return self.name
 
 
+class FilterableModel(models.Model):
+    filterable = models.BooleanField(default=True)
+
+
+class FilterableModelChild(models.Model):
+    parent = models.ForeignKey(FilterableModel, models.CASCADE)
+
+
 class Note(models.Model):
     note = models.CharField(max_length=100)
     misc = models.CharField(max_length=10)

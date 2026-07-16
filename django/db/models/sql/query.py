@@ -1141,7 +1141,7 @@ class Query(BaseExpression):
         # OTHERWISE, recursively apply this classification to each source
         # expression, propagating the first unsupported-filter error; RETURN
         # only after the complete expression tree is accepted (DJANGO-005).
-        if not getattr(expression, 'filterable', True):
+        if isinstance(expression, BaseExpression) and not expression.filterable:
             raise NotSupportedError(
                 expression.__class__.__name__ + ' is disallowed in the filter '
                 'clause.'
