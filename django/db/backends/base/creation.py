@@ -5,7 +5,7 @@ from io import StringIO
 from django.apps import apps
 from django.conf import settings
 from django.core import serializers
-from django.db import router
+from django.db import router, transaction
 
 # The prefix to put on the default database name when creating
 # the test database.
@@ -131,30 +131,34 @@ class BaseDatabaseCreation:
         # as the persistence port; neither port owns dependency ordering.
         #
         # The connection is the backend adapter for the restoration boundary:
-        # constraint_checks_disabled() brackets provisional graph persistence and
-        # check_constraints() validates the graph at the integration seam. The
-        # transaction boundary belongs here too, around both operations, so an
-        # integrity failure cannot escape with a partial graph. Backend-specific
-        # constraint mechanics remain behind BaseDatabaseWrapper's existing API.
+        # constraint_checks_disabled() brackets the atomic restoration scope and
+        # check_constraints() validates the complete graph before that scope can
+        # commit, so an integrity failure cannot escape with a partial graph.
+        # Backend-specific constraint mechanics remain behind
+        # BaseDatabaseWrapper's existing API.
         # Pseudocode contract — GUID: SRB-001, SRB-002, SRB-003, SRB-006.
         # INPUT: valid serialized rollback data; database alias from connection.
-        # BEGIN one atomic restoration scope for the complete serialized state.
-        #   ENTER a scope in which foreign-key constraints are deferred/disabled.
+        # ENTER a scope in which foreign-key constraints are deferred/disabled.
+        #   BEGIN one atomic restoration scope for the complete serialized state.
         #   FOR EACH serialized object, in the order supplied:
         #     deserialize the object and retain every serialized foreign-key value;
         #     save the object even when a referenced target is not yet restored;
         #     transition that object from serialized to provisionally restored.
         #   END FOR only after forward references and circular graph members exist.
-        #   EXIT the deferred/disabled-constraint scope.
         #   CHECK integrity constraints against the complete restored graph.
         #   IF integrity checking fails:
-        #     abort the atomic scope, roll back every provisional save, and propagate
-        #     the integrity failure; no partial or invalid restored state may persist.
-        #   ELSE commit all objects and their represented foreign-key relationships.
+        #     abort the atomic scope, roll back every provisional save, and
+        #     propagate the integrity failure; no invalid state may persist.
+        #   ELSE commit every object and represented foreign-key relationship.
+        # EXIT the deferred/disabled-constraint scope.
         # OUTPUT: a complete, integrity-valid graph independent of serialized order.
         data = StringIO(data)
-        for obj in serializers.deserialize("json", data, using=self.connection.alias):
-            obj.save()
+        with self.connection.constraint_checks_disabled():
+            with transaction.atomic(using=self.connection.alias):
+                for obj in serializers.deserialize(
+                        "json", data, using=self.connection.alias):
+                    obj.save()
+                self.connection.check_constraints()
 
     def _get_database_display_str(self, verbosity, database_name):
         """

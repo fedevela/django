@@ -111,3 +111,7 @@ class Author(models.Model):
 
 class Book(models.Model):
     author = models.ForeignKey(Author, models.CASCADE, to_field='name')
+
+
+class CircularReference(models.Model):
+    other = models.ForeignKey('self', models.CASCADE, null=True)
