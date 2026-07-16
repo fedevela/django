@@ -390,20 +390,44 @@ def unescape_string_literal(s):
     return s[1:-1].replace(r'\%s' % quote, quote).replace(r'\\', '\\')
 
 
+# Architecture boundary (SLUG-003, SLUG-004, SLUG-005, SLUG-007): slugify()
+# remains the single owner of slug normalization. Its terminal boundary policy
+# consumes the completed normalized value, so the Unicode, lowercase, and
+# internal-separator stages stay upstream and independent of that policy.
 @keep_lazy_text
 def slugify(value, allow_unicode=False):
     """
     Convert to ASCII if 'allow_unicode' is False. Convert spaces to hyphens.
     Remove characters that aren't alphanumerics, underscores, or hyphens.
-    Convert to lowercase. Also strip leading and trailing whitespace.
+    Convert to lowercase. Also strip leading and trailing whitespace, dashes,
+    and underscores.
     """
+    # Pseudocode obligations for SLUG-003, SLUG-004, SLUG-005, and SLUG-007:
+    # 1. Convert the input to text, then follow the established Unicode branch:
+    #    preserve compatible Unicode when allowed; otherwise normalize and
+    #    reduce to ASCII. Do not alter either branch. (SLUG-007)
+    # 2. Lowercase the normalized text, remove only the established disallowed
+    #    characters, and trim surrounding whitespace. (SLUG-004, SLUG-007)
+    # 3. Apply the established dash-and-whitespace collapsing step so whitespace
+    #    between meaningful words becomes an internal hyphen; retain valid
+    #    internal dashes and underscores in the completed slug. (SLUG-003,
+    #    SLUG-005)
+    # 4. After the completed slug exists, repeatedly remove only dashes and
+    #    underscores at its leading and trailing boundaries. Do not inspect or
+    #    remove matching characters from internal positions. (SLUG-003,
+    #    SLUG-004, SLUG-005, SLUG-007)
+    # 5. Return the boundary-stripped result. Preserve its lowercase words,
+    #    internal separator hyphens, internal dashes or underscores, and the
+    #    content produced by the selected Unicode branch.
+    # Failure path: introduce no recovery branch; conversion or normalization
+    # failures continue through the established exception behavior.
     value = str(value)
     if allow_unicode:
         value = unicodedata.normalize('NFKC', value)
     else:
         value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
     value = re.sub(r'[^\w\s-]', '', value.lower()).strip()
-    return re.sub(r'[-\s]+', '-', value)
+    return re.sub(r'[-\s]+', '-', value).strip('-_')
 
 
 def camel_case_to_spaces(value):
