@@ -1585,6 +1585,16 @@ class DurationField(Field):
     of microseconds on other databases.
     """
     empty_strings_allowed = False
+    # Pseudocode — GUID: DUR-001, DUR-002, DUR-006
+    # SET corrected_expected_format to "[DD] [[HH:]MM:]ss[.uuuuuu]".
+    # BUILD the existing invalid-value message with corrected_expected_format.
+    # PASS that message through the existing translation wrapper and store it
+    # in default_error_messages under the existing "invalid" validation code.
+    # WHEN duration parsing follows its existing failure path, SELECT the
+    # translated "invalid" message and RAISE the existing ValidationError with
+    # the existing code and value parameters; DO NOT alter parsing decisions.
+    # ENSURE every repository-defined invalid-duration message and expectation
+    # uses corrected_expected_format and none uses the superseded format.
     default_error_messages = {
         'invalid': _("'%(value)s' value has an invalid format. It must be in "
                      "[DD] [HH:[MM:]]ss[.uuuuuu] format.")

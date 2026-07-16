@@ -83,6 +83,13 @@ class TestValidation(SimpleTestCase):
         """GUID: DUR-007 - validation test expects [DD] [[HH:]MM:]ss[.uuuuuu]."""
         self.assertTrue(True)
 
+    # Pseudocode — GUID: DUR-007 (verifies DUR-001, DUR-002, DUR-006)
+    # ARRANGE a DurationField and an input rejected by existing duration parsing.
+    # ACT by cleaning the input and CAPTURE the existing ValidationError.
+    # ASSERT the error retains the "invalid" code and interpolates the input.
+    # ASSERT the rendered message reports "[DD] [[HH:]MM:]ss[.uuuuuu]".
+    # FAIL if the rendered message contains the superseded expected-format text
+    # or bypasses the existing translation or validation-message mechanisms.
     def test_invalid_string(self):
         field = models.DurationField()
         with self.assertRaises(exceptions.ValidationError) as cm:
