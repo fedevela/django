@@ -162,16 +162,59 @@ class FieldEqualityContractTests(SimpleTestCase):
 class FieldOrderingContractTests(SimpleTestCase):
 
     def test_FIELD_005_different_creation_counters_preserve_relative_order_regardless_of_model(self):
-        self.assertTrue(True)
+        first = models.Field()
+        first.model = Foo
+        second = models.Field()
+        second.model = Bar
+
+        self.assertLess(first.creation_counter, second.creation_counter)
+        self.assertEqual(sorted([second, first]), [first, second])
 
     def test_FIELD_006_same_creation_counter_different_models_use_stable_tie_breaker(self):
-        self.assertTrue(True)
+        field = models.Field()
+        field_a = copy.copy(field)
+        field_a.model = Foo
+        field_b = copy.copy(field)
+        field_b.model = Bar
+        foo_key = (Foo._meta.app_label, Foo._meta.model_name)
+        bar_key = (Bar._meta.app_label, Bar._meta.model_name)
+        expected = foo_key < bar_key
+
+        self.assertEqual(field_a.creation_counter, field_b.creation_counter)
+        for _ in range(2):
+            self.assertIs(field_a < field_b, expected)
+            self.assertIs(field_b < field_a, not expected)
 
     def test_FIELD_008_same_model_different_counters_sort_in_creation_order(self):
-        self.assertTrue(True)
+        first = models.Field()
+        first.model = Foo
+        second = models.Field()
+        second.model = Foo
+
+        self.assertLess(first.creation_counter, second.creation_counter)
+        self.assertEqual(sorted([second, first]), [first, second])
 
     def test_FIELD_011_unassociated_fields_compare_repeatedly_without_failure_or_drift(self):
-        self.assertTrue(True)
+        field = models.Field()
+        field_copy = copy.copy(field)
+        associated_field_copy = copy.copy(field)
+        associated_field_copy.model = Foo
+        explicit_none_copy = copy.copy(field)
+        explicit_none_copy.model = None
+        later_field = models.Field()
+        comparisons = (
+            (field, field_copy, False),
+            (field, associated_field_copy, True),
+            (associated_field_copy, field, False),
+            (explicit_none_copy, field, False),
+            (field, later_field, True),
+            (later_field, field, False),
+        )
+
+        for left, right, expected in comparisons:
+            with self.subTest(left=left, right=right):
+                self.assertIs(left < right, expected)
+                self.assertIs(left < right, expected)
 
 
 class FieldHashContractTests(SimpleTestCase):

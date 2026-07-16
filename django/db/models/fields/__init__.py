@@ -535,24 +535,30 @@ class Field(RegisterLookupMixin):
     # direct model-object comparison or a model-layer ordering adapter, and so
     # an absent association can be represented inside the same private key.
     def __lt__(self, other):
-        # FIELD-005, FIELD-006, FIELD-008, FIELD-011 ordering logic:
-        # INPUT: self and other are candidate Field operands.
-        # IF other is not a Field, HAND OFF comparison with NotImplemented.
-        # IF creation counters differ, RETURN their less-than result
-        #   immediately;
-        #   this preserves model-independent creation order (FIELD-005) and
-        #   same-model creation order (FIELD-008).
-        # OTHERWISE, the counters collide: derive a stable ordering key from
-        #   each associated model, using a deterministic sentinel/key when the
-        #   model attribute is absent or None (FIELD-011).
-        # IF the derived model keys differ, RETURN their less-than result as
-        #   the deterministic collision tie-breaker (FIELD-006).
-        # OTHERWISE, RETURN false because neither Field precedes the other.
-        # FAILURE PATH: key derivation and comparison must not compare model
-        #   objects directly or raise for an unassociated Field (FIELD-011).
         # This is needed because bisect does not take a comparison function.
         if isinstance(other, Field):
-            return self.creation_counter < other.creation_counter
+            # FIELD-005, FIELD-008: Preserve creation order as the primary
+            # ordering component, independently of model association.
+            if self.creation_counter != other.creation_counter:
+                return self.creation_counter < other.creation_counter
+
+            self_model = getattr(self, 'model', None)
+            other_model = getattr(other, 'model', None)
+            # FIELD-011: Order unassociated fields before associated fields,
+            # and don't attempt to inspect a missing model association.
+            if self_model is None or other_model is None:
+                return self_model is None and other_model is not None
+
+            # FIELD-006: Creation counters can collide when fields are copied
+            # from abstract models. Use model metadata instead of comparing
+            # model classes directly to provide a deterministic tie-breaker.
+            return (
+                self_model._meta.app_label,
+                self_model._meta.model_name,
+            ) < (
+                other_model._meta.app_label,
+                other_model._meta.model_name,
+            )
         return NotImplemented
 
     def __hash__(self):
