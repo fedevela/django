@@ -111,6 +111,31 @@ class SafeExceptionReporterFilter:
         #     RETURN a tuple containing the cleansed items in their original order.
         # Each recursive handoff repeats sensitive-key matching before descending.
         #
+        # GUID: SAFE-003 - Preserve each non-sensitive scalar value.
+        # IF the key is not sensitive AND value is not a supported container:
+        #     CARRY the same scalar value into the cleansed result unchanged.
+        #
+        # GUID: SAFE-004 - Preserve supported container structure and ordering.
+        # WHEN reconstructing a dictionary, list, or tuple:
+        #     CREATE the same container kind at the same nesting position.
+        #     PLACE each recursively cleansed entry or item in its original order.
+        #     PRESERVE dictionary keys and associate each key with its cleansed value.
+        #
+        # GUID: SAFE-005 - Keep cleansing separate from the source value.
+        # FOR EACH supported source container:
+        #     READ entries or items without assigning into the source container.
+        #     BUILD a distinct result container from recursively produced values.
+        # IF a sensitive entry is reached:
+        #     PLACE the substitute only in the result; leave the source value intact.
+        # RETURN the completed result without mutating any source value or container.
+        #
+        # GUID: SAFE-003, SAFE-004, SAFE-005 - Preserve mixed-container integrity.
+        # FOR EACH safe or sensitive value in a nested supported container:
+        #     APPLY the sensitive-key decision independently at its original position.
+        #     CARRY safe scalars unchanged and sensitive substitutes into the new result.
+        #     RECONSTRUCT every enclosing container with its original kind and order.
+        #     NEVER write any produced value back into the source container graph.
+        #
         # GUID: SAFE-006 - Preserve scalar traversal boundaries.
         # ELSE value is unsupported or scalar, including every string:
         #     RETURN value unchanged; do not iterate it.
