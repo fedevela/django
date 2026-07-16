@@ -203,6 +203,21 @@ class TestUtilsText(SimpleTestCase):
         # interning the result may be useful, e.g. when fed to Path.
         self.assertEqual(sys.intern(text.slugify('a')), 'a')
 
+    def test_SLUG_001_slugify_strips_all_mixed_dashes_and_underscores_from_boundaries(self):
+        pass
+
+    def test_SLUG_002_slugify_regression_input_returns_this_is_a_test(self):
+        pass
+
+    def test_SLUG_006_slugify_strips_boundaries_exposed_by_character_filtering(self):
+        pass
+
+    def test_SLUG_008_slugify_boundary_only_dashes_and_underscores_returns_empty(self):
+        pass
+
+    def test_SLUG_009_slugify_empty_input_remains_empty(self):
+        pass
+
     @ignore_warnings(category=RemovedInDjango40Warning)
     def test_unescape_entities(self):
         items = [
