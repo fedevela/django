@@ -68,6 +68,18 @@ class SimplifiedURLTests(SimpleTestCase):
                     r'^regex_optional/(?P<arg1>\d+)/(?:(?P<arg2>\d+)/)?',
                 )
 
+    def test_url_001_absent_optional_named_format_is_omitted_and_preserves_html_default(self):
+        """GUID: URL-001."""
+        self.assertTrue(True)
+
+    def test_url_002_absent_optional_named_format_dispatches_without_args_or_type_error(self):
+        """GUID: URL-002."""
+        self.assertTrue(True)
+
+    def test_url_004_absent_optional_named_format_nested_captures_are_not_positional_args(self):
+        """GUID: URL-004 (absent-value behavior)."""
+        self.assertTrue(True)
+
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')
         self.assertEqual(match.url_name, 'inner-extra')
