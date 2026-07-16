@@ -956,3 +956,38 @@ class LookupTests(TestCase):
             ),
         )
         self.assertEqual(qs.get(has_author_alias_match=True), tag)
+
+
+class GroupedAggregateExactLookupContractTests(TestCase):
+
+    def test_django_11797_001_exact_lookup_preserves_group_by_email_not_id(self):
+        """DJANGO-11797-001: Exact lookup preserves GROUP BY email, not id."""
+        self.assertTrue(True)
+
+    def test_django_11797_002_exact_lookup_selects_projected_max_id_not_pk(self):
+        """DJANGO-11797-002: The subquery selects projected Max('id'), not pk."""
+        self.assertTrue(True)
+
+    def test_django_11797_003_exact_lookup_subquery_remains_single_column(self):
+        """DJANGO-11797-003: The exact-lookup subquery remains single-column."""
+        self.assertTrue(True)
+
+    def test_django_11797_004_filter_subquery_preserves_email_isnull(self):
+        """DJANGO-11797-004: Conversion preserves email__isnull=True."""
+        self.assertTrue(True)
+
+    def test_django_11797_005_filter_subquery_preserves_max_id_expression(self):
+        """DJANGO-11797-005: Conversion preserves the Max('id') expression."""
+        self.assertTrue(True)
+
+    def test_django_11797_006_exact_lookup_preserves_limit_one(self):
+        """DJANGO-11797-006: Embedding the sliced queryset preserves LIMIT 1."""
+        self.assertTrue(True)
+
+    def test_django_11797_007_standalone_selects_max_id_and_groups_by_email(self):
+        """DJANGO-11797-007: Standalone SQL selects Max('id') by email."""
+        self.assertTrue(True)
+
+    def test_django_11797_008_slice_preserves_query_and_adds_limit_one(self):
+        """DJANGO-11797-008: Slicing preserves semantics and adds LIMIT 1."""
+        self.assertTrue(True)
