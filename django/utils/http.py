@@ -38,15 +38,6 @@ RFC1123_DATE = re.compile(r'^\w{3}, %s %s %s %s GMT$' % (__D, __M, __Y, __T))
 RFC850_DATE = re.compile(r'^\w{6,9}, %s-%s-%s %s GMT$' % (__D, __M, __Y2, __T))
 ASCTIME_DATE = re.compile(r'^\w{3} %s %s %s %s$' % (__M, __D2, __T, __Y))
 
-# HTTP-date year-resolution architecture (HTTPDATE-001..HTTPDATE-006):
-# parse_http_date() owns format dispatch and the call-time calendar-year read.
-# The RFC850_DATE branch owns candidate construction and applies this window;
-# its datetime.datetime.now dependency is the controlled-time seam for threshold
-# verification (HTTPDATE-006). RFC1123_DATE and ASCTIME_DATE bypass that branch,
-# preserving their four-digit years before all formats rejoin the shared datetime
-# construction and validation boundary (HTTPDATE-005).
-_RFC850_YEAR_WINDOW = 50
-
 RFC3986_GENDELIMS = ":/?#[]@"
 RFC3986_SUBDELIMS = "!$&'()*+,;="
 
@@ -184,32 +175,15 @@ def parse_http_date(date):
         raise ValueError("%r is not in a valid HTTP date format" % date)
     try:
         year = int(m.group('year'))
-        # Integration seam: use ``regex is RFC850_DATE`` to isolate the rolling
-        # century contract from four-digit RFC 1123 and asctime years. Read
-        # datetime.datetime.now().year here, at the parser boundary, and keep
-        # the resolver's inputs limited to that year and the matched RFC 850
-        # year digits.
-        # RFC 850 two-digit-year resolution pseudocode:
-        # - HTTPDATE-001: When RFC850_DATE supplied the matched year, read the
-        #   calendar year at call time; combine its century with the supplied
-        #   final two digits to form the current-century candidate.
-        # - HTTPDATE-002 / HTTPDATE-004: If candidate - current year is less
-        #   than or equal to 50, retain the candidate (including exactly 50).
-        # - HTTPDATE-003: Otherwise, candidate is more than 50 years ahead;
-        #   subtract 100 and use that past year, preserving the supplied final
-        #   two digits.
-        # - Continue with the shared month/day/time construction below; let its
-        #   existing exception path reject invalid date components.
-        if regex is RFC850_DATE:
-            current_year = datetime.datetime.now().year
-            year += current_year - current_year % 100
-            if year - current_year > _RFC850_YEAR_WINDOW:
-                year -= 100
-        elif year < 100:
-            if year < 70:
-                year += 2000
+        if year < 100:
+            current_year = datetime.datetime.utcnow().year
+            current_century = current_year - (current_year % 100)
+            if year - (current_year % 100) > 50:
+                # Years more than 50 years in the future are interpreted
+                # as representing the past.
+                year += current_century - 100
             else:
-                year += 1900
+                year += current_century
         month = MONTHS.index(m.group('mon').lower()) + 1
         day = int(m.group('day'))
         hour = int(m.group('hour'))
