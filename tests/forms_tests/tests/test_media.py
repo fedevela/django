@@ -1,4 +1,7 @@
-from django.forms import CharField, Form, Media, MultiWidget, TextInput
+import warnings
+
+from django.forms import CharField, Form, Media, MultiWidget, TextInput, Widget
+from django.forms.widgets import MediaOrderConflictWarning
 from django.template import Context, Template
 from django.test import SimpleTestCase, override_settings
 
@@ -8,6 +11,30 @@ from django.test import SimpleTestCase, override_settings
 )
 class FormsMediaTestCase(SimpleTestCase):
     """Tests for the media handling on widgets and forms"""
+
+    def _supplied_three_widget_form(self):
+        class ColorPicker(Widget):
+            class Media:
+                js = ['color-picker.js']
+
+        class SimpleTextWidget(Widget):
+            class Media:
+                js = ['text-editor.js']
+
+        class FancyTextWidget(Widget):
+            class Media:
+                js = [
+                    'text-editor.js',
+                    'text-editor-extras.js',
+                    'color-picker.js',
+                ]
+
+        class MyForm(Form):
+            background_color = CharField(widget=ColorPicker())
+            intro = CharField(widget=SimpleTextWidget())
+            body = CharField(widget=FancyTextWidget())
+
+        return MyForm()
 
     def test_construction(self):
         # Check construction of media objects
@@ -521,15 +548,29 @@ class FormsMediaTestCase(SimpleTestCase):
 
     def test_media_001_supplied_three_widget_form_js_preserves_expected_order(self):
         """GUID: MEDIA-001 - Accessing form media preserves the supplied JavaScript order."""
-        pass
+        self.assertEqual(
+            self._supplied_three_widget_form().media._js,
+            ['text-editor.js', 'text-editor-extras.js', 'color-picker.js'],
+        )
 
     def test_media_002_accessing_supplied_form_media_emits_no_order_conflict_warning(self):
         """GUID: MEDIA-002 - Accessing the supplied form media emits no conflict warning."""
-        pass
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')
+            self._supplied_three_widget_form().media._js
+        self.assertFalse(any(
+            issubclass(warning.category, MediaOrderConflictWarning)
+            for warning in caught_warnings
+        ))
 
     def test_media_005_supplied_form_media_contains_each_distinct_js_file_once(self):
         """GUID: MEDIA-005 - Accessing form media includes each supplied JavaScript file once."""
-        pass
+        js = self._supplied_three_widget_form().media._js
+        for path in (
+            'text-editor.js', 'text-editor-extras.js', 'color-picker.js',
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(js.count(path), 1)
 
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])

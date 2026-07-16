@@ -6,16 +6,21 @@ import copy
 import datetime
 import re
 import warnings
+from collections import defaultdict
 from itertools import chain
 
 from django.conf import settings
 from django.forms.utils import to_current_timezone
 from django.templatetags.static import static
 from django.utils import datetime_safe, formats
+from django.utils.datastructures import OrderedSet
 from django.utils.dates import MONTHS
 from django.utils.formats import get_format
 from django.utils.html import format_html, html_safe
 from django.utils.safestring import mark_safe
+from django.utils.topological_sort import (
+    CyclicDependencyError, stable_topological_sort,
+)
 from django.utils.translation import gettext_lazy as _
 
 from .renderers import get_default_renderer
@@ -118,23 +123,30 @@ class Media:
         Architecture contract (GUID: MEDIA-001, MEDIA-002, MEDIA-005): this is
         the integration seam between retained declarations and ordered media.
         It owns cross-list ordering, conflict detection, and deduplication. The
-        pairwise merge() method remains the compatibility primitive until this
-        resolver receives the graph-based implementation.
+        pairwise merge() method remains the compatibility primitive for direct
+        callers.
         """
-        # PSEUDOCODE: merge_all(declaration_lists) -> ordered_paths
-        # GUID: MEDIA-001 — Register every path and only its explicitly declared
-        # predecessor relationship, then resolve all relationships together in
-        # stable order. The supplied lists resolve to text-editor.js,
-        # text-editor-extras.js, color-picker.js.
-        # GUID: MEDIA-005 — Register a path once across all declaration lists
-        # and emit each registered path once.
-        # GUID: MEDIA-002 — Return an acyclic resolution without warning. Only
-        # a genuine cycle warns and uses a deterministic first-seen fallback.
-        merged = lists[0] if lists else []
-        # Preserve current behavior during the architecture phase.
-        for item_list in filter(None, lists[1:]):
-            merged = cls.merge(merged, item_list)
-        return merged
+        dependency_graph = defaultdict(set)
+        all_items = OrderedSet()
+        for item_list in filter(None, lists):
+            head = item_list[0]
+            # The first item depends on nothing but must be in the graph.
+            dependency_graph.setdefault(head, set())
+            for item in item_list:
+                all_items.add(item)
+                # Repeated paths don't create self-dependencies.
+                if head != item:
+                    dependency_graph[item].add(head)
+                head = item
+        try:
+            return stable_topological_sort(all_items, dependency_graph)
+        except CyclicDependencyError:
+            warnings.warn(
+                'Detected duplicate Media files in an opposite order: {}'.format(
+                    ', '.join(repr(item_list) for item_list in lists)
+                ), MediaOrderConflictWarning,
+            )
+            return list(all_items)
 
     @staticmethod
     def merge(list_1, list_2):
