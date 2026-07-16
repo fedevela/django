@@ -5,9 +5,131 @@ from django.core.exceptions import ValidationError
 from django.forms.models import ModelChoiceIterator
 from django.forms.widgets import CheckboxSelectMultiple
 from django.template import Context, Template
-from django.test import TestCase
+from django.test import TestCase, skipUnlessDBFeature
 
 from .models import Article, Author, Book, Category, Writer
+
+
+@skipUnlessDBFeature('supports_select_union')
+class UnionBackedModelMultipleChoiceFieldContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.entertainment = Category.objects.create(
+            name='Entertainment', slug='entertainment', url='entertainment',
+        )
+        cls.test = Category.objects.create(
+            name='A test', slug='test', url='test',
+        )
+        cls.third = Category.objects.create(
+            name='Third', slug='third', url='third',
+        )
+
+    def union_queryset(self):
+        return Category.objects.filter(name__startswith='E').union(
+            Category.objects.filter(url='third'),
+        )
+
+    def test_DJ13158_003_optional_union_queryset_empty_submission_cleans_to_empty_selection(self):
+        """DJ13158-003: An empty submission cleans to an empty selection."""
+        field = forms.ModelMultipleChoiceField(
+            queryset=self.union_queryset(), required=False,
+        )
+
+        self.assertSequenceEqual(field.clean([]), [])
+
+    def test_DJ13158_005_unchanged_union_queryset_renders_exact_component_filter_matches(self):
+        """DJ13158-005: Rendering exposes exactly the component filter matches."""
+        class CategoryForm(forms.Form):
+            categories = forms.ModelMultipleChoiceField(
+                queryset=self.union_queryset(), required=False,
+            )
+
+        rendered = str(CategoryForm()['categories'])
+
+        self.assertEqual(rendered.count('<option '), 2)
+        self.assertInHTML(
+            '<option value="%s">Entertainment</option>' % self.entertainment.pk,
+            rendered,
+            count=1,
+        )
+        self.assertInHTML(
+            '<option value="%s">Third</option>' % self.third.pk,
+            rendered,
+            count=1,
+        )
+        self.assertNotIn('value="%s"' % self.test.pk, rendered)
+
+    def test_DJ13158_007_union_queryset_valid_nonempty_submission_cleans_to_selected_matches(self):
+        """DJ13158-007: A valid non-empty submission cleans to selected matches."""
+        field = forms.ModelMultipleChoiceField(
+            queryset=self.union_queryset(), required=False,
+        )
+
+        cleaned = field.clean([str(self.entertainment.pk)])
+
+        self.assertCountEqual(cleaned, [self.entertainment])
+
+
+@skipUnlessDBFeature('supports_select_union')
+class UnionBackedModelFormRelationshipContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.entertainment = Category.objects.create(
+            name='Entertainment', slug='entertainment', url='entertainment',
+        )
+        cls.test = Category.objects.create(
+            name='A test', slug='test', url='test',
+        )
+        cls.third = Category.objects.create(
+            name='Third', slug='third', url='third',
+        )
+        cls.article = Article.objects.create(
+            headline='Union-backed relationships',
+            slug='union-backed-relationships',
+            pub_date=datetime.date(2020, 7, 3),
+            writer=Writer.objects.create(name='Test writer'),
+            article='Test article',
+        )
+
+    def union_queryset(self):
+        return Category.objects.filter(name__startswith='E').union(
+            Category.objects.filter(url='third'),
+        )
+
+    def article_form(self, data):
+        class ArticleForm(forms.ModelForm):
+            categories = forms.ModelMultipleChoiceField(
+                queryset=self.union_queryset(), required=False,
+            )
+
+            class Meta:
+                model = Article
+                fields = ['categories']
+
+        return ArticleForm(data=data, instance=self.article)
+
+    def test_DJ13158_004_empty_valid_submission_save_adds_no_publication_relationships(self):
+        """DJ13158-004: Saving an empty valid form adds no publications."""
+        form = self.article_form({'categories': []})
+
+        self.assertTrue(form.is_valid(), form.errors)
+        article = form.save()
+
+        article = Article.objects.get(pk=article.pk)
+        self.assertSequenceEqual(article.categories.all(), [])
+
+    def test_DJ13158_008_valid_nonempty_union_backed_submission_save_preserves_submitted_publication_relationships(self):
+        """DJ13158-008: Saving preserves the submitted publications."""
+        submitted = [self.entertainment, self.third]
+        form = self.article_form({
+            'categories': [category.pk for category in submitted],
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+        article = form.save()
+
+        article = Article.objects.get(pk=article.pk)
+        self.assertCountEqual(article.categories.all(), submitted)
 
 
 class ModelChoiceFieldTests(TestCase):

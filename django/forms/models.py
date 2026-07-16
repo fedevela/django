@@ -421,6 +421,11 @@ class BaseModelForm(BaseForm):
         except ValidationError as e:
             self._update_errors(e)
 
+    # DJ13158-004, DJ13158-008 architecture boundary: this method owns the
+    # integration seam between cleaned ModelForm data and model relationship
+    # persistence. Union-backed field handling remains field-owned; this seam
+    # forwards the cleaned empty or selected value unchanged through the
+    # existing model field save_form_data() contract.
     def _save_m2m(self):
         """
         Save the many-to-many fields and generic relations for this form.
@@ -1292,6 +1297,11 @@ class ModelChoiceField(ChoiceField):
         return str(self.prepare_value(initial_value)) != str(data_value)
 
 
+# DJ13158-004, DJ13158-008 architecture boundary: this field owns selection
+# cleaning before relationship persistence. clean() and _check_values() remain
+# the private empty-selection and membership-resolution seams; their cleaned
+# value flows one-way into BaseModelForm._save_m2m(), without a model-form or
+# relationship-layer dependency on combined QuerySet internals.
 class ModelMultipleChoiceField(ModelChoiceField):
     """A MultipleChoiceField whose choices are a model QuerySet."""
     widget = SelectMultiple
@@ -1352,16 +1362,23 @@ class ModelMultipleChoiceField(ModelChoiceField):
                 self.error_messages['invalid_list'],
                 code='invalid_list',
             )
+        queryset = self.queryset
+        if queryset.query.combinator:
+            # Combined querysets cannot be filtered. Wrap the combined query
+            # in a subquery so the submitted values can be checked against it.
+            queryset = queryset.model._base_manager.using(queryset.db).filter(
+                pk__in=queryset.values('pk'),
+            )
         for pk in value:
             try:
-                self.queryset.filter(**{key: pk})
+                queryset.filter(**{key: pk})
             except (ValueError, TypeError):
                 raise ValidationError(
                     self.error_messages['invalid_pk_value'],
                     code='invalid_pk_value',
                     params={'pk': pk},
                 )
-        qs = self.queryset.filter(**{'%s__in' % key: value})
+        qs = queryset.filter(**{'%s__in' % key: value})
         pks = {str(getattr(o, key)) for o in qs}
         for val in value:
             if str(val) not in pks:

@@ -16,6 +16,30 @@ class QuerySetSetOperationTests(TestCase):
     def assertNumbersEqual(self, queryset, expected_numbers, ordered=True):
         self.assertQuerysetEqual(queryset, expected_numbers, operator.attrgetter('num'), ordered)
 
+    def test_none(self):
+        qs1 = Number.objects.filter(num__lte=1)
+        qs2 = Number.objects.filter(num__gte=8)
+        combined = [qs1.union(qs2)]
+        if connection.features.supports_select_intersection:
+            combined.append(
+                Number.objects.filter(num__lte=5).intersection(
+                    Number.objects.filter(num__gte=5),
+                )
+            )
+        if connection.features.supports_select_difference:
+            combined.append(
+                Number.objects.filter(num__lte=5).difference(
+                    Number.objects.filter(num__lte=4),
+                )
+            )
+        for queryset in combined:
+            with self.subTest(combinator=queryset.query.combinator):
+                self.assertSequenceEqual(queryset.none(), [])
+                self.assertIs(queryset.none().exists(), False)
+
+        # Calling none() must not alter the original combined query.
+        self.assertNumbersEqual(combined[0], [0, 1, 8, 9], ordered=False)
+
     def test_simple_union(self):
         qs1 = Number.objects.filter(num__lte=1)
         qs2 = Number.objects.filter(num__gte=8)
