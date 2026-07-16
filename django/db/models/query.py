@@ -793,7 +793,7 @@ class QuerySet:
         collector.collect(del_query)
 
         # ARCHITECTURE CONTRACT — GUID: DELETE-001, DELETE-002, DELETE-003,
-        # DELETE-004
+        # DELETE-004, DELETE-005
         # Collector owns cascade discovery and deletion and supplies its raw
         # (total, per-model dictionary) result through this integration seam.
         # QuerySet.delete() owns normalization of the public result after this
@@ -803,6 +803,11 @@ class QuerySet:
         # Nonzero results cross the seam unchanged: their combined total and
         # model-label counts remain owned by Collector and must not be rebuilt
         # by the queryset layer.
+        # The selected database enters Collector only through del_query.db;
+        # backend-specific deletion details remain below this seam. DELETE-005
+        # therefore belongs to the queryset-owned normalization after the seam,
+        # with no backend or foreign-key-topology adapter between Collector's
+        # result and the single public zero-deletion convention.
         deleted, _rows_count = collector.delete()
 
         # Clear the result cache, in case this QuerySet gets reused.
