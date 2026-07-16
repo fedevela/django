@@ -513,6 +513,10 @@ class Field(RegisterLookupMixin):
         name, path, args, kwargs = self.deconstruct()
         return self.__class__(*args, **kwargs)
 
+    # FIELD-003, FIELD-004, FIELD-010 identity contract: Field owns the
+    # (creation_counter, associated model object or None) comparison boundary.
+    # __eq__ defines that identity and __hash__ must consume the same tuple;
+    # model identity remains local to Field rather than a model-layer adapter.
     def __eq__(self, other):
         # Needed for @total_ordering
         if isinstance(other, Field):
