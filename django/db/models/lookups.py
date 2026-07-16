@@ -259,6 +259,22 @@ class Exact(FieldGetDbPrepValueMixin, BuiltinLookup):
     lookup_name = 'exact'
 
     def process_rhs(self, compiler, connection):
+        # DJANGO-11797-009 LOGIC OBLIGATION: accept a one-position result
+        # window, including one whose lower bound is a nonzero offset.
+        # DJANGO-11797-010 LOGIC OBLIGATION: reject every Query result window
+        # that is not limited to exactly one position.
+        # Exact-lookup cardinality flow:
+        # INPUT: the right-hand side prepared for exact-lookup SQL processing.
+        # IF the input is a Query, inspect its established result window.
+        #     IF the window contains exactly one position (high mark - low mark
+        #     equals one), accept it; preserve any nonzero low mark so an offset
+        #     one-result query retains its established meaning.
+        #         IF the query has no explicit select fields, replace its select
+        #         clause with the primary key required by the exact lookup.
+        #     ELSE reject the query with the established cardinality error and
+        #     stop right-hand-side processing.
+        # HANDOFF: delegate every accepted or non-Query input to the inherited
+        # right-hand-side processor; propagate its SQL, parameters, or failure.
         from django.db.models.sql.query import Query
         if isinstance(self.rhs, Query):
             if self.rhs.has_limit_one():
