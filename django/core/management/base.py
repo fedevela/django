@@ -364,6 +364,23 @@ class BaseCommand:
         if options.get('stderr'):
             self.stderr = OutputWrapper(options['stderr'])
 
+        # Pseudocode contract: gate makemigrations on model-check results.
+        #
+        # GUID: DJUC-002
+        # INPUT: a makemigrations command, its check options, and model checks
+        # that may report an invalid UniqueConstraint field reference.
+        # IF system checks are required and have not been skipped:
+        #     RUN model checks before dispatching to the command handler.
+        #     IF an invalid UniqueConstraint field reference produces a serious
+        #     model-check issue:
+        #         FORMAT the issue as the observable system-check error.
+        #         RAISE that error to the caller.
+        #         DO NOT dispatch to makemigrations.handle().
+        #         THEREFORE do not reach migration detection or file creation.
+        #     ELSE:
+        #         RETURN from the check normally and continue dispatch.
+        # OUTPUT: invalid references stop before migration creation; references
+        # with no model-check errors introduce no new stop condition.
         if self.requires_system_checks and not options['skip_checks']:
             self.check()
         if self.requires_migrations_checks:
