@@ -57,6 +57,15 @@ class ChildArticle(Article):
     pass
 
 
+class OrderedByPKParent(models.Model):
+    class Meta:
+        ordering = ('-pk',)
+
+
+class OrderedByPKChild(OrderedByPKParent):
+    pass
+
+
 class Reference(models.Model):
     article = models.ForeignKey(OrderedByAuthorArticle, models.CASCADE)
 

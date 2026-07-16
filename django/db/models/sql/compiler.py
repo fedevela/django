@@ -703,46 +703,16 @@ class SQLCompiler:
         not be) and column name for ordering by the given 'name' parameter.
         The 'name' is of the form 'field1__field2__...__fieldN'.
         """
-        # Architecture boundary (DJANGO-001, DJANGO-002, DJANGO-003,
-        # DJANGO-009): this method owns the conversion of ordering names into
-        # backend-neutral OrderBy contracts. Query.setup_joins() supplies the
-        # resolved field/target topology; the relation-ordering branch below
-        # is the seam between related-model ordering expansion and concrete
-        # target ordering; and get_order_by()/backend compilers consume the
-        # returned OrderBy instances. Inherited ``pk`` direction must remain
-        # owned here until it is attached to the concrete parent-PK target.
-        # DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-009 -- Logic obligation:
-        # preserve an inherited primary-key alias's direction from resolution
-        # through backend compilation and queryset evaluation.
-        #
-        # Pseudocode:
-        #   INPUT ordering name, starting model options, and default direction.
-        #   1. Separate the requested direction from the field path and retain
-        #      whether the resulting OrderBy expression is descending.
-        #   2. Resolve the path. If its terminal token is the ``pk`` shortcut
-        #      and resolution crosses a multi-table inheritance parent link,
-        #      treat that link as access to the concrete parent primary-key
-        #      target, not as a request for the related model's ordering.
-        #   3. For that shortcut, bypass expansion of the parent's Meta.ordering,
-        #      trim the inheritance joins to the concrete primary-key target,
-        #      and emit an OrderBy carrying the retained descending state.
-        #   4. Otherwise, preserve normal related-model ordering expansion;
-        #      recurse with the effective direction and reject a repeated join
-        #      path as an infinite ordering loop.
-        #   5. Hand the resolved OrderBy to the active backend compiler. It must
-        #      render the concrete parent primary-key column with DESC so row
-        #      evaluation yields parent primary keys from highest to lowest.
-        #   FAILURE: propagate invalid-path errors and the ordering-loop error;
-        #      never silently discard or invert the retained ``-pk`` direction.
         name, order = get_order_dir(name, default_order)
         descending = order == 'DESC'
         pieces = name.split(LOOKUP_SEP)
         field, targets, alias, joins, path, opts, transform_function = self._setup_joins(pieces, opts, alias)
 
         # If we get to this point and the field is a relation to another model,
-        # append the default ordering for that model unless the attribute name
-        # of the field is specified.
-        if field.is_relation and opts.ordering and getattr(field, 'attname', None) != name:
+        # append the default ordering for that model unless it is the pk
+        # shortcut or the attribute name of the field that is specified.
+        if (field.is_relation and opts.ordering and
+                getattr(field, 'attname', None) != name and name != 'pk'):
             # Firstly, avoid infinite loops.
             already_seen = already_seen or set()
             join_tuple = tuple(getattr(self.query.alias_map[j], 'join_cols', None) for j in joins)

@@ -2,32 +2,66 @@ from datetime import datetime
 from operator import attrgetter
 
 from django.core.exceptions import FieldError
+from django.db import connection
 from django.db.models import (
     CharField, DateTimeField, F, Max, OuterRef, Subquery, Value,
 )
 from django.db.models.functions import Upper
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 
-from .models import Article, Author, ChildArticle, OrderedByFArticle, Reference
+from .models import (
+    Article, Author, ChildArticle, OrderedByFArticle, OrderedByPKChild,
+    OrderedByPKParent, Reference,
+)
 
 
-class InheritedPrimaryKeyOrderingContractTests(SimpleTestCase):
+class InheritedPrimaryKeyOrderingContractTests(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.children = [OrderedByPKChild.objects.create() for _ in range(3)]
 
     def test_DJANGO_001_child_inherited_minus_pk_compiles_parent_pk_descending(self):
         """DJANGO-001: inherited -pk compiles the concrete parent PK descending."""
-        self.assertTrue(True)
+        query = OrderedByPKChild.objects.all().query
+        sql, params = query.get_compiler(connection=connection).as_sql()
+        parent_link = OrderedByPKChild._meta.pk
+        ordering_sql = '{}.{} DESC'.format(
+            connection.ops.quote_name(OrderedByPKChild._meta.db_table),
+            connection.ops.quote_name(parent_link.column),
+        )
+        self.assertIn('ORDER BY %s' % ordering_sql, sql)
+        self.assertEqual(params, ())
 
     def test_DJANGO_002_child_default_queryset_returns_parent_pks_highest_to_lowest(self):
         """DJANGO-002: evaluating the child queryset returns descending parent PKs."""
-        self.assertTrue(True)
+        self.assertSequenceEqual(
+            list(OrderedByPKChild.objects.values_list('pk', flat=True)),
+            sorted((child.pk for child in self.children), reverse=True),
+        )
 
     def test_DJANGO_003_inherited_minus_pk_resolves_parent_pk_with_descending_prefix(self):
         """DJANGO-003: resolving inherited -pk preserves its descending prefix."""
-        self.assertTrue(True)
+        query = OrderedByPKChild.objects.all().query
+        compiler = query.get_compiler(connection=connection)
+        order_by, is_ref = compiler.find_ordering_name(
+            '-pk', OrderedByPKChild._meta,
+        )[0]
+        self.assertIs(order_by.expression.target.target_field, OrderedByPKParent._meta.pk)
+        self.assertIs(order_by.descending, True)
+        self.assertIs(is_ref, False)
 
     def test_DJANGO_009_supported_backend_compiles_inherited_parent_pk_descending(self):
         """DJANGO-009: supported backends compile the inherited parent PK descending."""
-        self.assertTrue(True)
+        query = OrderedByPKChild.objects.all().query
+        compiler = query.get_compiler(connection=connection)
+        order_by = compiler.get_order_by()
+        self.assertEqual(len(order_by), 1)
+        expression, (sql, params, is_ref) = order_by[0]
+        self.assertIs(expression.descending, True)
+        self.assertTrue(sql.endswith(' DESC'))
+        self.assertEqual(params, [])
+        self.assertIs(is_ref, False)
 
 
 class OrderingTests(TestCase):
