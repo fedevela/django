@@ -204,7 +204,10 @@ class Query(BaseExpression):
         self.annotation_select_mask = None
         self._annotation_select_cache = None
 
-        # Set combination attributes
+        # Set combination attributes. ARCHITECTURE DJ13158-001,
+        # DJ13158-002, DJ13158-006: Query owns both the compound-query children
+        # and their empty-state transition. QuerySet remains the cloning/public
+        # API boundary and SQLCompiler remains a consumer of Query state.
         self.combinator = None
         self.combinator_all = False
         self.combined_queries = ()

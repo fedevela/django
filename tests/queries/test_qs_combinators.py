@@ -9,6 +9,9 @@ from .models import Number, ReservedName
 
 @skipUnlessDBFeature('supports_select_union')
 class QuerySetSetOperationTests(TestCase):
+    # ARCHITECTURE DJ13158-009, DJ13158-010: this existing backend-gated test
+    # case is the regression boundary for combined-query empty-state behavior
+    # and preservation of the established combinator contracts.
     @classmethod
     def setUpTestData(cls):
         Number.objects.bulk_create(Number(num=i, other_num=10 - i) for i in range(10))
