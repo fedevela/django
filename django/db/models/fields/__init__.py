@@ -1007,6 +1007,40 @@ class CharField(Field):
     def get_internal_type(self):
         return "CharField"
 
+    # Pseudocode -- GUID: CHOICE-001, CHOICE-002, CHOICE-004
+    #
+    # NORMALIZE_TEXT_CHOICE_VALUE(value, lifecycle_source):
+    #     IF value is None:
+    #         RETURN None through the existing nullable-value path.
+    #     IF this CharField has choices AND value is a TextChoices member:
+    #         candidate = the member's underlying value.
+    #         IF candidate is not a primitive str:
+    #             FOLLOW the existing CharField conversion/error contract.
+    #         normalized_value = candidate as a primitive str, never the enum
+    #         member object or its enum-qualified representation.
+    #     ELSE IF value is already a primitive str:
+    #         normalized_value = value unchanged.
+    #     ELSE:
+    #         normalized_value = value converted by the existing CharField
+    #         string-conversion contract.
+    #     ASSERT type(normalized_value) is str when it is not None.
+    #     RETURN normalized_value.
+    #
+    # FRESH-INSTANCE HANDOFF (CHOICE-001, CHOICE-002):
+    #     BEFORE storing a constructor-supplied value in the model instance,
+    #     route it through NORMALIZE_TEXT_CHOICE_VALUE(..., "initialization").
+    #     EXPOSE the returned primitive str on immediate field access.
+    #     CONSEQUENTLY, str(exposed_value) equals the member's underlying text
+    #     and cannot produce an enum-qualified name.
+    #
+    # PERSISTENCE/RETRIEVAL TRANSITION (CHOICE-004):
+    #     Route the value entering persistence through the same normalization.
+    #     Persist the resulting textual value using the existing database path.
+    #     On database materialization, normalize the returned value before it
+    #     is stored on the retrieved model instance.
+    #     ASSERT the fresh and retrieved values both have exact type str and
+    #     equal semantic values; propagate existing persistence/conversion
+    #     failures without substituting an enum member.
     def to_python(self, value):
         if isinstance(value, str) or value is None:
             return value
