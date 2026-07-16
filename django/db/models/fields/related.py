@@ -1267,6 +1267,28 @@ class ManyToManyField(RelatedField):
                 to_model_name = to_model._meta.object_name
             relationship_model_name = self.remote_field.through._meta.object_name
             self_referential = from_model == to_model
+
+            # Pseudocode contract for ambiguous intermediary relationships:
+            # INPUT: resolved source model, target model, intermediary model,
+            #        and the optional through_fields selection.
+            # DJANGO-001: IF the relevant foreign-key count exceeds the
+            # allowed count AND through_fields is absent, THEN append the
+            # existing ambiguous-intermediary-model error.
+            # DJANGO-002 / DJANGO-003: WHEN an E334 or E335 ambiguity error
+            # needs the recursive-relationship hint, THEN describe a
+            # ManyToManyField from "self" using relationship_model_name as
+            # its through argument; do not describe a ForeignKey and do not
+            # add a symmetry option.
+            # DJANGO-004: APPLY that same hint construction independently to
+            # both directional branches: excess source foreign keys -> E334;
+            # excess target foreign keys -> E335.
+            # DJANGO-005 / DJANGO-006: FOR either ambiguity branch, preserve
+            # the existing through_fields guidance, error identifier, error
+            # object, and surrounding diagnostic text; replace only the hint.
+            # DJANGO-007: OTHERWISE preserve every check condition and every
+            # diagnostic; continue collecting errors in the existing order.
+            # OUTPUT: return the accumulated system-check errors after all
+            # existing relationship and through_fields validations run.
             # Count foreign keys in intermediate model
             if self_referential:
                 seen_self = sum(
