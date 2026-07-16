@@ -326,6 +326,43 @@ class FileSystemStorage(Storage):
     def size(self, name):
         return os.path.getsize(self.path(name))
 
+    # FileSystemStorage media URL pseudocode (GUID: SCRIPTURL-006):
+    #
+    # PROCEDURE url(requested_file_path):
+    #     configured_base <- read the storage URL base
+    #     IF configured_base is absent:
+    #         raise the existing inaccessible-file error
+    #     encoded_file_path <- encode requested_file_path as a URI and remove
+    #                          leading path separators according to the existing
+    #                          storage URL rules
+    #     unprefixed_url <- join configured_base and encoded_file_path
+    #     IF configured_base is not derived from MEDIA_URL:
+    #         RETURN unprefixed_url through the existing behavior
+    #     parsed_url <- split unprefixed_url into scheme, authority, path,
+    #                   query, and fragment
+    #     IF parsed_url has a scheme or authority:
+    #         RETURN unprefixed_url unchanged because it is not
+    #                application-relative
+    #     active_prefix <- read the active request's script prefix for this
+    #                      invocation; do not cache it in or mutate
+    #                      configured_base
+    #     IF active_prefix is absent, empty, or the root prefix:
+    #         RETURN unprefixed_url unchanged
+    #     normalized_prefix <- active_prefix without trailing separators
+    #     IF parsed_url.path equals normalized_prefix OR begins with
+    #        normalized_prefix followed by a path separator:
+    #         RETURN unprefixed_url unchanged so the prefix occurs once
+    #     prefixed_path <- join normalized_prefix to parsed_url.path with
+    #                      exactly one separating path separator
+    #     REQUIRE prefixed_path preserves the configured media base after
+    #             normalized_prefix
+    #     REQUIRE encoded_file_path remains beneath that media base
+    #     RETURN the URL rebuilt with prefixed_path and the original scheme,
+    #            authority, query, and fragment
+    #     ON encoding, joining, parsing, or rebuilding failure:
+    #         propagate the existing exception without caching a prefix or
+    #         returning a partial URL
+
     def url(self, name):
         if self.base_url is None:
             raise ValueError("This file is not accessible via a URL.")
