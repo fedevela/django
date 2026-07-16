@@ -199,32 +199,14 @@ class Feed:
             if updateddate and is_naive(updateddate):
                 updateddate = make_aware(updateddate, tz)
 
-            # GUID: COMMENTS-001, COMMENTS-003, COMMENTS-004, COMMENTS-005,
-            # COMMENTS-006 -- item comments handoff pseudocode:
-            #
-            # FOR this item only:
-            #     extra_item_kwargs = item_extra_kwargs(item)
-            #     direct_comments = resolve ``item_comments`` through
-            #         _get_dynamic_attr() with an ABSENT sentinel
-            #     IF direct_comments is ABSENT:
-            #         pass extra_item_kwargs unchanged, retaining its
-            #         ``comments`` value when present and otherwise omitting it
-            #     ELSE IF ``comments`` is absent from extra_item_kwargs:
-            #         pass direct_comments as add_item(comments=...)
-            #     ELSE:
-            #         hand off to the separately defined dual-source
-            #         precedence policy; never pass duplicate keywords
-            #     pass every non-comments item argument unchanged
-            #     discard all resolved state before processing the next item
-            # IF dynamic resolution, extra-argument construction, or add_item()
-            # fails, propagate that failure through the established feed path.
-            #
-            # Architecture boundary (GUID: COMMENTS-001, COMMENTS-003,
-            # COMMENTS-004, COMMENTS-005, COMMENTS-006): Feed.get_feed() owns
-            # per-item dynamic resolution and collision-free keyword assembly.
-            # item_extra_kwargs() remains the extension seam, while
-            # SyndicationFeed.add_item() remains the receiving contract; the
-            # feed generator must not depend back on view-level resolution.
+            # Resolve item comments in this per-item scope and assemble them
+            # with extra kwargs before calling add_item() (COMMENTS-001,
+            # COMMENTS-003, COMMENTS-004, COMMENTS-005, COMMENTS-006).
+            item_extra_kwargs = self.item_extra_kwargs(item).copy()
+            if hasattr(self, 'item_comments'):
+                item_extra_kwargs['comments'] = self._get_dynamic_attr(
+                    'item_comments', item,
+                )
             feed.add_item(
                 title=title,
                 link=link,
@@ -240,6 +222,6 @@ class Feed:
                 author_link=author_link,
                 categories=self._get_dynamic_attr('item_categories', item),
                 item_copyright=self._get_dynamic_attr('item_copyright', item),
-                **self.item_extra_kwargs(item)
+                **item_extra_kwargs
             )
         return feed

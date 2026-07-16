@@ -4,7 +4,7 @@ from xml.dom import minidom
 from django.contrib.sites.models import Site
 from django.contrib.syndication import views
 from django.core.exceptions import ImproperlyConfigured
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.test.utils import requires_tz_support
 from django.utils import timezone
 from django.utils.feedgenerator import rfc2822_date, rfc3339_date
@@ -515,26 +515,98 @@ class SyndicationFeedTest(FeedTestCase):
 
 
 class SyndicationCommentsContractTests(TestCase):
+    class CommentsFeed(views.Feed):
+        title = 'Comments feed'
+        link = '/comments/'
+        description = 'Comments feed description'
+        feed_copyright = 'Copyright value'
+        item_copyright = 'Item copyright value'
+        item_author_name = 'Author name'
+        item_author_email = 'author@example.com'
+        item_categories = ('category',)
+
+        def __init__(self, items):
+            self._items = items
+
+        def items(self):
+            return self._items
+
+        def item_link(self, item):
+            return '/comments/%s/' % item
+
+    def get_feed(self, feed):
+        return feed.get_feed(None, RequestFactory().get('/comments/'))
+
     def test_comments_001_item_comments_attribute_resolves_and_is_forwarded(self):
         """GUID: COMMENTS-001 - An item_comments attribute is forwarded."""
-        self.assertTrue(True)
+        class AttributeCommentsFeed(self.CommentsFeed):
+            item_comments = 'https://example.com/comments/'
+
+        feed = self.get_feed(AttributeCommentsFeed(['first']))
+
+        self.assertEqual(
+            feed.items[0]['comments'], 'https://example.com/comments/',
+        )
 
     def test_comments_001_item_comments_callable_resolves_per_item_and_is_forwarded(self):
         """GUID: COMMENTS-001 - An item_comments callable result is forwarded."""
-        self.assertTrue(True)
+        class CallableCommentsFeed(self.CommentsFeed):
+            def item_comments(self, item):
+                return 'https://example.com/comments/%s/' % item
+
+        feed = self.get_feed(CallableCommentsFeed(['first']))
+
+        self.assertEqual(
+            feed.items[0]['comments'], 'https://example.com/comments/first/',
+        )
 
     def test_comments_003_without_direct_comments_item_extra_comments_remain_supported(self):
         """GUID: COMMENTS-003 - Indirect comments avoid duplicate keywords."""
-        self.assertTrue(True)
+        class ExtraCommentsFeed(self.CommentsFeed):
+            def item_extra_kwargs(self, item):
+                return {'comments': 'https://example.com/extra/%s/' % item}
+
+        feed = self.get_feed(ExtraCommentsFeed(['first']))
+
+        self.assertEqual(
+            feed.items[0]['comments'], 'https://example.com/extra/first/',
+        )
 
     def test_comments_004_without_comments_prior_omission_or_default_is_preserved(self):
         """GUID: COMMENTS-004 - Absent comments preserve prior behavior."""
-        self.assertTrue(True)
+        feed = self.get_feed(self.CommentsFeed(['first']))
+
+        self.assertIsNone(feed.items[0]['comments'])
 
     def test_comments_005_direct_comments_preserve_other_item_metadata(self):
         """GUID: COMMENTS-005 - Direct comments leave other metadata unchanged."""
-        self.assertTrue(True)
+        class DirectCommentsFeed(self.CommentsFeed):
+            item_comments = 'https://example.com/comments/'
+
+        direct_item = self.get_feed(DirectCommentsFeed(['first'])).items[0]
+        plain_item = self.get_feed(self.CommentsFeed(['first'])).items[0]
+        direct_item.pop('comments')
+        plain_item.pop('comments')
+
+        self.assertEqual(direct_item, plain_item)
 
     def test_comments_006_each_feed_item_resolves_or_omits_comments_independently(self):
         """GUID: COMMENTS-006 - Comments resolution is isolated per item."""
-        self.assertTrue(True)
+        class PerItemCommentsFeed(self.CommentsFeed):
+            def item_comments(self, item):
+                if item == 'without-comments':
+                    return None
+                return 'https://example.com/comments/%s/' % item
+
+        feed = self.get_feed(PerItemCommentsFeed([
+            'first', 'without-comments', 'third',
+        ]))
+
+        self.assertEqual(
+            [item['comments'] for item in feed.items],
+            [
+                'https://example.com/comments/first/',
+                None,
+                'https://example.com/comments/third/',
+            ],
+        )
