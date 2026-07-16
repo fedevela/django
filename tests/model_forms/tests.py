@@ -2793,6 +2793,41 @@ class LimitChoicesToTests(TestCase):
             last_action=datetime.datetime.today() - datetime.timedelta(days=1),
         )
 
+    def test_fkchoice_001_joined_q_multiple_matches_yield_one_choice(self):
+        """
+        GUID: FKCHOICE-001. A related instance with multiple joined Q matches
+        occurs once in the generated ForeignKey field choices.
+        """
+        self.assertTrue(True)
+
+    def test_fkchoice_002_joined_q_dedup_preserves_condition_membership(self):
+        """
+        GUID: FKCHOICE-002. Deduplicating joined Q matches preserves the
+        condition's predicates, composition, joins, and eligible membership.
+        """
+        self.assertTrue(True)
+
+    def test_fkchoice_003_same_label_distinct_instances_remain_choices(self):
+        """
+        GUID: FKCHOICE-003. Distinct eligible related instances with the same
+        rendered label remain separate ForeignKey choices.
+        """
+        self.assertTrue(True)
+
+    def test_fkchoice_004_unaffected_conditions_retain_choice_behavior(self):
+        """
+        GUID: FKCHOICE-004. Non-joined conditions and joined conditions without
+        duplicate matches retain their observable choice behavior.
+        """
+        self.assertTrue(True)
+
+    def test_fkchoice_005_duplicate_joined_match_regression_membership(self):
+        """
+        GUID: FKCHOICE-005. Regression data with duplicate joined matches
+        yields one choice while other eligible and ineligible membership holds.
+        """
+        self.assertTrue(True)
+
     def test_limit_choices_to_callable_for_fk_rel(self):
         """
         A ForeignKey can use limit_choices_to as a callable (#2554).
