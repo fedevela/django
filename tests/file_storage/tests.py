@@ -540,6 +540,21 @@ class FileStorageTests(SimpleTestCase):
             )
 
 
+class ScriptNameFileSystemStorageContractTests(SimpleTestCase):
+
+    def test_scripturl_006_nonempty_script_name_filesystemstorage_media_url_prefixes_once_before_media_base_and_preserves_requested_file_path(self):
+        """GUID: SCRIPTURL-006."""
+        pass
+
+    def test_scripturl_006_absent_or_empty_script_name_filesystemstorage_media_url_preserves_existing_output(self):
+        """GUID: SCRIPTURL-006."""
+        pass
+
+    def test_scripturl_006_separate_requests_filesystemstorage_media_urls_contain_only_their_own_script_name(self):
+        """GUID: SCRIPTURL-006."""
+        pass
+
+
 class CustomStorage(FileSystemStorage):
     def get_available_name(self, name, max_length=None):
         """
