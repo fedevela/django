@@ -610,6 +610,25 @@ class Field(RegisterLookupMixin):
         Validate value and raise ValidationError if necessary. Subclasses
         should override this to provide validation logic.
         """
+        # Pseudocode -- GUID: CHOICE-008, CHOICE-009
+        #
+        # PRESERVE_CONFIGURED_CHOICE_CONTRACT(value):
+        #     INPUT the choices collection supplied by an unchanged field
+        #     declaration using TextChoices.choices or IntegerChoices.choices.
+        #     RETAIN every configured (primitive_value, label) pair without
+        #     requiring different declaration syntax or rewriting either item.
+        #     IF value is a supported member of the configured choice enum:
+        #         normalized_value = the member's underlying primitive value.
+        #     ELSE:
+        #         normalized_value = value.
+        #     Evaluate choice membership for value and normalized_value against
+        #     the same retained primitive keys, including keys inside optgroups.
+        #     REQUIRE both membership results to be identical.
+        #     IF normalized_value matches a configured key:
+        #         RETURN the same configured label associated with that key.
+        #     ELSE:
+        #         FOLLOW the existing invalid-choice failure path with the
+        #         existing error code, message, and rejected-value parameter.
         if not self.editable:
             # Skip validation for non-editable fields.
             return
@@ -1017,6 +1036,27 @@ class CharField(Field):
     def get_internal_type(self):
         return "CharField"
 
+    # Pseudocode -- GUID: CHOICE-006, CHOICE-007
+    #
+    # NORMALIZE_TEXT_CHOICE_LIFECYCLE_VALUE(value):
+    #     IF this CharField has configured choices AND value is a TextChoices
+    #     member:
+    #         candidate = the member's underlying primitive string.
+    #     ELSE:
+    #         candidate = value, preserving an ordinary valid string unchanged.
+    #     Route candidate through the existing CharField conversion contract.
+    #     IF conversion or choice validation fails:
+    #         PROPAGATE the existing lifecycle-appropriate failure.
+    #     normalized_value = the resulting primitive string (or allowed None).
+    #     RETURN normalized_value; never return the TextChoices member object.
+    #
+    # ASSIGNMENT/ACCESS TRANSITION (CHOICE-007):
+    #     Normalize before the model attribute stores an enum member; store and
+    #     expose the primitive string. For an ordinary valid string, preserve its
+    #     exact primitive type and value.
+    # PERSISTENCE TRANSITION (CHOICE-006, CHOICE-007):
+    #     Normalize the value handed to database preparation, then persist only
+    #     the primitive string. On retrieval, expose that same primitive string.
     def to_python(self, value):
         if self.choices is not None and isinstance(value, TextChoices):
             return value.value
@@ -1787,6 +1827,29 @@ class IntegerField(Field):
     def get_internal_type(self):
         return "IntegerField"
 
+    # Pseudocode -- GUID: CHOICE-006, CHOICE-007
+    #
+    # NORMALIZE_INTEGER_CHOICE_LIFECYCLE_VALUE(value):
+    #     IF this IntegerField has configured choices AND value is an
+    #     IntegerChoices member:
+    #         candidate = the member's underlying primitive integer.
+    #     ELSE:
+    #         candidate = value, preserving an ordinary valid integer unchanged.
+    #     IF candidate is None:
+    #         RETURN None through the existing nullable-value path.
+    #     ATTEMPT the existing IntegerField integer conversion.
+    #     IF conversion or choice validation fails:
+    #         PROPAGATE the existing lifecycle-appropriate failure.
+    #     normalized_value = the resulting primitive integer.
+    #     RETURN normalized_value; never return the IntegerChoices member object.
+    #
+    # ASSIGNMENT/ACCESS TRANSITION (CHOICE-007):
+    #     Normalize before the model attribute stores an enum member; store and
+    #     expose the primitive integer. For an ordinary valid integer, preserve
+    #     its exact primitive type and value.
+    # PERSISTENCE TRANSITION (CHOICE-006, CHOICE-007):
+    #     Normalize the value handed to database preparation, then persist only
+    #     the primitive integer. On retrieval, expose that same primitive integer.
     def to_python(self, value):
         if self.choices is not None and isinstance(value, IntegerChoices):
             return value.value
