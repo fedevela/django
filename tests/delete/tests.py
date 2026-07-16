@@ -652,15 +652,48 @@ class EmptyQuerySetDeleteContractTests(TestCase):
 class NonzeroQuerySetDeleteContractTests(TestCase):
     def test_delete_004_direct_only_deletion_reports_total_and_model_label_count(self):
         """GUID: DELETE-004; direct deletion -> total and model-label count."""
-        self.assertTrue(True)
+        EmptyDeleteTestModel.objects.bulk_create([
+            EmptyDeleteTestModel(),
+            EmptyDeleteTestModel(),
+        ])
+
+        deleted, deleted_by_model = EmptyDeleteTestModel.objects.all().delete()
+
+        self.assertEqual(deleted, 2)
+        self.assertEqual(deleted_by_model, {
+            EmptyDeleteTestModel._meta.label: 2,
+        })
 
     def test_delete_004_cascading_deletion_reports_combined_direct_and_cascaded_total(self):
         """GUID: DELETE-004; cascading deletion -> combined deletion total."""
-        self.assertTrue(True)
+        avatar = Avatar.objects.create()
+        User.objects.bulk_create([
+            User(avatar=avatar),
+            User(avatar=avatar),
+        ])
+
+        deleted, deleted_by_model = Avatar.objects.filter(pk=avatar.pk).delete()
+
+        self.assertEqual(deleted, 3)
+        self.assertEqual(deleted, sum(deleted_by_model.values()))
 
     def test_delete_004_multimodel_cascade_reports_accurate_counts_by_each_model_label(self):
         """GUID: DELETE-004; multi-model cascade -> counts by model label."""
-        self.assertTrue(True)
+        avatar_1 = Avatar.objects.create()
+        avatar_2 = Avatar.objects.create()
+        User.objects.bulk_create([
+            User(avatar=avatar_1),
+            User(avatar=avatar_1),
+            User(avatar=avatar_2),
+        ])
+
+        deleted, deleted_by_model = Avatar.objects.all().delete()
+
+        self.assertEqual(deleted, 5)
+        self.assertEqual(deleted_by_model, {
+            Avatar._meta.label: 2,
+            User._meta.label: 3,
+        })
 
 
 class FastDeleteTests(TestCase):
