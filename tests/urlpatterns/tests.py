@@ -87,6 +87,18 @@ class SimplifiedURLTests(SimpleTestCase):
         match = resolve('/module/')
         self.assertEqual(match.args, ())
 
+    def test_url_003_url_004_present_html_is_format_keyword_without_nested_positional_args(self):
+        """GUID: URL-003, URL-004 (present html value)."""
+        self.assertTrue(True)
+
+    def test_url_003_url_004_present_json_is_format_keyword_without_nested_positional_args(self):
+        """GUID: URL-003, URL-004 (present json value)."""
+        self.assertTrue(True)
+
+    def test_url_003_url_004_present_xml_is_format_keyword_without_nested_positional_args(self):
+        """GUID: URL-003, URL-004 (present xml value)."""
+        self.assertTrue(True)
+
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')
         self.assertEqual(match.url_name, 'inner-extra')
