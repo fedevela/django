@@ -242,6 +242,22 @@ class Field(RegisterLookupMixin):
             return []
 
     def _check_choices(self):
+        # Choice-length check pseudocode:
+        #
+        # CHOICE-004 — INPUT: receive the field configuration through the
+        # model-check path; do not construct or save a model instance.
+        # CHOICE-001 — After the existing choice-structure validation succeeds,
+        # inspect each meaningfully length-comparable stored choice value and
+        # determine the greatest value length in deterministic traversal order.
+        # If max_length is configured and that greatest length exceeds it,
+        # transition the check result to failure; otherwise preserve success.
+        # Re-running the check with unchanged configuration must take the same
+        # branch and produce the same result.
+        # CHOICE-002 — On failure, return one model-check error whose object is
+        # this field and whose message states that max_length is too small for
+        # the field's choices; include only deterministic configuration-derived
+        # diagnostic data. Return through Field.check(), with no persistence
+        # handoff. Malformed-choice failures retain their existing error path.
         if not self.choices:
             return []
 
