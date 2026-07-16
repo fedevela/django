@@ -2151,6 +2151,14 @@ class AutodetectorTests(TestCase):
         )
         self.assertNotIn("_order", [name for name, field in changes['testapp'][0].operations[0].fields])
 
+    def test_order_001_new_order_with_respect_to_model_places_alter_before_each_order_index(self):
+        """ORDER-001: AlterOrderWithRespectTo precedes every _order AddIndex."""
+        pass
+
+    def test_order_001_composite_look_order_index_has_no_early_order_reference(self):
+        """ORDER-001: ['look', '_order'] isn't referenced before it exists."""
+        pass
+
     def test_alter_model_managers(self):
         """
         Changing the model managers adds a new operation.
