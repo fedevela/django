@@ -175,7 +175,13 @@ class TranslationE004Trans007ContractTests(SimpleTestCase):
         # TRANS-007 DECISION: Inspect every returned check message by ID.
         # TRANS-007 SUCCESS: Verify translation.E004 is absent; fail if it is
         # emitted despite the available base-language fallback.
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='de-at',
+            LANGUAGES=[('de', 'German')],
+        ):
+            errors = check_language_settings_consistent(None)
+
+        self.assertNotIn('translation.E004', {error.id for error in errors})
 
     def test_trans_007_available_exact_regional_or_variant_does_not_emit_e004(self):
         """TRANS-007: An exact regional or variant match does not emit E004."""
@@ -184,7 +190,15 @@ class TranslationE004Trans007ContractTests(SimpleTestCase):
         # TRANS-007 ACTION: Run the consistency check for each isolated case.
         # TRANS-007 SUCCESS: Verify translation.E004 is absent for every exact
         # match; identify the specific code if any case emits the error.
-        self.assertTrue(True)
+        for language_code in ('fr-CA', 'ca-ES-valencia'):
+            with self.subTest(language_code=language_code), self.settings(
+                LANGUAGE_CODE=language_code,
+                LANGUAGES=[(language_code, 'Language')],
+            ):
+                errors = check_language_settings_consistent(None)
+                self.assertNotIn(
+                    'translation.E004', {error.id for error in errors},
+                )
 
     def test_trans_007_unavailable_exact_and_base_emits_e004(self):
         """TRANS-007: No exact or base-language match emits E004."""
@@ -193,7 +207,17 @@ class TranslationE004Trans007ContractTests(SimpleTestCase):
         # TRANS-007 ACTION: Run the language-settings consistency check.
         # TRANS-007 FAILURE PATH: Verify the result contains translation.E004
         # with the established message; fail if the error is absent or changed.
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='fr-ca',
+            LANGUAGES=[('de', 'German')],
+        ):
+            self.assertEqual(check_language_settings_consistent(None), [
+                Error(
+                    'You have provided a value for the LANGUAGE_CODE setting '
+                    'that is not in the LANGUAGES setting.',
+                    id='translation.E004',
+                ),
+            ])
 
     def test_trans_007_existing_translation_system_checks_continue_to_pass(self):
         """TRANS-007: Existing translation system-check coverage remains passing."""
@@ -202,4 +226,17 @@ class TranslationE004Trans007ContractTests(SimpleTestCase):
         # TRANS-007 DECISION: If any pre-existing check expectation fails,
         # propagate that failure without suppressing or replacing its result.
         # TRANS-007 SUCCESS: Complete only when all existing and new cases pass.
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='en',
+            LANGUAGES=[('en', 'English')],
+            LANGUAGES_BIDI=['en'],
+        ):
+            checks = (
+                check_setting_language_code,
+                check_setting_languages,
+                check_setting_languages_bidi,
+                check_language_settings_consistent,
+            )
+            for check in checks:
+                with self.subTest(check=check.__name__):
+                    self.assertEqual(check(None), [])
