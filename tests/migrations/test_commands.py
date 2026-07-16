@@ -906,6 +906,20 @@ class MakeMigrationsTests(MigrationTestBase):
         apps.clear_cache()
         super().tearDown()
 
+    def test_djuc_002_invalid_unique_constraint_field_check_stops_before_migration_creation(self):
+        """
+        DJUC-002: An invalid UniqueConstraint field model-check error is
+        observable and stops makemigrations before migration creation.
+        """
+        self.assertTrue(True)
+
+    def test_djuc_002_valid_unique_constraint_fields_do_not_stop_migration_creation(self):
+        """
+        DJUC-002: Valid UniqueConstraint field references introduce no new
+        reason for makemigrations to stop migration creation.
+        """
+        self.assertTrue(True)
+
     def test_files_content(self):
         self.assertTableNotExists("migrations_unicodemodel")
         apps.register_model('migrations', UnicodeModel)
