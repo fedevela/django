@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import connection, models
 from django.test import SimpleTestCase, TestCase
 
-from .models import Post
+from .models import Event, Post, TextChoicesModel
 
 
 class TestCharField(TestCase):
@@ -45,15 +45,25 @@ class TestCharField(TestCase):
 
     def test_choice_001_fresh_charfield_with_textchoices_member_exposes_primitive_string(self):
         """GUID: CHOICE-001"""
-        self.assertTrue(True)
+        instance = TextChoicesModel(event=Event.CARNIVAL)
+
+        self.assertIs(type(instance.event), str)
+        self.assertEqual(instance.event, Event.CARNIVAL.value)
 
     def test_choice_002_fresh_charfield_value_string_conversion_returns_underlying_text(self):
         """GUID: CHOICE-002"""
-        self.assertTrue(True)
+        instance = TextChoicesModel(event=Event.CARNIVAL)
+
+        self.assertEqual(str(instance.event), Event.CARNIVAL.value)
 
     def test_choice_004_retrieved_charfield_value_matches_fresh_primitive_string(self):
         """GUID: CHOICE-004"""
-        self.assertTrue(True)
+        fresh = TextChoicesModel.objects.create(event=Event.CARNIVAL)
+        retrieved = TextChoicesModel.objects.get(pk=fresh.pk)
+
+        self.assertIs(type(fresh.event), str)
+        self.assertIs(type(retrieved.event), str)
+        self.assertEqual(retrieved.event, fresh.event)
 
 
 class ValidationTests(SimpleTestCase):

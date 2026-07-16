@@ -14,6 +14,7 @@ from django.conf import settings
 from django.core import checks, exceptions, validators
 from django.db import connection, connections, router
 from django.db.models.constants import LOOKUP_SEP
+from django.db.models.enums import TextChoices
 from django.db.models.query_utils import DeferredAttribute, RegisterLookupMixin
 from django.utils import timezone
 from django.utils.datastructures import DictWrapper
@@ -965,17 +966,17 @@ class BooleanField(Field):
         return super().formfield(**{**defaults, **kwargs})
 
 
-# Architecture -- GUID: CHOICE-001, CHOICE-002, CHOICE-004
-#
-# CharField owns the primitive-text conversion contract in to_python(). A
-# private CharField assignment descriptor, colocated in this module and
-# selected through descriptor_class, is the integration seam that must route
-# constructor values, later assignments, and Model.from_db() materialization
-# through that contract before instance storage. Keep DeferredAttribute and
-# Model.__init__ generic: neither boundary should depend on TextChoices. The
-# existing field preparation path then persists the normalized instance value.
+class _CharFieldDeferredAttribute(DeferredAttribute):
+    def __set__(self, instance, value):
+        # GUID: CHOICE-001, CHOICE-002, CHOICE-004
+        if self.field.choices is not None and isinstance(value, TextChoices):
+            value = self.field.to_python(value)
+        instance.__dict__[self.field.attname] = value
+
+
 class CharField(Field):
     description = _("String (up to %(max_length)s)")
+    descriptor_class = _CharFieldDeferredAttribute
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1016,41 +1017,9 @@ class CharField(Field):
     def get_internal_type(self):
         return "CharField"
 
-    # Pseudocode -- GUID: CHOICE-001, CHOICE-002, CHOICE-004
-    #
-    # NORMALIZE_TEXT_CHOICE_VALUE(value, lifecycle_source):
-    #     IF value is None:
-    #         RETURN None through the existing nullable-value path.
-    #     IF this CharField has choices AND value is a TextChoices member:
-    #         candidate = the member's underlying value.
-    #         IF candidate is not a primitive str:
-    #             FOLLOW the existing CharField conversion/error contract.
-    #         normalized_value = candidate as a primitive str, never the enum
-    #         member object or its enum-qualified representation.
-    #     ELSE IF value is already a primitive str:
-    #         normalized_value = value unchanged.
-    #     ELSE:
-    #         normalized_value = value converted by the existing CharField
-    #         string-conversion contract.
-    #     ASSERT type(normalized_value) is str when it is not None.
-    #     RETURN normalized_value.
-    #
-    # FRESH-INSTANCE HANDOFF (CHOICE-001, CHOICE-002):
-    #     BEFORE storing a constructor-supplied value in the model instance,
-    #     route it through NORMALIZE_TEXT_CHOICE_VALUE(..., "initialization").
-    #     EXPOSE the returned primitive str on immediate field access.
-    #     CONSEQUENTLY, str(exposed_value) equals the member's underlying text
-    #     and cannot produce an enum-qualified name.
-    #
-    # PERSISTENCE/RETRIEVAL TRANSITION (CHOICE-004):
-    #     Route the value entering persistence through the same normalization.
-    #     Persist the resulting textual value using the existing database path.
-    #     On database materialization, normalize the returned value before it
-    #     is stored on the retrieved model instance.
-    #     ASSERT the fresh and retrieved values both have exact type str and
-    #     equal semantic values; propagate existing persistence/conversion
-    #     failures without substituting an enum member.
     def to_python(self, value):
+        if self.choices is not None and isinstance(value, TextChoices):
+            return value.value
         if isinstance(value, str) or value is None:
             return value
         return str(value)

@@ -130,6 +130,15 @@ class Post(models.Model):
     body = models.TextField()
 
 
+class Event(models.TextChoices):
+    CARNIVAL = 'Carnival!'
+    FESTIVAL = 'Festival!'
+
+
+class TextChoicesModel(models.Model):
+    event = models.CharField(max_length=10, choices=Event.choices)
+
+
 class NullBooleanModel(models.Model):
     nbfield = models.BooleanField(null=True, blank=True)
     nbfield_old = models.NullBooleanField()
