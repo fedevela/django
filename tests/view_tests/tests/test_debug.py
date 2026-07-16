@@ -1303,22 +1303,109 @@ class ExceptionReporterFilterTests(ExceptionReportTestMixin, LoggingCaptureMixin
 
     def test_safe_003_get_safe_settings_preserves_non_sensitive_scalar_values(self):
         """GUID: SAFE-003 - Non-sensitive scalar values remain unchanged."""
-        self.assertTrue(True)
+        reporter_filter = SafeExceptionReporterFilter()
+        setting = {
+            'text': 'visible',
+            'integer': 42,
+            'decimal': 3.5,
+            'enabled': True,
+            'nothing': None,
+        }
+        with self.settings(FOOBAR=setting):
+            safe_settings = reporter_filter.get_safe_settings()
+        self.assertEqual(safe_settings['FOOBAR'], setting)
 
     def test_safe_004_get_safe_settings_preserves_nested_container_identity_and_order(self):
         """GUID: SAFE-004 - Dictionary, list, and tuple structure remains intact."""
-        self.assertTrue(True)
+        reporter_filter = SafeExceptionReporterFilter()
+        setting = {
+            'first': [('alpha', {'numbers': (1, 2)}), 'omega'],
+            'second': ({'letters': ['a', 'b']}, 'last'),
+        }
+        with self.settings(FOOBAR=setting):
+            cleansed = reporter_filter.get_safe_settings()['FOOBAR']
+        self.assertEqual(cleansed, setting)
+        self.assertEqual(list(cleansed), ['first', 'second'])
+        self.assertIsInstance(cleansed, dict)
+        self.assertIsInstance(cleansed['first'], list)
+        self.assertIsInstance(cleansed['first'][0], tuple)
+        self.assertIsInstance(cleansed['first'][0][1], dict)
+        self.assertIsInstance(cleansed['first'][0][1]['numbers'], tuple)
+        self.assertIsInstance(cleansed['second'], tuple)
+        self.assertIsInstance(cleansed['second'][0]['letters'], list)
 
     def test_safe_005_get_safe_settings_does_not_mutate_original_values_or_containers(self):
         """GUID: SAFE-005 - Cleansing leaves the original setting unchanged."""
-        self.assertTrue(True)
+        reporter_filter = SafeExceptionReporterFilter()
+        setting = {
+            'items': [
+                {'PASSWORD': 'secret', 'visible': 'value'},
+                ('ordered', {'count': 2}),
+            ],
+        }
+        snapshot = {
+            'items': [
+                {'PASSWORD': 'secret', 'visible': 'value'},
+                ('ordered', {'count': 2}),
+            ],
+        }
+        source_items = setting['items']
+        source_dictionary = setting['items'][0]
+        source_tuple = setting['items'][1]
+        source_nested_dictionary = setting['items'][1][1]
+        with self.settings(FOOBAR=setting):
+            cleansed = reporter_filter.get_safe_settings()['FOOBAR']
+        self.assertEqual(setting, snapshot)
+        self.assertIs(setting['items'], source_items)
+        self.assertIs(setting['items'][0], source_dictionary)
+        self.assertIs(setting['items'][1], source_tuple)
+        self.assertIs(setting['items'][1][1], source_nested_dictionary)
+        self.assertIsNot(cleansed, setting)
+        self.assertIsNot(cleansed['items'], source_items)
+        self.assertIsNot(cleansed['items'][0], source_dictionary)
+        self.assertIsNot(cleansed['items'][1], source_tuple)
+        self.assertIsNot(cleansed['items'][1][1], source_nested_dictionary)
 
     def test_safe_003_004_005_get_safe_settings_separates_sensitive_values_without_integrity_loss(self):
         """
         GUID: SAFE-003, SAFE-004, SAFE-005 - Mixed sensitive and safe values
         retain safe values, structure, ordering, and an unchanged source.
         """
-        self.assertTrue(True)
+        reporter_filter = SafeExceptionReporterFilter()
+        setting = [
+            ('before', {'PASSWORD': 'secret', 'visible': 7}),
+            {'nested': ('middle', {'API_KEY': 'token'}, 'after')},
+        ]
+        snapshot = [
+            ('before', {'PASSWORD': 'secret', 'visible': 7}),
+            {'nested': ('middle', {'API_KEY': 'token'}, 'after')},
+        ]
+        with self.settings(FOOBAR=setting):
+            cleansed = reporter_filter.get_safe_settings()['FOOBAR']
+        self.assertEqual(
+            cleansed,
+            [
+                (
+                    'before',
+                    {
+                        'PASSWORD': reporter_filter.cleansed_substitute,
+                        'visible': 7,
+                    },
+                ),
+                {
+                    'nested': (
+                        'middle',
+                        {'API_KEY': reporter_filter.cleansed_substitute},
+                        'after',
+                    ),
+                },
+            ],
+        )
+        self.assertEqual(setting, snapshot)
+        self.assertIsInstance(cleansed, list)
+        self.assertIsInstance(cleansed[0], tuple)
+        self.assertIsInstance(cleansed[0][1], dict)
+        self.assertIsInstance(cleansed[1]['nested'], tuple)
 
     def test_safe_006_get_safe_settings_treats_nested_strings_and_dictionary_keys_as_scalars(self):
         """GUID: SAFE-006 - Nested strings and dictionary keys remain scalar."""
