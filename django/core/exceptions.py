@@ -171,7 +171,11 @@ class ValidationError(Exception):
                 self._error_list_equal(errors, other.error_dict[field])
                 for field, errors in self.error_dict.items()
             )
-        if not hasattr(self, 'message') or not hasattr(other, 'message'):
+        self_has_message = hasattr(self, 'message')
+        other_has_message = hasattr(other, 'message')
+        if self_has_message != other_has_message:
+            return False
+        if not self_has_message:
             return self._error_list_equal(self.error_list, other.error_list)
         return (
             self.message == other.message and
