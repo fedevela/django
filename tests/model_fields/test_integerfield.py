@@ -203,25 +203,72 @@ class IntegerChoicesLifecycleTests(TestCase):
 
 class IntegerChoicesCompatibilityContractTests(TestCase):
 
+    def assertDatabaseValue(self, instance, expected):
+        table = connection.ops.quote_name(instance._meta.db_table)
+        pk_column = connection.ops.quote_name(instance._meta.pk.column)
+        number_column = connection.ops.quote_name(
+            instance._meta.get_field('number').column,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT %s FROM %s WHERE %s = %%s' % (
+                    number_column, table, pk_column,
+                ),
+                [instance.pk],
+            )
+            value = cursor.fetchone()[0]
+        self.assertIs(type(value), int)
+        self.assertEqual(value, expected)
+
     def test_choice_006_saved_integerchoices_member_stores_underlying_primitive_int(self):
         """GUID: CHOICE-006"""
-        self.assertTrue(True)
+        instance = IntegerChoicesModel.objects.create(number=Number.ONE)
+
+        self.assertDatabaseValue(instance, Number.ONE.value)
 
     def test_choice_007_ordinary_valid_int_remains_primitive_through_create_access_save_and_retrieval(self):
         """GUID: CHOICE-007"""
-        self.assertTrue(True)
+        value = Number.TWO.value
+        instance = IntegerChoicesModel(number=value)
+
+        self.assertIs(type(instance.number), int)
+        self.assertEqual(instance.number, value)
+        instance.save()
+        self.assertIs(type(instance.number), int)
+        self.assertEqual(instance.number, value)
+        self.assertDatabaseValue(instance, value)
+
+        retrieved = IntegerChoicesModel.objects.get(pk=instance.pk)
+        self.assertIs(type(retrieved.number), int)
+        self.assertEqual(retrieved.number, value)
 
     def test_choice_008_normalized_integerchoices_member_preserves_choice_validation_result(self):
         """GUID: CHOICE-008"""
-        self.assertTrue(True)
+        field = IntegerChoicesModel._meta.get_field('number')
+
+        self.assertEqual(
+            field.clean(Number.ONE, None),
+            field.clean(Number.ONE.value, None),
+        )
 
     def test_choice_008_normalized_integerchoices_member_preserves_configured_label(self):
         """GUID: CHOICE-008"""
-        self.assertTrue(True)
+        member_instance = IntegerChoicesModel(number=Number.ONE)
+        primitive_instance = IntegerChoicesModel(number=Number.ONE.value)
+
+        self.assertEqual(member_instance.get_number_display(), Number.ONE.label)
+        self.assertEqual(
+            member_instance.get_number_display(),
+            primitive_instance.get_number_display(),
+        )
 
     def test_choice_009_integerfield_declared_with_integerchoices_choices_remains_supported_without_syntax_change(self):
         """GUID: CHOICE-009"""
-        self.assertTrue(True)
+        field = IntegerChoicesModel._meta.get_field('number')
+
+        self.assertEqual(field.choices, Number.choices)
+        instance = IntegerChoicesModel.objects.create(number=Number.TWO)
+        self.assertEqual(instance.number, Number.TWO.value)
 
 
 class ValidationTests(SimpleTestCase):

@@ -68,25 +68,72 @@ class TestCharField(TestCase):
 
 class TextChoicesCompatibilityContractTests(TestCase):
 
+    def assertDatabaseValue(self, instance, expected):
+        table = connection.ops.quote_name(instance._meta.db_table)
+        pk_column = connection.ops.quote_name(instance._meta.pk.column)
+        event_column = connection.ops.quote_name(
+            instance._meta.get_field('event').column,
+        )
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT %s FROM %s WHERE %s = %%s' % (
+                    event_column, table, pk_column,
+                ),
+                [instance.pk],
+            )
+            value = cursor.fetchone()[0]
+        self.assertIs(type(value), str)
+        self.assertEqual(value, expected)
+
     def test_choice_006_saved_textchoices_member_stores_underlying_primitive_string(self):
         """GUID: CHOICE-006"""
-        self.assertTrue(True)
+        instance = TextChoicesModel.objects.create(event=Event.CARNIVAL)
+
+        self.assertDatabaseValue(instance, Event.CARNIVAL.value)
 
     def test_choice_007_ordinary_valid_string_remains_primitive_through_create_access_save_and_retrieval(self):
         """GUID: CHOICE-007"""
-        self.assertTrue(True)
+        value = Event.FESTIVAL.value
+        instance = TextChoicesModel(event=value)
+
+        self.assertIs(type(instance.event), str)
+        self.assertEqual(instance.event, value)
+        instance.save()
+        self.assertIs(type(instance.event), str)
+        self.assertEqual(instance.event, value)
+        self.assertDatabaseValue(instance, value)
+
+        retrieved = TextChoicesModel.objects.get(pk=instance.pk)
+        self.assertIs(type(retrieved.event), str)
+        self.assertEqual(retrieved.event, value)
 
     def test_choice_008_normalized_textchoices_member_preserves_choice_validation_result(self):
         """GUID: CHOICE-008"""
-        self.assertTrue(True)
+        field = TextChoicesModel._meta.get_field('event')
+
+        self.assertEqual(
+            field.clean(Event.CARNIVAL, None),
+            field.clean(Event.CARNIVAL.value, None),
+        )
 
     def test_choice_008_normalized_textchoices_member_preserves_configured_label(self):
         """GUID: CHOICE-008"""
-        self.assertTrue(True)
+        member_instance = TextChoicesModel(event=Event.CARNIVAL)
+        primitive_instance = TextChoicesModel(event=Event.CARNIVAL.value)
+
+        self.assertEqual(member_instance.get_event_display(), Event.CARNIVAL.label)
+        self.assertEqual(
+            member_instance.get_event_display(),
+            primitive_instance.get_event_display(),
+        )
 
     def test_choice_009_charfield_declared_with_textchoices_choices_remains_supported_without_syntax_change(self):
         """GUID: CHOICE-009"""
-        self.assertTrue(True)
+        field = TextChoicesModel._meta.get_field('event')
+
+        self.assertEqual(field.choices, Event.choices)
+        instance = TextChoicesModel.objects.create(event=Event.FESTIVAL)
+        self.assertEqual(instance.event, Event.FESTIVAL.value)
 
 
 class ValidationTests(SimpleTestCase):
