@@ -1,8 +1,10 @@
 import copy
 import datetime
+import json
 from unittest import mock
 
 from django.core import serializers
+from django.core.serializers.base import DeserializationError
 from django.db import DEFAULT_DB_ALIAS, IntegrityError, connection, connections
 from django.db.backends.base.creation import (
     TEST_DATABASE_PREFIX, BaseDatabaseCreation,
@@ -81,18 +83,72 @@ class TestDbCreationTests(SimpleTestCase):
 
 class DeserializeDbFromStringTests(TransactionTestCase):
     available_apps = ['backends']
+    databases = {'default', 'other'}
+
+    def data_with_failure_after_reporter(self, reporter):
+        data = json.loads(serializers.serialize('json', [reporter, reporter]))
+        data[1]['model'] = 'backends.missingmodel'
+        return json.dumps(data)
 
     def test_srb_004_failure_after_object_processed_commits_no_restored_objects(self):
         """GUID: SRB-004; failed restoration transitions to no committed objects."""
-        pass
+        reporter = Reporter(
+            pk=10001, first_name='Elijah', last_name='Baley',
+        )
+        data = self.data_with_failure_after_reporter(reporter)
+
+        with self.assertRaises(DeserializationError):
+            connection.creation.deserialize_db_from_string(data)
+
+        self.assertFalse(Reporter.objects.filter(pk=reporter.pk).exists())
 
     def test_srb_005_restoration_reads_and_persists_only_associated_database_alias(self):
         """GUID: SRB-005; restoration is confined to its associated alias."""
-        pass
+        alias = 'other'
+        reporter = Reporter(
+            pk=10002, first_name='R.', last_name='Daneel Olivaw',
+        )
+        Reporter.objects.using('default').create(
+            pk=reporter.pk, first_name='Default', last_name='Sentinel',
+        )
+        data = serializers.serialize('json', [reporter])
+
+        with mock.patch(
+                'django.db.backends.base.creation.serializers.deserialize',
+                wraps=serializers.deserialize) as deserialize:
+            connections[alias].creation.deserialize_db_from_string(data)
+
+        self.assertEqual(deserialize.call_args.kwargs['using'], alias)
+        self.assertEqual(
+            Reporter.objects.using(alias).get(pk=reporter.pk).last_name,
+            'Daneel Olivaw',
+        )
+        self.assertEqual(
+            Reporter.objects.using('default').get(pk=reporter.pk).last_name,
+            'Sentinel',
+        )
 
     def test_srb_004_srb_005_alias_scoped_failure_commits_no_partial_or_cross_alias_state(self):
         """GUID: SRB-004, SRB-005; failed alias-scoped restoration has no durable effects."""
-        pass
+        alias = 'other'
+        reporter = Reporter(
+            pk=10003, first_name='Hari', last_name='Seldon',
+        )
+        Reporter.objects.using('default').create(
+            pk=reporter.pk, first_name='Default', last_name='Sentinel',
+        )
+        data = self.data_with_failure_after_reporter(reporter)
+
+        with self.assertRaises(DeserializationError):
+            connections[alias].creation.deserialize_db_from_string(data)
+
+        self.assertFalse(
+            Reporter.objects.using(alias).filter(pk=reporter.pk).exists(),
+        )
+        self.assertEqual(
+            Reporter.objects.using('default').get(pk=reporter.pk).last_name,
+            'Sentinel',
+        )
 
     def forward_reference_data(self):
         reporter = Reporter.objects.create(

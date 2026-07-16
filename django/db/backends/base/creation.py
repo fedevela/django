@@ -174,7 +174,7 @@ class BaseDatabaseCreation:
             with transaction.atomic(using=self.connection.alias):
                 for obj in serializers.deserialize(
                         "json", data, using=self.connection.alias):
-                    obj.save()
+                    obj.save(using=self.connection.alias)
                 self.connection.check_constraints()
 
     def _get_database_display_str(self, verbosity, database_name):
