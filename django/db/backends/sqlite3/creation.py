@@ -31,25 +31,10 @@ class DatabaseCreation(BaseDatabaseCreation):
     def _create_test_db(self, verbosity, autoclobber, keepdb=False):
         test_database_name = self._get_test_db_name()
 
-        # GUID: SQLITE-003 -- First keepdb creation of named SQLite databases.
-        # LOGIC OBLIGATION (creation and initialization):
-        #   INPUT: this alias's test database name, keepdb, and parallel=1.
-        #   IF keepdb is true, the name identifies an on-disk database, and the
-        #   named file is missing:
-        #       preserve the name for this alias; do not enter the old-file
-        #       deletion flow;
-        #       return the name to the base creation flow;
-        #       let that flow bind this alias to the name, initialize its schema,
-        #       and open the connection (which creates the SQLite file).
-        #   FOR EACH distinct alias invocation, perform the same handoff using
-        #   that alias's own name; never substitute another alias's database.
-        #   OUTPUT: every missing named database is an initialized, writable file
-        #   associated with its intended alias.
-        # LOGIC OBLIGATION (write and failure path):
-        #   AFTER initialization, a write through each alias must target only
-        #   that alias's open database and complete successfully.
-        #   IF creation, initialization, or the required write reports a database
-        #   lock, propagate the failure; do not treat the database as ready.
+        # GUID: SQLITE-003 -- Returning a named database, even when its file is
+        # missing, lets the base creation flow bind it to this alias, initialize
+        # it, and open the connection that creates the SQLite file. Database
+        # errors remain visible to the test runner.
         if keepdb:
             return test_database_name
         if not self.is_in_memory_db(test_database_name):
