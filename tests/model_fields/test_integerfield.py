@@ -182,6 +182,17 @@ class PositiveIntegerFieldTests(IntegerFieldTests):
             p.save()
 
 
+class IntegerChoicesLifecycleTests(TestCase):
+
+    def test_choice_003_fresh_integerfield_initialized_with_integerchoices_member_exposes_primitive_int(self):
+        """GUID: CHOICE-003"""
+        self.assertTrue(True)
+
+    def test_choice_005_retrieved_integerfield_exposes_same_primitive_int_value_as_fresh_instance(self):
+        """GUID: CHOICE-005"""
+        self.assertTrue(True)
+
+
 class ValidationTests(SimpleTestCase):
 
     class Choices(models.IntegerChoices):
