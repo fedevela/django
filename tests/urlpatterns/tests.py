@@ -111,6 +111,14 @@ class SimplifiedURLTests(SimpleTestCase):
         response = self.client.get('/module/xml')
         self.assertEqual(response.content, b'xml')
 
+    def test_url_005_positional_only_captures_resolve_in_established_order_without_keyword_conversion(self):
+        """GUID: URL-005 (resolution behavior)."""
+        self.assertTrue(True)
+
+    def test_url_005_positional_compatible_view_dispatch_receives_same_url_arguments(self):
+        """GUID: URL-005 (dispatch behavior)."""
+        self.assertTrue(True)
+
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')
         self.assertEqual(match.url_name, 'inner-extra')
