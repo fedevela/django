@@ -1383,34 +1383,187 @@ class JSONFieldTests(TestCase):
         self.assertEqual(Model.check(databases=self.databases), [])
 
 
+@isolate_apps('invalid_models_tests')
 class UniqueConstraintFieldCheckContractTests(SimpleTestCase):
     def test_djuc_001_missing_named_field_reports_e012(self):
         """GUID: DJUC-001."""
-        pass
+        class Model(models.Model):
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing'], name='unique_missing'
+                    ),
+                ]
+
+        self.assertEqual(Model.check(), [
+            Error(
+                "'constraints' refers to the nonexistent field 'missing'.",
+                obj=Model,
+                id='models.E012',
+            ),
+        ])
 
     def test_djuc_003_many_to_many_named_field_reports_e013(self):
         """GUID: DJUC-003."""
-        pass
+        class Model(models.Model):
+            related = models.ManyToManyField('self')
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['related'], name='unique_related'
+                    ),
+                ]
+
+        self.assertEqual(Model.check(), [
+            Error(
+                "'constraints' refers to a ManyToManyField 'related', but "
+                "ManyToManyFields are not permitted in 'constraints'.",
+                obj=Model,
+                id='models.E013',
+            ),
+        ])
 
     def test_djuc_004_inherited_non_local_named_field_reports_e016(self):
         """GUID: DJUC-004."""
-        pass
+        class Parent(models.Model):
+            inherited = models.IntegerField()
+
+        class Child(Parent):
+            local = models.IntegerField()
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['local', 'inherited'], name='unique_fields'
+                    ),
+                ]
+
+        self.assertEqual(Child.check(), [
+            Error(
+                "'constraints' refers to field 'inherited' which is not local "
+                "to model 'Child'.",
+                hint='This issue may be caused by multi-table inheritance.',
+                obj=Child,
+                id='models.E016',
+            ),
+        ])
 
     def test_djuc_005_valid_local_and_foreign_key_fields_report_no_error(self):
         """GUID: DJUC-005."""
-        pass
+        class Target(models.Model):
+            pass
+
+        class Model(models.Model):
+            local = models.IntegerField()
+            target = models.ForeignKey(Target, on_delete=models.CASCADE)
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['local', 'target'], name='unique_fields'
+                    ),
+                ]
+
+        self.assertEqual(Model.check(), [])
 
     def test_djuc_006_all_invalid_named_fields_and_no_valid_fields_are_reported(self):
         """GUID: DJUC-006."""
-        pass
+        class Parent(models.Model):
+            inherited = models.IntegerField()
+
+        class Target(models.Model):
+            pass
+
+        class Model(Parent):
+            local = models.IntegerField()
+            related = models.ManyToManyField('self')
+            target = models.ForeignKey(Target, on_delete=models.CASCADE)
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['local', 'missing', 'related', 'inherited'],
+                        name='unique_mixed_fields',
+                    ),
+                    models.UniqueConstraint(
+                        fields=['target', 'also_missing'],
+                        name='unique_other_fields',
+                    ),
+                ]
+
+        self.assertEqual(Model.check(), [
+            Error(
+                "'constraints' refers to the nonexistent field 'missing'.",
+                obj=Model,
+                id='models.E012',
+            ),
+            Error(
+                "'constraints' refers to a ManyToManyField 'related', but "
+                "ManyToManyFields are not permitted in 'constraints'.",
+                obj=Model,
+                id='models.E013',
+            ),
+            Error(
+                "'constraints' refers to field 'inherited' which is not local "
+                "to model 'Model'.",
+                hint='This issue may be caused by multi-table inheritance.',
+                obj=Model,
+                id='models.E016',
+            ),
+            Error(
+                "'constraints' refers to the nonexistent field 'also_missing'.",
+                obj=Model,
+                id='models.E012',
+            ),
+        ])
 
     def test_djuc_007_expression_only_constraint_skips_named_field_validation(self):
         """GUID: DJUC-007."""
-        pass
+        class Model(models.Model):
+            name = models.CharField(max_length=20)
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['name'], name='unique_lower_name'
+                    ),
+                ]
+
+        constraint = Model._meta.constraints[0]
+        constraint.fields = ()
+        constraint.expressions = (Lower('name'),)
+
+        self.assertEqual(Model.check(), [])
 
     def test_djuc_010_repeated_checks_preserve_error_ids_and_field_details(self):
         """GUID: DJUC-010."""
-        pass
+        class Model(models.Model):
+            related = models.ManyToManyField('self')
+
+            class Meta:
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing', 'related'], name='unique_invalid'
+                    ),
+                ]
+
+        def error_details():
+            return [(error.id, error.msg) for error in Model.check()]
+
+        expected = [
+            (
+                'models.E012',
+                "'constraints' refers to the nonexistent field 'missing'.",
+            ),
+            (
+                'models.E013',
+                "'constraints' refers to a ManyToManyField 'related', but "
+                "ManyToManyFields are not permitted in 'constraints'.",
+            ),
+        ]
+        self.assertEqual(error_details(), expected)
+        self.assertEqual(error_details(), expected)
 
 
 @isolate_apps('invalid_models_tests')

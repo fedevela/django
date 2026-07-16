@@ -1866,34 +1866,13 @@ class Model(metaclass=ModelBase):
     @classmethod
     def _check_constraints(cls, databases):
         errors = []
-
-        # Architecture boundary (DJUC-001, DJUC-003, DJUC-004, DJUC-005,
-        # DJUC-006, DJUC-007, DJUC-010): this method owns selecting explicit
-        # UniqueConstraint field names; _check_local_fields() remains the sole
-        # owner of field locality classification and its model-check errors.
-        # Keep that integration seam outside the per-database capability loop.
-
-        # Pseudocode contract: validate explicitly named UniqueConstraint fields.
-        #
-        # DJUC-001, DJUC-003, DJUC-004, DJUC-005, DJUC-006, DJUC-007, DJUC-010
-        # INPUT: cls._meta.constraints in stable declaration order.
-        # named_fields = []
-        # FOR EACH constraint IN cls._meta.constraints:
-        #     IF constraint IS NOT a UniqueConstraint:
-        #         CONTINUE
-        #     IF constraint has no explicitly named fields:
-        #         CONTINUE  # DJUC-007: do not interpret expressions as names.
-        #     APPEND every constraint.fields entry to named_fields in field order.
-        # CALL cls._check_local_fields(named_fields, "constraints") once and
-        # APPEND every returned error without short-circuiting:
-        #     missing name -> models.E012 with that name                 [DJUC-001]
-        #     many-to-many name -> models.E013 with that name            [DJUC-003]
-        #     inherited non-local name -> models.E016 with that name     [DJUC-004]
-        #     valid local or foreign-key name -> no error                [DJUC-005]
-        # Preserve all invalid-field errors and exclude valid names      [DJUC-006].
-        # Preserve traversal and helper output order so identical metadata yields
-        # identical error identifiers and field details on every run     [DJUC-010].
-        # OUTPUT: errors containing named-field failures plus existing warnings.
+        fields = (
+            field
+            for constraint in cls._meta.constraints
+            if isinstance(constraint, UniqueConstraint)
+            for field in constraint.fields
+        )
+        errors.extend(cls._check_local_fields(fields, 'constraints'))
         for db in databases:
             if not router.allow_migrate_model(db, cls):
                 continue
