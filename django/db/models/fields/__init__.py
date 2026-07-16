@@ -242,6 +242,14 @@ class Field(RegisterLookupMixin):
             return []
 
     def _check_choices(self):
+        """
+        Own choice-structure validation and its error paths.
+
+        Architecture contract for CHOICE-007 and CHOICE-008: malformed or
+        otherwise structurally invalid choices terminate here with the existing
+        fields.E004 or fields.E005 result. Only structurally valid choices may
+        cross the dependency boundary into _check_choice_value_length().
+        """
         # Pseudocode — GUID: CHOICE-007, GUID: CHOICE-008
         # INPUT: the field's choices and the existing choice-validation rules.
         # IF choices are malformed or already invalid:
@@ -304,14 +312,16 @@ class Field(RegisterLookupMixin):
         """
         Check structurally valid choices through the choice-length seam.
 
-        Architecture contract for CHOICE-001, CHOICE-002, CHOICE-003,
-        CHOICE-004, CHOICE-005, and CHOICE-006: _check_choices() owns choice
-        structure validation and calls this seam only after validation succeeds.
-        This seam consumes flatchoices as the adapter for both flat choices and
-        named groups, evaluates every meaningfully length-comparable stored
-        value, and excludes human-readable labels. It owns the inclusive
-        max_length boundary and the fields.E009 result; a failure is returned
-        only when the greatest stored-value length is greater than max_length.
+        Architecture contract for CHOICE-001 through CHOICE-008:
+        _check_choices() owns choice structure validation and calls this seam
+        only after validation succeeds. For CHOICE-007 and CHOICE-008, this
+        seam therefore never receives choices already rejected by fields.E004
+        or fields.E005. This seam consumes flatchoices as the adapter for both
+        flat choices and named groups, evaluates every meaningfully
+        length-comparable stored value, and excludes human-readable labels. It
+        owns the inclusive max_length boundary and the fields.E009 result; a
+        failure is returned only when the greatest stored-value length is
+        greater than max_length.
         """
         choice_max_length = 0
         for value, _ in self.flatchoices:
