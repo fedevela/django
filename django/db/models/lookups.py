@@ -463,6 +463,22 @@ class IsNull(BuiltinLookup):
     prepare_rhs = False
     can_use_none_as_rhs = True
 
+    # Pseudocode [GUID: ISNULL-004, ISNULL-005, ISNULL-009]:
+    # INPUT resolved left-hand expression, lookup RHS, compiler, connection
+    # IF this registered lookup was not selected for an "isnull" lookup
+    #     HAND OFF to the selected lookup's own preparation and SQL path unchanged
+    # IF RHS is not the boolean singleton True or False
+    #     FAIL with the isnull-specific query-value error before returning SQL
+    # COMPILE the left-hand expression through the existing compiler
+    # IF RHS is True
+    #     OUTPUT the existing "IS NULL" predicate and compiled parameters
+    #     PRESERVE the established direct-field null-matching result set
+    # ELSE  # RHS is False
+    #     OUTPUT the existing "IS NOT NULL" predicate and compiled parameters
+    #     PRESERVE the established direct-field non-null-matching result set
+    # DO NOT change accepted values, errors, SQL, or results for any other lookup
+    # END
+
     # Architecture boundary [GUID: ISNULL-001, ISNULL-002, ISNULL-003,
     # ISNULL-007, ISNULL-008]: this registered lookup owns its RHS contract at
     # the as_sql() compilation seam. Field/path resolution supplies the same
