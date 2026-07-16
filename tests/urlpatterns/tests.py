@@ -21,6 +21,40 @@ converter_test_data = (
 @override_settings(ROOT_URLCONF='urlpatterns.path_urls')
 class SimplifiedURLTests(SimpleTestCase):
 
+    # GUID: URL-006 (focused resolution regression verification)
+    # PSEUDOCODE:
+    # - DEFINE resolution cases as the absent-format URL ``/module/`` plus
+    #   ``/module/html``, ``/module/json``, and ``/module/xml``, pairing each
+    #   explicit URL with its expected named ``format`` value.
+    # - FOR EACH case, resolve the URL under ``urlpatterns.path_urls``.
+    # - ASSERT the resolved positional argument collection is empty.
+    # - IF the case is absent-format, ASSERT ``format`` is not present in the
+    #   resolved keyword argument collection.
+    # - ELSE ASSERT the keyword argument collection contains exactly one
+    #   entry, ``format``, whose value equals the case's expected value.
+    # - FAILURE PATH: fail the individual case, identifying its URL and
+    #   expected argument shape, when resolution fails or either collection
+    #   differs; do not allow one explicit value to stand for another.
+
+    # GUID: URL-007 (existing URL compatibility verification)
+    # PSEUDOCODE:
+    # - INPUT the existing tests unchanged after the regression correction.
+    # - EXECUTE matching coverage through path/re_path lookup and converter
+    #   matching tests, preserving their existing URL configurations and data.
+    # - EXECUTE reversing coverage through path, converter, and included-route
+    #   reverse tests with their existing names and argument mappings.
+    # - EXECUTE conversion coverage through converter resolve/reverse tests and
+    #   their established conversion-error propagation paths.
+    # - EXECUTE inclusion coverage through single, empty-string, nested, and
+    #   reversible inclusion tests.
+    # - EXECUTE parameter-restriction coverage through invalid and valid
+    #   identifier tests in ``ParameterRestrictionTests``.
+    # - FOR EACH identified test, preserve its current assertions: a passing
+    #   result advances to the next test; a failure or unexpected exception
+    #   records that existing behavior as incompatible and fails the suite.
+    # - OUTPUT compatibility success only when every identified test passes
+    #   without modification.
+
     def test_path_lookup_without_parameters(self):
         match = resolve('/articles/2003/')
         self.assertEqual(match.url_name, 'articles-2003')
