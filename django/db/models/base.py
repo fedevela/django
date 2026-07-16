@@ -2036,6 +2036,9 @@ class Model(metaclass=ModelBase):
 
 # ORDERING METHODS #########################
 
+# ORDER-005 architecture boundary: relation-scoped ordering remains owned by
+# the established model-method adapters below. Migrations provide their _order
+# storage contract but don't duplicate or reach into this runtime model API.
 def method_set_order(self, ordered_obj, id_list, using=None):
     # ORDER-005 relation-ordering pseudocode
     # INPUTS: one parent instance, its related ordered model, and an ordered

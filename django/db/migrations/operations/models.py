@@ -572,6 +572,9 @@ class AlterIndexTogether(AlterTogetherOptionOperation):
 class AlterOrderWithRespectTo(ModelOptionOperation):
     """Represent a change with the order_with_respect_to option."""
 
+    # ORDER-003 architecture boundary: this operation owns the migration-state
+    # transition and schema-editor seam that materialize the implicit _order
+    # field. Index operations consume the resulting state but don't create it.
     option_name = 'order_with_respect_to'
 
     def __init__(self, name, order_with_respect_to):
@@ -750,6 +753,9 @@ class IndexOperation(Operation):
 class AddIndex(IndexOperation):
     """Add an index on a model."""
 
+    # ORDER-004 architecture boundary: AddIndex preserves the Index contract's
+    # declared field order and delegates column resolution and DDL to the schema
+    # editor. Its _order prerequisite is supplied by autodetector scheduling.
     def __init__(self, model_name, index):
         self.model_name = model_name
         if not index.name:

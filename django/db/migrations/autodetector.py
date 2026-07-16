@@ -666,6 +666,11 @@ class MigrationAutodetector:
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
+                # ORDER-002 architecture contract: generate_created_models()
+                # owns the integration seam between generated AddIndex and
+                # AlterOrderWithRespectTo operations. The private dependency
+                # token points from the index consumer to the operation that
+                # provisions _order; operation classes don't own scheduling.
                 # ORDER-002 migration-application pseudocode
                 # INPUTS: a new model with order_with_respect_to and a
                 # declared index whose fields include the synthetic _order.
