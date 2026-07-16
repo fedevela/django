@@ -155,6 +155,10 @@ class BaseExpression:
     # aggregate specific fields
     is_summary = False
     _output_field_resolved_to_none = False
+    # Filter-clause capability contract (DJANGO-001, DJANGO-004, DJANGO-005):
+    # BaseExpression owns this marker. Query.check_filterable() must interpret
+    # it only for values participating in this expression hierarchy; an
+    # identically named attribute on model data is outside this contract.
     # Can the expression be used in a WHERE clause?
     filterable = True
     # Can the expression can be used as a source expression in Window?
