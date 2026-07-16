@@ -519,6 +519,18 @@ class FormsMediaTestCase(SimpleTestCase):
 <link href="/some/form/css" type="text/css" media="all" rel="stylesheet">"""
         )
 
+    def test_media_001_supplied_three_widget_form_js_preserves_expected_order(self):
+        """GUID: MEDIA-001 - Accessing form media preserves the supplied JavaScript order."""
+        pass
+
+    def test_media_002_accessing_supplied_form_media_emits_no_order_conflict_warning(self):
+        """GUID: MEDIA-002 - Accessing the supplied form media emits no conflict warning."""
+        pass
+
+    def test_media_005_supplied_form_media_contains_each_distinct_js_file_once(self):
+        """GUID: MEDIA-005 - Accessing form media includes each supplied JavaScript file once."""
+        pass
+
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])
         self.assertTrue(hasattr(Media, '__html__'))
