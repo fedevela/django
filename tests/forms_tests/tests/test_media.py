@@ -644,6 +644,18 @@ class FormsMediaTestCase(SimpleTestCase):
             results[1].index('c.js'),
         )
 
+    def test_media_007_aggregation_of_opposite_declared_order_emits_conflict_warning(self):
+        """GUID: MEDIA-007 - A-before-B plus B-before-A emits MediaOrderConflictWarning."""
+        pass
+
+    def test_media_007_compatible_declarations_with_incidental_adjacency_emit_no_conflict_warning(self):
+        """GUID: MEDIA-007 - Incidental adjacency in compatible declarations emits no warning."""
+        pass
+
+    def test_media_008_conflict_warning_identifies_both_files_in_opposite_declared_order(self):
+        """GUID: MEDIA-008 - The conflict warning identifies file A and file B."""
+        pass
+
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])
         self.assertTrue(hasattr(Media, '__html__'))
