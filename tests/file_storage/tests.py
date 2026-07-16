@@ -20,7 +20,7 @@ from django.db.models.fields.files import FileDescriptor
 from django.test import (
     LiveServerTestCase, SimpleTestCase, TestCase, override_settings,
 )
-from django.test.utils import requires_tz_support
+from django.test.utils import override_script_prefix, requires_tz_support
 from django.urls import NoReverseMatch, reverse_lazy
 from django.utils import timezone
 
@@ -542,17 +542,50 @@ class FileStorageTests(SimpleTestCase):
 
 class ScriptNameFileSystemStorageContractTests(SimpleTestCase):
 
-    def test_scripturl_006_nonempty_script_name_filesystemstorage_media_url_prefixes_once_before_media_base_and_preserves_requested_file_path(self):
+    @override_settings(MEDIA_URL='/media/uploads/')
+    def test_scripturl_006_nonempty_script_name_filesystemstorage_media_url_prefixes_once_before_media_base_and_preserves_requested_file_path(
+            self):
         """GUID: SCRIPTURL-006."""
-        pass
+        media_storage = FileSystemStorage()
+        with override_script_prefix('/application/'):
+            first_url = media_storage.url('images/profile/photo.jpg')
+            second_url = media_storage.url('images/profile/photo.jpg')
+        expected_url = (
+            '/application/media/uploads/images/profile/photo.jpg'
+        )
+        self.assertEqual(first_url, expected_url)
+        self.assertEqual(second_url, expected_url)
+        self.assertEqual(first_url.count('/application/'), 1)
 
-    def test_scripturl_006_absent_or_empty_script_name_filesystemstorage_media_url_preserves_existing_output(self):
+    @override_settings(MEDIA_URL='/media/uploads/')
+    def test_scripturl_006_absent_or_empty_script_name_filesystemstorage_media_url_preserves_existing_output(
+            self):
         """GUID: SCRIPTURL-006."""
-        pass
+        media_storage = FileSystemStorage()
+        for script_name in ('', '/'):
+            with self.subTest(script_name=script_name):
+                with override_script_prefix(script_name):
+                    url = media_storage.url('images/profile/photo.jpg')
+                self.assertEqual(
+                    url,
+                    '/media/uploads/images/profile/photo.jpg',
+                )
 
-    def test_scripturl_006_separate_requests_filesystemstorage_media_urls_contain_only_their_own_script_name(self):
+    @override_settings(MEDIA_URL='/media/uploads/')
+    def test_scripturl_006_separate_requests_filesystemstorage_media_urls_contain_only_their_own_script_name(
+            self):
         """GUID: SCRIPTURL-006."""
-        pass
+        media_storage = FileSystemStorage()
+        urls = []
+        for script_name in ('/tenant-one/', '/tenant-two/'):
+            with override_script_prefix(script_name):
+                urls.append(media_storage.url('documents/report.pdf'))
+        self.assertEqual(urls, [
+            '/tenant-one/media/uploads/documents/report.pdf',
+            '/tenant-two/media/uploads/documents/report.pdf',
+        ])
+        self.assertNotIn('/tenant-two/', urls[0])
+        self.assertNotIn('/tenant-one/', urls[1])
 
 
 class CustomStorage(FileSystemStorage):

@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from django.conf import settings
 from django.core.exceptions import SuspiciousFileOperation
@@ -369,7 +369,28 @@ class FileSystemStorage(Storage):
         url = filepath_to_uri(name)
         if url is not None:
             url = url.lstrip('/')
-        return urljoin(self.base_url, url)
+        url = urljoin(self.base_url, url)
+        if self._base_url is not None:
+            return url
+
+        parsed = urlsplit(url)
+        if parsed.scheme or parsed.netloc:
+            return url
+
+        from django.urls import get_script_prefix
+
+        script_prefix = get_script_prefix()
+        if not script_prefix or script_prefix == '/':
+            return url
+
+        script_path = script_prefix.rstrip('/')
+        if (parsed.path == script_path or
+                parsed.path.startswith(script_path + '/')):
+            return url
+
+        path = '%s/%s' % (script_path, parsed.path.lstrip('/'))
+        return urlunsplit((parsed.scheme, parsed.netloc, path,
+                           parsed.query, parsed.fragment))
 
     def _datetime_from_timestamp(self, ts):
         """
