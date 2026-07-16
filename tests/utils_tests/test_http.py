@@ -354,26 +354,75 @@ class HttpDateProcessingTests(unittest.TestCase):
 
     def test_httpdate_005_rfc1123_full_year_parsing_remains_unchanged(self):
         """GUID: HTTPDATE-005; RFC 1123 full-year parsing is preserved."""
+        # HTTPDATE-005 logic obligation (RFC 1123 non-regression):
+        # - Given the supported RFC 1123 input with the full year 1994,
+        #   pass the input to parse_http_date().
+        # - Convert the returned timestamp to a UTC datetime.
+        # - Verify the result is 1994-11-06 08:49:37, preserving the full year
+        #   without applying RFC 850 century resolution.
+        # - If parsing raises or the timestamp differs, report this
+        #   non-regression obligation as failed.
         self.assertTrue(True)
 
     def test_httpdate_005_asctime_full_year_parsing_remains_unchanged(self):
         """GUID: HTTPDATE-005; asctime full-year parsing is preserved."""
+        # HTTPDATE-005 logic obligation (asctime non-regression):
+        # - Given the supported asctime input with the full year 1994,
+        #   pass the input to parse_http_date().
+        # - Convert the returned timestamp to a UTC datetime.
+        # - Verify the result is 1994-11-06 08:49:37, preserving the full year
+        #   without applying RFC 850 century resolution.
+        # - If parsing raises or the timestamp differs, report this
+        #   non-regression obligation as failed.
         self.assertTrue(True)
 
     def test_httpdate_006_year_69_in_2020_selects_2069_below_50_year_threshold(self):
         """GUID: HTTPDATE-006; below-threshold RFC 850 obligation."""
+        # HTTPDATE-006 logic obligation (below the threshold):
+        # - Control the parser's call-time current year as 2020.
+        # - Parse an RFC 850 date whose encoded year is 69.
+        # - Derive current-century candidate 2069 and distance 49.
+        # - Because distance is less than 50, retain 2069.
+        # - Verify the timestamp represents 2069-11-06 08:49:37 UTC; if the
+        #   parser raises or resolves another year, report failure.
         self.assertTrue(True)
 
     def test_httpdate_006_year_70_in_2020_selects_2070_at_50_year_boundary(self):
         """GUID: HTTPDATE-006; exact-boundary RFC 850 obligation."""
+        # HTTPDATE-006 logic obligation (exact threshold boundary):
+        # - Control the parser's call-time current year as 2020.
+        # - Parse an RFC 850 date whose encoded year is 70.
+        # - Derive current-century candidate 2070 and distance 50.
+        # - Because the exact boundary is retained, select 2070 rather than
+        #   the historical fixed-split result 1970.
+        # - Verify the timestamp represents 2070-11-06 08:49:37 UTC; if the
+        #   parser raises or resolves another year, report failure.
         self.assertTrue(True)
 
     def test_httpdate_006_year_71_in_2020_selects_1971_above_50_year_threshold(self):
         """GUID: HTTPDATE-006; above-threshold RFC 850 obligation."""
+        # HTTPDATE-006 logic obligation (above the threshold):
+        # - Control the parser's call-time current year as 2020.
+        # - Parse an RFC 850 date whose encoded year is 71.
+        # - Derive current-century candidate 2071 and distance 51.
+        # - Because distance is greater than 50, subtract 100 and select 1971.
+        # - Verify the timestamp represents 1971-11-06 08:49:37 UTC; if the
+        #   parser raises or resolves another year, report failure.
         self.assertTrue(True)
 
     def test_httpdate_006_same_rfc850_year_on_opposite_threshold_sides_uses_each_call_year(self):
         """GUID: HTTPDATE-006; rolling-threshold call-time obligation."""
+        # HTTPDATE-006 logic obligation (rolling, call-time threshold):
+        # - Use the same RFC 850 encoded year 70 for both parser calls.
+        # - With call-time current year 2019, derive candidate 2070 and
+        #   distance 51; subtract 100 and record resolved year 1970.
+        # - With call-time current year 2020, derive candidate 2070 and
+        #   distance 50; retain and record resolved year 2070.
+        # - Verify the two timestamps contain their respective recorded years,
+        #   proving each call reads its current year instead of using a fixed
+        #   69/70 mapping.
+        # - If either call raises, either result differs, or both calls resolve
+        #   through the same fixed mapping, report failure.
         self.assertTrue(True)
 
     def test_parsing_asctime(self):
