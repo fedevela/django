@@ -1770,6 +1770,13 @@ class Query(BaseExpression):
         Apply any limits passed in here to the existing constraints. Add low
         to the current low value and clamp both to any existing high value.
         """
+        # DJANGO-11797-006, DJANGO-11797-008 -- slicing logic obligation:
+        # INPUT: a query whose selected annotation, WHERE predicates,
+        # aggregate expressions, and GROUP BY expressions are already set.
+        # WHEN a one-row slice is requested, derive and store only the new
+        # low/high bounds; do not rebuild any of those established clauses.
+        # OUTPUT: the same query semantics plus a bound that compiles as
+        # LIMIT 1. If existing bounds are tighter, retain the tighter bound.
         if high is not None:
             if self.high_mark is not None:
                 self.high_mark = min(self.high_mark, self.low_mark + high)
@@ -2078,6 +2085,17 @@ class Query(BaseExpression):
         self._extra_select_cache = None
 
     def set_values(self, fields):
+        # DJANGO-11797-007 -- standalone grouped-aggregate logic obligation:
+        # INPUT: values('email') followed by aggregate annotation m=Max('id').
+        # First establish email as the non-aggregate GROUP BY expression; then
+        # expose m as the selected aggregate result when values('m') narrows
+        # the projection. Preserve the WHERE predicate and aggregate registry.
+        # OUTPUT: one selected Max('id') result grouped by email.
+        #
+        # DJANGO-11797-008 -- projection-transition logic obligation:
+        # WHEN the resulting query is cloned for slicing, carry its selected
+        # annotation mask, WHERE predicates, annotations, and GROUP BY tuple
+        # forward unchanged; the slice transition adds only its row bound.
         self.select_related = False
         self.clear_deferred_loading()
         self.clear_select_fields()
