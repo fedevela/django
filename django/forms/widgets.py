@@ -39,6 +39,15 @@ MEDIA_TYPES = ('css', 'js')
 
 
 class MediaOrderConflictWarning(RuntimeWarning):
+    """
+    Report contradictory ordering declared by media sources.
+
+    Architecture contract (GUID: MEDIA-007, MEDIA-008): Media._merge_lists()
+    owns emission because it is the boundary that retains the complete set of
+    authoritative declarations. The warning payload identifies the files in
+    the contradictory cycle selected from those declarations; generic graph
+    utilities don't depend on this media-specific warning contract.
+    """
     pass
 
 
@@ -121,12 +130,15 @@ class Media:
         Resolve a complete set of media declaration lists.
 
         Architecture contract (GUID: MEDIA-001, MEDIA-002, MEDIA-003,
-        MEDIA-004, MEDIA-005, MEDIA-006): this is the sole integration seam
-        between retained source declarations and ordered media. Media.__add__()
-        owns declaration retention; this resolver owns construction of the
-        complete dependency set, conflict detection, deterministic ordering,
-        and deduplication. It may depend on the generic stable topological-sort
-        utility, but that utility must remain unaware of media declarations.
+        MEDIA-004, MEDIA-005, MEDIA-006, MEDIA-007, MEDIA-008): this is the
+        sole integration seam between retained source declarations and ordered
+        media. Media.__add__() owns declaration retention; this resolver owns
+        construction of the complete dependency set, conflict detection,
+        deterministic ordering, deduplication, selection of contradictory
+        declared edges, and emission of the media-specific warning. It may
+        depend on the generic stable topological-sort utility for cycle
+        detection, but that utility must remain unaware of media declarations,
+        conflict evidence, and MediaOrderConflictWarning.
 
         Each item list crossing this boundary is an authoritative source
         declaration. A resolved list must not re-enter as a source declaration,
@@ -135,7 +147,10 @@ class Media:
         operation so every compatible declared relationship reaches the final
         order (GUID: MEDIA-004). Source-list order and first-seen item order are
         the stable tie-break inputs, not additional dependencies
-        (GUID: MEDIA-006).
+        (GUID: MEDIA-006). Only a cycle in the authoritative declaration graph
+        crosses the warning boundary (GUID: MEDIA-007); the warning contract
+        receives the graph and stable item order needed to select and identify
+        that cycle's participants (GUID: MEDIA-008).
 
         The pairwise merge() method remains a compatibility primitive for
         direct callers and is not the Media aggregation boundary.
