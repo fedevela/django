@@ -421,6 +421,12 @@ class Collector:
         # don't support transactions or cannot defer constraint checks until the
         # end of a transaction.
         self.sort()
+        # ARCHITECTURE CONTRACT — GUID: DELETE-004
+        # Collector.delete() owns the canonical nonzero deletion result. This
+        # counter is the shared aggregation boundary for fast/cascaded deletes
+        # and collected-model deletes; its keys are affected models' labels.
+        # The single-object fast path below must expose the same result contract
+        # without requiring callers to reconstruct or reinterpret its counts.
         # number of objects deleted for each model label
         deleted_counter = Counter()
 
