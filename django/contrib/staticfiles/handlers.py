@@ -104,6 +104,10 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
     #         propagate the failure; do not synthesize static-file behavior.
     #     The caller then consumes either returned response through Django's
     #     normal ASGI response contract, including completion of its body.
+    # Response-boundary contract (GUID: ASGI-STATIC-002, ASGI-STATIC-003,
+    # ASGI-STATIC-005): StaticFilesHandlerMixin owns response construction and
+    # Http404 normalization. This override is only the async adapter seam; the
+    # returned response contract remains owned and consumed by ASGIHandler.
     async def get_response_async(self, request):
         return await sync_to_async(self.get_response)(request)
 
@@ -118,6 +122,10 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
         # ELSE:
         #     do not perform static lookup or serving;
         #     hand off to the wrapped application and return its result.
+        # Routing-boundary contract (GUID: ASGI-STATIC-006): this override may
+        # select between ASGIHandler and the injected application, but static
+        # recognition remains owned by StaticFilesHandlerMixin._should_handle;
+        # no alternate lookup, storage, or serving dependency belongs here.
         if scope['type'] == 'http' and self._should_handle(scope['path']):
             # Serve static content
             # (the one thing super() doesn't do is __call__, apparently)
