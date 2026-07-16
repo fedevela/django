@@ -320,16 +320,24 @@ class QuerySetSetOperationTests(TestCase):
 
     def test_uniondist_005_annotated_operands_union_without_distinct_preserves_results(self):
         """UNIONDIST-005: annotated union operands retain their established results."""
-        pass
+        qs1 = Number.objects.filter(num=1).annotate(source=Value('first'))
+        qs2 = Number.objects.filter(num=2).annotate(source=Value('second'))
+        union = qs1.union(qs2).values_list('num', 'source')
+        self.assertCountEqual(union, [(1, 'first'), (2, 'second')])
 
     def test_uniondist_006_supported_ordering_on_union_without_distinct_preserves_results(self):
         """UNIONDIST-006: supported union ordering retains its established result."""
-        pass
+        qs1 = Number.objects.filter(num__lte=1)
+        qs2 = Number.objects.filter(num__range=(2, 3))
+        union = qs1.union(qs2).order_by('-num').values_list('num', flat=True)
+        self.assertEqual(list(union), [3, 2, 1, 0])
 
     def test_uniondist_008_union_without_distinct_eliminates_duplicate_rows(self):
         """UNIONDIST-008: UNION retains its established duplicate-elimination semantics."""
-        pass
+        qs = Number.objects.filter(num__lte=1).values_list('num', flat=True)
+        self.assertCountEqual(qs.union(qs), [0, 1])
 
     def test_uniondist_008_union_all_without_distinct_preserves_duplicate_rows(self):
         """UNIONDIST-008: UNION ALL retains its established duplicate-preservation semantics."""
-        pass
+        qs = Number.objects.filter(num__lte=1).values_list('num', flat=True)
+        self.assertCountEqual(qs.union(qs, all=True), [0, 0, 1, 1])
