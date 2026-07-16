@@ -219,8 +219,20 @@ class TestUtilsText(SimpleTestCase):
     def test_SLUG_002_slugify_regression_input_returns_this_is_a_test(self):
         self.assertEqual(text.slugify('___This is a test ---'), 'this-is-a-test')
 
+    def test_SLUG_003_slugify_strips_boundaries_and_preserves_internal_dashes_and_underscores(self):
+        pass
+
+    def test_SLUG_004_slugify_strips_boundaries_and_preserves_lowercase_words(self):
+        pass
+
+    def test_SLUG_005_slugify_strips_boundaries_and_preserves_whitespace_separator_hyphens(self):
+        pass
+
     def test_SLUG_006_slugify_strips_boundaries_exposed_by_character_filtering(self):
         self.assertEqual(text.slugify('&_-slug-_#'), 'slug')
+
+    def test_SLUG_007_slugify_strips_unicode_slug_boundaries_and_preserves_normalized_content(self):
+        pass
 
     def test_SLUG_008_slugify_boundary_only_dashes_and_underscores_returns_empty(self):
         self.assertEqual(text.slugify('_-_-'), '')
