@@ -81,4 +81,8 @@ class ModelInstanceFilterabilityContractTests(TestCase):
         # related to the supplied instance.
         # IF the records differ, FAIL with the existing sequence-comparison
         # evidence; OTHERWISE, the regression obligation passes.
-        self.assertTrue(True)
+        queryset = FilterableModelChild.objects.filter(
+            parent=self.false_model,
+        ).order_by('pk')
+
+        self.assertSequenceEqual(list(queryset), self.false_children)
