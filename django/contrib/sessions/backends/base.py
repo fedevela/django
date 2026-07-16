@@ -141,6 +141,16 @@ class SessionBase:
         # available and an authentication attempt can establish fresh state.
         # FAILURE INVARIANT: no contained session-decoding failure becomes an
         # HTTP 500 that ends either request path.
+        # Pseudocode — GUID: SESSION-005
+        # INPUT: session_data containing a valid current-format signed session.
+        # VALIDATE the signature and decode with the configured serializer.
+        # IF current-format validation and decoding succeed:
+        #     RETURN the decoded mapping immediately, preserving every stored
+        #     key and value supplied by the serializer.
+        #     DO NOT enter legacy compatibility decoding or otherwise transform
+        #     the decoded contents.
+        # ELSE hand off the original session_data to the existing legacy path;
+        # this branch is outside the valid-current-format success obligation.
         try:
             return signing.loads(session_data, salt=self.key_salt, serializer=self.serializer)
         # RemovedInDjango40Warning: when the deprecation ends, handle here
@@ -167,6 +177,17 @@ class SessionBase:
         # Diagnostic boundary — GUID: SESSION-008
         # Rejection reporting is an internal, best-effort dependency of this
         # boundary and must not participate in its result or escape to callers.
+        # Pseudocode — GUID: SESSION-006
+        # INPUT: the original session_data for a valid supported legacy session
+        # after current-format decoding has rejected it.
+        # Base64-decode the legacy candidate and split digest from payload.
+        # COMPUTE the expected legacy digest from the serialized payload.
+        # IF the supplied and expected digests match:
+        #     DESERIALIZE the payload with the configured serializer.
+        #     RETURN that decoded mapping with its stored keys and values
+        #     unchanged under the existing legacy compatibility behavior.
+        # ELSE transition to the established rejected-session failure path and
+        # return empty state; do not reinterpret or recover the candidate.
         # Pseudocode — GUID: SESSION-001, SESSION-002, SESSION-003, SESSION-007,
         # SESSION-008
         # INPUT: session_data rejected by current-format decoding.
