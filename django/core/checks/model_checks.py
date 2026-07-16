@@ -20,6 +20,24 @@ from django.core.checks import Error, Tags, register
 #   converted to CheckMessage instances.
 # - Verification home: DBTable001NoDatabaseRoutersContractTests in
 #   tests/check_framework/test_model_checks.py covers all DBTABLE-001 paths.
+# DBTABLE-002, DBTABLE-003, and DBTABLE-004 architecture contract:
+# - Ownership: check_all_models() owns routed-table collision diagnostics; no
+#   router-specific model or application layer owns either collision variant.
+# - Input boundary: the existing db_table_models groups supply the shared table
+#   and complete model-label set, while settings.DATABASE_ROUTERS supplies only
+#   the fact that routing is configured.
+# - Diagnostic contract: a routed collision produces one non-blocking
+#   CheckMessage that carries the shared table, every conflicting model label,
+#   and guidance to verify that routing separates the models. Its identifier is
+#   intentionally left to implementation.
+# - Dependency direction: model checks depend on router configuration and the
+#   checks message abstraction; they must not instantiate or invoke routers or
+#   attempt to prove model isolation.
+# - Integration seam: extend the existing collision-to-models.E028 branch in
+#   the db_table_models loop. Same-app (DBTABLE-003) and cross-app (DBTABLE-002)
+#   groups enter the same seam; DBTABLE-004 defines its diagnostic payload.
+# - Verification home: RoutedDuplicateDBTableContractTests in
+#   tests/check_framework/test_model_checks.py covers the routed output contract.
 @register(Tags.models)
 def check_all_models(app_configs=None, **kwargs):
     db_table_models = defaultdict(list)
