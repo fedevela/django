@@ -517,11 +517,33 @@ class ValidSessionDecodingCompatibilityContractTests(TestCase):
 
     def test_session_005_valid_current_format_with_stored_values_decodes_contents_unchanged(self):
         """GUID: SESSION-005 - Valid current-format contents remain unchanged."""
-        pass
+        session = CookieSession()
+        data = {
+            'stored_value': 'unchanged',
+            'nested': {'number': 42, 'enabled': True},
+        }
+        encoded = session.encode(data)
+
+        with mock.patch.object(session, '_legacy_decode') as legacy_decode:
+            self.assertEqual(session.decode(encoded), data)
+
+        legacy_decode.assert_not_called()
 
     def test_session_006_valid_supported_legacy_values_decode_with_existing_compatibility_behavior(self):
         """GUID: SESSION-006 - Valid legacy contents retain compatibility."""
-        pass
+        session = CookieSession()
+        data = {
+            'stored_value': 'unchanged',
+            'nested': {'number': 42, 'enabled': True},
+        }
+        encoded = session._legacy_encode(data)
+
+        with mock.patch.object(
+            session, '_legacy_decode', wraps=session._legacy_decode,
+        ) as legacy_decode:
+            self.assertEqual(session.decode(encoded), data)
+
+        legacy_decode.assert_called_once_with(encoded)
 
 
 class DatabaseSessionTests(SessionTestsMixin, TestCase):
