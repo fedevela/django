@@ -986,6 +986,16 @@ class QuerySet:
             return self._filter_or_exclude(False, **filter_obj)
 
     def _combinator_query(self, combinator, *other_qs, all=False):
+        # UNIONDIST-005, UNIONDIST-006, UNIONDIST-008 pseudocode:
+        # INPUT: the established operand queries, requested combinator, and
+        # duplicate-preservation flag.
+        # CLONE the left queryset without changing any operand's selected or
+        # annotated expressions; clear only outer limits and ordering so a
+        # supported ordering can be applied to the combined result.
+        # TRANSITION the clone to combined-query state by retaining every
+        # operand in order, recording the combinator, and recording ``all``.
+        # OUTPUT the unevaluated combined queryset; do not introduce distinct
+        # state or otherwise change the operands' established result shape.
         # Clone the query to inherit the select list and everything
         clone = self._chain()
         # Clear limits and ordering so they can be reapplied

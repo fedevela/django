@@ -427,6 +427,17 @@ class SQLCompiler:
         return sql, params
 
     def get_combinator_sql(self, combinator, all):
+        # UNIONDIST-005, UNIONDIST-008 pseudocode:
+        # FOR EACH nonempty combined operand, compile its established select
+        # shape, including annotations; when the outer query limits columns,
+        # align an operand without its own values selection to that shape.
+        # IF operand compilation reports an empty result, omit it only under
+        # the existing UNION/DIFFERENCE rules; otherwise propagate the failure.
+        # SELECT the backend's established set operator for ``combinator``.
+        # IF this is UNION and ``all`` is true, select UNION ALL so duplicates
+        # are preserved; OTHERWISE retain UNION so SQL eliminates duplicates.
+        # JOIN compiled operands and parameters in operand order and return
+        # them without adding distinct state or changing annotation semantics.
         features = self.connection.features
         compilers = [
             query.get_compiler(self.using, self.connection)
@@ -589,6 +600,11 @@ class SQLCompiler:
                 ))
 
             if order_by:
+                # UNIONDIST-006 pseudocode:
+                # IF pre-SQL setup resolved a supported outer ordering, append
+                # its compiled expressions and parameters after the combined
+                # SELECT, preserving their established order; OTHERWISE append
+                # no ORDER BY. Propagate existing resolution/backend failures.
                 ordering = []
                 for _, (o_sql, o_params, _) in order_by:
                     ordering.append(o_sql)
