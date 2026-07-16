@@ -1,5 +1,5 @@
 from django.core import checks
-from django.core.checks import Error
+from django.core.checks import Error, Warning
 from django.db import models
 from django.test import (
     SimpleTestCase, TestCase, override_settings, skipUnlessDBFeature,
@@ -7,6 +7,10 @@ from django.test import (
 from django.test.utils import (
     isolate_apps, modify_settings, override_system_checks,
 )
+
+
+class EmptyRouter:
+    pass
 
 
 @isolate_apps('check_framework', attr_name='apps')
@@ -74,23 +78,88 @@ class DBTable001NoDatabaseRoutersContractTests(SimpleTestCase):
         ])
 
 
+@isolate_apps('check_framework', attr_name='apps')
+@override_settings(
+    DATABASE_ROUTERS=['check_framework.test_model_checks.EmptyRouter'],
+)
+@override_system_checks([checks.model_checks.check_all_models])
 class RoutedDuplicateDBTableContractTests(SimpleTestCase):
     """Verification obligations for GUIDs DBTABLE-002 through DBTABLE-004."""
 
-    def test_dbtable_002_routed_duplicate_managed_table_across_apps_reports_non_blocking_diagnostic_instead_of_e028(self):
-        self.assertTrue(True)
+    def run_same_app_check(self, table_name):
+        class Model1(models.Model):
+            class Meta:
+                db_table = table_name
+
+        class Model2(models.Model):
+            class Meta:
+                db_table = table_name
+
+        return checks.run_checks(app_configs=self.apps.get_app_configs())
+
+    def assert_routed_duplicate_warning(self, warning, db_table, model_labels):
+        model_labels_str = ', '.join(model_labels)
+        self.assertEqual(warning, Warning(
+            "db_table '%s' is used by multiple models: %s."
+            % (db_table, model_labels_str),
+            hint=(
+                'You have configured settings.DATABASE_ROUTERS. Verify that '
+                '%s are correctly routed to separate databases.'
+                % model_labels_str
+            ),
+            obj=db_table,
+            id='models.W035',
+        ))
+        self.assertFalse(warning.is_serious())
+
+    @modify_settings(INSTALLED_APPS={'append': 'basic'})
+    @isolate_apps('basic', 'check_framework', kwarg_name='apps')
+    def test_dbtable_002_routed_duplicate_managed_table_across_apps_reports_non_blocking_diagnostic_instead_of_e028(self, apps):
+        class Model1(models.Model):
+            class Meta:
+                app_label = 'basic'
+                db_table = 'dbtable_002_across_apps'
+
+        class Model2(models.Model):
+            class Meta:
+                app_label = 'check_framework'
+                db_table = 'dbtable_002_across_apps'
+
+        warnings = checks.run_checks(app_configs=apps.get_app_configs())
+        self.assertEqual(len(warnings), 1)
+        self.assert_routed_duplicate_warning(
+            warnings[0],
+            'dbtable_002_across_apps',
+            ['basic.Model1', 'check_framework.Model2'],
+        )
+        self.assertNotEqual(warnings[0].id, 'models.E028')
 
     def test_dbtable_003_routed_duplicate_managed_table_in_same_app_reports_non_blocking_diagnostic_instead_of_e028(self):
-        self.assertTrue(True)
+        warnings = self.run_same_app_check('dbtable_003_same_app')
+        self.assertEqual(len(warnings), 1)
+        self.assert_routed_duplicate_warning(
+            warnings[0],
+            'dbtable_003_same_app',
+            ['check_framework.Model1', 'check_framework.Model2'],
+        )
+        self.assertNotEqual(warnings[0].id, 'models.E028')
 
     def test_dbtable_004_routed_duplicate_diagnostic_identifies_shared_table(self):
-        self.assertTrue(True)
+        warnings = self.run_same_app_check('dbtable_004_shared_table')
+        self.assertEqual(warnings[0].obj, 'dbtable_004_shared_table')
+        self.assertIn("db_table 'dbtable_004_shared_table'", warnings[0].msg)
 
     def test_dbtable_004_routed_duplicate_diagnostic_identifies_conflicting_models(self):
-        self.assertTrue(True)
+        warnings = self.run_same_app_check('dbtable_004_models')
+        self.assertIn('check_framework.Model1', warnings[0].msg)
+        self.assertIn('check_framework.Model2', warnings[0].msg)
 
     def test_dbtable_004_routed_duplicate_diagnostic_directs_user_to_verify_routing_separates_models(self):
-        self.assertTrue(True)
+        warnings = self.run_same_app_check('dbtable_004_routing_guidance')
+        self.assertIn('Verify that', warnings[0].hint)
+        self.assertIn('check_framework.Model1', warnings[0].hint)
+        self.assertIn('check_framework.Model2', warnings[0].hint)
+        self.assertIn('routed to separate databases', warnings[0].hint)
 
 
 @isolate_apps('check_framework', attr_name='apps')

@@ -5,7 +5,7 @@ from itertools import chain
 
 from django.apps import apps
 from django.conf import settings
-from django.core.checks import Error, Tags, register
+from django.core.checks import Error, Tags, Warning, register
 
 
 # DBTABLE-001 architecture contract:
@@ -79,6 +79,15 @@ def check_all_models(app_configs=None, **kwargs):
             indexes[model_index.name].append(model._meta.label)
         for model_constraint in model._meta.constraints:
             constraints[model_constraint.name].append(model._meta.label)
+    if settings.DATABASE_ROUTERS:
+        error_class, error_id = Warning, 'models.W035'
+        error_hint = (
+            'You have configured settings.DATABASE_ROUTERS. Verify that %s '
+            'are correctly routed to separate databases.'
+        )
+    else:
+        error_class, error_id = Error, 'models.E028'
+        error_hint = None
     for db_table, model_labels in db_table_models.items():
         # DBTABLE-002 and DBTABLE-003 logic obligations:
         # INPUT: one shared db_table and all managed, non-proxy model labels
@@ -100,13 +109,15 @@ def check_all_models(app_configs=None, **kwargs):
         # OUTPUT: append exactly the selected duplicate-table diagnostic and then
         # continue checking other tables; router uncertainty remains advisory and
         # must not become models.E028 or silently suppress the collision.
-        if len(model_labels) != 1 and not settings.DATABASE_ROUTERS:
+        if len(model_labels) != 1:
+            model_labels_str = ', '.join(model_labels)
             errors.append(
-                Error(
+                error_class(
                     "db_table '%s' is used by multiple models: %s."
-                    % (db_table, ', '.join(db_table_models[db_table])),
+                    % (db_table, model_labels_str),
                     obj=db_table,
-                    id='models.E028',
+                    hint=(error_hint % model_labels_str) if error_hint else None,
+                    id=error_id,
                 )
             )
     for index_name, model_labels in indexes.items():
