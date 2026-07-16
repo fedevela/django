@@ -1584,6 +1584,11 @@ class DurationField(Field):
     Use interval on PostgreSQL, INTERVAL DAY TO SECOND on Oracle, and bigint
     of microseconds on other databases.
     """
+    # Architecture contract — GUID: DUR-003
+    # DurationField.to_python() delegates duration syntax and value construction
+    # to django.utils.dateparse.parse_duration and owns translation of an
+    # unsuccessful parse into this field's existing "invalid" validation
+    # condition. The parser remains independent of the model-field layer.
     empty_strings_allowed = False
     default_error_messages = {
         'invalid': _("'%(value)s' value has an invalid format. It must be in "

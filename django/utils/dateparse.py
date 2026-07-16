@@ -130,6 +130,11 @@ def parse_duration(value):
     Also supports ISO 8601 representation and PostgreSQL's day-time interval
     format.
     """
+    # Architecture contract — GUID: DUR-004, DUR-005
+    # This utility owns accepted duration syntax, format precedence, and
+    # construction of parsed values. Callers own their response to None or
+    # ValueError. Existing accepted inputs retain their interpretation,
+    # including "14:00" as 14 minutes.
     # Pseudocode — GUID: DUR-004, DUR-005
     # MATCH the input against the existing duration formats in existing order.
     # IF no format matches, RETURN no parsed value through the existing path.
