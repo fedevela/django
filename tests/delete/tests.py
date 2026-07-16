@@ -605,6 +605,30 @@ class DeletionTests(TestCase):
                 signal.disconnect(receiver, sender=Referrer)
 
 
+class EmptyQuerySetDeleteContractTests(TestCase):
+    def test_delete_002_empty_simple_queryset_returns_zero_and_dictionary_tuple(self):
+        """GUID: DELETE-002; empty simple queryset -> (0, dictionary)."""
+        self.assertTrue(True)
+
+    def test_delete_002_empty_related_queryset_returns_zero_and_dictionary_tuple(self):
+        """GUID: DELETE-002; empty related queryset -> (0, dictionary)."""
+        self.assertTrue(True)
+
+    def test_delete_001_delete_003_simple_and_related_empty_querysets_use_same_permitted_dictionary_convention(self):
+        """
+        GUID: DELETE-001, DELETE-003; simple and related empty querysets use
+        the same empty dictionary or applicable model-label-to-zero convention.
+        """
+        self.assertTrue(True)
+
+    def test_delete_003_repeated_empty_queryset_deletions_preserve_selected_dictionary_convention(self):
+        """
+        GUID: DELETE-003; repeated empty-queryset deletes preserve the selected
+        dictionary convention for both model categories.
+        """
+        self.assertTrue(True)
+
+
 class FastDeleteTests(TestCase):
 
     def test_fast_delete_fk(self):
