@@ -38,6 +38,30 @@ class PrefixNode(template.Node):
 
     @classmethod
     def handle_simple(cls, name):
+        # Request-scoped base resolution pseudocode
+        # (GUID: SCRIPTURL-002, SCRIPTURL-008, SCRIPTURL-009, SCRIPTURL-010,
+        # GUID: SCRIPTURL-011):
+        #
+        # PROCEDURE resolve_asset_base(setting_name):
+        #     configured_base <- read setting_name using the existing empty
+        #                        fallback and encode it as an IRI-safe URL
+        #     IF configured_base has a scheme or network location:
+        #         RETURN configured_base unchanged
+        #     active_prefix <- read the current request's script prefix now;
+        #                      do not cache it or write it back to settings
+        #     IF active_prefix is absent, empty, or the root prefix:
+        #         RETURN configured_base unchanged
+        #     IF configured_base already starts with active_prefix on a path
+        #        segment boundary:
+        #         RETURN configured_base unchanged
+        #     resolved_base <- active_prefix joined before configured_base,
+        #                      preserving its path, query, and fragment
+        #     HAND OFF resolved_base to static or media path composition;
+        #              append the requested path beneath the complete base
+        #              without altering either component
+        #     RETURN resolved_base
+        #     ON malformed input or failed URL conversion:
+        #         propagate the existing error; retain no request state
         try:
             from django.conf import settings
         except ImportError:
@@ -113,6 +137,21 @@ class StaticNode(template.Node):
 
     @classmethod
     def handle_simple(cls, path):
+        # Static asset composition pseudocode
+        # (GUID: SCRIPTURL-001):
+        #
+        # PROCEDURE build_static_asset_url(requested_path):
+        #     candidate_base <- resolve STATIC_URL through the request-scoped
+        #                       base procedure above, including when the active
+        #                       storage supplies the configured static base
+        #     subordinate_path <- quote requested_path for URL use without
+        #                         discarding candidate_base
+        #     output <- join subordinate_path beneath candidate_base
+        #     ASSERT output contains any usable active prefix exactly once,
+        #            followed by the complete configured base and asset path
+        #     RETURN output
+        #     ON storage or quoting failure:
+        #         propagate the existing error without returning a partial URL
         if apps.is_installed('django.contrib.staticfiles'):
             from django.contrib.staticfiles.storage import staticfiles_storage
             return staticfiles_storage.url(path)
