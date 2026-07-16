@@ -336,15 +336,18 @@ class Field(RegisterLookupMixin):
         # IF greatest comparable length exceeds max_length:
         #     RETURN fields.E009
         # RETURN no choice-length error
-        choice_max_length = 0
-        for value, _ in self.flatchoices:
-            if isinstance(value, str):
-                choice_max_length = max(choice_max_length, len(value))
         if (
-            isinstance(self.max_length, int) and
-            not isinstance(self.max_length, bool) and
-            choice_max_length > self.max_length
+            not isinstance(self.max_length, int) or
+            isinstance(self.max_length, bool)
         ):
+            return []
+
+        choice_max_length = max(
+            (len(value) for value, _ in self.flatchoices
+             if isinstance(value, str)),
+            default=0,
+        )
+        if choice_max_length > self.max_length:
             return [
                 checks.Error(
                     "'max_length' is too small to fit the longest value in "

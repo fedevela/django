@@ -1,6 +1,7 @@
 import unittest
 from unittest import mock
 
+from django.core import exceptions
 from django.core.checks import Error, Warning as DjangoWarning
 from django.db import connection, models
 from django.test import SimpleTestCase, TestCase, skipIfDBFeature
@@ -227,15 +228,54 @@ class CharFieldTests(SimpleTestCase):
 
     def test_choice_009_field_without_relevant_choices_does_not_report_choice_length_failure(self):
         """GUID: CHOICE-009"""
-        self.assertTrue(True)
+        class Model(models.Model):
+            field = models.CharField(max_length=1)
+
+        field = Model._meta.get_field('field')
+        with mock.patch.object(
+            field,
+            '_check_choice_value_length',
+            wraps=field._check_choice_value_length,
+        ) as length_check:
+            self.assertEqual(Model.check(), [])
+        length_check.assert_not_called()
 
     def test_choice_009_field_without_max_length_does_not_report_choice_length_failure(self):
         """GUID: CHOICE-009"""
-        self.assertTrue(True)
+        class StoredValue(str):
+            def __len__(self):
+                raise AssertionError('choice length must not be inspected')
+
+        class Model(models.Model):
+            field = models.CharField(
+                choices=[(StoredValue('oversized'), 'Oversized')],
+            )
+
+        field = Model._meta.get_field('field')
+        self.assertEqual(Model.check(), [
+            Error(
+                "CharFields must define a 'max_length' attribute.",
+                obj=field,
+                id='fields.E120',
+            ),
+        ])
 
     def test_choice_010_stored_value_without_comparable_length_remains_under_existing_choice_semantics(self):
         """GUID: CHOICE-010"""
-        self.assertTrue(True)
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=1,
+                choices=[(100, 'One hundred')],
+            )
+
+        field = Model._meta.get_field('field')
+        self.assertEqual(Model.check(), [])
+        self.assertIsNone(field.validate(100, Model()))
+        with self.assertRaisesMessage(
+            exceptions.ValidationError,
+            "Value 101 is not a valid choice.",
+        ):
+            field.validate(101, Model())
 
     def test_missing_max_length(self):
         class Model(models.Model):
