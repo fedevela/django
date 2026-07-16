@@ -1595,6 +1595,13 @@ class DurationField(Field):
         return "DurationField"
 
     def to_python(self, value):
+        # Pseudocode — GUID: DUR-003
+        # IF the input is null or already a timedelta, RETURN it unchanged.
+        # OTHERWISE, HAND OFF the input to the existing duration parser.
+        # IF parsing raises ValueError or returns no parsed value, FOLLOW the
+        # existing invalid-duration path and RAISE ValidationError with the
+        # existing "invalid" code and original input parameter.
+        # IF parsing succeeds, RETURN the parser's value unchanged.
         if value is None:
             return value
         if isinstance(value, datetime.timedelta):

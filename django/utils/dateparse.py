@@ -130,6 +130,14 @@ def parse_duration(value):
     Also supports ISO 8601 representation and PostgreSQL's day-time interval
     format.
     """
+    # Pseudocode — GUID: DUR-004, DUR-005
+    # MATCH the input against the existing duration formats in existing order.
+    # IF no format matches, RETURN no parsed value through the existing path.
+    # OTHERWISE, EXTRACT the matched duration components without reinterpreting
+    # their positions; specifically, MAP "14:00" to 14 minutes and 0 seconds.
+    # NORMALIZE the sign and fractional components through the existing rules.
+    # RETURN the same timedelta assembled from those components, so every input
+    # accepted before the message correction retains its previous parsed value.
     match = (
         standard_duration_re.match(value) or
         iso8601_duration_re.match(value) or
