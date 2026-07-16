@@ -10,6 +10,9 @@ from .settings import TEST_SETTINGS
 
 
 class StaticFilesHandlerRegressionContractTests(SimpleTestCase):
+    # Regression ownership boundary (GUID: ASGI-STATIC-007,
+    # ASGI-STATIC-008): synchronous and WSGI contracts remain isolated here
+    # from the ASGI response-path contract below.
     def test_asgi_static_007_existing_sync_routing_lookup_serving_and_not_found_remain_unchanged(self):
         """GUID: ASGI-STATIC-007."""
         self.assertTrue(True)
@@ -25,6 +28,9 @@ class StaticFilesHandlerRegressionContractTests(SimpleTestCase):
     **TEST_SETTINGS,
 )
 class ASGIStaticFilesHandlerContractTests(SimpleTestCase):
+    # Async verification boundary (GUID: ASGI-STATIC-009): successful and
+    # missing-file cases share the ASGI message-exchange seam owned by this
+    # test case; production protocol adaptation remains owned by the handler.
     async_request_factory = AsyncRequestFactory()
 
     async def test_asgi_static_009_existing_file_async_path_returns_successful_static_response(self):
@@ -52,6 +58,8 @@ class ASGIStaticFilesHandlerContractTests(SimpleTestCase):
         self.assertTrue(True)
 
     async def get_asgi_response(self, handler, path):
+        # Integration seam (GUID: ASGI-STATIC-009): test-only ASGI transport
+        # adapter for exercising the handler through scope/receive/send.
         scope = self.async_request_factory._base_scope(path=path)
         messages = []
 

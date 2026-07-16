@@ -16,6 +16,10 @@ class StaticFilesHandlerMixin:
     """
     Common methods used by WSGI and ASGI handlers.
     """
+    # Architecture contract (GUID: ASGI-STATIC-007): this mixin owns the
+    # protocol-independent synchronous static-file boundary (path translation,
+    # lookup, serving, and Http404 conversion). Protocol handlers may select
+    # this boundary, but must not redefine its response behavior.
     # May be used to differentiate between handler types (e.g. in a
     # request_finished signal)
     handles_files = True
@@ -69,6 +73,9 @@ class StaticFilesHandler(StaticFilesHandlerMixin, WSGIHandler):
     WSGI middleware that intercepts calls to the static files directory, as
     defined by the STATIC_URL setting, and serves those files.
     """
+    # Architecture contract (GUID: ASGI-STATIC-008): this adapter owns only the
+    # WSGI routing seam. Non-static requests depend on the injected application;
+    # static requests depend on WSGIHandler and the shared synchronous boundary.
     def __init__(self, application):
         self.application = application
         self.base_url = urlparse(self.get_base_url())
