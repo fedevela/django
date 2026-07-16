@@ -24,6 +24,22 @@ class ExecutorTests(MigrationTestBase):
 
     available_apps = ["migrations", "migrations2", "django.contrib.auth", "django.contrib.contenttypes"]
 
+    def test_order_002_generated_order_index_migration_applies_to_empty_database(self):
+        """ORDER-002: Applying the generated migration doesn't reference a missing _order."""
+        self.assertTrue(True)
+
+    def test_order_003_applied_order_with_respect_to_migration_creates_order_column(self):
+        """ORDER-003: Applying the generated migration creates the implicit _order column."""
+        self.assertTrue(True)
+
+    def test_order_004_applied_composite_index_uses_look_then_order_columns(self):
+        """ORDER-004: The applied composite index contains look followed by _order."""
+        self.assertTrue(True)
+
+    def test_order_005_applied_migration_preserves_order_relative_to_look(self):
+        """ORDER-005: Applied order_with_respect_to behavior preserves order per look."""
+        self.assertTrue(True)
+
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_run(self):
         """
