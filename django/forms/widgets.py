@@ -126,6 +126,43 @@ class Media:
         pairwise merge() method remains the compatibility primitive for direct
         callers.
         """
+        # Pseudocode contract (GUID: MEDIA-003, MEDIA-004, MEDIA-006):
+        #
+        # aggregate_declared_media(source_lists):
+        #     INPUT source_lists in their supplied sequence; each source list
+        #         declares order only between its own consecutive distinct files
+        #
+        #     INITIALIZE one dependency graph and one insertion-ordered file set
+        #         for the complete aggregation
+        #
+        #     FOR EACH nonempty source list in supplied sequence:
+        #         RECORD every distinct file in first-seen order
+        #         FOR EACH consecutive pair declared by that same source list:
+        #             IF the pair contains two distinct files:
+        #                 RECORD predecessor -> successor as authoritative
+        #             ELSE:
+        #                 IGNORE the repeated-file self-dependency
+        #         DO NOT derive a dependency from adjacency in an intermediate
+        #             aggregate; only a source list may declare a dependency
+        #             (GUID: MEDIA-003)
+        #
+        #     ATTEMPT a stable topological ordering of all distinct files using
+        #         the complete dependency graph and first-seen order as the
+        #         deterministic tie-breaker
+        #     IF all declared dependencies are compatible:
+        #         RETURN an order satisfying every declared relationship
+        #             (GUID: MEDIA-004)
+        #         ALLOW unrelated files to occupy any position selected by the
+        #             deterministic tie-breaker; assign them no preferred
+        #             position as an additional constraint (GUID: MEDIA-006)
+        #     ELSE:
+        #         HAND OFF to the existing contradiction-warning policy and
+        #             deterministic first-seen fallback; contradiction semantics
+        #             are outside these requirements
+        #
+        #     GUARANTEE identical source lists in identical sequence produce the
+        #         same valid output because graph construction and tie-breaking
+        #         use stable source and first-seen order (GUID: MEDIA-006)
         dependency_graph = defaultdict(set)
         all_items = OrderedSet()
         for item_list in filter(None, lists):
