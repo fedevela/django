@@ -7,10 +7,13 @@ from django.db.models import (
     CharField, DateTimeField, F, Max, OuterRef, Subquery, Value,
 )
 from django.db.models.functions import Upper
-from django.test import SimpleTestCase, TestCase
+from django.test import TestCase
 
 from .models import (
-    Article, Author, ChildArticle, OrderedByCustomPKChild,
+    Article, Author, ChildArticle, OrderedByConcreteFieldAscendingChild,
+    OrderedByConcreteFieldAscendingParent,
+    OrderedByConcreteFieldDescendingChild,
+    OrderedByConcreteFieldDescendingParent, OrderedByCustomPKChild,
     OrderedByCustomPKParent, OrderedByFArticle, OrderedByPKAscendingChild,
     OrderedByPKAscendingParent, OrderedByPKChild, OrderedByPKParent, Reference,
 )
@@ -120,15 +123,72 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
         self.assertIs(is_ref, False)
 
 
-class InheritedOrderingRegressionContractTests(SimpleTestCase):
+class InheritedOrderingRegressionContractTests(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        for position in (30, 10, 20):
+            OrderedByConcreteFieldAscendingChild.objects.create(
+                position=position,
+            )
+            OrderedByConcreteFieldDescendingChild.objects.create(
+                position=position,
+            )
+        ChildArticle.objects.create(
+            headline='Earlier', pub_date=datetime(2005, 7, 26),
+        )
+        ChildArticle.objects.create(
+            headline='Later B', pub_date=datetime(2005, 7, 27),
+        )
+        ChildArticle.objects.create(
+            headline='Later A', pub_date=datetime(2005, 7, 27),
+        )
+
     def test_DJANGO_007_child_inherited_concrete_field_ascending_remains_ascending(self):
-        pass
+        compiler = OrderedByConcreteFieldAscendingChild.objects.all().query.get_compiler(
+            connection=connection,
+        )
+        expression, (sql, params, is_ref) = compiler.get_order_by()[0]
+        self.assertIs(
+            expression.expression.target,
+            OrderedByConcreteFieldAscendingParent._meta.get_field('position'),
+        )
+        self.assertIs(expression.descending, False)
+        self.assertTrue(sql.endswith(' ASC'))
+        self.assertEqual(params, [])
+        self.assertIs(is_ref, False)
+        self.assertSequenceEqual(
+            list(OrderedByConcreteFieldAscendingChild.objects.values_list(
+                'position', flat=True,
+            )),
+            [10, 20, 30],
+        )
 
     def test_DJANGO_007_child_inherited_concrete_field_descending_remains_descending(self):
-        pass
+        compiler = OrderedByConcreteFieldDescendingChild.objects.all().query.get_compiler(
+            connection=connection,
+        )
+        expression, (sql, params, is_ref) = compiler.get_order_by()[0]
+        self.assertIs(
+            expression.expression.target,
+            OrderedByConcreteFieldDescendingParent._meta.get_field('position'),
+        )
+        self.assertIs(expression.descending, True)
+        self.assertTrue(sql.endswith(' DESC'))
+        self.assertEqual(params, [])
+        self.assertIs(is_ref, False)
+        self.assertSequenceEqual(
+            list(OrderedByConcreteFieldDescendingChild.objects.values_list(
+                'position', flat=True,
+            )),
+            [30, 20, 10],
+        )
 
     def test_DJANGO_008_existing_model_ordering_and_multi_table_inheritance_regressions_continue_to_pass(self):
-        pass
+        self.assertSequenceEqual(
+            list(ChildArticle.objects.values_list('headline', flat=True)),
+            ['Later A', 'Later B', 'Earlier'],
+        )
 
 
 class OrderingTests(TestCase):

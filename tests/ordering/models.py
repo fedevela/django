@@ -86,6 +86,28 @@ class OrderedByPKAscendingChild(OrderedByPKAscendingParent):
     pass
 
 
+class OrderedByConcreteFieldAscendingParent(models.Model):
+    position = models.IntegerField()
+
+    class Meta:
+        ordering = ('position',)
+
+
+class OrderedByConcreteFieldAscendingChild(OrderedByConcreteFieldAscendingParent):
+    pass
+
+
+class OrderedByConcreteFieldDescendingParent(models.Model):
+    position = models.IntegerField()
+
+    class Meta:
+        ordering = ('-position',)
+
+
+class OrderedByConcreteFieldDescendingChild(OrderedByConcreteFieldDescendingParent):
+    pass
+
+
 class Reference(models.Model):
     article = models.ForeignKey(OrderedByAuthorArticle, models.CASCADE)
 

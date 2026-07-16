@@ -703,49 +703,6 @@ class SQLCompiler:
         not be) and column name for ordering by the given 'name' parameter.
         The 'name' is of the form 'field1__field2__...__fieldN'.
         """
-        # DJANGO-007 -- Logic obligations:
-        #   test_DJANGO_007_child_inherited_concrete_field_ascending_remains_ascending
-        #   test_DJANGO_007_child_inherited_concrete_field_descending_remains_descending
-        #
-        # Pseudocode:
-        #   INPUT an inherited ordering name for a concrete field and the
-        #       child model options used to resolve it.
-        #   1. Separate any direction prefix from the concrete field name;
-        #      retain ASC when no prefix exists and retain DESC for ``-name``.
-        #   2. Resolve the named field through the existing child/parent path.
-        #   3. If the resolved field is concrete, do not enter related-model
-        #      ordering expansion and do not reinterpret it as the ``pk`` alias.
-        #   4. Trim only redundant joins, preserving the resolved field target.
-        #   5. Produce one OrderBy for each resolved target using the direction
-        #      retained in step 1, then return the normal non-reference result.
-        #   FAILURE: propagate invalid-path and join-resolution errors; do not
-        #      replace a valid concrete target or reverse its requested order.
-        #
-        # DJANGO-008 -- Logic obligation:
-        #   test_DJANGO_008_existing_model_ordering_and_multi_table_inheritance_regressions_continue_to_pass
-        #
-        # Pseudocode:
-        #   INPUT any established model-ordering or multi-table-inheritance
-        #       ordering expression processed alongside the ``pk`` correction.
-        #   1. Apply special handling only when the normalized name is exactly
-        #      the ``pk`` shortcut; otherwise preserve the existing path.
-        #   2. For relations eligible for default-ordering expansion, keep the
-        #      existing recursion, direction propagation, cycle detection, and
-        #      OrderBy-expression handling unchanged.
-        #   3. For concrete fields and explicit relation attribute names, keep
-        #      direct target resolution, join trimming, and result construction.
-        #   4. Return the same result shape and allow downstream compilation and
-        #      evaluation to follow their established control flow.
-        #   FAILURE: preserve existing FieldError propagation, including the
-        #      infinite-loop guard; introduce no fallback that masks regressions.
-        #
-        # DJANGO-007/DJANGO-008 -- Architecture boundary:
-        # Direction normalization belongs to ``get_order_dir()`` and field-path
-        # resolution belongs to ``_setup_joins()``. This method owns the single
-        # integration seam between related-model ordering expansion and direct
-        # concrete-target construction. Any ``pk`` correction must remain at
-        # that seam: it must bypass relation expansion without changing the
-        # shared ``trim_joins()``/``OrderBy`` path or inheritance machinery.
         name, order = get_order_dir(name, default_order)
         descending = order == 'DESC'
         pieces = name.split(LOOKUP_SEP)
