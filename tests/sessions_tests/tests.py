@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest import mock
 
 from django.conf import settings
+from django.contrib.auth import SESSION_KEY, get_user_model, login
 from django.contrib.sessions.backends.base import UpdateError
 from django.contrib.sessions.backends.cache import SessionStore as CacheSession
 from django.contrib.sessions.backends.cached_db import (
@@ -26,7 +27,7 @@ from django.contrib.sessions.models import Session
 from django.contrib.sessions.serializers import (
     JSONSerializer, PickleSerializer,
 )
-from django.core import management
+from django.core import management, signing
 from django.core.cache import caches
 from django.core.cache.backends.base import InvalidCacheBackendError
 from django.core.exceptions import ImproperlyConfigured, SuspiciousOperation
@@ -398,10 +399,21 @@ class SessionTestsMixin:
         self.assertEqual(s1.load(), {})
 
 
-class MalformedSessionDataContractTests(SimpleTestCase):
+class MalformedSessionDataContractTests(TestCase):
 
     def setUp(self):
         self.session = CookieSession()
+
+    def request_with_invalid_persisted_session(self, path):
+        session_key = 'invalidpersistedsessiondata'
+        Session.objects.create(
+            session_key=session_key,
+            session_data='a',
+            expire_date=timezone.now() + timedelta(days=1),
+        )
+        request = RequestFactory().get(path)
+        request.COOKIES[settings.SESSION_COOKIE_NAME] = session_key
+        return request
 
     def test_session_001_malformed_base64_after_signature_failure_does_not_escape_decode(self):
         """GUID: SESSION-001 - Malformed legacy Base64 doesn't escape decoding."""
@@ -437,17 +449,52 @@ class MalformedSessionDataContractTests(SimpleTestCase):
             self.assertNotIn('stored_value', request.session)
             self.assertEqual(dict(request.session), {})
 
+    @override_settings(SESSION_ENGINE='django.contrib.sessions.backends.db')
     def test_session_004_invalid_persisted_session_allows_site_access_without_decode_http_500(self):
         """GUID: SESSION-004 - Invalid session data doesn't block site access."""
-        self.assertTrue(True)
+        request = self.request_with_invalid_persisted_session('/')
 
+        def get_response(request):
+            self.assertEqual(dict(request.session), {})
+            return HttpResponse('Site available')
+
+        response = SessionMiddleware(get_response)(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'Site available')
+
+    @override_settings(SESSION_ENGINE='django.contrib.sessions.backends.db')
     def test_session_004_invalid_persisted_session_allows_authentication_attempt_without_decode_http_500(self):
         """GUID: SESSION-004 - Invalid session data doesn't block authentication."""
-        self.assertTrue(True)
+        request = self.request_with_invalid_persisted_session('/login/')
+        user = get_user_model().objects.create_user(username='session-user')
+
+        def get_response(request):
+            login(
+                request, user,
+                backend='django.contrib.auth.backends.ModelBackend',
+            )
+            return HttpResponse('Authentication attempted')
+
+        response = SessionMiddleware(get_response)(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(request.session[SESSION_KEY], str(user.pk))
 
     def test_session_007_failed_current_validation_then_incorrectly_padded_legacy_base64_returns_empty_without_exception(self):
         """GUID: SESSION-007 - Failed fallback decoding returns empty safely."""
-        self.assertTrue(True)
+        incorrectly_padded = 'a'
+
+        with mock.patch(
+            'django.contrib.sessions.backends.base.signing.loads',
+            wraps=signing.loads,
+        ) as current_decode, mock.patch.object(
+            self.session, '_legacy_decode', wraps=self.session._legacy_decode,
+        ) as legacy_decode:
+            self.assertEqual(self.session.decode(incorrectly_padded), {})
+
+        current_decode.assert_called_once()
+        legacy_decode.assert_called_once_with(incorrectly_padded)
 
     def test_session_008_rejection_diagnostics_do_not_interrupt_session_or_request_processing(self):
         """GUID: SESSION-008 - Rejection diagnostics don't interrupt processing."""
