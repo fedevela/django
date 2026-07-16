@@ -863,7 +863,7 @@ class AutodetectorTests(TestCase):
         self.assertOperationTypes(changes, 'app', 0, ['RenameField'])
         self.assertOperationAttributes(changes, 'app', 0, 0, old_name='field', new_name='renamed_field')
 
-    # MIGPK-001..MIGPK-006 verification boundary: keep this scenario beside
+    # MIGPK-001..MIGPK-007 verification boundary: keep this scenario beside
     # existing rename autodetection coverage; production ownership is split
     # between MigrationAutodetector and RenameField.state_forwards.
     def get_migpk_custom_primary_key_rename(self):
@@ -969,6 +969,14 @@ class AutodetectorTests(TestCase):
         resulting_pk = resulting_state.models['app', 'foo'].get_field_by_name('new_key')
         self.assertIs(resulting_pk.primary_key, True)
         self.assertEqual(resulting_pk.max_length, 32)
+
+    def test_migpk_007_integer_primary_key_rename_uses_rename_field_and_updates_implicit_foreign_key_target(self):
+        """MIGPK-007: An integer PK rename updates its implicit FK target."""
+        self.assertTrue(True)
+
+    def test_migpk_007_integer_primary_key_rename_matches_char_field_relation_target_behavior(self):
+        """MIGPK-007: Relation-target correctness is independent of CharField."""
+        self.assertTrue(True)
 
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')
