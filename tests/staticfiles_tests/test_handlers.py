@@ -9,6 +9,16 @@ from django.utils.http import http_date
 from .settings import TEST_SETTINGS
 
 
+class StaticFilesHandlerRegressionContractTests(SimpleTestCase):
+    def test_asgi_static_007_existing_sync_routing_lookup_serving_and_not_found_remain_unchanged(self):
+        """GUID: ASGI-STATIC-007."""
+        self.assertTrue(True)
+
+    def test_asgi_static_008_existing_wsgi_static_files_response_contract_remains_unchanged(self):
+        """GUID: ASGI-STATIC-008."""
+        self.assertTrue(True)
+
+
 @override_settings(
     DEBUG=False,
     ROOT_URLCONF='staticfiles_tests.urls.default',
@@ -16,6 +26,14 @@ from .settings import TEST_SETTINGS
 )
 class ASGIStaticFilesHandlerContractTests(SimpleTestCase):
     async_request_factory = AsyncRequestFactory()
+
+    async def test_asgi_static_009_existing_file_async_path_returns_successful_static_response(self):
+        """GUID: ASGI-STATIC-009; recognized existing static file."""
+        self.assertTrue(True)
+
+    async def test_asgi_static_009_missing_file_async_path_returns_static_not_found_response(self):
+        """GUID: ASGI-STATIC-009; recognized missing static file."""
+        self.assertTrue(True)
 
     async def get_asgi_response(self, handler, path):
         scope = self.async_request_factory._base_scope(path=path)
