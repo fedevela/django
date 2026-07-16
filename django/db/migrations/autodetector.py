@@ -421,6 +421,10 @@ class MigrationAutodetector:
                 operation.name_lower == dependency[1].lower() and
                 (operation.order_with_respect_to or "").lower() != dependency[2].lower()
             )
+        # ORDER-001 architecture contract: ``order_wrt_set`` is a private
+        # MigrationAutodetector dependency kind. generate_created_models() is
+        # its producer and this resolver is its consumer; migration operation
+        # classes remain independent of automatic operation ordering.
         # ORDER-001 dependency-resolution pseudocode
         # INPUT: a dependency emitted for a newly created model's index that
         # references the synthetic ``_order`` field.
@@ -628,6 +632,10 @@ class MigrationAutodetector:
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
+                # ORDER-001 integration seam: new-model AddIndex dependencies
+                # are owned here. An _order-aware dependency is represented by
+                # the autodetector's private ``order_wrt_set`` contract and is
+                # resolved only by check_dependency().
                 # ORDER-001 generation pseudocode
                 # INPUTS: this newly created model's declared index, its
                 # order_with_respect_to option, and related_dependencies.
