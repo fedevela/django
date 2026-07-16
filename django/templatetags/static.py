@@ -1,4 +1,4 @@
-from urllib.parse import quote, urljoin, urlsplit, urlunsplit
+from urllib.parse import quote, urljoin
 
 from django import template
 from django.apps import apps
@@ -6,27 +6,6 @@ from django.utils.encoding import iri_to_uri
 from django.utils.html import conditional_escape
 
 register = template.Library()
-
-
-def _url_with_script_prefix(url):
-    """Add the current script prefix to an application-relative URL."""
-    from django.urls import get_script_prefix
-
-    parsed = urlsplit(url)
-    if parsed.scheme or parsed.netloc:
-        return url
-
-    script_prefix = get_script_prefix()
-    if not script_prefix or script_prefix == '/':
-        return url
-
-    script_path = script_prefix.rstrip('/')
-    if parsed.path == script_path or parsed.path.startswith(script_path + '/'):
-        return url
-
-    path = '%s/%s' % (script_path, parsed.path.lstrip('/'))
-    return urlunsplit((parsed.scheme, parsed.netloc, path,
-                       parsed.query, parsed.fragment))
 
 
 class PrefixNode(template.Node):
@@ -65,7 +44,7 @@ class PrefixNode(template.Node):
             prefix = ''
         else:
             prefix = iri_to_uri(getattr(settings, name, ''))
-        return _url_with_script_prefix(prefix)
+        return prefix
 
     def render(self, context):
         prefix = self.handle_simple(self.name)
@@ -124,29 +103,6 @@ class StaticNode(template.Node):
         return self.handle_simple(path)
 
     def render(self, context):
-        # Default static tag output pseudocode
-        # (GUID: SCRIPTURL-003, GUID: SCRIPTURL-004):
-        #
-        # PROCEDURE render_default_static_tag(context, requested_path,
-        #                                     optional_assignment_name):
-        #     resolved_path <- resolve requested_path from context
-        #     asset_url <- build the static asset URL once for resolved_path
-        #                  using the active request's script prefix
-        #     IF the active script prefix is non-empty and non-root AND the
-        #        configured static base is application-relative:
-        #         REQUIRE asset_url contains it exactly once, before the
-        #                 configured static path
-        #     ELSE IF the active script prefix is absent, empty, or root:
-        #         REQUIRE asset_url equals the existing unprefixed output
-        #     escaped_url <- conditionally escape asset_url according to the
-        #                    current context's existing autoescape behavior
-        #     IF optional_assignment_name is absent:
-        #         RETURN escaped_url for direct rendering
-        #     context[optional_assignment_name] <- escaped_url
-        #     RETURN an empty rendering, so assignment stores exactly the URL
-        #            that direct rendering would return for the same inputs
-        #     ON path resolution, URL construction, or escaping failure:
-        #         propagate the existing error and do not assign a partial URL
         url = self.url(context)
         if context.autoescape:
             url = conditional_escape(url)
@@ -159,10 +115,9 @@ class StaticNode(template.Node):
     def handle_simple(cls, path):
         if apps.is_installed('django.contrib.staticfiles'):
             from django.contrib.staticfiles.storage import staticfiles_storage
-            url = staticfiles_storage.url(path)
+            return staticfiles_storage.url(path)
         else:
-            url = urljoin(PrefixNode.handle_simple("STATIC_URL"), quote(path))
-        return _url_with_script_prefix(url)
+            return urljoin(PrefixNode.handle_simple("STATIC_URL"), quote(path))
 
     @classmethod
     def handle_token(cls, parser, token):
