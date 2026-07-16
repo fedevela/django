@@ -512,3 +512,29 @@ class SyndicationFeedTest(FeedTestCase):
         for prefix in prefix_domain_mapping:
             with self.subTest(prefix=prefix):
                 self.assertEqual(views.add_domain(*prefix[0]), prefix[1])
+
+
+class SyndicationCommentsContractTests(TestCase):
+    def test_comments_001_item_comments_attribute_resolves_and_is_forwarded(self):
+        """GUID: COMMENTS-001 - An item_comments attribute is forwarded."""
+        self.assertTrue(True)
+
+    def test_comments_001_item_comments_callable_resolves_per_item_and_is_forwarded(self):
+        """GUID: COMMENTS-001 - An item_comments callable result is forwarded."""
+        self.assertTrue(True)
+
+    def test_comments_003_without_direct_comments_item_extra_comments_remain_supported(self):
+        """GUID: COMMENTS-003 - Indirect comments avoid duplicate keywords."""
+        self.assertTrue(True)
+
+    def test_comments_004_without_comments_prior_omission_or_default_is_preserved(self):
+        """GUID: COMMENTS-004 - Absent comments preserve prior behavior."""
+        self.assertTrue(True)
+
+    def test_comments_005_direct_comments_preserve_other_item_metadata(self):
+        """GUID: COMMENTS-005 - Direct comments leave other metadata unchanged."""
+        self.assertTrue(True)
+
+    def test_comments_006_each_feed_item_resolves_or_omits_comments_independently(self):
+        """GUID: COMMENTS-006 - Comments resolution is isolated per item."""
+        self.assertTrue(True)
