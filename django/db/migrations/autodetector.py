@@ -831,6 +831,19 @@ class MigrationAutodetector:
                             old_field_dec[0:2] == field_dec[0:2] and
                             dict(old_field_dec[2], db_column=old_db_column) == field_dec[2])):
                         if self.questioner.ask_rename(model_name, rem_field_name, field_name, field):
+                            # MIGPK-001, MIGPK-006 -- custom-primary-key rename flow:
+                            # INPUT: equivalent old/new field definitions whose names differ.
+                            # DECISION: after rename confirmation, classify the transition as
+                            # a rename rather than independent removal and addition.
+                            # TRANSITION: emit RenameField(old name -> new name), reconcile the
+                            # field-key sets, and record new name -> old name for later relation
+                            # comparison.
+                            # HANDOFF: retain the destination field definition as the source of
+                            # primary_key and all other declared attributes; operation-state
+                            # application changes its name without replacing those attributes.
+                            # FAILURE PATH: if definitions differ or confirmation is declined,
+                            # do not record a rename; leave normal add/remove/alter detection to
+                            # represent the actual transition.
                             self.add_operation(
                                 app_label,
                                 operations.RenameField(
@@ -916,6 +929,23 @@ class MigrationAutodetector:
             # Implement any model renames on relations; these are handled by RenameModel
             # so we need to exclude them from the comparison
             if hasattr(new_field, "remote_field") and getattr(new_field.remote_field, "model", None):
+                # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005 -- implicit-FK flow:
+                # INPUT: old/new relation definitions plus the recorded target-field
+                # rename map produced by generate_renamed_fields().
+                # DECISION: determine whether a changed target name is the implicit
+                # primary-key consequence of that rename or an explicit relation change.
+                # COMPARISON: normalize only the values used to decide whether an
+                # AlterField is necessary; never let the removed target name become the
+                # destination field carried by an emitted operation.
+                # EMISSION: if no independent relation option changed, rely on the target
+                # RenameField handoff. If AlterField is independently required, carry the
+                # destination relation whose target is the renamed primary key and preserve
+                # blank, null, on_delete, and every other unchanged relation option.
+                # STATE TRANSITION: apply generated operations in order so the relation
+                # continues to address the same model and resolves to its renamed field.
+                # FAILURE PATH: reject any candidate operation/state representation whose
+                # to_field still names the removed primary-key field; do not serialize or
+                # hand off a partially normalized relation.
                 rename_key = (
                     new_field.remote_field.model._meta.app_label,
                     new_field.remote_field.model._meta.model_name,
