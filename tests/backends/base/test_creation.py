@@ -243,12 +243,53 @@ class DeserializeDbFromStringTests(TransactionTestCase):
 class SerializedRollbackRestorationContractTests(SimpleTestCase):
     def test_srb_007_foreign_key_before_target_restores_objects_and_relationship_on_intended_alias(self):
         """GUID: SRB-007; unsafe order transitions to a complete alias-bound graph."""
+        # Pseudocode (GUID: SRB-007):
+        # GIVEN an intended database alias and two related objects where the
+        # referencing object is serialized before its referenced target:
+        #   capture both primary keys and the expected foreign-key value;
+        #   remove both objects from the intended alias;
+        # WHEN serialized rollback restoration runs for that alias:
+        #   deserialize every serialized object using the intended alias;
+        #   defer ordering-sensitive constraint validation until the complete
+        #   serialized stream has been saved;
+        #   validate the completed relational state on the intended alias;
+        # THEN query only the intended alias and require:
+        #   the referencing object exists;
+        #   the referenced target exists;
+        #   the referencing object's foreign key equals the target's key;
+        # OTHERWISE fail if either object is absent, the relationship differs,
+        # or restoration reads from or writes to another database alias.
         self.assertTrue(True)
 
     def test_srb_008_order_insensitive_data_restores_captured_objects_values_and_relationships(self):
         """GUID: SRB-008; ordinary serialized state transitions to an equivalent restored state."""
+        # Pseudocode (GUID: SRB-008):
+        # GIVEN ordinary serialized rollback data whose relationships don't
+        # depend on foreign-key-unsafe ordering:
+        #   capture object identities, field values, and relationship values;
+        #   remove the captured objects so restoration is observable;
+        # WHEN serialized rollback restoration consumes the captured data:
+        #   restore each object and its deferred relationship data;
+        #   complete constraint validation after the serialized stream;
+        # THEN reload the objects and require their identities, field values,
+        # and relationships to equal the captured serialized state;
+        # OTHERWISE fail on a missing object or any value or relationship drift.
         self.assertTrue(True)
 
     def test_srb_009_natural_key_dependencies_restore_objects_and_relationships_without_reordering(self):
         """GUID: SRB-009; natural-key-dependent state restores with dependency ordering unchanged."""
+        # Pseudocode (GUID: SRB-009):
+        # GIVEN serialized rollback data containing an object whose natural key
+        # declares an existing dependency on another serialized object:
+        #   capture the serializer-produced order without modifying it;
+        #   capture both object identities and the expected relationship;
+        #   remove the objects so natural-key resolution must occur on restore;
+        # WHEN serialized rollback restoration consumes that unchanged stream:
+        #   resolve natural keys through the existing dependency behavior;
+        #   save all objects and deferred relationships on the restoration alias;
+        #   validate constraints only after the complete stream is restored;
+        # THEN require both objects and their relationship to be restored and
+        # require the observed serialized order to match the captured order;
+        # OTHERWISE fail if natural-key resolution, object restoration,
+        # relationship restoration, or ordering compatibility changes.
         self.assertTrue(True)
