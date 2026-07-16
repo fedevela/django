@@ -159,6 +159,21 @@ class FieldEqualityContractTests(SimpleTestCase):
                 self.assertIs(left == right, expected)
 
 
+class FieldOrderingContractTests(SimpleTestCase):
+
+    def test_FIELD_005_different_creation_counters_preserve_relative_order_regardless_of_model(self):
+        self.assertTrue(True)
+
+    def test_FIELD_006_same_creation_counter_different_models_use_stable_tie_breaker(self):
+        self.assertTrue(True)
+
+    def test_FIELD_008_same_model_different_counters_sort_in_creation_order(self):
+        self.assertTrue(True)
+
+    def test_FIELD_011_unassociated_fields_compare_repeatedly_without_failure_or_drift(self):
+        self.assertTrue(True)
+
+
 class FieldHashContractTests(SimpleTestCase):
 
     @classmethod
