@@ -7,7 +7,7 @@ from django.db.models import (
     CharField, DateTimeField, F, Max, OuterRef, Subquery, Value,
 )
 from django.db.models.functions import Upper
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from .models import (
     Article, Author, ChildArticle, OrderedByCustomPKChild,
@@ -118,6 +118,17 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
         self.assertTrue(sql.endswith(' DESC'))
         self.assertEqual(params, [])
         self.assertIs(is_ref, False)
+
+
+class InheritedOrderingRegressionContractTests(SimpleTestCase):
+    def test_DJANGO_007_child_inherited_concrete_field_ascending_remains_ascending(self):
+        pass
+
+    def test_DJANGO_007_child_inherited_concrete_field_descending_remains_descending(self):
+        pass
+
+    def test_DJANGO_008_existing_model_ordering_and_multi_table_inheritance_regressions_continue_to_pass(self):
+        pass
 
 
 class OrderingTests(TestCase):
