@@ -199,6 +199,22 @@ class GetFieldDisplayTests(SimpleTestCase):
 
 class AbstractInheritedChoiceFieldDisplayContractTests(SimpleTestCase):
 
+    class AbstractParent(models.Model):
+        status = models.CharField(max_length=10, choices=[
+            ('retained', 'Parent retained'),
+            ('relabeled', 'Parent label'),
+        ])
+
+        class Meta:
+            abstract = True
+
+    class Child(AbstractParent):
+        status = models.CharField(max_length=10, choices=[
+            ('retained', 'Child retained'),
+            ('relabeled', 'Child label'),
+            ('child', 'Child only'),
+        ])
+
     # ARCHITECTURE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-004,
     # DJANGO-005, DJANGO-006]: This class is the single regression boundary
     # for the abstract-parent/overriding-child model fixture and its display
@@ -221,31 +237,33 @@ class AbstractInheritedChoiceFieldDisplayContractTests(SimpleTestCase):
 
     def test_django_001_child_only_value_uses_child_effective_field_label(self):
         """GUID: DJANGO-001"""
-        self.assertTrue(True)
+        self.assertEqual(self.Child(status='child').get_status_display(), 'Child only')
 
     def test_django_002_parent_value_with_replaced_label_uses_child_label(self):
         """GUID: DJANGO-002"""
-        self.assertTrue(True)
+        self.assertEqual(self.Child(status='relabeled').get_status_display(), 'Child label')
 
     def test_django_003_retained_parent_value_uses_child_effective_field_label(self):
         """GUID: DJANGO-003"""
-        self.assertTrue(True)
+        self.assertEqual(self.Child(status='retained').get_status_display(), 'Child retained')
 
     def test_django_004_value_absent_from_child_choices_is_returned_unchanged(self):
         """GUID: DJANGO-004"""
-        self.assertTrue(True)
+        self.assertEqual(self.Child(status='unknown').get_status_display(), 'unknown')
 
     def test_django_005_non_overridden_configured_value_keeps_existing_label(self):
         """GUID: DJANGO-005 (configured value)"""
-        self.assertTrue(True)
+        self.assertEqual(Whiz(c=1).get_c_display(), 'First')
 
     def test_django_005_non_overridden_unmatched_value_is_returned_unchanged(self):
         """GUID: DJANGO-005 (unmatched value)"""
-        self.assertTrue(True)
+        self.assertEqual(Whiz(c=9).get_c_display(), 9)
 
     def test_django_006_regression_covers_retained_child_only_and_unmatched_values(self):
         """GUID: DJANGO-006"""
-        self.assertTrue(True)
+        values = ('retained', 'child', 'unknown')
+        displays = [self.Child(status=value).get_status_display() for value in values]
+        self.assertEqual(displays, ['Child retained', 'Child only', 'unknown'])
 
 
 class GetChoicesTests(SimpleTestCase):

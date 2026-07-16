@@ -782,7 +782,7 @@ class Field(RegisterLookupMixin):
             #       consult the child's effective choices.
             #   FOR a field without an abstract-inheritance override, retain
             #   the same generated-method binding and resolution path.
-            if not hasattr(cls, 'get_%s_display' % self.name):
+            if 'get_%s_display' % self.name not in cls.__dict__:
                 setattr(
                     cls,
                     'get_%s_display' % self.name,
