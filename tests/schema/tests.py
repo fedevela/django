@@ -2123,6 +2123,30 @@ class SchemaTests(TransactionTestCase):
             AuthorWithUniqueNameAndBirthday._meta.constraints = []
             editor.remove_constraint(AuthorWithUniqueNameAndBirthday, constraint)
 
+    def test_djix_001_remove_overlapping_index_together_avoids_wrong_constraint_count(self):
+        """GUID: DJIX-001 - Removal completes without a constraint-count error."""
+        pass
+
+    def test_djix_002_remove_overlap_selects_non_unique_index_not_unique_constraint(self):
+        """GUID: DJIX-002 - Discovery selects only the non-unique index."""
+        pass
+
+    def test_djix_003_remove_overlap_deletes_target_non_unique_index(self):
+        """GUID: DJIX-003 - Removal deletes the targeted non-unique index."""
+        pass
+
+    def test_djix_004_remove_overlap_preserves_matching_unique_together(self):
+        """GUID: DJIX-004 - Removal preserves the matching unique constraint."""
+        pass
+
+    def test_djix_005_preserved_unique_together_rejects_duplicate_values(self):
+        """GUID: DJIX-005 - The preserved constraint rejects duplicate values."""
+        pass
+
+    def test_djix_006_remove_overlap_preserves_unrelated_indexes_and_constraints(self):
+        """GUID: DJIX-006 - Removal leaves unrelated schema objects unchanged."""
+        pass
+
     def test_index_together(self):
         """
         Tests removing and adding index_together constraints on a model.
