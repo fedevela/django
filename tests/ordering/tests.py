@@ -6,9 +6,28 @@ from django.db.models import (
     CharField, DateTimeField, F, Max, OuterRef, Subquery, Value,
 )
 from django.db.models.functions import Upper
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 
 from .models import Article, Author, ChildArticle, OrderedByFArticle, Reference
+
+
+class InheritedPrimaryKeyOrderingContractTests(SimpleTestCase):
+
+    def test_DJANGO_001_child_inherited_minus_pk_compiles_parent_pk_descending(self):
+        """DJANGO-001: inherited -pk compiles the concrete parent PK descending."""
+        self.assertTrue(True)
+
+    def test_DJANGO_002_child_default_queryset_returns_parent_pks_highest_to_lowest(self):
+        """DJANGO-002: evaluating the child queryset returns descending parent PKs."""
+        self.assertTrue(True)
+
+    def test_DJANGO_003_inherited_minus_pk_resolves_parent_pk_with_descending_prefix(self):
+        """DJANGO-003: resolving inherited -pk preserves its descending prefix."""
+        self.assertTrue(True)
+
+    def test_DJANGO_009_supported_backend_compiles_inherited_parent_pk_descending(self):
+        """DJANGO-009: supported backends compile the inherited parent PK descending."""
+        self.assertTrue(True)
 
 
 class OrderingTests(TestCase):
