@@ -534,6 +534,17 @@ class OrderingTests(TestCase):
             [article.pk for article in articles],
         )
 
+    def _orm_010_ordering_structure(self, ordering):
+        """
+        ORM-010 test-only integration seam for inspecting one ordering case.
+
+        The direction-specific tests own result ordering. This helper owns the
+        shared compiler-metadata and active-join view of that same queryset;
+        rendered SQL, generated aliases, and backend quoting stay outside its
+        contract.
+        """
+        pass
+
     def test_orm_010_ascending_self_fk_attname_orders_by_concrete_column_without_self_join(self):
         """
         ORM-010: Ascending record__root_id ordering returns ascending stored
