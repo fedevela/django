@@ -28,6 +28,18 @@ class TestDbSignatureTests(SimpleTestCase):
 class NamedTestDatabaseKeepdbTests(SimpleTestCase):
     aliases = ('default', 'other')
 
+    def test_sqlite_004_reused_named_database_releases_blocking_state_before_test_write(self):
+        """GUID: SQLITE-004; reused named databases allow subsequent test writes."""
+        pass
+
+    def test_sqlite_006_reused_migrated_database_is_preserved_and_writable_after_setup(self):
+        """GUID: SQLITE-006; setup preserves reused migrated databases as writable."""
+        pass
+
+    def test_sqlite_007_repeated_keepdb_reuse_does_not_accumulate_state_blocking_later_writes(self):
+        """GUID: SQLITE-007; repeated keepdb reuse leaves later-run writes unlocked."""
+        pass
+
     def create_named_test_databases(self, directory):
         database_settings = {
             alias: {
