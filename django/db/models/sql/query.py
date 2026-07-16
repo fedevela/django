@@ -1927,6 +1927,33 @@ class Query(BaseExpression):
         primary key, and the query would be equivalent, the optimization
         will be made automatically.
         """
+        # Pseudocode contract for ambiguous annotation grouping:
+        #
+        # INPUT (GEV-005, GEV-006, GEV-007): retain the query's existing
+        # cross-relation OR predicate, participating relation joins, and the
+        # Subquery correlation to the outer model primary key.
+        #
+        # BUILD the set of database column names exposed by every table that
+        # participates in the query.
+        # FOR EACH selected annotation and its requested grouping alias:
+        #     IF alias grouping is disabled OR the alias collides with an
+        #     exposed column name:
+        #         derive grouping columns from the annotation expression with
+        #         no alias; for ``status``, this selects the correlated
+        #         Subquery expression instead of ``GROUP BY "status"``
+        #         (GEV-001, GEV-002, GEV-007).
+        #     ELSE:
+        #         retain the alias-based grouping reference.
+        #     APPEND the derived grouping columns without modifying filters,
+        #     joins, correlation, annotations, or external structures.
+        # OUTPUT (GEV-003, GEV-004): select ``status`` from the unchanged
+        # correlated Subquery and calculate ``total_count = Count("status")``
+        # once for each group defined by that annotation's value.
+        # PRESERVE (GEV-005, GEV-006, GEV-008): qualifying rows, join meaning,
+        # the ``status`` annotation name, models, schema, and configuration.
+        # FAILURE PATH (GEV-001, GEV-002): resolve an alias collision through
+        # expression grouping before SQL compilation; never emit an ambiguous
+        # bare grouping alias for the colliding annotation.
         group_by = list(self.select)
         if self.annotation_select:
             for alias, annotation in self.annotation_select.items():
