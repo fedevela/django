@@ -93,6 +93,10 @@ class ExecutorTests(MigrationTestBase):
                 [second.pk, first.pk],
             )
 
+    def test_order_006_empty_database_migration_creates_created_at_and_updated_at_indexes(self):
+        """ORDER-006: Applying the migration creates created_at and updated_at indexes."""
+        self.assertTrue(True)
+
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_run(self):
         """

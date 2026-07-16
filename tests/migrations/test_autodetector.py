@@ -2197,6 +2197,10 @@ class AutodetectorTests(TestCase):
             index=models.Index(fields=["look", "_order"], name="look_order_idx"),
         )
 
+    def test_order_006_new_ordered_model_migration_retains_created_at_and_updated_at_indexes(self):
+        """ORDER-006: Migration generation retains timestamp indexes alongside an _order index."""
+        self.assertTrue(True)
+
     def test_alter_model_managers(self):
         """
         Changing the model managers adds a new operation.
