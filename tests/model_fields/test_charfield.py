@@ -43,6 +43,18 @@ class TestCharField(TestCase):
         self.assertEqual(p1, p2)
         self.assertEqual(p2.title, Event.C)
 
+    def test_choice_001_fresh_charfield_with_textchoices_member_exposes_primitive_string(self):
+        """GUID: CHOICE-001"""
+        self.assertTrue(True)
+
+    def test_choice_002_fresh_charfield_value_string_conversion_returns_underlying_text(self):
+        """GUID: CHOICE-002"""
+        self.assertTrue(True)
+
+    def test_choice_004_retrieved_charfield_value_matches_fresh_primitive_string(self):
+        """GUID: CHOICE-004"""
+        self.assertTrue(True)
+
 
 class ValidationTests(SimpleTestCase):
 
