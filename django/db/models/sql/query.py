@@ -1776,6 +1776,18 @@ class Query(BaseExpression):
         return condition, needed_inner
 
     def set_empty(self):
+        # PSEUDOCODE DJ13158-001, DJ13158-002, DJ13158-006:
+        # - Mark this query's predicate tree as empty.
+        # - If this query owns combined queries, mark every component empty so
+        #   compound SQL compilation cannot bypass the outer empty marker.
+        # - Preserve the combinator and its component queries; only the clone
+        #   produced by QuerySet.none() transitions to the empty state.
+        # - On result evaluation, let compilation raise EmptyResultSet when no
+        #   component remains; expose that as an empty iterable.
+        # - On exists() evaluation, follow the same compilation path with a
+        #   single-row limit; translate EmptyResultSet to False.
+        # - If set_empty() was not requested, leave every component unchanged
+        #   and compile the established union/intersection/difference result.
         self.where.add(NothingNode(), AND)
 
     def is_empty(self):

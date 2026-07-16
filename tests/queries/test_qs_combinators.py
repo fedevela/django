@@ -18,22 +18,33 @@ class QuerySetSetOperationTests(TestCase):
 
     def test_dj13158_001_none_on_supported_combined_queryset_evaluates_empty(self):
         """GUID: DJ13158-001"""
+        # PSEUDOCODE: build each supported combined queryset; call none();
+        # evaluate the returned clone; verify that it contains zero objects.
         pass
 
     def test_dj13158_002_exists_after_none_on_combined_queryset_returns_false(self):
         """GUID: DJ13158-002"""
+        # PSEUDOCODE: build a combined queryset; call none(); call exists() on
+        # the returned clone; verify that the result is False.
         pass
 
     def test_dj13158_006_union_without_none_retains_set_operation_result(self):
         """GUID: DJ13158-006"""
+        # PSEUDOCODE: build component queries with known matching rows; union
+        # them without calling none(); evaluate; verify established set output.
         pass
 
     def test_dj13158_009_regression_verifies_combined_queryset_none_is_empty(self):
         """GUID: DJ13158-009"""
+        # PSEUDOCODE: arrange a nonempty combined queryset; apply none();
+        # evaluate through the regression path; verify the result is empty.
         pass
 
     def test_dj13158_010_existing_queryset_combinator_tests_remain_passing(self):
         """GUID: DJ13158-010"""
+        # PSEUDOCODE: execute the existing combinator cases unchanged; if any
+        # established union/intersection/difference expectation fails, fail
+        # the regression suite; otherwise preserve the passing state.
         pass
 
     def test_simple_union(self):
