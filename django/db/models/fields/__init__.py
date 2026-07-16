@@ -764,6 +764,11 @@ class Field(RegisterLookupMixin):
             if not getattr(cls, self.attname, None):
                 setattr(cls, self.attname, self.descriptor_class(self))
         if self.choices is not None:
+            # ARCHITECTURE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-005]:
+            # Field contribution owns the generated display-method binding.
+            # The binding contract is class-local: the contributed field is
+            # the effective field dependency, while an explicitly declared
+            # model method remains outside this generated-method boundary.
             # PSEUDOCODE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-005]:
             #   INPUT the choice field currently being contributed and its
             #   destination model class.

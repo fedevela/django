@@ -944,6 +944,10 @@ class Model(metaclass=ModelBase):
     delete.alters_data = True
 
     def _get_FIELD_display(self, field):
+        # ARCHITECTURE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-004,
+        # DJANGO-005]: This lookup boundary consumes the effective Field
+        # dependency supplied by Field.contribute_to_class(); it must not own
+        # inheritance discovery or select a field from model metadata.
         # PSEUDOCODE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-004,
         # DJANGO-005]:
         #   INPUT the instance and the effective field bound by the generated

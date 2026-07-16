@@ -199,6 +199,11 @@ class GetFieldDisplayTests(SimpleTestCase):
 
 class AbstractInheritedChoiceFieldDisplayContractTests(SimpleTestCase):
 
+    # ARCHITECTURE [DJANGO-001, DJANGO-002, DJANGO-003, DJANGO-004,
+    # DJANGO-005, DJANGO-006]: This class is the single regression boundary
+    # for the abstract-parent/overriding-child model fixture and its display
+    # contracts. Keep the fixture and cases colocated here; production model
+    # modules require no adapter or test-driven dependency for this behavior.
     # PSEUDOCODE [DJANGO-006]:
     #   DEFINE an abstract parent with a choice field containing retained and
     #   relabeled candidate values.
