@@ -247,6 +247,10 @@ class Field(RegisterLookupMixin):
 
         GUID: CHOICE-007, CHOICE-008.
         """
+        # Pseudocode — GUID: CHOICE-009
+        # IF the field has no relevant choices:
+        #     RETURN no choice-check errors
+        #     DO NOT hand off to choice-length validation
         if not self.choices:
             return []
 
@@ -311,6 +315,20 @@ class Field(RegisterLookupMixin):
         failure is returned only when the greatest stored-value length is
         greater than max_length.
         """
+        # Pseudocode — GUID: CHOICE-009, CHOICE-010
+        # INPUT structurally valid flattened (stored_value, label) choices
+        # SET greatest comparable stored-value length to zero
+        # FOR EACH stored value:
+        #     IF its length is meaningfully comparable with max_length:
+        #         UPDATE the greatest comparable length
+        #     ELSE:
+        #         SKIP new length comparison for that value
+        #         PRESERVE its existing choice semantics
+        # IF max_length is absent or is not a comparable integer:
+        #     RETURN no choice-length error
+        # IF greatest comparable length exceeds max_length:
+        #     RETURN fields.E009
+        # RETURN no choice-length error
         choice_max_length = 0
         for value, _ in self.flatchoices:
             if isinstance(value, str):
