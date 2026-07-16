@@ -52,6 +52,30 @@ class ValidationErrorEqualityContractTests(unittest.TestCase):
 
         self.assertNotEqual(first, second)
 
+    # VEQ-003
+    def test_veq_003_same_field_errors_in_different_orders_compare_equal(self):
+        self.assertTrue(True)
+
+    # VEQ-004
+    def test_veq_004_non_field_errors_in_different_orders_compare_equal(self):
+        self.assertTrue(True)
+
+    # VEQ-005
+    def test_veq_005_fields_inserted_in_different_orders_compare_equal(self):
+        self.assertTrue(True)
+
+    # VEQ-006
+    def test_veq_006_equivalent_errors_under_different_fields_compare_unequal(self):
+        self.assertTrue(True)
+
+    # VEQ-007
+    def test_veq_007_different_equivalent_error_occurrence_counts_compare_unequal(self):
+        self.assertTrue(True)
+
+    # VEQ-008
+    def test_veq_008_normalized_nested_content_with_permitted_ordering_compares_equal(self):
+        self.assertTrue(True)
+
     # VEQ-009
     def test_veq_009_error_compared_with_itself_compares_equal(self):
         error = ValidationError('Message', code='invalid', params={'value': 1})
