@@ -68,15 +68,38 @@ class TestSerialization(SimpleTestCase):
 class TestValidation(SimpleTestCase):
     def test_dur_003_invalid_input_preserves_invalid_duration_validation_condition(self):
         """GUID: DUR-003"""
-        self.assertTrue(True)
+        value = 'not a duration'
+        field = models.DurationField()
+
+        with self.assertRaises(exceptions.ValidationError) as cm:
+            field.clean(value, None)
+
+        self.assertEqual(cm.exception.code, 'invalid')
+        self.assertEqual(cm.exception.params, {'value': value})
 
     def test_dur_004_14_00_parses_as_00_14_00_representing_14_minutes(self):
         """GUID: DUR-004"""
-        self.assertTrue(True)
+        field = models.DurationField()
+
+        self.assertEqual(field.clean('14:00', None), datetime.timedelta(minutes=14))
 
     def test_dur_005_previously_accepted_input_preserves_parsed_value(self):
         """GUID: DUR-005"""
-        self.assertTrue(True)
+        field = models.DurationField()
+        test_values = (
+            ('30', datetime.timedelta(seconds=30)),
+            ('15:30.1', datetime.timedelta(minutes=15, seconds=30, milliseconds=100)),
+            ('1:15:30', datetime.timedelta(hours=1, minutes=15, seconds=30)),
+            ('4 10:15:30', datetime.timedelta(days=4, hours=10, minutes=15, seconds=30)),
+            ('-15:30', datetime.timedelta(minutes=-15, seconds=-30)),
+            ('P4D', datetime.timedelta(days=4)),
+            ('PT0.000005S', datetime.timedelta(microseconds=5)),
+            ('1 day 0:00:01', datetime.timedelta(days=1, seconds=1)),
+        )
+
+        for value, expected in test_values:
+            with self.subTest(value=value):
+                self.assertEqual(field.clean(value, None), expected)
 
     def test_invalid_string(self):
         field = models.DurationField()
