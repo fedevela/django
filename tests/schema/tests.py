@@ -2221,14 +2221,32 @@ class SchemaTests(TransactionTestCase):
         GUID: DJIX-007 - Applying the equivalent declaration move executes no
         index-removal or index-creation operation.
         """
-        self.assertTrue(True)
+        # LOGIC OBLIGATION DJIX-007 (schema execution):
+        # GIVEN a table with one non-unique index over ordered_fields created
+        # from the source index_together declaration, record its constraints.
+        # WHEN the migration for the equivalent Options.indexes declaration is
+        # applied, capture schema-editor actions and executed schema SQL.
+        #   IF an action or statement removes/drops the existing index, fail.
+        #   IF an action or statement creates/adds a replacement index, fail.
+        #   OTHERWISE complete the transition without schema mutation.
+        # Index-name equality must not be required for this decision.
+        pass
 
     def test_djix_008_index_together_to_options_indexes_same_order_keeps_one_non_unique_schema_index(self):
         """
         GUID: DJIX-008 - Schema inspection retains one non-unique index over
         the same ordered fields after the equivalent declaration move.
         """
-        self.assertTrue(True)
+        # LOGIC OBLIGATION DJIX-008 (database-schema transition):
+        # GIVEN the database state produced by applying the equivalent move:
+        # WHEN constraints are introspected, select entries whose ordered
+        # columns equal ordered_fields and whose index flag is true.
+        # THEN require exactly one selected entry and require unique to be false.
+        #   IF none is selected, fail because the declaration move lost the index.
+        #   IF more than one is selected, fail because the move duplicated it.
+        #   IF the ordered columns differ or unique is true, fail because schema
+        #   semantics no longer agree with the resulting migration state.
+        pass
 
     def test_index_together(self):
         """

@@ -1444,14 +1444,38 @@ class AutodetectorTests(TestCase):
         GUID: DJIX-007 - Moving the same ordered fields from index_together to
         Options.indexes emits no index-removal or index-creation operation.
         """
-        self.assertTrue(True)
+        # LOGIC OBLIGATION DJIX-007 (migration emission):
+        # GIVEN a source ProjectState whose model declares index_together for
+        # ordered_fields, and a target ProjectState whose model replaces only
+        # that declaration with one non-unique Index over ordered_fields:
+        #   source_signature = (model, ordered_fields, unique=False)
+        #   target_signature = (model, ordered_fields, unique=False)
+        # WHEN the migration autodetector compares source and target states:
+        #   IF the signatures are equal and the target index has no additional
+        #   attributes, classify the difference as an equivalent declaration
+        #   move and consume both sides of the index difference.
+        #   ELSE leave the difference to the existing remove/add detection path.
+        # THEN collect every emitted operation for the model and fail if any
+        # operation removes the legacy index or creates the replacement index;
+        # physical index-name identity is not part of the comparison.
+        pass
 
     def test_djix_008_index_together_to_options_indexes_same_order_keeps_one_non_unique_state_index(self):
         """
         GUID: DJIX-008 - Migration state retains one non-unique index over the
         same ordered fields after the equivalent declaration move.
         """
-        self.assertTrue(True)
+        # LOGIC OBLIGATION DJIX-008 (migration-state transition):
+        # GIVEN the same source and target ProjectStates used for DJIX-007:
+        # WHEN the autodetected migration operations are applied to the source
+        # state, derive the resulting model state without touching a database.
+        # THEN normalize all non-unique index declarations on the model to their
+        # ordered field sequences and select those equal to ordered_fields.
+        #   IF the selection contains exactly one entry, require its ordered
+        #   fields to equal ordered_fields and its uniqueness to remain false.
+        #   ELSE fail because state lost the index or represents it more than
+        #   once after the declaration move.
+        pass
 
     def test_create_model_with_check_constraint(self):
         """Test creation of new model with constraints already defined."""
