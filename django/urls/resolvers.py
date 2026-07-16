@@ -153,6 +153,24 @@ class RegexPattern(CheckURLMixin):
         self.converters = {}
 
     def match(self, path):
+        # GUID: URL-001, URL-002, URL-004 (absent-value behavior)
+        # PSEUDOCODE:
+        # - Search the path with the compiled regular expression.
+        # - IF no match exists, return no resolution result.
+        # - Read the complete named-capture mapping before absent values are
+        #   removed; use the existence of named captures, not the existence of
+        #   non-absent named values, to select the argument-passing mode.
+        # - Remove entries whose captured value is absent from keyword
+        #   arguments, so an absent ``format`` is omitted and the view retains
+        #   its declared default (URL-001).
+        # - IF the expression defines any named capture, produce no positional
+        #   arguments; nested captures inside the named optional group remain
+        #   internal whether their values are absent or present (URL-004).
+        # - ELSE produce positional arguments from the expression's captures.
+        # - Return the unmatched path plus the positional and keyword argument
+        #   collections for resolver/dispatch handoff; for ``/module/`` this
+        #   invokes the compatible view with neither unexpected positional
+        #   arguments nor an absent ``format`` keyword (URL-002).
         match = self.regex.search(path)
         if match:
             # If there are any named groups, use those as kwargs, ignoring
