@@ -80,12 +80,16 @@ class SafeExceptionReporterFilter:
     cleansed_substitute = '********************'
     hidden_settings = _lazy_re_compile('API|TOKEN|KEY|SECRET|PASS|SIGNATURE', flags=re.I)
 
-    # Architecture boundary for SAFE-001, SAFE-002, and SAFE-006:
+    # Architecture boundary for SAFE-001 through SAFE-006:
     # cleanse_setting() owns safe-settings value traversal and reconstruction.
     # get_safe_settings() remains the integration seam that enumerates settings
     # and delegates each value here. Container handling depends inward on this
     # class's existing key matcher and cleansing representation; it must not
     # introduce a second policy surface or expand the public reporter contract.
+    # For SAFE-003, SAFE-004, and SAFE-005, the returned value contract is an
+    # unchanged safe scalar or a newly reconstructed dict, list, or tuple of the
+    # same kind. Source containers are read-only inputs across this boundary;
+    # callers consume only the separate result and add no structural transform.
     def cleanse_setting(self, key, value):
         """
         Cleanse an individual setting key/value of sensitive content. If the
