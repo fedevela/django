@@ -2153,11 +2153,49 @@ class AutodetectorTests(TestCase):
 
     def test_order_001_new_order_with_respect_to_model_places_alter_before_each_order_index(self):
         """ORDER-001: AlterOrderWithRespectTo precedes every _order AddIndex."""
-        pass
+        ordered_model = ModelState("testapp", "OrderedModel", [
+            ("id", models.AutoField(primary_key=True)),
+            ("look", models.IntegerField()),
+        ], options={
+            "order_with_respect_to": "look",
+            "indexes": [
+                models.Index(fields=["_order"], name="order_idx"),
+                models.Index(fields=["-_order"], name="order_desc_idx"),
+            ],
+        })
+
+        changes = self.get_changes([], [ordered_model])
+
+        self.assertOperationTypes(changes, "testapp", 0, [
+            "CreateModel", "AlterOrderWithRespectTo", "AddIndex", "AddIndex",
+        ])
+        self.assertOperationAttributes(
+            changes, "testapp", 0, 1,
+            name="orderedmodel", order_with_respect_to="look",
+        )
 
     def test_order_001_composite_look_order_index_has_no_early_order_reference(self):
         """ORDER-001: ['look', '_order'] isn't referenced before it exists."""
-        pass
+        ordered_model = ModelState("testapp", "OrderedModel", [
+            ("id", models.AutoField(primary_key=True)),
+            ("look", models.IntegerField()),
+        ], options={
+            "order_with_respect_to": "look",
+            "indexes": [
+                models.Index(fields=["look", "_order"], name="look_order_idx"),
+            ],
+        })
+
+        changes = self.get_changes([], [ordered_model])
+
+        self.assertOperationTypes(changes, "testapp", 0, [
+            "CreateModel", "AlterOrderWithRespectTo", "AddIndex",
+        ])
+        self.assertOperationAttributes(
+            changes, "testapp", 0, 2,
+            model_name="orderedmodel",
+            index=models.Index(fields=["look", "_order"], name="look_order_idx"),
+        )
 
     def test_alter_model_managers(self):
         """

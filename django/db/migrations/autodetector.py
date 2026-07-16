@@ -367,7 +367,47 @@ class MigrationAutodetector:
         # Optimize migrations
         for app_label, migrations in self.migrations.items():
             for migration in migrations:
-                migration.operations = MigrationOptimizer().optimize(migration.operations, app_label)
+                # ORDER-001: Keep field-introducing operations that are index
+                # prerequisites from being folded into CreateModel.
+                order_wrt_dependencies = {
+                    dependency
+                    for operation in migration.operations
+                    if isinstance(operation, operations.AddIndex)
+                    for dependency in operation._auto_deps
+                    if dependency[3] == "order_wrt_set"
+                }
+                optimization_boundaries = {
+                    operation
+                    for operation in migration.operations
+                    if any(
+                        self.check_dependency(operation, dependency)
+                        for dependency in order_wrt_dependencies
+                    )
+                }
+                if optimization_boundaries:
+                    optimized_operations = []
+                    optimizable_operations = []
+                    for operation in migration.operations:
+                        if operation in optimization_boundaries:
+                            optimized_operations.extend(
+                                MigrationOptimizer().optimize(
+                                    optimizable_operations, app_label,
+                                )
+                            )
+                            optimizable_operations = []
+                            optimized_operations.append(operation)
+                        else:
+                            optimizable_operations.append(operation)
+                    optimized_operations.extend(
+                        MigrationOptimizer().optimize(
+                            optimizable_operations, app_label,
+                        )
+                    )
+                    migration.operations = optimized_operations
+                else:
+                    migration.operations = MigrationOptimizer().optimize(
+                        migration.operations, app_label,
+                    )
 
     def check_dependency(self, operation, dependency):
         """
@@ -421,19 +461,13 @@ class MigrationAutodetector:
                 operation.name_lower == dependency[1].lower() and
                 (operation.order_with_respect_to or "").lower() != dependency[2].lower()
             )
-        # ORDER-001 architecture contract: ``order_wrt_set`` is a private
-        # MigrationAutodetector dependency kind. generate_created_models() is
-        # its producer and this resolver is its consumer; migration operation
-        # classes remain independent of automatic operation ordering.
-        # ORDER-001 dependency-resolution pseudocode
-        # INPUT: a dependency emitted for a newly created model's index that
-        # references the synthetic ``_order`` field.
-        # IF the candidate operation is AlterOrderWithRespectTo for the same
-        # model and it sets a non-empty order_with_respect_to value:
-        #     resolve the dependency to that operation.
-        # ELSE:
-        #     leave the dependency unresolved so sorting cannot place the
-        #     _order-dependent AddIndex before the field-introducing operation.
+        # order_with_respect_to being set for a field
+        elif dependency[2] is not None and dependency[3] == "order_wrt_set":
+            return (
+                isinstance(operation, operations.AlterOrderWithRespectTo) and
+                operation.name_lower == dependency[1].lower() and
+                (operation.order_with_respect_to or "").lower() == dependency[2].lower()
+            )
         # Field is removed and part of an index/unique_together
         elif dependency[2] is not None and dependency[3] == "foo_together_change":
             return (
@@ -632,35 +666,24 @@ class MigrationAutodetector:
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
-                # ORDER-001 integration seam: new-model AddIndex dependencies
-                # are owned here. An _order-aware dependency is represented by
-                # the autodetector's private ``order_wrt_set`` contract and is
-                # resolved only by check_dependency().
-                # ORDER-001 generation pseudocode
-                # INPUTS: this newly created model's declared index, its
-                # order_with_respect_to option, and related_dependencies.
-                # START with an independent copy of related_dependencies.
-                # IF order_with_respect_to is set AND index.fields references
-                # ``_order`` (alone or as one field of a composite index):
-                #     add a dependency on the same model's successful
-                #     AlterOrderWithRespectTo operation.
-                # ELSE:
-                #     preserve the existing dependencies unchanged.
-                # EMIT AddIndex with the resulting dependency set; sorting must
-                # place its resolved prerequisites first.
-                # FAILURE: if the field-introducing operation is absent or
-                # cannot be resolved, do not permit an early _order reference;
-                # propagate the existing unresolved-dependency failure.
-                # VERIFIES:
-                # - test_order_001_new_order_with_respect_to_model_places_alter_before_each_order_index
-                # - test_order_001_composite_look_order_index_has_no_early_order_reference
+                dependencies = related_dependencies.copy()
+                # ORDER-001: _order is created by AlterOrderWithRespectTo.
+                if order_with_respect_to and any(
+                    field.lstrip("-") == "_order" for field in index.fields
+                ):
+                    dependencies.append((
+                        app_label,
+                        model_name,
+                        order_with_respect_to,
+                        "order_wrt_set",
+                    ))
                 self.add_operation(
                     app_label,
                     operations.AddIndex(
                         model_name=model_name,
                         index=index,
                     ),
-                    dependencies=related_dependencies,
+                    dependencies=dependencies,
                 )
             for constraint in constraints:
                 self.add_operation(
