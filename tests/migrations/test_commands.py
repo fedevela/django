@@ -7,6 +7,7 @@ from unittest import mock
 
 from django.apps import apps
 from django.core.management import CommandError, call_command
+from django.core.management.base import SystemCheckError
 from django.db import (
     ConnectionHandler, DatabaseError, OperationalError, connection,
     connections, models,
@@ -911,14 +912,51 @@ class MakeMigrationsTests(MigrationTestBase):
         DJUC-002: An invalid UniqueConstraint field model-check error is
         observable and stops makemigrations before migration creation.
         """
-        self.assertTrue(True)
+        class InvalidUniqueConstraintModel(models.Model):
+            existing = models.IntegerField()
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['missing'], name='unique_missing'
+                    ),
+                ]
+
+        msg = "'constraints' refers to the nonexistent field 'missing'."
+        with self.temporary_migration_module() as migration_dir:
+            with self.assertRaisesMessage(SystemCheckError, msg) as cm:
+                call_command(
+                    'makemigrations', 'migrations',
+                    skip_checks=False, verbosity=0,
+                )
+            self.assertIn('models.E012', str(cm.exception))
+            self.assertFalse(os.path.exists(migration_dir))
 
     def test_djuc_002_valid_unique_constraint_fields_do_not_stop_migration_creation(self):
         """
         DJUC-002: Valid UniqueConstraint field references introduce no new
         reason for makemigrations to stop migration creation.
         """
-        self.assertTrue(True)
+        class ValidUniqueConstraintModel(models.Model):
+            code = models.CharField(max_length=20)
+
+            class Meta:
+                app_label = 'migrations'
+                constraints = [
+                    models.UniqueConstraint(
+                        fields=['code'], name='unique_code'
+                    ),
+                ]
+
+        with self.temporary_migration_module() as migration_dir:
+            call_command(
+                'makemigrations', 'migrations',
+                skip_checks=False, verbosity=0,
+            )
+            self.assertTrue(os.path.exists(os.path.join(
+                migration_dir, '0001_initial.py',
+            )))
 
     def test_files_content(self):
         self.assertTableNotExists("migrations_unicodemodel")
