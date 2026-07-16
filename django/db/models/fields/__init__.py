@@ -526,6 +526,14 @@ class Field(RegisterLookupMixin):
             )
         return NotImplemented
 
+    # FIELD-005, FIELD-006, FIELD-008, FIELD-011 ordering architecture:
+    # Field owns the ordering contract, with __lt__ as the comparison seam
+    # consumed by @total_ordering and field collection sorting. The creation
+    # counter remains the primary ordering component; a private, deterministic
+    # model-association key belongs at this seam only as a collision component.
+    # Keep that key derivation local to Field so ordering has no dependency on
+    # direct model-object comparison or a model-layer ordering adapter, and so
+    # an absent association can be represented inside the same private key.
     def __lt__(self, other):
         # FIELD-005, FIELD-006, FIELD-008, FIELD-011 ordering logic:
         # INPUT: self and other are candidate Field operands.
