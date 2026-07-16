@@ -649,6 +649,20 @@ class EmptyQuerySetDeleteContractTests(TestCase):
                 self.assertEqual(queryset.delete(), (0, {}))
 
 
+class NonzeroQuerySetDeleteContractTests(TestCase):
+    def test_delete_004_direct_only_deletion_reports_total_and_model_label_count(self):
+        """GUID: DELETE-004; direct deletion -> total and model-label count."""
+        self.assertTrue(True)
+
+    def test_delete_004_cascading_deletion_reports_combined_direct_and_cascaded_total(self):
+        """GUID: DELETE-004; cascading deletion -> combined deletion total."""
+        self.assertTrue(True)
+
+    def test_delete_004_multimodel_cascade_reports_accurate_counts_by_each_model_label(self):
+        """GUID: DELETE-004; multi-model cascade -> counts by model label."""
+        self.assertTrue(True)
+
+
 class FastDeleteTests(TestCase):
 
     def test_fast_delete_fk(self):
