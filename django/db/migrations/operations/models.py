@@ -572,9 +572,6 @@ class AlterIndexTogether(AlterTogetherOptionOperation):
 class AlterOrderWithRespectTo(ModelOptionOperation):
     """Represent a change with the order_with_respect_to option."""
 
-    # ORDER-003 architecture boundary: this operation owns the migration-state
-    # transition and schema-editor seam that materialize the implicit _order
-    # field. Index operations consume the resulting state but don't create it.
     option_name = 'order_with_respect_to'
 
     def __init__(self, name, order_with_respect_to):
@@ -601,19 +598,6 @@ class AlterOrderWithRespectTo(ModelOptionOperation):
         to_model = to_state.apps.get_model(app_label, self.name)
         if self.allow_migrate_model(schema_editor.connection.alias, to_model):
             from_model = from_state.apps.get_model(app_label, self.name)
-            # ORDER-003 forward-transition pseudocode
-            # INPUTS: model states immediately before and after applying
-            # order_with_respect_to.
-            # IF the target state enables relative ordering and the source
-            # state does not:
-            #     resolve the target model's synthetic _order field;
-            #     provide an initialization value when it has no default;
-            #     add that field to the existing table.
-            # ON field resolution or schema-editor failure:
-            #     propagate the error and leave this operation unapplied.
-            # OUTPUT: the table contains the implicit _order column.
-            # VERIFIES:
-            # - test_order_003_applied_order_with_respect_to_migration_creates_order_column
             # Remove a field if we need to
             if from_model._meta.order_with_respect_to and not to_model._meta.order_with_respect_to:
                 schema_editor.remove_field(from_model, from_model._meta.get_field("_order"))
@@ -753,13 +737,6 @@ class IndexOperation(Operation):
 class AddIndex(IndexOperation):
     """Add an index on a model."""
 
-    # ORDER-006 ownership boundary: one AddIndex carries one unchanged Index
-    # declaration from migration state to the schema-editor adapter. Timestamp
-    # indexes require no knowledge of _order and no coupling to sibling indexes;
-    # generation-time prerequisites remain owned by the autodetector.
-    # ORDER-004 architecture boundary: AddIndex preserves the Index contract's
-    # declared field order and delegates column resolution and DDL to the schema
-    # editor. Its _order prerequisite is supplied by autodetector scheduling.
     def __init__(self, model_name, index):
         self.model_name = model_name
         if not index.name:
@@ -777,34 +754,6 @@ class AddIndex(IndexOperation):
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
         model = to_state.apps.get_model(app_label, self.model_name)
         if self.allow_migrate_model(schema_editor.connection.alias, model):
-            # ORDER-006 migration-application pseudocode
-            # INPUT: an AddIndex retained by migration generation and the
-            # target model state after its field prerequisites are applied.
-            # RESOLVE the AddIndex declaration against the target model.
-            # IF migration is allowed for the model on this database:
-            #     hand the unchanged index to the schema editor;
-            #     for created_at and updated_at declarations, create each
-            #     corresponding database index independently.
-            # ELSE:
-            #     perform no database index creation on this database.
-            # ON field resolution or schema-editor failure:
-            #     abort the migration operation and propagate the error.
-            # OUTPUT: after successful application to an empty database, the
-            # declared created_at and updated_at indexes both exist.
-            # VERIFIES:
-            # - test_order_006_empty_database_migration_creates_created_at_and_updated_at_indexes
-            # ORDER-004 index-creation pseudocode
-            # INPUT: the declared composite index fields [look, _order] and
-            # the post-ordering model state.
-            # RESOLVE each field in declaration order to its database column:
-            #     look -> the foreign-key storage column;
-            #     _order -> the previously created implicit ordering column.
-            # CREATE one index using that same first-to-second column order.
-            # ON a missing field, missing column, or schema-editor failure:
-            #     abort this operation and propagate the database error.
-            # OUTPUT: the database index orders look before _order.
-            # VERIFIES:
-            # - test_order_004_applied_composite_index_uses_look_then_order_columns
             schema_editor.add_index(model, self.index)
 
     def database_backwards(self, app_label, schema_editor, from_state, to_state):

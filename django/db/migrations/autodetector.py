@@ -182,12 +182,12 @@ class MigrationAutodetector:
         self.generate_removed_fields()
         self.generate_added_fields()
         self.generate_altered_fields()
+        self.generate_altered_order_with_respect_to()
         self.generate_altered_unique_together()
         self.generate_altered_index_together()
         self.generate_added_indexes()
         self.generate_added_constraints()
         self.generate_altered_db_table()
-        self.generate_altered_order_with_respect_to()
 
         self._sort_migrations()
         self._build_migration_list(graph)
@@ -367,47 +367,7 @@ class MigrationAutodetector:
         # Optimize migrations
         for app_label, migrations in self.migrations.items():
             for migration in migrations:
-                # ORDER-001: Keep field-introducing operations that are index
-                # prerequisites from being folded into CreateModel.
-                order_wrt_dependencies = {
-                    dependency
-                    for operation in migration.operations
-                    if isinstance(operation, operations.AddIndex)
-                    for dependency in operation._auto_deps
-                    if dependency[3] == "order_wrt_set"
-                }
-                optimization_boundaries = {
-                    operation
-                    for operation in migration.operations
-                    if any(
-                        self.check_dependency(operation, dependency)
-                        for dependency in order_wrt_dependencies
-                    )
-                }
-                if optimization_boundaries:
-                    optimized_operations = []
-                    optimizable_operations = []
-                    for operation in migration.operations:
-                        if operation in optimization_boundaries:
-                            optimized_operations.extend(
-                                MigrationOptimizer().optimize(
-                                    optimizable_operations, app_label,
-                                )
-                            )
-                            optimizable_operations = []
-                            optimized_operations.append(operation)
-                        else:
-                            optimizable_operations.append(operation)
-                    optimized_operations.extend(
-                        MigrationOptimizer().optimize(
-                            optimizable_operations, app_label,
-                        )
-                    )
-                    migration.operations = optimized_operations
-                else:
-                    migration.operations = MigrationOptimizer().optimize(
-                        migration.operations, app_label,
-                    )
+                migration.operations = MigrationOptimizer().optimize(migration.operations, app_label)
 
     def check_dependency(self, operation, dependency):
         """
@@ -460,13 +420,6 @@ class MigrationAutodetector:
                 isinstance(operation, operations.AlterOrderWithRespectTo) and
                 operation.name_lower == dependency[1].lower() and
                 (operation.order_with_respect_to or "").lower() != dependency[2].lower()
-            )
-        # order_with_respect_to being set for a field
-        elif dependency[2] is not None and dependency[3] == "order_wrt_set":
-            return (
-                isinstance(operation, operations.AlterOrderWithRespectTo) and
-                operation.name_lower == dependency[1].lower() and
-                (operation.order_with_respect_to or "").lower() == dependency[2].lower()
             )
         # Field is removed and part of an index/unique_together
         elif dependency[2] is not None and dependency[3] == "foo_together_change":
@@ -660,76 +613,31 @@ class MigrationAutodetector:
                     dependencies=list(set(dependencies)),
                 )
             # Generate other opns
+            if order_with_respect_to:
+                self.add_operation(
+                    app_label,
+                    operations.AlterOrderWithRespectTo(
+                        name=model_name,
+                        order_with_respect_to=order_with_respect_to,
+                    ),
+                    dependencies=[
+                        (app_label, model_name, order_with_respect_to, True),
+                        (app_label, model_name, None, True),
+                    ]
+                )
             related_dependencies = [
                 (app_label, model_name, name, True)
                 for name in sorted(related_fields)
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
-                # ORDER-006 architecture contract: generate_created_models()
-                # owns each declared index as an independent AddIndex operation.
-                # Ordinary field indexes retain related_dependencies; only an
-                # index that consumes _order receives the private ordering-field
-                # dependency below. AddIndex remains unaware of scheduling.
-                # ORDER-006 migration-generation pseudocode
-                # INPUT: each declared index from the new model, including
-                # independent created_at and updated_at indexes and any index
-                # that references the synthetic _order field.
-                # FOR every declared index:
-                #     copy the ordinary model and related-field prerequisites;
-                #     IF its fields contain _order:
-                #         add the ordering-field prerequisite;
-                #     ELSE:
-                #         retain only the ordinary prerequisites without
-                #         discarding, merging, or rewriting the index;
-                #     emit one AddIndex carrying the unchanged declaration.
-                # ON an invalid declaration or unresolved prerequisite:
-                #     propagate migration-generation failure rather than
-                #     silently omitting an unrelated index.
-                # OUTPUT: generated operations retain separate AddIndex
-                # operations for created_at and updated_at alongside the
-                # _order-referencing AddIndex.
-                # VERIFIES:
-                # - test_order_006_new_ordered_model_migration_retains_created_at_and_updated_at_indexes
-                # ORDER-002 architecture contract: generate_created_models()
-                # owns the integration seam between generated AddIndex and
-                # AlterOrderWithRespectTo operations. The private dependency
-                # token points from the index consumer to the operation that
-                # provisions _order; operation classes don't own scheduling.
-                # ORDER-002 migration-application pseudocode
-                # INPUTS: a new model with order_with_respect_to and a
-                # declared index whose fields include the synthetic _order.
-                # COPY the model and related-field prerequisites for AddIndex.
-                # IF the index references _order:
-                #     require the matching AlterOrderWithRespectTo operation.
-                # SORT operations so table creation and the related field are
-                # followed by _order creation, then by index creation.
-                # APPLY the sorted operations to the empty database in order.
-                # ON any unresolved prerequisite or database error:
-                #     abort migration application and propagate the error;
-                #     never attempt AddIndex against a missing _order column.
-                # OUTPUT: a successfully applied migration with every index
-                # prerequisite present.
-                # VERIFIES:
-                # - test_order_002_generated_order_index_migration_applies_to_empty_database
-                dependencies = related_dependencies.copy()
-                # ORDER-001: _order is created by AlterOrderWithRespectTo.
-                if order_with_respect_to and any(
-                    field.lstrip("-") == "_order" for field in index.fields
-                ):
-                    dependencies.append((
-                        app_label,
-                        model_name,
-                        order_with_respect_to,
-                        "order_wrt_set",
-                    ))
                 self.add_operation(
                     app_label,
                     operations.AddIndex(
                         model_name=model_name,
                         index=index,
                     ),
-                    dependencies=dependencies,
+                    dependencies=related_dependencies,
                 )
             for constraint in constraints:
                 self.add_operation(
@@ -758,19 +666,6 @@ class MigrationAutodetector:
                     ),
                     dependencies=related_dependencies
                 )
-            if order_with_respect_to:
-                self.add_operation(
-                    app_label,
-                    operations.AlterOrderWithRespectTo(
-                        name=model_name,
-                        order_with_respect_to=order_with_respect_to,
-                    ),
-                    dependencies=[
-                        (app_label, model_name, order_with_respect_to, True),
-                        (app_label, model_name, None, True),
-                    ]
-                )
-
             # Fix relationships if the model changed from a proxy model to a
             # concrete model.
             if (app_label, model_name) in self.old_proxy_keys:
