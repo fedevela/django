@@ -1,11 +1,39 @@
 import asyncio
+import os
 from unittest import mock
 
 from django.contrib.staticfiles.handlers import ASGIStaticFilesHandler
-from django.test import SimpleTestCase
+from django.test import AsyncRequestFactory, SimpleTestCase, override_settings
+from django.utils.http import http_date
+
+from .settings import TEST_SETTINGS
 
 
+@override_settings(
+    DEBUG=False,
+    ROOT_URLCONF='staticfiles_tests.urls.default',
+    **TEST_SETTINGS,
+)
 class ASGIStaticFilesHandlerContractTests(SimpleTestCase):
+    async_request_factory = AsyncRequestFactory()
+
+    async def get_asgi_response(self, handler, path):
+        scope = self.async_request_factory._base_scope(path=path)
+        messages = []
+
+        async def receive():
+            return {'type': 'http.request'}
+
+        async def send(message):
+            messages.append(message)
+
+        result = await handler(scope, receive, send)
+        return result, messages
+
+    def assert_response_complete(self, messages):
+        self.assertEqual(messages[-1]['type'], 'http.response.body')
+        self.assertFalse(messages[-1].get('more_body', False))
+
     def test_asgi_static_001_async_response_avoids_uninitialized_middleware_chain(self):
         """GUID: ASGI-STATIC-001."""
         handler = ASGIStaticFilesHandler(None)
@@ -44,22 +72,89 @@ class ASGIStaticFilesHandlerContractTests(SimpleTestCase):
         self.assertIs(actual_response, response)
         self.assertEqual(calls, [(scope, receive, send)])
 
-    def test_asgi_static_002_recognized_existing_file_returns_complete_content_status_and_headers(self):
+    async def test_asgi_static_002_recognized_existing_file_returns_complete_content_status_and_headers(self):
         """GUID: ASGI-STATIC-002."""
-        self.assertTrue(True)
+        handler = ASGIStaticFilesHandler(None)
 
-    def test_asgi_static_003_recognized_missing_file_preserves_not_found_response(self):
+        result, messages = await self.get_asgi_response(
+            handler, '/static/testfile.txt',
+        )
+
+        self.assertIsNone(result)
+        response_start = messages[0]
+        self.assertEqual(response_start['type'], 'http.response.start')
+        self.assertEqual(response_start['status'], 200)
+        test_filename = os.path.join(TEST_SETTINGS['STATIC_ROOT'], 'testfile.txt')
+        self.assertEqual(
+            set(response_start['headers']),
+            {
+                (b'Content-Type', b'text/plain'),
+                (b'Content-Length', b'5'),
+                (b'Content-Disposition', b'inline; filename="testfile.txt"'),
+                (
+                    b'Last-Modified',
+                    http_date(os.path.getmtime(test_filename)).encode('ascii'),
+                ),
+            },
+        )
+        self.assertEqual(
+            b''.join(message.get('body', b'') for message in messages[1:]),
+            b'Test!',
+        )
+
+    async def test_asgi_static_003_recognized_missing_file_preserves_not_found_response(self):
         """GUID: ASGI-STATIC-003."""
-        self.assertTrue(True)
+        handler = ASGIStaticFilesHandler(None)
 
-    def test_asgi_static_005_existing_file_response_completes_asgi_consumption_without_contract_error(self):
+        result, messages = await self.get_asgi_response(
+            handler, '/static/missing.txt',
+        )
+
+        self.assertIsNone(result)
+        self.assertEqual(messages[0]['type'], 'http.response.start')
+        self.assertEqual(messages[0]['status'], 404)
+        self.assertEqual(
+            dict(messages[0]['headers'])[b'Content-Type'],
+            b'text/html; charset=utf-8',
+        )
+        self.assertTrue(
+            b''.join(message.get('body', b'') for message in messages[1:]),
+        )
+
+    async def test_asgi_static_005_existing_file_response_completes_asgi_consumption_without_contract_error(self):
         """GUID: ASGI-STATIC-005; existing recognized file response."""
-        self.assertTrue(True)
+        handler = ASGIStaticFilesHandler(None)
 
-    def test_asgi_static_005_missing_file_response_completes_asgi_consumption_without_contract_error(self):
+        _, messages = await self.get_asgi_response(
+            handler, '/static/testfile.txt',
+        )
+
+        self.assert_response_complete(messages)
+
+    async def test_asgi_static_005_missing_file_response_completes_asgi_consumption_without_contract_error(self):
         """GUID: ASGI-STATIC-005; recognized missing file response."""
-        self.assertTrue(True)
+        handler = ASGIStaticFilesHandler(None)
 
-    def test_asgi_static_006_request_outside_existing_static_rules_is_not_served_as_static(self):
+        _, messages = await self.get_asgi_response(
+            handler, '/static/missing.txt',
+        )
+
+        self.assert_response_complete(messages)
+
+    async def test_asgi_static_006_request_outside_existing_static_rules_is_not_served_as_static(self):
         """GUID: ASGI-STATIC-006."""
-        self.assertTrue(True)
+        response = mock.sentinel.response
+
+        async def application(scope, receive, send):
+            return response
+
+        handler = ASGIStaticFilesHandler(application)
+        scope = self.async_request_factory._base_scope(path='/media/testfile.txt')
+        receive = mock.Mock()
+        send = mock.Mock()
+
+        with mock.patch.object(handler, 'serve') as serve:
+            result = await handler(scope, receive, send)
+
+        self.assertIs(result, response)
+        serve.assert_not_called()
