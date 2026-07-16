@@ -271,6 +271,9 @@ class AlterField(FieldOperation):
         return super().reduce(operation, app_label=app_label)
 
 
+# MIGPK-002, MIGPK-004, MIGPK-005, MIGPK-006 state boundary: RenameField owns
+# project-state reconciliation for inbound relation targets. The autodetector
+# may depend on this contract but must not duplicate state-graph ownership.
 class RenameField(FieldOperation):
     """Rename a field on the model. Might affect db_column too."""
 

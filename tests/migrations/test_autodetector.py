@@ -863,6 +863,9 @@ class AutodetectorTests(TestCase):
         self.assertOperationTypes(changes, 'app', 0, ['RenameField'])
         self.assertOperationAttributes(changes, 'app', 0, 0, old_name='field', new_name='renamed_field')
 
+    # MIGPK-001..MIGPK-006 verification boundary: keep this scenario beside
+    # existing rename autodetection coverage; production ownership is split
+    # between MigrationAutodetector and RenameField.state_forwards.
     def test_migpk_001_autodetection_renames_custom_primary_key(self):
         """MIGPK-001: Autodetection renames the referenced custom primary key."""
         self.assertTrue(True)

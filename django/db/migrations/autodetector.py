@@ -180,6 +180,10 @@ class MigrationAutodetector:
         self.generate_removed_constraints()
         self.generate_removed_indexes()
         # Generate field operations
+        # MIGPK-001..MIGPK-006 architecture: rename discovery owns the
+        # new-name -> old-name map consumed by altered-field comparison. Keep
+        # these phases in this dependency order; operation application remains
+        # the responsibility of the field-operation state boundary.
         self.generate_renamed_fields()
         self.generate_removed_fields()
         self.generate_added_fields()
@@ -806,6 +810,8 @@ class MigrationAutodetector:
                 ),
             )
 
+    # MIGPK-001, MIGPK-006 ownership: this is the sole field-rename detection
+    # boundary and producer of renamed_fields for downstream comparison.
     def generate_renamed_fields(self):
         """Work out renamed fields."""
         self.renamed_fields = {}
@@ -914,6 +920,9 @@ class MigrationAutodetector:
             ],
         )
 
+    # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005 integration seam: consume
+    # rename metadata here, at relation deconstruction and operation emission;
+    # RenameField.state_forwards owns the later project-state reconciliation.
     def generate_altered_fields(self):
         """
         Make AlterField operations, or possibly RemovedField/AddField if alter
