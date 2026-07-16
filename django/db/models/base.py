@@ -1867,6 +1867,12 @@ class Model(metaclass=ModelBase):
     def _check_constraints(cls, databases):
         errors = []
 
+        # Architecture boundary (DJUC-001, DJUC-003, DJUC-004, DJUC-005,
+        # DJUC-006, DJUC-007, DJUC-010): this method owns selecting explicit
+        # UniqueConstraint field names; _check_local_fields() remains the sole
+        # owner of field locality classification and its model-check errors.
+        # Keep that integration seam outside the per-database capability loop.
+
         # Pseudocode contract: validate explicitly named UniqueConstraint fields.
         #
         # DJUC-001, DJUC-003, DJUC-004, DJUC-005, DJUC-006, DJUC-007, DJUC-010
