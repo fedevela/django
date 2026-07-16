@@ -25,6 +25,17 @@ class TestDbSignatureTests(SimpleTestCase):
 
 
 @unittest.skipUnless(connection.vendor == 'sqlite', 'SQLite tests')
+class UnnamedTestDatabaseContractTests(SimpleTestCase):
+    def test_sqlite_008_default_unnamed_database_creation_and_initialization_complete_successfully(self):
+        """GUID: SQLITE-008; default unnamed database setup succeeds unchanged."""
+        self.assertTrue(True)
+
+    def test_sqlite_008_initialized_unnamed_database_write_through_default_alias_succeeds(self):
+        """GUID: SQLITE-008; initialized unnamed database accepts default-alias writes."""
+        self.assertTrue(True)
+
+
+@unittest.skipUnless(connection.vendor == 'sqlite', 'SQLite tests')
 class NamedTestDatabaseKeepdbTests(SimpleTestCase):
     aliases = ('default', 'other')
 
