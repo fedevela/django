@@ -70,17 +70,7 @@ class Media:
 
     @property
     def _js(self):
-        # PSEUDOCODE CONTRACT — GUID: MEDIA-001, MEDIA-002, MEDIA-005
-        # INPUT: retain every original JavaScript declaration list until this
-        # property is evaluated; do not turn an intermediate pairwise result
-        # into a new ordering constraint.
-        # HANDOFF: merge all retained declaration lists in one operation.
-        # OUTPUT: return the merged paths in dependency-respecting order.
-        js = self._js_lists[0]
-        # filter(None, ...) avoids calling merge() with empty lists.
-        for obj in filter(None, self._js_lists[1:]):
-            js = self.merge(js, obj)
-        return js
+        return self._merge_lists(*self._js_lists)
 
     def render(self):
         return mark_safe('\n'.join(chain.from_iterable(getattr(self, 'render_' + name)() for name in MEDIA_TYPES)))
@@ -120,6 +110,32 @@ class Media:
             return Media(**{str(name): getattr(self, '_' + name)})
         raise KeyError('Unknown media type "%s"' % name)
 
+    @classmethod
+    def _merge_lists(cls, *lists):
+        """
+        Resolve a complete set of media declaration lists.
+
+        Architecture contract (GUID: MEDIA-001, MEDIA-002, MEDIA-005): this is
+        the integration seam between retained declarations and ordered media.
+        It owns cross-list ordering, conflict detection, and deduplication. The
+        pairwise merge() method remains the compatibility primitive until this
+        resolver receives the graph-based implementation.
+        """
+        # PSEUDOCODE: merge_all(declaration_lists) -> ordered_paths
+        # GUID: MEDIA-001 — Register every path and only its explicitly declared
+        # predecessor relationship, then resolve all relationships together in
+        # stable order. The supplied lists resolve to text-editor.js,
+        # text-editor-extras.js, color-picker.js.
+        # GUID: MEDIA-005 — Register a path once across all declaration lists
+        # and emit each registered path once.
+        # GUID: MEDIA-002 — Return an acyclic resolution without warning. Only
+        # a genuine cycle warns and uses a deterministic first-seen fallback.
+        merged = lists[0] if lists else []
+        # Preserve current behavior during the architecture phase.
+        for item_list in filter(None, lists[1:]):
+            merged = cls.merge(merged, item_list)
+        return merged
+
     @staticmethod
     def merge(list_1, list_2):
         """
@@ -131,19 +147,6 @@ class Media:
         in a certain order. In JavaScript you may not be able to reference a
         global or in CSS you might want to override a style.
         """
-        # PSEUDOCODE: merge_all(declaration_lists) -> ordered_paths
-        # GUID: MEDIA-001 — For each nonempty declaration list, register each
-        # path and only its explicitly declared predecessor relationship; then
-        # resolve all relationships together in stable order. For the supplied
-        # lists, resolve text-editor.js before text-editor-extras.js and place
-        # the independent color-picker.js afterward, yielding exactly
-        # [text-editor.js, text-editor-extras.js, color-picker.js].
-        # GUID: MEDIA-005 — Register a path once even when it occurs in more
-        # than one declaration list, and emit each registered path once.
-        # GUID: MEDIA-002 — IF the complete relationship set is acyclic, return
-        # the resolved paths without warning. ELSE, and only for a genuine
-        # contradictory cycle, emit MediaOrderConflictWarning and return a
-        # deterministic first-seen fallback containing every distinct path.
         # Start with a copy of list_1.
         combined_list = list(list_1)
         last_insert_index = len(list_1)
