@@ -74,6 +74,15 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
     ASGI application which wraps another and intercepts requests for static
     files, passing them off to Django's static file serving.
     """
+    # Architecture contract (GUID: ASGI-STATIC-001, ASGI-STATIC-004):
+    # * ASGIHandler owns the HTTP request/response lifecycle and enters this
+    #   subclass through the get_response_async() override seam.
+    # * This wrapper owns static response acquisition; its dependency points
+    #   through an async adapter to StaticFilesHandlerMixin.get_response(), not
+    #   to BaseHandler._middleware_chain, which this wrapper doesn't initialize.
+    # * This wrapper owns static/non-static scope selection. The non-static
+    #   branch depends only on the injected application and returns its result;
+    #   the wrapped application has no dependency on this static-files handler.
     def __init__(self, application):
         self.application = application
         self.base_url = urlparse(self.get_base_url())
