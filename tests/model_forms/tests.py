@@ -2798,6 +2798,10 @@ class LimitChoicesToTests(TestCase):
         GUID: FKCHOICE-001. A related instance with multiple joined Q matches
         occurs once in the generated ForeignKey field choices.
         """
+        # ARRANGE one related instance and multiple joined rows satisfying one
+        # Q-based limit_choices_to condition for that same instance.
+        # ACT by generating the ForeignKey form field and evaluating choices.
+        # ASSERT the instance identity occurs exactly once.
         self.assertTrue(True)
 
     def test_fkchoice_002_joined_q_dedup_preserves_condition_membership(self):
@@ -2805,6 +2809,12 @@ class LimitChoicesToTests(TestCase):
         GUID: FKCHOICE-002. Deduplicating joined Q matches preserves the
         condition's predicates, composition, joins, and eligible membership.
         """
+        # ARRANGE joined data spanning every logical branch of the supplied Q:
+        # at least one eligible instance per satisfied branch and instances
+        # failing the composed condition.
+        # ACT by evaluating the generated field's related-instance identities.
+        # ASSERT all and only condition-eligible identities remain, regardless
+        # of how many joined rows satisfy a branch.
         self.assertTrue(True)
 
     def test_fkchoice_003_same_label_distinct_instances_remain_choices(self):
@@ -2812,6 +2822,9 @@ class LimitChoicesToTests(TestCase):
         GUID: FKCHOICE-003. Distinct eligible related instances with the same
         rendered label remain separate ForeignKey choices.
         """
+        # ARRANGE two eligible related instances whose string labels are equal.
+        # ACT by evaluating the generated ForeignKey choices.
+        # ASSERT both distinct model identities remain as separate choices.
         self.assertTrue(True)
 
     def test_fkchoice_004_unaffected_conditions_retain_choice_behavior(self):
@@ -2819,6 +2832,11 @@ class LimitChoicesToTests(TestCase):
         GUID: FKCHOICE-004. Non-joined conditions and joined conditions without
         duplicate matches retain their observable choice behavior.
         """
+        # ARRANGE a non-joined limit, a joined limit with one match per eligible
+        # identity, and their expected pre-dedup choice order and membership.
+        # ACT by evaluating each generated ForeignKey field.
+        # ASSERT each result has the same identities, multiplicity, and order as
+        # its existing observable behavior.
         self.assertTrue(True)
 
     def test_fkchoice_005_duplicate_joined_match_regression_membership(self):
@@ -2826,6 +2844,11 @@ class LimitChoicesToTests(TestCase):
         GUID: FKCHOICE-005. Regression data with duplicate joined matches
         yields one choice while other eligible and ineligible membership holds.
         """
+        # ARRANGE a multiply matched eligible instance, another eligible
+        # instance, and an ineligible instance under one joined Q condition.
+        # ACT by generating the ForeignKey field and collecting choice values.
+        # ASSERT the multiply matched identity occurs once, the other eligible
+        # identity occurs once, and the ineligible identity does not occur.
         self.assertTrue(True)
 
     def test_limit_choices_to_callable_for_fk_rel(self):

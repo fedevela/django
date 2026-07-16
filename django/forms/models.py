@@ -97,6 +97,35 @@ def model_to_dict(instance, fields=None, exclude=None):
 
 def apply_limit_choices_to_to_formfield(formfield):
     """Apply limit_choices_to to the formfield's queryset if needed."""
+    # FKCHOICE-001 / FKCHOICE-002 / FKCHOICE-003 / FKCHOICE-004
+    # Logic obligation: filter choices by related-instance eligibility without
+    # allowing the number of joined matches to determine choice multiplicity.
+    #
+    # PROCEDURE apply_related_instance_limit(formfield):
+    #   INPUT: the form field's existing related-model queryset and its
+    #          resolved limit_choices_to condition.
+    #   IF either input capability is absent:
+    #       RETURN without changing the field.  [FKCHOICE-004]
+    #   RESOLVE a callable condition once for this form-field application.
+    #   IF the resolved condition is absent:
+    #       RETURN the existing queryset unchanged.  [FKCHOICE-004]
+    #   BUILD an eligibility query for the same related model.
+    #   APPLY the supplied condition to that query as one intact expression:
+    #       preserve every predicate, connector, negation, and required join;
+    #       do not rewrite or decompose its logical composition.  [FKCHOICE-002]
+    #   CORRELATE eligibility to each candidate by model-instance identity
+    #       (the related model's primary-key identity), never by its rendered
+    #       label.  [FKCHOICE-003]
+    #   RETAIN a candidate exactly when at least one correlated eligibility
+    #       row exists; zero matches exclude it and one-or-more matches include
+    #       it once.  Joined match count must not multiply candidates.
+    #       [FKCHOICE-001, FKCHOICE-002]
+    #   REPLACE the form field's queryset with the identity-filtered result,
+    #       preserving its prior ordering and observable choice behavior when
+    #       each candidate has at most one eligibility match.  [FKCHOICE-004]
+    #   FAILURE PATH: propagate condition-resolution and query-construction
+    #       errors through the existing form-field creation path; do not
+    #       silently broaden eligibility or fall back to label deduplication.
     if hasattr(formfield, 'queryset') and hasattr(formfield, 'get_limit_choices_to'):
         limit_choices_to = formfield.get_limit_choices_to()
         if limit_choices_to is not None:
