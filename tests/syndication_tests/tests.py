@@ -6,7 +6,7 @@ from django.contrib.syndication import views
 from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory, TestCase, override_settings
 from django.test.utils import requires_tz_support
-from django.utils import timezone
+from django.utils import feedgenerator, timezone
 from django.utils.feedgenerator import rfc2822_date, rfc3339_date
 
 from .models import Article, Entry
@@ -537,6 +537,14 @@ class SyndicationCommentsContractTests(TestCase):
     def get_feed(self, feed):
         return feed.get_feed(None, RequestFactory().get('/comments/'))
 
+    def render_direct_comments_feed(self, generator_class):
+        class DirectCommentsFeed(self.CommentsFeed):
+            feed_type = generator_class
+            item_comments = 'https://example.com/comments/?a=1&b=2'
+
+        feed = self.get_feed(DirectCommentsFeed(['first']))
+        return minidom.parseString(feed.writeString('utf-8'))
+
     def test_comments_001_item_comments_attribute_resolves_and_is_forwarded(self):
         """GUID: COMMENTS-001 - An item_comments attribute is forwarded."""
         class AttributeCommentsFeed(self.CommentsFeed):
@@ -562,7 +570,16 @@ class SyndicationCommentsContractTests(TestCase):
 
     def test_comments_002_rss2_direct_comments_render_resolved_value_in_comments_element(self):
         """GUID: COMMENTS-002 - RSS 2.0 renders direct comments."""
-        self.assertTrue(True)
+        doc = self.render_direct_comments_feed(feedgenerator.Rss201rev2Feed)
+        comments = doc.getElementsByTagName('item')[0].getElementsByTagName(
+            'comments',
+        )
+
+        self.assertEqual(len(comments), 1)
+        self.assertEqual(
+            comments[0].firstChild.wholeText,
+            'https://example.com/comments/?a=1&b=2',
+        )
 
     def test_comments_003_without_direct_comments_item_extra_comments_remain_supported(self):
         """GUID: COMMENTS-003 - Indirect comments avoid duplicate keywords."""
@@ -617,12 +634,42 @@ class SyndicationCommentsContractTests(TestCase):
 
     def test_comments_007_rss2_direct_comments_retain_comments_element_and_valid_output(self):
         """GUID: COMMENTS-007 - RSS 2.0 retains comments and valid output."""
-        self.assertTrue(True)
+        doc = self.render_direct_comments_feed(feedgenerator.Rss201rev2Feed)
+        rss = doc.documentElement
+
+        self.assertEqual(rss.tagName, 'rss')
+        self.assertEqual(rss.getAttribute('version'), '2.0')
+        self.assertEqual(
+            len(rss.getElementsByTagName('item')[0].getElementsByTagName(
+                'comments',
+            )),
+            1,
+        )
 
     def test_comments_007_rss091_direct_comments_retain_omission_and_valid_output(self):
         """GUID: COMMENTS-007 - RSS 0.91 retains omission and valid output."""
-        self.assertTrue(True)
+        doc = self.render_direct_comments_feed(feedgenerator.RssUserland091Feed)
+        rss = doc.documentElement
+
+        self.assertEqual(rss.tagName, 'rss')
+        self.assertEqual(rss.getAttribute('version'), '0.91')
+        self.assertEqual(
+            len(rss.getElementsByTagName('item')[0].getElementsByTagName(
+                'comments',
+            )),
+            0,
+        )
 
     def test_comments_007_atom_direct_comments_retain_omission_and_valid_output(self):
         """GUID: COMMENTS-007 - Atom retains omission and valid output."""
-        self.assertTrue(True)
+        doc = self.render_direct_comments_feed(feedgenerator.Atom1Feed)
+        feed = doc.documentElement
+
+        self.assertEqual(feed.tagName, 'feed')
+        self.assertEqual(feed.getAttribute('xmlns'), 'http://www.w3.org/2005/Atom')
+        self.assertEqual(
+            len(feed.getElementsByTagName('entry')[0].getElementsByTagName(
+                'comments',
+            )),
+            0,
+        )
