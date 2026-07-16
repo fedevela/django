@@ -173,6 +173,16 @@ class ValidationError(Exception):
     # Neither the successful nor failure path modifies either error or
     # any validation content reachable from it.                           # VEQ-012
 
+    # Structured equality architecture (VEQ-003, VEQ-004, VEQ-005, VEQ-006,
+    # VEQ-007, VEQ-008): __init__ remains the normalization boundary and
+    # __eq__ owns comparison of its error_dict/error_list products. Mapping
+    # keys define field ownership; each mapped list is a separate occurrence
+    # collection, with NON_FIELD_ERRORS flowing through that same contract.
+    # Any collection-matching seam is a private implementation detail colocated
+    # with ValidationError, and depends inward on normalized leaf equality. It
+    # must not depend on dict/list insertion order, presentation properties,
+    # formatted messages, hashing, or mutation, and must not become public API.
+
     # Structured ValidationError equality procedure (VEQ-003, VEQ-004,
     # VEQ-005, VEQ-006, VEQ-007, VEQ-008):
     #
