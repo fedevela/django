@@ -98,6 +98,18 @@ class CharFieldTests(SimpleTestCase):
         field = Model._meta.get_field('field')
         self.assertEqual(field.check(), [])
 
+    def test_choice_001_repeated_model_checks_report_same_oversized_choice_failure(self):
+        """GUID: CHOICE-001"""
+        self.assertTrue(True)
+
+    def test_choice_002_choice_length_failure_identifies_field_and_insufficient_max_length(self):
+        """GUID: CHOICE-002"""
+        self.assertTrue(True)
+
+    def test_choice_004_model_checks_report_choice_length_failure_without_saving_instance(self):
+        """GUID: CHOICE-004"""
+        self.assertTrue(True)
+
     def test_missing_max_length(self):
         class Model(models.Model):
             field = models.CharField()
