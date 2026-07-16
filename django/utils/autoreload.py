@@ -133,6 +133,17 @@ def iter_modules_and_files(modules, extra_files):
             sys_file_paths.append(origin)
 
     results = set()
+    # Pseudocode — module-file discovery (STAT-001, STAT-002, STAT-003,
+    # STAT-004, STAT-006):
+    # FOR EACH candidate filename, independently:
+    #     IF the candidate is empty, skip it.
+    #     Convert the candidate to a pathlib.Path.
+    #     ATTEMPT to resolve the path strictly and make it absolute.
+    #     IF resolution raises FileNotFoundError, exclude only this candidate.
+    #     IF resolution raises ValueError, suppress the error and exclude only
+    #     this candidate.  Continue processing every remaining candidate.
+    #     OTHERWISE, add the resolved pathlib.Path to the result set.
+    # RETURN the successfully resolved paths as the existing frozen collection.
     for filename in itertools.chain(sys_file_paths, extra_files):
         if not filename:
             continue

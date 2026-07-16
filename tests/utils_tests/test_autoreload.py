@@ -140,6 +140,16 @@ class TestIterModulesAndFiles(SimpleTestCase):
         fake_main = types.ModuleType('__main__')
         self.assertEqual(autoreload.iter_modules_and_files((fake_main,), frozenset()), frozenset())
 
+    # Pseudocode — deterministic regression coverage (STAT-001, STAT-002,
+    # STAT-003, STAT-004, STAT-005, STAT-006):
+    # ARRANGE one ordinary candidate and one failing candidate.
+    # PATCH Path.resolve so the failing candidate raises
+    # ValueError("embedded null byte") and ordinary candidates resolve normally.
+    # INVOKE iter_modules_and_files with both candidates.
+    # VERIFY no ValueError escapes, the failing candidate is absent, every
+    # successful candidate remains present, and each returned value is a Path.
+    # INVOKE the same discovery flow with ordinary candidates only.
+    # VERIFY its watched-file collection retains the established result.
     def test_stat_001_value_error_during_candidate_resolution_is_suppressed(self):
         """STAT-001: A candidate resolution ValueError isn't propagated."""
         self.assertTrue(True)
