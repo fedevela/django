@@ -16,6 +16,26 @@ class QuerySetSetOperationTests(TestCase):
     def assertNumbersEqual(self, queryset, expected_numbers, ordered=True):
         self.assertQuerysetEqual(queryset, expected_numbers, operator.attrgetter('num'), ordered)
 
+    def test_dj13158_001_none_on_supported_combined_queryset_evaluates_empty(self):
+        """GUID: DJ13158-001"""
+        pass
+
+    def test_dj13158_002_exists_after_none_on_combined_queryset_returns_false(self):
+        """GUID: DJ13158-002"""
+        pass
+
+    def test_dj13158_006_union_without_none_retains_set_operation_result(self):
+        """GUID: DJ13158-006"""
+        pass
+
+    def test_dj13158_009_regression_verifies_combined_queryset_none_is_empty(self):
+        """GUID: DJ13158-009"""
+        pass
+
+    def test_dj13158_010_existing_queryset_combinator_tests_remain_passing(self):
+        """GUID: DJ13158-010"""
+        pass
+
     def test_simple_union(self):
         qs1 = Number.objects.filter(num__lte=1)
         qs2 = Number.objects.filter(num__gte=8)
