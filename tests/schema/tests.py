@@ -28,6 +28,7 @@ from .fields import (
 from .models import (
     Author, AuthorCharFieldWithIndex, AuthorTextFieldWithIndex,
     AuthorWithDefaultHeight, AuthorWithEvenLongerName, AuthorWithIndexedName,
+    AuthorWithIndexAndUniqueNameAndBirthday,
     AuthorWithIndexedNameAndBirthday, AuthorWithUniqueName,
     AuthorWithUniqueNameAndBirthday, Book, BookForeignObj, BookWeak,
     BookWithLongName, BookWithO2O, BookWithoutAuthor, BookWithSlug, IntegerPK,
@@ -50,8 +51,9 @@ class SchemaTests(TransactionTestCase):
     models = [
         Author, AuthorCharFieldWithIndex, AuthorTextFieldWithIndex,
         AuthorWithDefaultHeight, AuthorWithEvenLongerName, Book, BookWeak,
-        BookWithLongName, BookWithO2O, BookWithSlug, IntegerPK, Node, Note,
-        Tag, TagIndexed, TagM2MTest, TagUniqueRename, Thing, UniqueTest,
+        AuthorWithIndexAndUniqueNameAndBirthday, BookWithLongName, BookWithO2O,
+        BookWithSlug, IntegerPK, Node, Note, Tag, TagIndexed, TagM2MTest,
+        TagUniqueRename, Thing, UniqueTest,
     ]
 
     # Utility functions
@@ -2123,29 +2125,96 @@ class SchemaTests(TransactionTestCase):
             AuthorWithUniqueNameAndBirthday._meta.constraints = []
             editor.remove_constraint(AuthorWithUniqueNameAndBirthday, constraint)
 
+    def create_index_and_unique_together_model(self):
+        with connection.schema_editor() as editor:
+            editor.create_model(AuthorWithIndexAndUniqueNameAndBirthday)
+
+    def remove_overlapping_index_together(self):
+        model = AuthorWithIndexAndUniqueNameAndBirthday
+        with connection.schema_editor() as editor:
+            editor.alter_index_together(model, model._meta.index_together, [])
+
+    def get_name_birthday_constraints(self):
+        constraints = self.get_constraints(
+            AuthorWithIndexAndUniqueNameAndBirthday._meta.db_table,
+        )
+        return {
+            name: details for name, details in constraints.items()
+            if details['columns'] == ['name', 'birthday']
+        }
+
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
     def test_djix_001_remove_overlapping_index_together_avoids_wrong_constraint_count(self):
         """GUID: DJIX-001 - Removal completes without a constraint-count error."""
-        pass
+        self.create_index_and_unique_together_model()
+        self.remove_overlapping_index_together()
 
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
     def test_djix_002_remove_overlap_selects_non_unique_index_not_unique_constraint(self):
         """GUID: DJIX-002 - Discovery selects only the non-unique index."""
-        pass
+        self.create_index_and_unique_together_model()
+        model = AuthorWithIndexAndUniqueNameAndBirthday
+        with connection.schema_editor() as editor:
+            with mock.patch.object(
+                editor, '_constraint_names', wraps=editor._constraint_names,
+            ) as constraint_names:
+                editor.alter_index_together(model, model._meta.index_together, [])
+        self.assertIs(constraint_names.call_args.kwargs['index'], True)
+        self.assertIs(constraint_names.call_args.kwargs['unique'], False)
 
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
     def test_djix_003_remove_overlap_deletes_target_non_unique_index(self):
         """GUID: DJIX-003 - Removal deletes the targeted non-unique index."""
-        pass
+        self.create_index_and_unique_together_model()
+        constraints = self.get_name_birthday_constraints()
+        self.assertEqual(
+            sum(details['index'] and not details['unique'] for details in constraints.values()),
+            1,
+        )
+        self.remove_overlapping_index_together()
+        constraints = self.get_name_birthday_constraints()
+        self.assertFalse(any(
+            details['index'] and not details['unique']
+            for details in constraints.values()
+        ))
 
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
     def test_djix_004_remove_overlap_preserves_matching_unique_together(self):
         """GUID: DJIX-004 - Removal preserves the matching unique constraint."""
-        pass
+        self.create_index_and_unique_together_model()
+        self.remove_overlapping_index_together()
+        constraints = self.get_name_birthday_constraints()
+        self.assertEqual(
+            sum(details['unique'] for details in constraints.values()),
+            1,
+        )
 
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
     def test_djix_005_preserved_unique_together_rejects_duplicate_values(self):
         """GUID: DJIX-005 - The preserved constraint rejects duplicate values."""
-        pass
+        self.create_index_and_unique_together_model()
+        self.remove_overlapping_index_together()
+        model = AuthorWithIndexAndUniqueNameAndBirthday
+        model.objects.create(name='Ada', birthday='1815-12-10', height=1)
+        with self.assertRaises(IntegrityError):
+            model.objects.create(name='Ada', birthday='1815-12-10', height=2)
 
+    @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
     def test_djix_006_remove_overlap_preserves_unrelated_indexes_and_constraints(self):
         """GUID: DJIX-006 - Removal leaves unrelated schema objects unchanged."""
-        pass
+        self.create_index_and_unique_together_model()
+        table = AuthorWithIndexAndUniqueNameAndBirthday._meta.db_table
+        constraints = self.get_constraints(table)
+        unrelated = {
+            name: constraints[name]
+            for name in ('djix_height_idx', 'djix_height_uniq')
+        }
+        self.remove_overlapping_index_together()
+        constraints = self.get_constraints(table)
+        self.assertEqual(
+            {name: constraints[name] for name in unrelated},
+            unrelated,
+        )
 
     def test_index_together(self):
         """

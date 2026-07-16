@@ -393,39 +393,16 @@ class BaseDatabaseSchemaEditor:
         news = {tuple(fields) for fields in new_index_together}
         # Deleted indexes
         for fields in olds.difference(news):
-            # DJIX-001 / DJIX-002 architecture: This caller owns the
-            # non-unique-index deletion intent. The shared composed-index
-            # resolver below owns its translation into introspection filters.
-            self._delete_composed_index(model, fields, {'index': True}, self.sql_delete_index)
+            self._delete_composed_index(
+                model, fields, {'index': True, 'unique': False},
+                self.sql_delete_index,
+            )
         # Created indexes
         for field_names in news.difference(olds):
             fields = [model._meta.get_field(field) for field in field_names]
             self.execute(self._create_index_sql(model, fields, suffix="_idx"))
 
     def _delete_composed_index(self, model, fields, constraint_kwargs, sql):
-        # DJIX-001..DJIX-006 architecture boundary:
-        # - BaseDatabaseSchemaEditor owns candidate filtering and the single
-        #   targeted deletion; backend schema editors continue to delegate here.
-        # - _constraint_names() is the introspection port. Its independent
-        #   index/unique predicates are the seam for distinguishing an
-        #   index_together index from an overlapping unique_together constraint.
-        # - The SQL template is the mutation port. Only the selected candidate
-        #   crosses it, leaving retained and unrelated schema objects outside
-        #   the mutation boundary.
-        # DJIX-001 / DJIX-002 pseudocode -- resolve an index_together removal:
-        #   INPUT the model, ordered fields, and the requested constraint kind.
-        #   IF the requested kind is a non-unique index, constrain discovery to
-        #   entries where index is true AND unique is false; a unique constraint
-        #   over the same ordered columns is not a deletion candidate.
-        #   DISCOVER candidates after excluding explicitly named Meta constraints
-        #   and indexes; REQUIRE exactly one candidate, otherwise report the
-        #   existing wrong-constraint-count failure without executing deletion.
-        # DJIX-003 / DJIX-004 pseudocode -- apply the selected transition:
-        #   DELETE only the discovered non-unique index; do not delete or recreate
-        #   the retained unique_together constraint on the same ordered columns.
-        # DJIX-005 / DJIX-006 pseudocode -- preserve schema postconditions:
-        #   HAND OFF with the retained unique constraint still enforcing duplicate
-        #   rejection, and with every non-target index and constraint unchanged.
         meta_constraint_names = {constraint.name for constraint in model._meta.constraints}
         meta_index_names = {constraint.name for constraint in model._meta.indexes}
         columns = [model._meta.get_field(field).column for field in fields]

@@ -80,6 +80,24 @@ class AuthorWithUniqueNameAndBirthday(models.Model):
         unique_together = [['name', 'birthday']]
 
 
+class AuthorWithIndexAndUniqueNameAndBirthday(models.Model):
+    name = models.CharField(max_length=255)
+    birthday = models.DateField()
+    height = models.PositiveIntegerField()
+
+    class Meta:
+        apps = new_apps
+        index_together = [['name', 'birthday']]
+        unique_together = [['name', 'birthday']]
+        indexes = [models.Index(fields=['height'], name='djix_height_idx')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['height'],
+                name='djix_height_uniq',
+            ),
+        ]
+
+
 class Book(models.Model):
     author = models.ForeignKey(Author, models.CASCADE)
     title = models.CharField(max_length=100, db_index=True)
