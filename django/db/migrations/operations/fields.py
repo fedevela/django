@@ -271,10 +271,6 @@ class AlterField(FieldOperation):
         return super().reduce(operation, app_label=app_label)
 
 
-# MIGPK-002, MIGPK-004, MIGPK-005, MIGPK-006, MIGPK-007 state boundary:
-# RenameField owns project-state reconciliation for inbound relation targets.
-# The autodetector may depend on this contract but must not duplicate state-graph
-# ownership.
 class RenameField(FieldOperation):
     """Rename a field on the model. Might affect db_column too."""
 
@@ -340,23 +336,6 @@ class RenameField(FieldOperation):
                 ]
         # Fix to_fields to refer to the new field.
         model_tuple = app_label, self.model_name_lower
-        # MIGPK-002, MIGPK-004, MIGPK-005, MIGPK-006, MIGPK-007 -- RenameField
-        # state handoff:
-        # INPUT: a state containing the renamed field's unchanged definition and any
-        # relations that target the old field name on this model.
-        # LOOP: inspect every relation in every model; restrict updates to relations
-        # whose resolved remote model is exactly the model being changed.
-        # TRANSITION: replace old_name with new_name in single-target field_name and
-        # multi-target to_fields references, without replacing either field object.
-        # OUTPUT: reload the affected model graph so an implicit foreign key resolves
-        # to the renamed primary key on the same model, with no stale old-name target.
-        # INVARIANTS: the relation retains blank, null, on_delete, and other options;
-        # the renamed field retains primary_key and all other declared attributes.
-        # TYPE INVARIANT: derive the target transition solely from model and field
-        # identity, so an equivalent supported non-CharField primary key follows the
-        # same old_name -> new_name transition as a CharField primary key.
-        # FAILURE PATH: unrelated models, unrelated target names, and absent optional
-        # target lists remain unchanged; a missing source field fails before this handoff.
         for (model_app_label, model_name), model_state in state.models.items():
             for index, (name, field) in enumerate(model_state.fields):
                 remote_field = field.remote_field

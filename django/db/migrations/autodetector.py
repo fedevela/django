@@ -180,10 +180,6 @@ class MigrationAutodetector:
         self.generate_removed_constraints()
         self.generate_removed_indexes()
         # Generate field operations
-        # MIGPK-001..MIGPK-006 architecture: rename discovery owns the
-        # new-name -> old-name map consumed by altered-field comparison. Keep
-        # these phases in this dependency order; operation application remains
-        # the responsibility of the field-operation state boundary.
         self.generate_renamed_fields()
         self.generate_removed_fields()
         self.generate_added_fields()
@@ -810,13 +806,6 @@ class MigrationAutodetector:
                 ),
             )
 
-    # MIGPK-001, MIGPK-006, MIGPK-007 ownership: this is the sole field-rename
-    # detection boundary and producer of renamed_fields for downstream comparison.
-    # MIGPK-007 architecture contract: renamed_fields is the internal handoff from
-    # rename detection to relation comparison. Its key is the destination field
-    # identity (app_label, model_name, new_name), and its value is the source field
-    # name. Field classes stay outside this contract; generate_altered_fields is its
-    # consumer, while RenameField.state_forwards exclusively owns state-graph updates.
     def generate_renamed_fields(self):
         """Work out renamed fields."""
         self.renamed_fields = {}
@@ -844,22 +833,6 @@ class MigrationAutodetector:
                             old_field_dec[0:2] == field_dec[0:2] and
                             dict(old_field_dec[2], db_column=old_db_column) == field_dec[2])):
                         if self.questioner.ask_rename(model_name, rem_field_name, field_name, field):
-                            # MIGPK-001, MIGPK-006, MIGPK-007 -- custom-primary-key
-                            # rename flow:
-                            # INPUT: equivalent old/new field definitions whose names differ;
-                            # the definitions may use any otherwise-supported field type.
-                            # DECISION: after rename confirmation, classify the transition as
-                            # a rename rather than independent removal and addition; base the
-                            # decision on definition equivalence, never on CharField identity.
-                            # TRANSITION: emit RenameField(old name -> new name), reconcile the
-                            # field-key sets, and record new name -> old name for later relation
-                            # comparison.
-                            # HANDOFF: retain the destination field definition as the source of
-                            # primary_key and all other declared attributes; operation-state
-                            # application changes its name without replacing those attributes.
-                            # FAILURE PATH: if definitions differ or confirmation is declined,
-                            # do not record a rename; leave normal add/remove/alter detection to
-                            # represent the actual transition.
                             self.add_operation(
                                 app_label,
                                 operations.RenameField(
@@ -930,9 +903,6 @@ class MigrationAutodetector:
             ],
         )
 
-    # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005, MIGPK-007 integration seam:
-    # consume rename metadata here, at relation deconstruction and operation
-    # emission; RenameField.state_forwards owns later project-state reconciliation.
     def generate_altered_fields(self):
         """
         Make AlterField operations, or possibly RemovedField/AddField if alter
@@ -944,52 +914,31 @@ class MigrationAutodetector:
             old_field_name = self.renamed_fields.get((app_label, model_name, field_name), field_name)
             old_field = self.old_apps.get_model(app_label, old_model_name)._meta.get_field(old_field_name)
             new_field = self.new_apps.get_model(app_label, model_name)._meta.get_field(field_name)
-            new_field_for_comparison = new_field.clone()
             dependencies = []
             # Implement any model renames on relations; these are handled by RenameModel
             # so we need to exclude them from the comparison
             if hasattr(new_field, "remote_field") and getattr(new_field.remote_field, "model", None):
-                # MIGPK-002, MIGPK-003, MIGPK-004, MIGPK-005, MIGPK-007 --
-                # implicit-FK flow:
-                # INPUT: old/new relation definitions plus the recorded target-field
-                # rename map produced by generate_renamed_fields().
-                # DECISION: determine whether a changed target name is the implicit
-                # primary-key consequence of that rename or an explicit relation change.
-                # COMPARISON: normalize only the values used to decide whether an
-                # AlterField is necessary; never let the removed target name become the
-                # destination field carried by an emitted operation.
-                # EMISSION: if no independent relation option changed, rely on the target
-                # RenameField handoff. If AlterField is independently required, carry the
-                # destination relation whose target is the renamed primary key and preserve
-                # blank, null, on_delete, and every other unchanged relation option.
-                # STATE TRANSITION: apply generated operations in order so the relation
-                # continues to address the same model and resolves to its renamed field.
-                # FAILURE PATH: reject any candidate operation/state representation whose
-                # to_field still names the removed primary-key field; do not serialize or
-                # hand off a partially normalized relation.
-                # TYPE INVARIANT: execute the same rename-map lookup and relation handoff
-                # for CharField and every equivalent supported custom-primary-key type.
                 rename_key = (
                     new_field.remote_field.model._meta.app_label,
                     new_field.remote_field.model._meta.model_name,
                 )
                 if rename_key in self.renamed_models:
-                    new_field_for_comparison.remote_field.model = old_field.remote_field.model
+                    new_field.remote_field.model = old_field.remote_field.model
                 # Handle ForeignKey which can only have a single to_field.
                 remote_field_name = getattr(new_field.remote_field, 'field_name', None)
-                if remote_field_name:
+                if remote_field_name and remote_field_name in new_field.to_fields:
                     to_field_rename_key = rename_key + (remote_field_name,)
                     if to_field_rename_key in self.renamed_fields:
-                        new_field_for_comparison.remote_field.field_name = old_field.remote_field.field_name
+                        new_field.remote_field.field_name = old_field.remote_field.field_name
                 # Handle ForeignObjects which can have multiple from_fields/to_fields.
                 from_fields = getattr(new_field, 'from_fields', None)
                 if from_fields:
                     from_rename_key = (app_label, model_name)
-                    new_field_for_comparison.from_fields = tuple([
+                    new_field.from_fields = tuple([
                         self.renamed_fields.get(from_rename_key + (from_field,), from_field)
                         for from_field in from_fields
                     ])
-                    new_field_for_comparison.to_fields = tuple([
+                    new_field.to_fields = tuple([
                         self.renamed_fields.get(rename_key + (to_field,), to_field)
                         for to_field in new_field.to_fields
                     ])
@@ -1000,9 +949,9 @@ class MigrationAutodetector:
                     new_field.remote_field.through._meta.model_name,
                 )
                 if rename_key in self.renamed_models:
-                    new_field_for_comparison.remote_field.through = old_field.remote_field.through
+                    new_field.remote_field.through = old_field.remote_field.through
             old_field_dec = self.deep_deconstruct(old_field)
-            new_field_dec = self.deep_deconstruct(new_field_for_comparison)
+            new_field_dec = self.deep_deconstruct(new_field)
             if old_field_dec != new_field_dec:
                 both_m2m = old_field.many_to_many and new_field.many_to_many
                 neither_m2m = not old_field.many_to_many and not new_field.many_to_many
