@@ -5,23 +5,69 @@ from django.core.exceptions import ValidationError
 from django.forms.models import ModelChoiceIterator
 from django.forms.widgets import CheckboxSelectMultiple
 from django.template import Context, Template
-from django.test import TestCase
+from django.test import TestCase, skipUnlessDBFeature
 
 from .models import Article, Author, Book, Category, Writer
 
 
+@skipUnlessDBFeature('supports_select_union')
 class UnionBackedModelMultipleChoiceFieldContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.entertainment = Category.objects.create(
+            name='Entertainment', slug='entertainment', url='entertainment',
+        )
+        cls.test = Category.objects.create(
+            name='A test', slug='test', url='test',
+        )
+        cls.third = Category.objects.create(
+            name='Third', slug='third', url='third',
+        )
+
+    def union_queryset(self):
+        return Category.objects.filter(name__startswith='E').union(
+            Category.objects.filter(url='third'),
+        )
+
     def test_DJ13158_003_optional_union_queryset_empty_submission_cleans_to_empty_selection(self):
         """DJ13158-003: An empty submission cleans to an empty selection."""
-        self.assertTrue(True)
+        field = forms.ModelMultipleChoiceField(
+            queryset=self.union_queryset(), required=False,
+        )
+
+        self.assertSequenceEqual(field.clean([]), [])
 
     def test_DJ13158_005_unchanged_union_queryset_renders_exact_component_filter_matches(self):
         """DJ13158-005: Rendering exposes exactly the component filter matches."""
-        self.assertTrue(True)
+        class CategoryForm(forms.Form):
+            categories = forms.ModelMultipleChoiceField(
+                queryset=self.union_queryset(), required=False,
+            )
+
+        rendered = str(CategoryForm()['categories'])
+
+        self.assertEqual(rendered.count('<option '), 2)
+        self.assertInHTML(
+            '<option value="%s">Entertainment</option>' % self.entertainment.pk,
+            rendered,
+            count=1,
+        )
+        self.assertInHTML(
+            '<option value="%s">Third</option>' % self.third.pk,
+            rendered,
+            count=1,
+        )
+        self.assertNotIn('value="%s"' % self.test.pk, rendered)
 
     def test_DJ13158_007_union_queryset_valid_nonempty_submission_cleans_to_selected_matches(self):
         """DJ13158-007: A valid non-empty submission cleans to selected matches."""
-        self.assertTrue(True)
+        field = forms.ModelMultipleChoiceField(
+            queryset=self.union_queryset(), required=False,
+        )
+
+        cleaned = field.clean([str(self.entertainment.pk)])
+
+        self.assertCountEqual(cleaned, [self.entertainment])
 
 
 class ModelChoiceFieldTests(TestCase):

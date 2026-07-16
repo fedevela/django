@@ -1146,23 +1146,12 @@ class ModelChoiceIteratorValue:
         return self.value == other
 
 
-# DJ13158-005 architecture boundary: ModelChoiceIterator owns the read-only
-# QuerySet-to-choice projection. It consumes the field's configured QuerySet
-# through the ORM's evaluation interface; query composition remains ORM-owned.
 class ModelChoiceIterator:
     def __init__(self, field):
         self.field = field
         self.queryset = field.queryset
 
     def __iter__(self):
-        # DJ13158-005 logic obligation (unchanged union-backed rendering):
-        # INPUT: the field's configured union queryset, with no submitted data.
-        # FLOW: retain that queryset unchanged -> evaluate its combined result ->
-        # emit one choice for each object present in the component-filter union.
-        # OUTPUT: the rendered choice objects equal the union result exactly;
-        # do not add objects outside either component or omit matching objects.
-        # FAILURE: propagate queryset evaluation or choice-conversion failures;
-        # rendering must not replace a failed union evaluation with partial choices.
         if self.field.empty_label is not None:
             yield ("", self.field.empty_label)
         queryset = self.queryset
@@ -1303,11 +1292,6 @@ class ModelChoiceField(ChoiceField):
         return str(self.prepare_value(initial_value)) != str(data_value)
 
 
-# DJ13158-003, DJ13158-007 architecture boundary: this field owns the cleaning
-# contract for empty and submitted selections. clean() is the empty-selection
-# boundary; _check_values() is the membership-resolution seam. Any support for
-# combined QuerySets belongs behind these existing private seams, preserving the
-# dependency direction from forms to the QuerySet API and adding no public API.
 class ModelMultipleChoiceField(ModelChoiceField):
     """A MultipleChoiceField whose choices are a model QuerySet."""
     widget = SelectMultiple
@@ -1335,21 +1319,6 @@ class ModelMultipleChoiceField(ModelChoiceField):
         return list(self._check_values(value))
 
     def clean(self, value):
-        # DJ13158-003 logic obligation (optional empty cleaning):
-        # INPUT: an empty submission for a non-required union-backed field.
-        # TRANSITION: SUBMITTED_EMPTY -> OPTIONAL_ACCEPTED -> CLEANED_EMPTY.
-        # OUTPUT: return an empty selection without attempting to constrain or
-        # otherwise alter the combined queryset; required emptiness still fails.
-        #
-        # DJ13158-007 logic obligation (valid non-empty cleaning):
-        # INPUT: a collection of submitted identifiers and the union queryset.
-        # FLOW: normalize identifiers -> reject a non-collection or malformed
-        # identifier -> resolve identifiers strictly within the union result ->
-        # reject every identifier absent from that allowed result -> run field
-        # validators -> return exactly the selected matching objects.
-        # TRANSITIONS: SUBMITTED_VALUES -> NORMALIZED -> UNION_MATCHED ->
-        # VALIDATED -> CLEANED_SELECTION; any rejection transitions to the
-        # corresponding validation error without returning a partial selection.
         value = self.prepare_value(value)
         if self.required and not value:
             raise ValidationError(self.error_messages['required'], code='required')
@@ -1383,16 +1352,23 @@ class ModelMultipleChoiceField(ModelChoiceField):
                 self.error_messages['invalid_list'],
                 code='invalid_list',
             )
+        queryset = self.queryset
+        if queryset.query.combinator:
+            # Combined querysets cannot be filtered. Wrap the combined query
+            # in a subquery so the submitted values can be checked against it.
+            queryset = queryset.model._base_manager.using(queryset.db).filter(
+                pk__in=queryset.values('pk'),
+            )
         for pk in value:
             try:
-                self.queryset.filter(**{key: pk})
+                queryset.filter(**{key: pk})
             except (ValueError, TypeError):
                 raise ValidationError(
                     self.error_messages['invalid_pk_value'],
                     code='invalid_pk_value',
                     params={'pk': pk},
                 )
-        qs = self.queryset.filter(**{'%s__in' % key: value})
+        qs = queryset.filter(**{'%s__in' % key: value})
         pks = {str(getattr(o, key)) for o in qs}
         for val in value:
             if str(val) not in pks:
