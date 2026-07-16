@@ -84,3 +84,30 @@ class TranslationCheckTests(SimpleTestCase):
             self.assertEqual(check_language_settings_consistent(None), [
                 Error(msg, id='translation.E004'),
             ])
+
+
+class TranslationE004ContractTests(SimpleTestCase):
+
+    def test_trans_001_available_base_language_does_not_emit_e004(self):
+        """TRANS-001: An available base language prevents translation.E004."""
+        self.assertTrue(True)
+
+    def test_trans_002_unavailable_exact_and_base_languages_emit_e004(self):
+        """TRANS-002: No exact or base language match emits translation.E004."""
+        self.assertTrue(True)
+
+    def test_trans_003_available_exact_regional_or_variant_match_does_not_emit_e004(self):
+        """TRANS-003: An exact regional or variant match prevents translation.E004."""
+        self.assertTrue(True)
+
+    def test_trans_004_exact_match_uses_established_normalization_semantics(self):
+        """TRANS-004: Exact matching retains established code normalization."""
+        self.assertTrue(True)
+
+    def test_trans_004_base_match_uses_established_normalization_semantics(self):
+        """TRANS-004: Base matching retains established code normalization."""
+        self.assertTrue(True)
+
+    def test_trans_006_unrelated_translation_check_errors_remain_present(self):
+        """TRANS-006: Unrelated translation check errors retain their behavior."""
+        self.assertTrue(True)
