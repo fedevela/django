@@ -20,6 +20,10 @@ class SessionMiddleware(MiddlewareMixin):
         self.SessionStore = engine.SessionStore
 
     def process_request(self, request):
+        # Request integration seam — GUID: SESSION-004
+        # This middleware owns attachment of the configured session backend.
+        # Site and authentication code consume only request.session; malformed
+        # persisted data remains contained behind the backend's mapping contract.
         session_key = request.COOKIES.get(settings.SESSION_COOKIE_NAME)
         request.session = self.SessionStore(session_key)
 

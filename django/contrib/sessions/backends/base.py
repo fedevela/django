@@ -156,11 +156,14 @@ class SessionBase:
 
     def _legacy_decode(self, session_data):
         # RemovedInDjango40Warning: pre-Django 3.1 format will be invalid.
-        # Compatibility boundary — GUID: SESSION-001, SESSION-002, SESSION-003
+        # Compatibility boundary — GUID: SESSION-001, SESSION-002, SESSION-003,
+        # SESSION-007
         # Input normalization, Base64 parsing, integrity checking, and payload
         # deserialization belong to this single rejection boundary. No partial
         # payload crosses it: every rejected candidate is represented by the
-        # same empty session mapping returned to decode().
+        # same empty session mapping returned to decode(). This private boundary
+        # is depended on by decode(); request-layer consumers depend only on the
+        # mapping contract exposed by decode(), never on legacy format details.
         # Diagnostic boundary — GUID: SESSION-008
         # Rejection reporting is an internal, best-effort dependency of this
         # boundary and must not participate in its result or escape to callers.
