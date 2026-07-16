@@ -204,10 +204,7 @@ class Query(BaseExpression):
         self.annotation_select_mask = None
         self._annotation_select_cache = None
 
-        # Set combination attributes. ARCHITECTURE DJ13158-001,
-        # DJ13158-002, DJ13158-006: Query owns both the compound-query children
-        # and their empty-state transition. QuerySet remains the cloning/public
-        # API boundary and SQLCompiler remains a consumer of Query state.
+        # Set combination attributes.
         self.combinator = None
         self.combinator_all = False
         self.combined_queries = ()
@@ -304,6 +301,7 @@ class Query(BaseExpression):
         obj.table_map = self.table_map.copy()
         obj.where = self.where.clone()
         obj.annotations = self.annotations.copy()
+        obj.combined_queries = tuple(query.clone() for query in self.combined_queries)
         if self.annotation_select_mask is None:
             obj.annotation_select_mask = None
         else:
@@ -1779,19 +1777,9 @@ class Query(BaseExpression):
         return condition, needed_inner
 
     def set_empty(self):
-        # PSEUDOCODE DJ13158-001, DJ13158-002, DJ13158-006:
-        # - Mark this query's predicate tree as empty.
-        # - If this query owns combined queries, mark every component empty so
-        #   compound SQL compilation cannot bypass the outer empty marker.
-        # - Preserve the combinator and its component queries; only the clone
-        #   produced by QuerySet.none() transitions to the empty state.
-        # - On result evaluation, let compilation raise EmptyResultSet when no
-        #   component remains; expose that as an empty iterable.
-        # - On exists() evaluation, follow the same compilation path with a
-        #   single-row limit; translate EmptyResultSet to False.
-        # - If set_empty() was not requested, leave every component unchanged
-        #   and compile the established union/intersection/difference result.
         self.where.add(NothingNode(), AND)
+        for query in self.combined_queries:
+            query.set_empty()
 
     def is_empty(self):
         return any(isinstance(c, NothingNode) for c in self.where.children)

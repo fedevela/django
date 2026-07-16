@@ -9,9 +9,6 @@ from .models import Number, ReservedName
 
 @skipUnlessDBFeature('supports_select_union')
 class QuerySetSetOperationTests(TestCase):
-    # ARCHITECTURE DJ13158-009, DJ13158-010: this existing backend-gated test
-    # case is the regression boundary for combined-query empty-state behavior
-    # and preservation of the established combinator contracts.
     @classmethod
     def setUpTestData(cls):
         Number.objects.bulk_create(Number(num=i, other_num=10 - i) for i in range(10))
@@ -19,36 +16,29 @@ class QuerySetSetOperationTests(TestCase):
     def assertNumbersEqual(self, queryset, expected_numbers, ordered=True):
         self.assertQuerysetEqual(queryset, expected_numbers, operator.attrgetter('num'), ordered)
 
-    def test_dj13158_001_none_on_supported_combined_queryset_evaluates_empty(self):
-        """GUID: DJ13158-001"""
-        # PSEUDOCODE: build each supported combined queryset; call none();
-        # evaluate the returned clone; verify that it contains zero objects.
-        pass
+    def test_none(self):
+        qs1 = Number.objects.filter(num__lte=1)
+        qs2 = Number.objects.filter(num__gte=8)
+        combined = [qs1.union(qs2)]
+        if connection.features.supports_select_intersection:
+            combined.append(
+                Number.objects.filter(num__lte=5).intersection(
+                    Number.objects.filter(num__gte=5),
+                )
+            )
+        if connection.features.supports_select_difference:
+            combined.append(
+                Number.objects.filter(num__lte=5).difference(
+                    Number.objects.filter(num__lte=4),
+                )
+            )
+        for queryset in combined:
+            with self.subTest(combinator=queryset.query.combinator):
+                self.assertSequenceEqual(queryset.none(), [])
+                self.assertIs(queryset.none().exists(), False)
 
-    def test_dj13158_002_exists_after_none_on_combined_queryset_returns_false(self):
-        """GUID: DJ13158-002"""
-        # PSEUDOCODE: build a combined queryset; call none(); call exists() on
-        # the returned clone; verify that the result is False.
-        pass
-
-    def test_dj13158_006_union_without_none_retains_set_operation_result(self):
-        """GUID: DJ13158-006"""
-        # PSEUDOCODE: build component queries with known matching rows; union
-        # them without calling none(); evaluate; verify established set output.
-        pass
-
-    def test_dj13158_009_regression_verifies_combined_queryset_none_is_empty(self):
-        """GUID: DJ13158-009"""
-        # PSEUDOCODE: arrange a nonempty combined queryset; apply none();
-        # evaluate through the regression path; verify the result is empty.
-        pass
-
-    def test_dj13158_010_existing_queryset_combinator_tests_remain_passing(self):
-        """GUID: DJ13158-010"""
-        # PSEUDOCODE: execute the existing combinator cases unchanged; if any
-        # established union/intersection/difference expectation fails, fail
-        # the regression suite; otherwise preserve the passing state.
-        pass
+        # Calling none() must not alter the original combined query.
+        self.assertNumbersEqual(combined[0], [0, 1, 8, 9], ordered=False)
 
     def test_simple_union(self):
         qs1 = Number.objects.filter(num__lte=1)
