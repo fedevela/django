@@ -112,6 +112,15 @@ class IntegerModel(models.Model):
     value = models.IntegerField()
 
 
+class Number(models.IntegerChoices):
+    ONE = 1
+    TWO = 2
+
+
+class IntegerChoicesModel(models.Model):
+    number = models.IntegerField(choices=Number.choices)
+
+
 class BigIntegerModel(models.Model):
     value = models.BigIntegerField()
     null_value = models.BigIntegerField(null=True, blank=True)

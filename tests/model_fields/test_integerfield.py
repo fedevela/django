@@ -6,8 +6,8 @@ from django.db import IntegrityError, connection, models
 from django.test import SimpleTestCase, TestCase
 
 from .models import (
-    BigIntegerModel, IntegerModel, PositiveIntegerModel,
-    PositiveSmallIntegerModel, SmallIntegerModel,
+    BigIntegerModel, IntegerChoicesModel, IntegerModel, Number,
+    PositiveIntegerModel, PositiveSmallIntegerModel, SmallIntegerModel,
 )
 
 
@@ -186,11 +186,19 @@ class IntegerChoicesLifecycleTests(TestCase):
 
     def test_choice_003_fresh_integerfield_initialized_with_integerchoices_member_exposes_primitive_int(self):
         """GUID: CHOICE-003"""
-        self.assertTrue(True)
+        instance = IntegerChoicesModel(number=Number.ONE)
+
+        self.assertIs(type(instance.number), int)
+        self.assertEqual(instance.number, Number.ONE.value)
 
     def test_choice_005_retrieved_integerfield_exposes_same_primitive_int_value_as_fresh_instance(self):
         """GUID: CHOICE-005"""
-        self.assertTrue(True)
+        fresh = IntegerChoicesModel.objects.create(number=Number.ONE)
+        retrieved = IntegerChoicesModel.objects.get(pk=fresh.pk)
+
+        self.assertIs(type(fresh.number), int)
+        self.assertIs(type(retrieved.number), int)
+        self.assertEqual(retrieved.number, fresh.number)
 
 
 class ValidationTests(SimpleTestCase):
