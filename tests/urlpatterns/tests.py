@@ -21,6 +21,21 @@ converter_test_data = (
 @override_settings(ROOT_URLCONF='urlpatterns.path_urls')
 class SimplifiedURLTests(SimpleTestCase):
 
+    # ARCHITECTURE (GUID: URL-006, URL-007):
+    # This class is the integration-test boundary for the reported ``module``
+    # pattern. The URL-006 absent/html/json/xml matrix belongs here beside the
+    # URL-001--URL-005 resolver contract tests and consumes only resolve()'s
+    # public args/kwargs result under ``urlpatterns.path_urls``. Dependency
+    # direction remains tests -> path_urls -> RegexPattern.match(); production
+    # URL resolution must not depend on regression-test data or helpers.
+    #
+    # URL-007 compatibility remains owned by the existing tests rather than a
+    # new wrapper suite: matching/reversing/inclusion live in this class,
+    # converter matching and reversing in ConverterTests, conversion failure
+    # contracts in ConversionExceptionTests, and parameter-name restrictions
+    # in ParameterRestrictionTests. Those loci are the compatibility seam and
+    # must remain unchanged when URL-006 is implemented.
+
     # GUID: URL-006 (focused resolution regression verification)
     # PSEUDOCODE:
     # - DEFINE resolution cases as the absent-format URL ``/module/`` plus
