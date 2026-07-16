@@ -866,29 +866,109 @@ class AutodetectorTests(TestCase):
     # MIGPK-001..MIGPK-006 verification boundary: keep this scenario beside
     # existing rename autodetection coverage; production ownership is split
     # between MigrationAutodetector and RenameField.state_forwards.
+    def get_migpk_custom_primary_key_rename(self):
+        before = [
+            ModelState('app', 'Foo', [
+                ('old_key', models.CharField(
+                    primary_key=True,
+                    max_length=32,
+                )),
+            ]),
+            ModelState('app', 'Bar', [
+                ('id', models.AutoField(primary_key=True)),
+                ('foo', models.ForeignKey(
+                    'app.Foo', models.SET_NULL, blank=True, null=True,
+                )),
+            ]),
+        ]
+        after = [
+            ModelState('app', 'Foo', [
+                ('new_key', models.CharField(
+                    primary_key=True,
+                    max_length=32,
+                )),
+            ]),
+            ModelState('app', 'Bar', [
+                ('id', models.AutoField(primary_key=True)),
+                ('foo', models.ForeignKey(
+                    'app.Foo', models.SET_NULL, blank=True, null=True,
+                    related_name='bars',
+                )),
+            ]),
+        ]
+        changes = self.get_changes(
+            before, after, MigrationQuestioner({'ask_rename': True}),
+        )
+        migration = changes['app'][0]
+        resulting_state = migration.mutate_state(self.make_project_state(before))
+        return migration, resulting_state
+
     def test_migpk_001_autodetection_renames_custom_primary_key(self):
         """MIGPK-001: Autodetection renames the referenced custom primary key."""
-        self.assertTrue(True)
+        migration, _ = self.get_migpk_custom_primary_key_rename()
+        renames = [
+            operation for operation in migration.operations
+            if operation.__class__.__name__ == 'RenameField'
+        ]
+        self.assertTrue(
+            renames,
+            [operation.__class__.__name__ for operation in migration.operations],
+        )
+        rename = renames[0]
+        self.assertEqual(rename.model_name, 'foo')
+        self.assertEqual(rename.old_name, 'old_key')
+        self.assertEqual(rename.new_name, 'new_key')
 
     def test_migpk_002_operations_and_state_omit_removed_primary_key_to_field(self):
         """MIGPK-002: Operations and state omit the removed PK to_field."""
-        self.assertTrue(True)
+        migration, resulting_state = self.get_migpk_custom_primary_key_rename()
+        for operation in migration.operations:
+            field = getattr(operation, 'field', None)
+            if field is not None:
+                self.assertNotEqual(
+                    field.deconstruct()[3].get('to_field'), 'old_key',
+                )
+        resulting_fk = resulting_state.models['app', 'bar'].get_field_by_name('foo')
+        self.assertNotEqual(
+            resulting_fk.deconstruct()[3].get('to_field'), 'old_key',
+        )
 
     def test_migpk_003_generated_alter_field_targets_renamed_primary_key(self):
         """MIGPK-003: A generated AlterField targets the renamed primary key."""
-        self.assertTrue(True)
+        migration, _ = self.get_migpk_custom_primary_key_rename()
+        alter = next(
+            operation for operation in migration.operations
+            if operation.__class__.__name__ == 'AlterField'
+        )
+        self.assertEqual(alter.name, 'foo')
+        self.assertEqual(alter.field.remote_field.field_name, 'new_key')
+        self.assertNotEqual(
+            alter.field.deconstruct()[3].get('to_field'), 'old_key',
+        )
 
     def test_migpk_004_operations_produce_state_with_foreign_key_targeting_renamed_field(self):
         """MIGPK-004: Operations produce state targeting the renamed field."""
-        self.assertTrue(True)
+        _, resulting_state = self.get_migpk_custom_primary_key_rename()
+        resulting_apps = resulting_state.apps
+        foo_model = resulting_apps.get_model('app', 'Foo')
+        resulting_fk = resulting_apps.get_model('app', 'Bar')._meta.get_field('foo')
+        self.assertIs(resulting_fk.remote_field.model, foo_model)
+        self.assertEqual(resulting_fk.target_field.name, 'new_key')
 
     def test_migpk_005_resulting_foreign_key_preserves_options(self):
         """MIGPK-005: The resulting foreign key preserves its declared options."""
-        self.assertTrue(True)
+        _, resulting_state = self.get_migpk_custom_primary_key_rename()
+        resulting_fk = resulting_state.models['app', 'bar'].get_field_by_name('foo')
+        self.assertIs(resulting_fk.blank, True)
+        self.assertIs(resulting_fk.null, True)
+        self.assertIs(resulting_fk.remote_field.on_delete, models.SET_NULL)
 
     def test_migpk_006_renamed_primary_key_preserves_declared_attributes(self):
         """MIGPK-006: The renamed primary key preserves its declared attributes."""
-        self.assertTrue(True)
+        _, resulting_state = self.get_migpk_custom_primary_key_rename()
+        resulting_pk = resulting_state.models['app', 'foo'].get_field_by_name('new_key')
+        self.assertIs(resulting_pk.primary_key, True)
+        self.assertEqual(resulting_pk.max_length, 32)
 
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')
