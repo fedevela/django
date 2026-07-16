@@ -157,6 +157,26 @@ class CharFieldTests(SimpleTestCase):
             ])
         save.assert_not_called()
 
+    def test_choice_003_model_checks_evaluate_every_stored_value_and_report_later_oversized_value(self):
+        """GUID: CHOICE-003"""
+        pass
+
+    def test_choice_003_model_checks_evaluate_named_group_stored_values_and_report_oversized_value(self):
+        """GUID: CHOICE-003"""
+        pass
+
+    def test_choice_005_model_checks_do_not_report_when_all_stored_values_are_shorter_than_max_length(self):
+        """GUID: CHOICE-005"""
+        pass
+
+    def test_choice_005_model_checks_do_not_report_when_longest_stored_value_equals_max_length(self):
+        """GUID: CHOICE-005"""
+        pass
+
+    def test_choice_006_model_checks_ignore_label_longer_than_max_length_when_stored_value_fits(self):
+        """GUID: CHOICE-006"""
+        pass
+
     def test_missing_max_length(self):
         class Model(models.Model):
             field = models.CharField()
