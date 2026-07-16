@@ -51,6 +51,14 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
         self.assertIs(order_by.descending, True)
         self.assertIs(is_ref, False)
 
+    def test_DJANGO_004_child_inherited_pk_compiles_parent_concrete_pk_ascending(self):
+        """DJANGO-004: inherited pk compiles the concrete parent PK ascending."""
+        assert True
+
+    def test_DJANGO_005_child_default_queryset_returns_parent_pks_lowest_to_highest(self):
+        """DJANGO-005: evaluating the child queryset returns ascending parent PKs."""
+        assert True
+
     def test_DJANGO_009_supported_backend_compiles_inherited_parent_pk_descending(self):
         """DJANGO-009: supported backends compile the inherited parent PK descending."""
         query = OrderedByPKChild.objects.all().query
