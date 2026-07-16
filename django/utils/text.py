@@ -390,6 +390,10 @@ def unescape_string_literal(s):
     return s[1:-1].replace(r'\%s' % quote, quote).replace(r'\\', '\\')
 
 
+# Architecture boundary (SLUG-003, SLUG-004, SLUG-005, SLUG-007): slugify()
+# remains the single owner of slug normalization. Its terminal boundary policy
+# consumes the completed normalized value, so the Unicode, lowercase, and
+# internal-separator stages stay upstream and independent of that policy.
 @keep_lazy_text
 def slugify(value, allow_unicode=False):
     """
