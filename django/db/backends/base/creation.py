@@ -136,22 +136,36 @@ class BaseDatabaseCreation:
         # commit, so an integrity failure cannot escape with a partial graph.
         # Backend-specific constraint mechanics remain behind
         # BaseDatabaseWrapper's existing API.
-        # Pseudocode contract — GUID: SRB-001, SRB-002, SRB-003, SRB-006.
-        # INPUT: valid serialized rollback data; database alias from connection.
+        # Pseudocode contract — GUID: SRB-001, SRB-002, SRB-003, SRB-004,
+        # SRB-005, SRB-006.
+        # SRB-004 -> test_srb_004_failure_after_object_processed_commits_no_restored_objects.
+        # SRB-005 -> test_srb_005_restoration_reads_and_persists_only_associated_database_alias.
+        # SRB-004 + SRB-005 -> test_srb_004_srb_005_alias_scoped_failure_commits_no_partial_or_cross_alias_state.
+        # INPUT: serialized rollback data; operation alias from this connection.
+        # GUID: SRB-005 — Bind the operation to that alias for its entire lifetime;
+        # do not select, read from, or write to any other database alias.
         # ENTER a scope in which foreign-key constraints are deferred/disabled.
-        #   BEGIN one atomic restoration scope for the complete serialized state.
+        #   GUID: SRB-004 — BEGIN one all-or-nothing persistence scope for the
+        #   complete serialized state, confined to the operation alias.
         #   FOR EACH serialized object, in the order supplied:
-        #     deserialize the object and retain every serialized foreign-key value;
-        #     save the object even when a referenced target is not yet restored;
+        #     deserialize the object using the operation alias, so every lookup
+        #     required to construct it reads exclusively through that alias;
+        #     retain every serialized foreign-key value;
+        #     save the object explicitly through the same operation alias, even
+        #     when a referenced target is not yet restored;
         #     transition that object from serialized to provisionally restored.
         #   END FOR only after forward references and circular graph members exist.
         #   CHECK integrity constraints against the complete restored graph.
-        #   IF integrity checking fails:
-        #     abort the atomic scope, roll back every provisional save, and
-        #     propagate the integrity failure; no invalid state may persist.
-        #   ELSE commit every object and represented foreign-key relationship.
+        #   IF deserialization, lookup, save, or integrity checking fails:
+        #     transition the operation to failed;
+        #     discard every provisional save made by this operation on its alias;
+        #     perform no compensating or restoration write on another alias;
+        #     propagate the failure; no object from the operation may commit.
+        #   ELSE transition the operation to complete and commit every object and
+        #   represented foreign-key relationship exclusively on its alias.
         # EXIT the deferred/disabled-constraint scope.
-        # OUTPUT: a complete, integrity-valid graph independent of serialized order.
+        # OUTPUT: either a complete, integrity-valid graph on the operation alias,
+        # independent of serialized order, or no durable restoration state.
         data = StringIO(data)
         with self.connection.constraint_checks_disabled():
             with transaction.atomic(using=self.connection.alias):
