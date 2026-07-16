@@ -2,7 +2,9 @@ from urllib.parse import urljoin
 
 from django.conf import settings
 from django.template import TemplateSyntaxError
+from django.templatetags.static import PrefixNode, StaticNode
 from django.test import SimpleTestCase, override_settings
+from django.test.utils import override_script_prefix
 
 from ..utils import setup
 
@@ -73,26 +75,105 @@ class StaticTagTests(SimpleTestCase):
 
 class ScriptNameStaticMediaContractTests(SimpleTestCase):
 
+    @override_settings(INSTALLED_APPS=[], STATIC_URL='/static/')
     def test_scripturl_001_nonempty_script_name_prefixes_relative_static_url_once_and_keeps_asset_path(self):
         """GUID: SCRIPTURL-001."""
-        self.assertTrue(True)
+        with override_script_prefix('/application/'):
+            self.assertEqual(
+                StaticNode.handle_simple('admin/base.css'),
+                '/application/static/admin/base.css',
+            )
+        with override_settings(STATIC_URL='/application/static/'):
+            with override_script_prefix('/application/'):
+                self.assertEqual(
+                    StaticNode.handle_simple('admin/base.css'),
+                    '/application/static/admin/base.css',
+                )
+        with override_settings(
+            INSTALLED_APPS=['django.contrib.staticfiles'],
+            STATIC_URL='/static/',
+        ):
+            with override_script_prefix('/application/'):
+                self.assertEqual(
+                    StaticNode.handle_simple('admin/base.css'),
+                    '/application/static/admin/base.css',
+                )
 
+    @override_settings(MEDIA_URL='/media/')
     def test_scripturl_002_nonempty_script_name_prefixes_relative_media_url_once_and_keeps_file_path(self):
         """GUID: SCRIPTURL-002."""
-        self.assertTrue(True)
+        with override_script_prefix('/application/'):
+            media_url = PrefixNode.handle_simple('MEDIA_URL')
+            self.assertEqual(
+                urljoin(media_url, 'avatars/profile.jpg'),
+                '/application/media/avatars/profile.jpg',
+            )
 
+    @override_settings(INSTALLED_APPS=[], MEDIA_URL='/media/', STATIC_URL='/static/')
     def test_scripturl_008_separate_requests_generate_static_and_media_urls_with_only_their_own_script_name(self):
         """GUID: SCRIPTURL-008."""
-        self.assertTrue(True)
+        for script_name in ('/first/', '/second/'):
+            with self.subTest(script_name=script_name):
+                with override_script_prefix(script_name):
+                    self.assertEqual(
+                        StaticNode.handle_simple('app.css'),
+                        '%sstatic/app.css' % script_name,
+                    )
+                    self.assertEqual(
+                        PrefixNode.handle_simple('MEDIA_URL'),
+                        '%smedia/' % script_name,
+                    )
 
+    @override_settings(INSTALLED_APPS=[], MEDIA_URL='/media/', STATIC_URL='/static/')
     def test_scripturl_009_absent_or_empty_script_name_leaves_static_and_media_url_outputs_unchanged(self):
         """GUID: SCRIPTURL-009."""
-        self.assertTrue(True)
+        for script_name in ('', '/'):
+            with self.subTest(script_name=script_name):
+                with override_script_prefix(script_name):
+                    self.assertEqual(
+                        StaticNode.handle_simple('app.css'),
+                        '/static/app.css',
+                    )
+                    self.assertEqual(
+                        PrefixNode.handle_simple('MEDIA_URL'),
+                        '/media/',
+                    )
 
+    @override_settings(
+        INSTALLED_APPS=[], MEDIA_URL='/uploads/images/',
+        STATIC_URL='/assets/versioned/',
+    )
     def test_scripturl_010_prefixing_preserves_static_and_media_bases_with_requested_paths_beneath_them(self):
         """GUID: SCRIPTURL-010."""
-        self.assertTrue(True)
+        with override_script_prefix('/tenant/'):
+            self.assertEqual(
+                StaticNode.handle_simple('css/project/site.css'),
+                '/tenant/assets/versioned/css/project/site.css',
+            )
+            self.assertEqual(
+                urljoin(PrefixNode.handle_simple('MEDIA_URL'),
+                        'users/42/avatar.png'),
+                '/tenant/uploads/images/users/42/avatar.png',
+            )
 
+    @override_settings(INSTALLED_APPS=[])
     def test_scripturl_011_nonempty_script_name_does_not_prefix_absolute_or_external_static_and_media_urls(self):
         """GUID: SCRIPTURL-011."""
-        self.assertTrue(True)
+        cases = (
+            ('https://static.example.com/assets/',
+             'https://media.example.com/uploads/'),
+            ('//static.example.com/assets/', '//media.example.com/uploads/'),
+        )
+        with override_script_prefix('/application/'):
+            for static_url, media_url in cases:
+                with self.subTest(static_url=static_url, media_url=media_url):
+                    with override_settings(STATIC_URL=static_url,
+                                           MEDIA_URL=media_url):
+                        self.assertEqual(
+                            StaticNode.handle_simple('app.css'),
+                            urljoin(static_url, 'app.css'),
+                        )
+                        self.assertEqual(
+                            PrefixNode.handle_simple('MEDIA_URL'),
+                            media_url,
+                        )

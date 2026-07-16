@@ -1,11 +1,31 @@
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
 from django import template
 from django.apps import apps
+from django.urls import get_script_prefix
 from django.utils.encoding import iri_to_uri
 from django.utils.html import conditional_escape
 
 register = template.Library()
+
+
+def _url_with_script_prefix(url):
+    """Add the current script prefix to an application-relative URL."""
+    parsed = urlsplit(url)
+    if parsed.scheme or parsed.netloc:
+        return url
+
+    script_prefix = get_script_prefix()
+    if not script_prefix or script_prefix == '/':
+        return url
+
+    script_path = script_prefix.rstrip('/')
+    if parsed.path == script_path or parsed.path.startswith(script_path + '/'):
+        return url
+
+    path = '%s/%s' % (script_path, parsed.path.lstrip('/'))
+    return urlunsplit((parsed.scheme, parsed.netloc, path,
+                       parsed.query, parsed.fragment))
 
 
 class PrefixNode(template.Node):
@@ -38,37 +58,13 @@ class PrefixNode(template.Node):
 
     @classmethod
     def handle_simple(cls, name):
-        # Request-scoped base resolution pseudocode
-        # (GUID: SCRIPTURL-002, SCRIPTURL-008, SCRIPTURL-009, SCRIPTURL-010,
-        # GUID: SCRIPTURL-011):
-        #
-        # PROCEDURE resolve_asset_base(setting_name):
-        #     configured_base <- read setting_name using the existing empty
-        #                        fallback and encode it as an IRI-safe URL
-        #     IF configured_base has a scheme or network location:
-        #         RETURN configured_base unchanged
-        #     active_prefix <- read the current request's script prefix now;
-        #                      do not cache it or write it back to settings
-        #     IF active_prefix is absent, empty, or the root prefix:
-        #         RETURN configured_base unchanged
-        #     IF configured_base already starts with active_prefix on a path
-        #        segment boundary:
-        #         RETURN configured_base unchanged
-        #     resolved_base <- active_prefix joined before configured_base,
-        #                      preserving its path, query, and fragment
-        #     HAND OFF resolved_base to static or media path composition;
-        #              append the requested path beneath the complete base
-        #              without altering either component
-        #     RETURN resolved_base
-        #     ON malformed input or failed URL conversion:
-        #         propagate the existing error; retain no request state
         try:
             from django.conf import settings
         except ImportError:
             prefix = ''
         else:
             prefix = iri_to_uri(getattr(settings, name, ''))
-        return prefix
+        return _url_with_script_prefix(prefix)
 
     def render(self, context):
         prefix = self.handle_simple(self.name)
@@ -137,26 +133,12 @@ class StaticNode(template.Node):
 
     @classmethod
     def handle_simple(cls, path):
-        # Static asset composition pseudocode
-        # (GUID: SCRIPTURL-001):
-        #
-        # PROCEDURE build_static_asset_url(requested_path):
-        #     candidate_base <- resolve STATIC_URL through the request-scoped
-        #                       base procedure above, including when the active
-        #                       storage supplies the configured static base
-        #     subordinate_path <- quote requested_path for URL use without
-        #                         discarding candidate_base
-        #     output <- join subordinate_path beneath candidate_base
-        #     ASSERT output contains any usable active prefix exactly once,
-        #            followed by the complete configured base and asset path
-        #     RETURN output
-        #     ON storage or quoting failure:
-        #         propagate the existing error without returning a partial URL
         if apps.is_installed('django.contrib.staticfiles'):
             from django.contrib.staticfiles.storage import staticfiles_storage
-            return staticfiles_storage.url(path)
+            url = staticfiles_storage.url(path)
         else:
-            return urljoin(PrefixNode.handle_simple("STATIC_URL"), quote(path))
+            url = urljoin(PrefixNode.handle_simple("STATIC_URL"), quote(path))
+        return _url_with_script_prefix(url)
 
     @classmethod
     def handle_token(cls, parser, token):
