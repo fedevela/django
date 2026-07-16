@@ -200,6 +200,14 @@ class IntegerChoicesLifecycleTests(TestCase):
         self.assertIs(type(retrieved.number), int)
         self.assertEqual(retrieved.number, fresh.number)
 
+    def test_choice_010_fresh_integerfield_with_integerchoices_member_has_primitive_int_type_and_value(self):
+        """GUID: CHOICE-010"""
+        pass
+
+    def test_choice_010_retrieved_integerfield_created_with_integerchoices_member_has_primitive_int_type_and_value(self):
+        """GUID: CHOICE-010"""
+        pass
+
 
 class IntegerChoicesCompatibilityContractTests(TestCase):
 

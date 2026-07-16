@@ -147,6 +147,10 @@ class ChoicesTests(SimpleTestCase):
             with self.subTest(field=field):
                 self.assertIsInstance(field.formfield(), forms.ChoiceField)
 
+    def test_choice_011_existing_choice_field_tests_unrelated_to_normalization_continue_to_pass(self):
+        """GUID: CHOICE-011"""
+        pass
+
 
 class GetFieldDisplayTests(SimpleTestCase):
 

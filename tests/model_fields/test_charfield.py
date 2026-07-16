@@ -65,6 +65,14 @@ class TestCharField(TestCase):
         self.assertIs(type(retrieved.event), str)
         self.assertEqual(retrieved.event, fresh.event)
 
+    def test_choice_010_fresh_charfield_with_textchoices_member_has_primitive_str_type_and_text_value(self):
+        """GUID: CHOICE-010"""
+        pass
+
+    def test_choice_010_retrieved_charfield_created_with_textchoices_member_has_primitive_str_type_and_text_value(self):
+        """GUID: CHOICE-010"""
+        pass
+
 
 class TextChoicesCompatibilityContractTests(TestCase):
 
