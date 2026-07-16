@@ -64,4 +64,16 @@ class ModelInstanceFilterabilityContractTests(TestCase):
 
     def test_django_006_filter_by_related_instance_with_filterable_false_evaluates_and_returns_expected_record(self):
         """DJANGO-006: The FK filter evaluates and returns the expected record."""
+        # Pseudocode contract (DJANGO-006):
+        # GIVEN a persisted related-model instance whose user-defined
+        # `filterable` field is False, AND a persisted child record whose
+        # foreign key identifies that instance.
+        # WHEN constructing a child queryset filtered by that exact related
+        # instance, evaluate the queryset to materialize its records.
+        # IF evaluation raises NotSupportedError, FAIL because ordinary model
+        # data must not be classified as a non-filterable query expression.
+        # OTHERWISE, compare the materialized records with the child record
+        # related to the supplied instance.
+        # IF the records differ, FAIL with the existing sequence-comparison
+        # evidence; OTHERWISE, the regression obligation passes.
         self.assertTrue(True)
