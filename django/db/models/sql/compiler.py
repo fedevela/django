@@ -724,6 +724,23 @@ class SQLCompiler:
         pieces = name.split(LOOKUP_SEP)
         field, targets, alias, joins, path, opts, transform_function = self._setup_joins(pieces, opts, alias)
 
+        # ORM-001, ORM-002, ORM-003, ORM-004 pseudocode:
+        # INPUT: the normalized ordering path, its explicit direction, the
+        # resolved field and targets, and the joins accumulated for the path.
+        # IF the terminal path component names the resolved relation's attname:
+        #     treat it as the concrete stored-column target (ORM-001);
+        #     preserve ``descending`` when constructing its OrderBy expression,
+        #     yielding ascending for ASC and descending for DESC (ORM-002/003);
+        #     trim joins not required to reach that stored column, including a
+        #     self-related join introduced solely by ordering (ORM-004);
+        #     RETURN the concrete target ordering without consulting the
+        #     related model's default ordering.
+        # ELSE IF the resolved field is a relation with default ordering:
+        #     expand that ordering recursively in the requested direction;
+        #     IF its join signature was already visited, RAISE FieldError to
+        #     terminate the recursive ordering cycle.
+        # ELSE: trim unnecessary joins and RETURN the resolved target ordering.
+
         # If we get to this point and the field is a relation to another model,
         # append the default ordering for that model unless it is the pk
         # shortcut or the attribute name of the field that is specified.
