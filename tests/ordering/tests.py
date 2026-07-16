@@ -411,54 +411,128 @@ class OrderingTests(TestCase):
         ORM-005: Ascending record__root_id ordering produces the same
         observable result order as ascending record__root__id ordering.
         """
-        self.assertTrue(True)
+        self._create_references_with_shuffled_authors()
+
+        attname_order = Reference.objects.order_by(
+            'article__author_id',
+        ).values_list('pk', flat=True)
+        explicit_pk_order = Reference.objects.order_by(
+            'article__author__id',
+        ).values_list('pk', flat=True)
+        self.assertSequenceEqual(attname_order, explicit_pk_order)
 
     def test_orm_005_record_root_id_matches_explicit_pk_order_descending(self):
         """
         ORM-005: Descending record__root_id ordering produces the same
         observable result order as descending record__root__id ordering.
         """
-        self.assertTrue(True)
+        self._create_references_with_shuffled_authors()
+
+        attname_order = Reference.objects.order_by(
+            '-article__author_id',
+        ).values_list('pk', flat=True)
+        explicit_pk_order = Reference.objects.order_by(
+            '-article__author__id',
+        ).values_list('pk', flat=True)
+        self.assertSequenceEqual(attname_order, explicit_pk_order)
 
     def test_orm_006_record_oneval_filter_and_membership_survive_ascending_order(self):
         """
         ORM-006: Applying ascending record__root_id ordering preserves the
         record__oneval filter condition and selected result set.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+        queryset = Reference.objects.filter(
+            article__headline__in=('Article 1', 'Article 3'),
+        ).order_by('article__author_id')
+
+        self.assertSequenceEqual(
+            queryset.values_list('article', flat=True),
+            [articles[2].pk, articles[0].pk],
+        )
+        self.assertSequenceEqual(
+            queryset.values_list('article__headline', flat=True),
+            ['Article 3', 'Article 1'],
+        )
 
     def test_orm_006_record_oneval_filter_and_membership_survive_descending_order(self):
         """
         ORM-006: Applying descending record__root_id ordering preserves the
         record__oneval filter condition and selected result set.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+        queryset = Reference.objects.filter(
+            article__headline__in=('Article 1', 'Article 3'),
+        ).order_by('-article__author_id')
+
+        self.assertSequenceEqual(
+            queryset.values_list('article', flat=True),
+            [articles[0].pk, articles[2].pk],
+        )
+        self.assertSequenceEqual(
+            queryset.values_list('article__headline', flat=True),
+            ['Article 1', 'Article 3'],
+        )
 
     def test_orm_007_explicit_root_pk_order_remains_valid_ascending(self):
         """
         ORM-007: Existing ascending record__root__id ordering remains valid.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+
+        self.assertSequenceEqual(
+            Reference.objects.order_by(
+                'article__author__id',
+            ).values_list('article', flat=True),
+            [article.pk for article in reversed(articles)],
+        )
 
     def test_orm_007_explicit_root_pk_order_remains_valid_descending(self):
         """
         ORM-007: Existing descending record__root__id ordering remains valid.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+
+        self.assertSequenceEqual(
+            Reference.objects.order_by(
+                '-article__author__id',
+            ).values_list('article', flat=True),
+            [article.pk for article in articles],
+        )
 
     def test_orm_008_record_root_retains_relation_ordering_semantics(self):
         """
         ORM-008: Ordering by record__root retains relation-ordering semantics
         and may expand OneModel.Meta.ordering.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+
+        self.assertSequenceEqual(
+            Reference.objects.order_by(
+                'article__author',
+            ).values_list('article', flat=True),
+            [article.pk for article in articles],
+        )
 
     def test_orm_009_ordinary_non_self_fk_ordering_remains_unchanged(self):
         """
         ORM-009: Existing valid ordering through an ordinary
         non-self-referencing foreign key remains unchanged.
         """
-        self.assertTrue(True)
+        articles = self._create_references_with_shuffled_authors()
+
+        self.assertSequenceEqual(
+            Article.objects.order_by(
+                'author_id',
+            ).values_list('pk', flat=True),
+            [article.pk for article in reversed(articles)],
+        )
+        self.assertSequenceEqual(
+            Article.objects.order_by(
+                '-author_id',
+            ).values_list('pk', flat=True),
+            [article.pk for article in articles],
+        )
 
     def test_order_by_f_expression(self):
         self.assertQuerysetEqual(
