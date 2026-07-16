@@ -220,19 +220,34 @@ class TestUtilsText(SimpleTestCase):
         self.assertEqual(text.slugify('___This is a test ---'), 'this-is-a-test')
 
     def test_SLUG_003_slugify_strips_boundaries_and_preserves_internal_dashes_and_underscores(self):
-        pass
+        self.assertEqual(
+            text.slugify('_slug-with_internal-separators-'),
+            'slug-with_internal-separators',
+        )
 
     def test_SLUG_004_slugify_strips_boundaries_and_preserves_lowercase_words(self):
-        pass
+        self.assertEqual(text.slugify('__UPPERCASE WORDS--'), 'uppercase-words')
 
     def test_SLUG_005_slugify_strips_boundaries_and_preserves_whitespace_separator_hyphens(self):
-        pass
+        self.assertEqual(
+            text.slugify('-words separated by whitespace_'),
+            'words-separated-by-whitespace',
+        )
 
     def test_SLUG_006_slugify_strips_boundaries_exposed_by_character_filtering(self):
         self.assertEqual(text.slugify('&_-slug-_#'), 'slug')
 
     def test_SLUG_007_slugify_strips_unicode_slug_boundaries_and_preserves_normalized_content(self):
-        pass
+        values = (
+            ('_ıçüş-', 'cus', False),
+            ('_ıçüş-', 'ıçüş', True),
+        )
+        for value, expected, allow_unicode in values:
+            with self.subTest(allow_unicode=allow_unicode):
+                self.assertEqual(
+                    text.slugify(value, allow_unicode=allow_unicode),
+                    expected,
+                )
 
     def test_SLUG_008_slugify_boundary_only_dashes_and_underscores_returns_empty(self):
         self.assertEqual(text.slugify('_-_-'), '')
