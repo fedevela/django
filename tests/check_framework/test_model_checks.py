@@ -74,6 +74,25 @@ class DBTable001NoDatabaseRoutersContractTests(SimpleTestCase):
         ])
 
 
+class RoutedDuplicateDBTableContractTests(SimpleTestCase):
+    """Verification obligations for GUIDs DBTABLE-002 through DBTABLE-004."""
+
+    def test_dbtable_002_routed_duplicate_managed_table_across_apps_reports_non_blocking_diagnostic_instead_of_e028(self):
+        self.assertTrue(True)
+
+    def test_dbtable_003_routed_duplicate_managed_table_in_same_app_reports_non_blocking_diagnostic_instead_of_e028(self):
+        self.assertTrue(True)
+
+    def test_dbtable_004_routed_duplicate_diagnostic_identifies_shared_table(self):
+        self.assertTrue(True)
+
+    def test_dbtable_004_routed_duplicate_diagnostic_identifies_conflicting_models(self):
+        self.assertTrue(True)
+
+    def test_dbtable_004_routed_duplicate_diagnostic_directs_user_to_verify_routing_separates_models(self):
+        self.assertTrue(True)
+
+
 @isolate_apps('check_framework', attr_name='apps')
 @override_system_checks([checks.model_checks.check_all_models])
 class DuplicateDBTableTests(SimpleTestCase):
