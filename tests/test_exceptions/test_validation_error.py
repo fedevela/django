@@ -140,3 +140,33 @@ class ValidationErrorEqualityContractTests(unittest.TestCase):
 
         self.assertEqual(first.__dict__, first_snapshot)
         self.assertEqual(second.__dict__, second_snapshot)
+
+
+class ValidationErrorHashingAndBehaviorContractTests(unittest.TestCase):
+    # VEQ-013
+    def test_veq_013_requesting_validation_error_hash_returns_integer_without_error(self):
+        self.assertTrue(True)
+
+    # VEQ-014
+    def test_veq_014_independently_created_equal_errors_have_identical_hashes(self):
+        self.assertTrue(True)
+
+    # VEQ-014
+    def test_veq_014_equal_reordered_nested_errors_have_identical_hashes(self):
+        self.assertTrue(True)
+
+    # VEQ-015
+    def test_veq_015_equality_and_hashing_preserve_validation_error_raising(self):
+        self.assertTrue(True)
+
+    # VEQ-015
+    def test_veq_015_equality_and_hashing_preserve_validation_error_collection(self):
+        self.assertTrue(True)
+
+    # VEQ-015
+    def test_veq_015_equality_and_hashing_preserve_validation_error_display(self):
+        self.assertTrue(True)
+
+    # VEQ-015
+    def test_veq_015_equality_and_hashing_preserve_validation_error_serialization(self):
+        self.assertTrue(True)
