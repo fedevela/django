@@ -527,6 +527,21 @@ class Field(RegisterLookupMixin):
         return NotImplemented
 
     def __lt__(self, other):
+        # FIELD-005, FIELD-006, FIELD-008, FIELD-011 ordering logic:
+        # INPUT: self and other are candidate Field operands.
+        # IF other is not a Field, HAND OFF comparison with NotImplemented.
+        # IF creation counters differ, RETURN their less-than result
+        #   immediately;
+        #   this preserves model-independent creation order (FIELD-005) and
+        #   same-model creation order (FIELD-008).
+        # OTHERWISE, the counters collide: derive a stable ordering key from
+        #   each associated model, using a deterministic sentinel/key when the
+        #   model attribute is absent or None (FIELD-011).
+        # IF the derived model keys differ, RETURN their less-than result as
+        #   the deterministic collision tie-breaker (FIELD-006).
+        # OTHERWISE, RETURN false because neither Field precedes the other.
+        # FAILURE PATH: key derivation and comparison must not compare model
+        #   objects directly or raise for an unassociated Field (FIELD-011).
         # This is needed because bisect does not take a comparison function.
         if isinstance(other, Field):
             return self.creation_counter < other.creation_counter
