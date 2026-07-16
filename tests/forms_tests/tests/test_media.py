@@ -683,20 +683,70 @@ class FormsMediaTestCase(SimpleTestCase):
         ))
         self.assertEqual(
             str(caught_warnings[0].message),
-            "Detected duplicate Media files in an opposite order: 'a.js', 'b.js'",
+            'Detected duplicate Media files in an opposite order:\n'
+            'a.js\n'
+            'b.js',
         )
 
     def test_media_009_one_object_nondefective_aggregation_preserves_collection_and_order(self):
         """GUID: MEDIA-009 - One-object collection and ordering remain compatible."""
-        pass
+        media = Media(
+            css={'screen': ['base.css', 'theme.css']},
+            js=['base.js', 'plugin.js'],
+        )
+
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')
+            self.assertEqual(media._css, {
+                'screen': ['base.css', 'theme.css'],
+            })
+            self.assertEqual(media._js, ['base.js', 'plugin.js'])
+        self.assertFalse(any(
+            issubclass(warning.category, MediaOrderConflictWarning)
+            for warning in caught_warnings
+        ))
 
     def test_media_009_two_object_nondefective_aggregation_preserves_collection_order_deduplication_and_warnings(self):
         """GUID: MEDIA-009 - Two-object results and warnings remain compatible."""
-        pass
+        independent = Media(js=['a.js', 'b.js']) + Media(js=['c.js'])
+        overlapping = (
+            Media(js=['a.js', 'shared.js']) +
+            Media(js=['shared.js', 'b.js'])
+        )
+        conflicting = Media(js=['a.js', 'b.js']) + Media(js=['b.js', 'a.js'])
+
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')
+            self.assertEqual(independent._js, ['a.js', 'b.js', 'c.js'])
+            self.assertEqual(overlapping._js, ['a.js', 'shared.js', 'b.js'])
+        self.assertFalse(any(
+            issubclass(warning.category, MediaOrderConflictWarning)
+            for warning in caught_warnings
+        ))
+        self.assertEqual(overlapping._js.count('shared.js'), 1)
+        msg = (
+            'Detected duplicate Media files in an opposite order:\n'
+            'a.js\n'
+            'b.js'
+        )
+        with self.assertWarnsMessage(MediaOrderConflictWarning, msg):
+            self.assertEqual(conflicting._js, ['a.js', 'b.js'])
 
     def test_media_009_defective_one_or_two_object_aggregation_is_excluded_from_compatibility(self):
         """GUID: MEDIA-009 - Defective one- or two-object behavior is excluded."""
-        pass
+        # The left operand is one Media object but retains two authoritative
+        # declarations. Treating its resolved a-b-c adjacency as authoritative
+        # would falsely conflict with the right operand's c-before-b order.
+        left = Media(js=['a.js', 'b.js']) + Media(js=['c.js'])
+        right = Media(js=['c.js', 'b.js'])
+
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')
+            self.assertEqual((left + right)._js, ['a.js', 'c.js', 'b.js'])
+        self.assertFalse(any(
+            issubclass(warning.category, MediaOrderConflictWarning)
+            for warning in caught_warnings
+        ))
 
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])

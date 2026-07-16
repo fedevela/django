@@ -226,6 +226,16 @@ class Media:
         #     ELSE:
         #         APPLY the corrected general aggregation flow without a
         #             MEDIA-009 compatibility guarantee
+        # Preserve the observable behavior of aggregations that contain no
+        # intermediate result capable of contributing an incidental ordering
+        # constraint (GUID: MEDIA-009). In particular, merge() retains the
+        # established placement of files that are independent across two
+        # declarations, as well as its deduplication and warning behavior.
+        if len(lists) == 1:
+            return list(lists[0])
+        if len(lists) == 2:
+            return cls.merge(*lists)
+
         dependency_graph = defaultdict(set)
         all_items = OrderedSet()
         for item_list in filter(None, lists):
