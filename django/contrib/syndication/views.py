@@ -218,6 +218,13 @@ class Feed:
             #     discard all resolved state before processing the next item
             # IF dynamic resolution, extra-argument construction, or add_item()
             # fails, propagate that failure through the established feed path.
+            #
+            # Architecture boundary (GUID: COMMENTS-001, COMMENTS-003,
+            # COMMENTS-004, COMMENTS-005, COMMENTS-006): Feed.get_feed() owns
+            # per-item dynamic resolution and collision-free keyword assembly.
+            # item_extra_kwargs() remains the extension seam, while
+            # SyndicationFeed.add_item() remains the receiving contract; the
+            # feed generator must not depend back on view-level resolution.
             feed.add_item(
                 title=title,
                 link=link,
