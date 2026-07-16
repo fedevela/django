@@ -985,6 +985,18 @@ class BooleanField(Field):
         return super().formfield(**{**defaults, **kwargs})
 
 
+# Architecture boundary -- GUID: CHOICE-006, CHOICE-007, CHOICE-008, CHOICE-009
+#
+# CharField owns text-choice normalization through its existing conversion and
+# database-preparation contracts. This private descriptor is only the model
+# assignment seam: it may depend on CharField.to_python(), while the generic
+# DeferredAttribute and Model construction boundaries remain choice-agnostic.
+# Ordinary strings bypass enum normalization (CHOICE-007), and get_prep_value()
+# remains the persistence handoff that guarantees primitive storage
+# (CHOICE-006). Field.validate(), contribute_to_class(), and the configured
+# choices collection remain the shared validation, label, and declaration
+# boundaries; normalization must not mutate or replace them (CHOICE-008,
+# CHOICE-009).
 class _CharFieldDeferredAttribute(DeferredAttribute):
     def __set__(self, instance, value):
         # GUID: CHOICE-001, CHOICE-002, CHOICE-004
@@ -1750,6 +1762,15 @@ class FloatField(Field):
         })
 
 
+# Architecture boundary -- GUID: CHOICE-006, CHOICE-007, CHOICE-008, CHOICE-009
+#
+# IntegerField mirrors the text-field ownership boundary: its private
+# descriptor delegates supported enum assignments to IntegerField.to_python(),
+# and its existing preparation path owns the primitive database handoff.
+# Ordinary integers retain the generic assignment path (CHOICE-007). Validation,
+# configured labels, and IntegerChoices.choices declaration syntax stay owned by
+# the unchanged shared Field boundaries above (CHOICE-008, CHOICE-009); neither
+# this descriptor nor IntegerField may rewrite the choices collection.
 class _IntegerFieldDeferredAttribute(DeferredAttribute):
     def __set__(self, instance, value):
         # GUID: CHOICE-003, CHOICE-005
