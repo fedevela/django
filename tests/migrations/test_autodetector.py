@@ -903,6 +903,37 @@ class AutodetectorTests(TestCase):
         resulting_state = migration.mutate_state(self.make_project_state(before))
         return migration, resulting_state
 
+    def get_migpk_integer_primary_key_rename(self):
+        before = [
+            ModelState('app', 'Foo', [
+                ('old_key', models.IntegerField(primary_key=True)),
+            ]),
+            ModelState('app', 'Bar', [
+                ('id', models.AutoField(primary_key=True)),
+                ('foo', models.ForeignKey(
+                    'app.Foo', models.SET_NULL, blank=True, null=True,
+                )),
+            ]),
+        ]
+        after = [
+            ModelState('app', 'Foo', [
+                ('new_key', models.IntegerField(primary_key=True)),
+            ]),
+            ModelState('app', 'Bar', [
+                ('id', models.AutoField(primary_key=True)),
+                ('foo', models.ForeignKey(
+                    'app.Foo', models.SET_NULL, blank=True, null=True,
+                    related_name='bars',
+                )),
+            ]),
+        ]
+        changes = self.get_changes(
+            before, after, MigrationQuestioner({'ask_rename': True}),
+        )
+        migration = changes['app'][0]
+        resulting_state = migration.mutate_state(self.make_project_state(before))
+        return migration, resulting_state
+
     def test_migpk_001_autodetection_renames_custom_primary_key(self):
         """MIGPK-001: Autodetection renames the referenced custom primary key."""
         migration, _ = self.get_migpk_custom_primary_key_rename()
@@ -972,11 +1003,45 @@ class AutodetectorTests(TestCase):
 
     def test_migpk_007_integer_primary_key_rename_uses_rename_field_and_updates_implicit_foreign_key_target(self):
         """MIGPK-007: An integer PK rename updates its implicit FK target."""
-        self.assertTrue(True)
+        migration, resulting_state = self.get_migpk_integer_primary_key_rename()
+        self.assertEqual(
+            [operation.__class__.__name__ for operation in migration.operations],
+            ['RenameField', 'AlterField'],
+        )
+        rename = migration.operations[0]
+        self.assertEqual(rename.model_name, 'foo')
+        self.assertEqual(rename.old_name, 'old_key')
+        self.assertEqual(rename.new_name, 'new_key')
+        for operation in migration.operations:
+            field = getattr(operation, 'field', None)
+            if field is not None:
+                self.assertNotEqual(
+                    field.deconstruct()[3].get('to_field'), 'old_key',
+                )
+        resulting_fk = resulting_state.models['app', 'bar'].get_field_by_name('foo')
+        self.assertNotEqual(
+            resulting_fk.deconstruct()[3].get('to_field'), 'old_key',
+        )
+        resulting_apps = resulting_state.apps
+        self.assertEqual(
+            resulting_apps.get_model('app', 'Bar')._meta.get_field('foo').target_field.name,
+            'new_key',
+        )
 
     def test_migpk_007_integer_primary_key_rename_matches_char_field_relation_target_behavior(self):
         """MIGPK-007: Relation-target correctness is independent of CharField."""
-        self.assertTrue(True)
+        char_migration, char_state = self.get_migpk_custom_primary_key_rename()
+        integer_migration, integer_state = self.get_migpk_integer_primary_key_rename()
+        self.assertEqual(
+            [operation.__class__.__name__ for operation in integer_migration.operations],
+            [operation.__class__.__name__ for operation in char_migration.operations],
+        )
+        char_fk = char_state.apps.get_model('app', 'Bar')._meta.get_field('foo')
+        integer_fk = integer_state.apps.get_model('app', 'Bar')._meta.get_field('foo')
+        self.assertEqual(integer_fk.target_field.name, char_fk.target_field.name)
+        self.assertEqual(integer_fk.target_field.name, 'new_key')
+        self.assertIsInstance(char_fk.target_field, models.CharField)
+        self.assertIsInstance(integer_fk.target_field, models.IntegerField)
 
     def test_rename_foreign_object_fields(self):
         fields = ('first', 'second')
