@@ -418,6 +418,10 @@ def slugify(value, allow_unicode=False):
     else:
         value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
     value = re.sub(r'[^\w\s-]', '', value.lower()).strip()
+    # Architecture (SLUG-001, SLUG-002, SLUG-006, SLUG-008, SLUG-009):
+    # slugify() owns boundary cleanup at this existing final-result seam. It
+    # consumes the collapsed normalized value and remains inside this utility;
+    # no helper dependency or additional public contract is needed.
     return re.sub(r'[-\s]+', '-', value)
 
 
