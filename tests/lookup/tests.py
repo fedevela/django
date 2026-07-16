@@ -1085,52 +1085,36 @@ class ExactLookupQuerysetCardinalityContractTests(TestCase):
 
 class GroupedAggregateExactLookupTraceabilityTests(TestCase):
 
+    def exact_lookup_subquery_sql(self):
+        rhs = User.objects.filter(email__isnull=True).values(
+            'email',
+        ).annotate(
+            m=Max('id'),
+        ).values('m')[:1]
+        queryset = User.objects.filter(id=rhs)
+        sql = str(queryset.query)
+        query = queryset.query.where.children[0].rhs
+        compiler = query.get_compiler(connection=connection)
+        subquery_sql, _ = compiler.as_sql()
+        aggregate_sql, _ = compiler.compile(query.annotation_select['m'])
+        email_sql, _ = compiler.compile(query.group_by[0])
+        pk = query.model._meta.pk.get_col(query.get_initial_alias())
+        pk_sql, _ = compiler.compile(pk)
+        self.assertIn(subquery_sql, sql)
+        return subquery_sql, aggregate_sql, email_sql, pk_sql
+
     def test_django_11797_011_generated_sql_subquery_selects_aggregate_and_groups_by_email(self):
         """DJANGO-11797-011: SQL selects the aggregate grouped by email."""
-        # DJANGO-11797-011 LOGIC OBLIGATION: verify the positive generated-SQL
-        # shape of the reported grouped-aggregate exact-lookup regression.
-        # INPUT: construct the reported queryset by filtering null emails,
-        # grouping by email, annotating each group with the maximum primary
-        # key, projecting that aggregate, and limiting the result to one row.
-        # TRANSITION: embed the sliced queryset as the right-hand side of an
-        # exact lookup, then compile the outer queryset to SQL.
-        # DECISION: inspect the embedded subquery's selected expression and
-        # grouping clause independently of backend-specific quoting.
-        #     IF the subquery selects the aggregate annotation and groups by
-        #     email, record this obligation as satisfied.
-        #     ELSE fail with evidence identifying the unexpected select or
-        #     grouping fragment.
-        # OUTPUT: a regression result proving that the explicit aggregate
-        # projection and its email grouping survive exact-lookup processing.
-        self.assertTrue(True)
+        subquery_sql, aggregate_sql, email_sql, _ = self.exact_lookup_subquery_sql()
+        selected_aggregate = 'SELECT %s AS %s FROM ' % (
+            aggregate_sql,
+            connection.ops.quote_name('m'),
+        )
+        self.assertTrue(subquery_sql.startswith(selected_aggregate), subquery_sql)
+        self.assertIn(' GROUP BY %s' % email_sql, subquery_sql)
 
     def test_django_11797_011_generated_sql_subquery_does_not_select_or_group_by_primary_key(self):
         """DJANGO-11797-011: SQL doesn't select or group by the primary key."""
-        # DJANGO-11797-011 LOGIC OBLIGATION: exclude the historical primary-key
-        # fallback shape from the same generated SQL inspected above.
-        # INPUT: obtain the embedded subquery SQL produced by the reported
-        # filtered, grouped, annotated, projected, and one-row-sliced queryset.
-        # DECISION: inspect both the selected expression and grouping clause.
-        #     IF either clause substitutes the model primary key for the
-        #     projected aggregate or email grouping, fail and identify the
-        #     offending clause.
-        #     ELSE record that the unwanted fallback shape is absent.
-        # OUTPUT: a regression result distinguishing the preserved grouping
-        # behavior from the original primary-key selection/grouping defect.
-        self.assertTrue(True)
-
-    def test_django_11797_012_relevant_lookup_tests_pass_after_grouping_preservation_change(self):
-        """DJANGO-11797-012: Relevant lookup tests retain compatibility."""
-        # DJANGO-11797-012 LOGIC OBLIGATION: retain the established exact-lookup
-        # behaviors while adding grouped-aggregate projection preservation.
-        # INPUT: the grouping-preservation change, the DJANGO-11797-011 SQL
-        # regression checks, and the existing relevant lookup test set.
-        # TRANSITION: run the focused lookup tests through the established
-        # Django test runner so setup, execution, and teardown remain standard.
-        # DECISION: collect every new and existing relevant test outcome.
-        #     IF all outcomes pass, report compatibility as preserved.
-        #     ELSE propagate each failure or error without converting it into
-        #     success, and report this obligation as unsatisfied.
-        # OUTPUT: one focused-suite result covering defect-specific protection
-        # and continued compatibility of relevant lookup behavior.
-        self.assertTrue(True)
+        subquery_sql, _, _, pk_sql = self.exact_lookup_subquery_sql()
+        self.assertFalse(subquery_sql.startswith('SELECT %s FROM ' % pk_sql))
+        self.assertNotIn(' GROUP BY %s' % pk_sql, subquery_sql)
