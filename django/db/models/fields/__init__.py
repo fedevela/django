@@ -1589,6 +1589,11 @@ class DurationField(Field):
     # to django.utils.dateparse.parse_duration and owns translation of an
     # unsuccessful parse into this field's existing "invalid" validation
     # condition. The parser remains independent of the model-field layer.
+    # Architecture contract — GUID: DUR-008
+    # This model field owns ORM conversion, persistence, serialization, query
+    # preparation, and the forms.DurationField integration seam. It depends on
+    # parse_duration for syntax, while backend-specific storage conversion stays
+    # behind the database operations boundary.
     # Regression flow — GUID: DUR-008
     # RECEIVE the values exercised by existing persistence, serialization, and
     # querying coverage without changing their accepted representations.

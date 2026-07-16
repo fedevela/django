@@ -143,6 +143,10 @@ def parse_duration(value):
     # NORMALIZE the sign and fractional components through the existing rules.
     # RETURN the same timedelta assembled from those components, so every input
     # accepted before the message correction retains its previous parsed value.
+    # Architecture contract — GUID: DUR-008
+    # This utility remains the single parsing boundary for model and form
+    # DurationField conversion. It owns syntax recognition and timedelta
+    # construction, but has no dependency on either field layer.
     # Regression flow — GUID: DUR-008
     # RECEIVE each duration value exercised by the existing parsing coverage.
     # ATTEMPT the same ordered format matches and component normalization above.

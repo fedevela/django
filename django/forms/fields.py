@@ -467,6 +467,10 @@ class DateTimeField(BaseTemporalField):
 
 
 class DurationField(Field):
+    # Architecture contract — GUID: DUR-008
+    # This form field owns presentation preparation and submitted-value error
+    # translation. It shares parse_duration with the model field without
+    # depending on the model layer; model-to-form construction points here.
     default_error_messages = {
         'invalid': _('Enter a valid duration.'),
         'overflow': _('The number of days must be between {min_days} and {max_days}.')
