@@ -3,6 +3,9 @@ import datetime
 import json
 from unittest import mock
 
+from django.apps import apps
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
 from django.core import serializers
 from django.core.serializers.base import DeserializationError
 from django.db import DEFAULT_DB_ALIAS, IntegrityError, connection, connections
@@ -240,56 +243,128 @@ class DeserializeDbFromStringTests(TransactionTestCase):
         self.assertFalse(Article.objects.exists())
 
 
-class SerializedRollbackRestorationContractTests(SimpleTestCase):
+class SerializedRollbackRestorationTests(TransactionTestCase):
+    available_apps = [
+        'backends', 'django.contrib.auth', 'django.contrib.contenttypes',
+    ]
+    databases = {'default', 'other'}
+    serialized_rollback = True
+
+    def restore_serialized_rollback(self, alias, data):
+        connection = connections[alias]
+        with mock.patch.object(
+                self, '_databases_names', return_value=[alias]), mock.patch.object(
+                    connection, '_test_serialized_contents', data, create=True):
+            self._fixture_setup()
+
     def test_srb_007_foreign_key_before_target_restores_objects_and_relationship_on_intended_alias(self):
         """GUID: SRB-007; unsafe order transitions to a complete alias-bound graph."""
-        # Pseudocode (GUID: SRB-007):
-        # GIVEN an intended database alias and two related objects where the
-        # referencing object is serialized before its referenced target:
-        #   capture both primary keys and the expected foreign-key value;
-        #   remove both objects from the intended alias;
-        # WHEN serialized rollback restoration runs for that alias:
-        #   deserialize every serialized object using the intended alias;
-        #   defer ordering-sensitive constraint validation until the complete
-        #   serialized stream has been saved;
-        #   validate the completed relational state on the intended alias;
-        # THEN query only the intended alias and require:
-        #   the referencing object exists;
-        #   the referenced target exists;
-        #   the referencing object's foreign key equals the target's key;
-        # OTHERWISE fail if either object is absent, the relationship differs,
-        # or restoration reads from or writes to another database alias.
-        self.assertTrue(True)
+        alias = 'other'
+        reporter = Reporter.objects.using(alias).create(
+            first_name='Elijah', last_name='Baley',
+        )
+        article = Article.objects.using(alias).create(
+            headline='Foreign-key-unsafe serialized order',
+            pub_date=datetime.date(2026, 7, 16),
+            reporter=reporter,
+        )
+        data = serializers.serialize('json', [article, reporter])
+        serialized_models = [item['model'] for item in json.loads(data)]
+        article_pk, reporter_pk = article.pk, reporter.pk
+        Article.objects.using(alias).all().delete()
+        Reporter.objects.using(alias).all().delete()
+
+        self.assertEqual(
+            serialized_models, ['backends.article', 'backends.reporter'],
+        )
+        self.restore_serialized_rollback(alias, data)
+
+        restored_article = Article.objects.using(alias).get(pk=article_pk)
+        self.assertTrue(
+            Reporter.objects.using(alias).filter(pk=reporter_pk).exists(),
+        )
+        self.assertEqual(restored_article.reporter_id, reporter_pk)
+        self.assertFalse(Article.objects.using('default').exists())
+        self.assertFalse(Reporter.objects.using('default').exists())
 
     def test_srb_008_order_insensitive_data_restores_captured_objects_values_and_relationships(self):
         """GUID: SRB-008; ordinary serialized state transitions to an equivalent restored state."""
-        # Pseudocode (GUID: SRB-008):
-        # GIVEN ordinary serialized rollback data whose relationships don't
-        # depend on foreign-key-unsafe ordering:
-        #   capture object identities, field values, and relationship values;
-        #   remove the captured objects so restoration is observable;
-        # WHEN serialized rollback restoration consumes the captured data:
-        #   restore each object and its deferred relationship data;
-        #   complete constraint validation after the serialized stream;
-        # THEN reload the objects and require their identities, field values,
-        # and relationships to equal the captured serialized state;
-        # OTHERWISE fail on a missing object or any value or relationship drift.
-        self.assertTrue(True)
+        reporter = Reporter.objects.create(
+            first_name='R.', last_name='Daneel Olivaw',
+        )
+        article = Article.objects.create(
+            headline='Ordinary serialized rollback',
+            pub_date=datetime.date(2026, 7, 16),
+            reporter=reporter,
+            reporter_proxy=reporter,
+        )
+        data = serializers.serialize('json', [reporter, article])
+        expected = {
+            'article_pk': article.pk,
+            'headline': article.headline,
+            'pub_date': article.pub_date,
+            'reporter_pk': reporter.pk,
+            'first_name': reporter.first_name,
+            'last_name': reporter.last_name,
+        }
+        Article.objects.all().delete()
+        Reporter.objects.all().delete()
+
+        self.restore_serialized_rollback('default', data)
+
+        restored_reporter = Reporter.objects.get(pk=expected['reporter_pk'])
+        restored_article = Article.objects.get(pk=expected['article_pk'])
+        self.assertEqual(restored_reporter.first_name, expected['first_name'])
+        self.assertEqual(restored_reporter.last_name, expected['last_name'])
+        self.assertEqual(restored_article.headline, expected['headline'])
+        self.assertEqual(restored_article.pub_date, expected['pub_date'])
+        self.assertEqual(restored_article.reporter_id, expected['reporter_pk'])
+        self.assertEqual(
+            restored_article.reporter_proxy_id, expected['reporter_pk'],
+        )
 
     def test_srb_009_natural_key_dependencies_restore_objects_and_relationships_without_reordering(self):
         """GUID: SRB-009; natural-key-dependent state restores with dependency ordering unchanged."""
-        # Pseudocode (GUID: SRB-009):
-        # GIVEN serialized rollback data containing an object whose natural key
-        # declares an existing dependency on another serialized object:
-        #   capture the serializer-produced order without modifying it;
-        #   capture both object identities and the expected relationship;
-        #   remove the objects so natural-key resolution must occur on restore;
-        # WHEN serialized rollback restoration consumes that unchanged stream:
-        #   resolve natural keys through the existing dependency behavior;
-        #   save all objects and deferred relationships on the restoration alias;
-        #   validate constraints only after the complete stream is restored;
-        # THEN require both objects and their relationship to be restored and
-        # require the observed serialized order to match the captured order;
-        # OTHERWISE fail if natural-key resolution, object restoration,
-        # relationship restoration, or ordering compatibility changes.
-        self.assertTrue(True)
+        content_type = ContentType.objects.create(
+            app_label='srb_009', model='positronic_brain',
+        )
+        permission = Permission.objects.create(
+            name='Can apply the Laws of Robotics',
+            codename='apply_laws',
+            content_type=content_type,
+        )
+        sorted_models = serializers.sort_dependencies([
+            (apps.get_app_config('auth'), [Permission]),
+            (apps.get_app_config('contenttypes'), [ContentType]),
+        ])
+        objects = {
+            ContentType: content_type,
+            Permission: permission,
+        }
+        data = serializers.serialize(
+            'json', (objects[model] for model in sorted_models),
+            use_natural_foreign_keys=True,
+        )
+        serialized_models = [item['model'] for item in json.loads(data)]
+        content_type_pk, permission_pk = content_type.pk, permission.pk
+        Permission.objects.filter(pk=permission_pk).delete()
+        ContentType.objects.filter(pk=content_type_pk).delete()
+
+        with mock.patch(
+                'django.db.backends.base.creation.serializers.sort_dependencies'
+        ) as sort_dependencies:
+            self.restore_serialized_rollback('default', data)
+
+        sort_dependencies.assert_not_called()
+        self.assertEqual(
+            serialized_models, ['contenttypes.contenttype', 'auth.permission'],
+        )
+        restored_content_type = ContentType.objects.get(pk=content_type_pk)
+        restored_permission = Permission.objects.get(pk=permission_pk)
+        self.assertEqual(
+            restored_content_type.natural_key(),
+            ('srb_009', 'positronic_brain'),
+        )
+        self.assertEqual(
+            restored_permission.content_type_id, restored_content_type.pk,
+        )
