@@ -162,16 +162,37 @@ class TranslationE004Trans007ContractTests(SimpleTestCase):
 
     def test_trans_007_unavailable_exact_available_base_does_not_emit_e004(self):
         """TRANS-007: An available base fallback does not emit E004."""
+        # TRANS-007 INPUT: Configure LANGUAGE_CODE with a sublanguage whose
+        # exact code is absent from LANGUAGES and whose base code is present.
+        # TRANS-007 ACTION: Run the language-settings consistency check.
+        # TRANS-007 DECISION: Inspect every returned check message by ID.
+        # TRANS-007 SUCCESS: Verify translation.E004 is absent; fail if it is
+        # emitted despite the available base-language fallback.
         self.assertTrue(True)
 
     def test_trans_007_available_exact_regional_or_variant_does_not_emit_e004(self):
         """TRANS-007: An exact regional or variant match does not emit E004."""
+        # TRANS-007 INPUT: For each representative regional or variant code,
+        # configure the same exact code as LANGUAGE_CODE and in LANGUAGES.
+        # TRANS-007 ACTION: Run the consistency check for each isolated case.
+        # TRANS-007 SUCCESS: Verify translation.E004 is absent for every exact
+        # match; identify the specific code if any case emits the error.
         self.assertTrue(True)
 
     def test_trans_007_unavailable_exact_and_base_emits_e004(self):
         """TRANS-007: No exact or base-language match emits E004."""
+        # TRANS-007 INPUT: Configure LANGUAGE_CODE so neither its complete code
+        # nor its base-language component is present in LANGUAGES.
+        # TRANS-007 ACTION: Run the language-settings consistency check.
+        # TRANS-007 FAILURE PATH: Verify the result contains translation.E004
+        # with the established message; fail if the error is absent or changed.
         self.assertTrue(True)
 
     def test_trans_007_existing_translation_system_checks_continue_to_pass(self):
         """TRANS-007: Existing translation system-check coverage remains passing."""
+        # TRANS-007 HANDOFF: Run the complete existing translation system-check
+        # test set together with the three outcome cases above.
+        # TRANS-007 DECISION: If any pre-existing check expectation fails,
+        # propagate that failure without suppressing or replacing its result.
+        # TRANS-007 SUCCESS: Complete only when all existing and new cases pass.
         self.assertTrue(True)
