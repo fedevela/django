@@ -141,6 +141,16 @@ class ValidationError(Exception):
             self.params = params
             self.error_list = [self]
 
+    # Equality architecture (VEQ-001, VEQ-002, VEQ-009, VEQ-010, VEQ-011,
+    # VEQ-012): ValidationError.__eq__ owns the value-comparison boundary and
+    # belongs here, beside the state established by __init__. Its value
+    # contract is the stored message, code, and params triplet; the type gate
+    # remains inside that method so unrelated operands cannot enter the state
+    # comparison boundary. The dependency direction is from equality to this
+    # stored state only -- not through message_dict, messages, __iter__, or any
+    # normalization/presentation helper. This keeps comparison read-only and
+    # prevents equality from acquiring mutation or formatting dependencies.
+
     # ValidationError equality procedure (VEQ-001, VEQ-002, VEQ-009,
     # VEQ-010, VEQ-011, VEQ-012):
     #
