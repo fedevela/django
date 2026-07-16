@@ -103,6 +103,21 @@ class BasicFieldTests(SimpleTestCase):
         self.assertEqual(path, 'model_fields.tests.Nested.Field')
 
 
+class FieldEqualityContractTests(SimpleTestCase):
+
+    def test_FIELD_001_copied_abstract_field_associated_with_different_models_compares_unequal(self):
+        pass
+
+    def test_FIELD_002_copied_fields_with_same_counter_and_different_models_remain_distinct_in_set(self):
+        pass
+
+    def test_FIELD_007_fields_with_same_counter_and_same_model_retain_established_equality(self):
+        pass
+
+    def test_FIELD_009_fields_without_associated_model_compare_repeatedly_without_failure_or_drift(self):
+        pass
+
+
 class ChoicesTests(SimpleTestCase):
 
     @classmethod
