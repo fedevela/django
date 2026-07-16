@@ -540,6 +540,24 @@ class OrderingTests(TestCase):
         values, targets the concrete column, and adds no ordering-only
         self-join.
         """
+        # ORM-010 logic obligation — ascending direction:
+        # GIVEN regression rows whose self-referential foreign-key values are
+        # deliberately out of insertion order, and whose related model has
+        # descending default ordering,
+        # WHEN a queryset is ordered by the traversed ``record__root_id``
+        # attname,
+        # THEN compile the ordering expression and identify its target by
+        # model metadata (table and concrete stored-column identity), not by
+        # matching backend-rendered SQL text,
+        # AND inspect the compiled query's active aliases/joins to confirm
+        # that traversal reaches ``record`` but does not add the self-related
+        # ``root`` table solely to satisfy ordering,
+        # AND evaluate stable identifiers from the queryset and compare them
+        # with the identifiers arranged by ascending stored ``root_id``.
+        # FAIL if direction is reversed by related default ordering, the
+        # expression targets a related/default-ordering column, an active
+        # ordering-only self-join exists, or the observed rows are not in the
+        # expected ascending order.
         pass
 
     def test_orm_010_descending_self_fk_attname_orders_by_concrete_column_without_self_join(self):
@@ -548,6 +566,21 @@ class OrderingTests(TestCase):
         values, targets the concrete column, and adds no ordering-only
         self-join.
         """
+        # ORM-010 logic obligation — descending direction:
+        # GIVEN the same regression rows and descending related-model default
+        # ordering used by the ascending case,
+        # WHEN a queryset is ordered by the traversed ``-record__root_id``
+        # attname,
+        # THEN compile the ordering expression, preserve the explicit
+        # descending flag, and identify the target as the concrete stored
+        # ``root_id`` column through model/compiler metadata,
+        # AND inspect active query aliases/joins to confirm that no join to
+        # the self-related ``root`` row was introduced solely for ordering,
+        # AND evaluate stable identifiers and compare them with the same
+        # expected identifiers arranged by descending stored ``root_id``.
+        # FAIL if the explicit direction is lost or compounded with related
+        # default ordering, the concrete target differs, an ordering-only
+        # self-join is active, or result order is not descending.
         pass
 
     def test_orm_010_sql_structure_checks_allow_backend_representation_differences(self):
@@ -556,6 +589,21 @@ class OrderingTests(TestCase):
         aliases, and formatting while identifying the concrete column and the
         absence of an ordering-only self-join.
         """
+        # ORM-010 logic obligation — backend-portable structure:
+        # FOR EACH direction in (``record__root_id``, ``-record__root_id``):
+        #   build the regression queryset and force compiler ordering
+        #   resolution without asserting the complete rendered SQL;
+        #   resolve the ordering target's concrete column and owning table
+        #   from compiler/model metadata, treating generated alias spelling,
+        #   identifier quoting, and whitespace as non-semantic;
+        #   collect only active joins from the query alias map;
+        #   verify the required path join is present exactly as needed and
+        #   the self-related table is absent as an ordering-only join;
+        #   hand the same queryset to the direction-specific result-order
+        #   check so structural and observable behavior describe one query.
+        # FAIL only on semantic differences (wrong concrete target, extra
+        # active self-join, wrong direction, or wrong result sequence), never
+        # on backend-specific SQL representation.
         pass
 
     def test_order_by_f_expression(self):
