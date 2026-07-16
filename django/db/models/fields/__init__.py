@@ -243,9 +243,13 @@ class Field(RegisterLookupMixin):
 
     def _check_choices(self):
         """
-        Check choice structure before checking the length of choice values.
+        Own choice applicability and structure before value-length checking.
 
-        GUID: CHOICE-007, CHOICE-008.
+        Architecture contract for CHOICE-007, CHOICE-008, and CHOICE-009:
+        fields without relevant choices terminate here, as do choices rejected
+        by the existing fields.E004 or fields.E005 structure checks. Only
+        present, structurally valid choices cross the dependency boundary into
+        _check_choice_value_length().
         """
         # Pseudocode — GUID: CHOICE-009
         # IF the field has no relevant choices:
@@ -304,7 +308,7 @@ class Field(RegisterLookupMixin):
         """
         Check structurally valid choices through the choice-length seam.
 
-        Architecture contract for CHOICE-001 through CHOICE-008:
+        Architecture contract for CHOICE-001 through CHOICE-010:
         _check_choices() owns choice structure validation and calls this seam
         only after validation succeeds. For CHOICE-007 and CHOICE-008, this
         seam therefore never receives choices already rejected by fields.E004
@@ -313,7 +317,10 @@ class Field(RegisterLookupMixin):
         length-comparable stored value, and excludes human-readable labels. It
         owns the inclusive max_length boundary and the fields.E009 result; a
         failure is returned only when the greatest stored-value length is
-        greater than max_length.
+        greater than max_length. For CHOICE-009, an absent or non-comparable
+        max_length terminates this seam without fields.E009. For CHOICE-010,
+        stored values outside the comparable-length contract bypass this seam's
+        new comparison and retain the existing choice semantics owned upstream.
         """
         # Pseudocode — GUID: CHOICE-009, CHOICE-010
         # INPUT structurally valid flattened (stored_value, label) choices
