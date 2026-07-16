@@ -98,6 +98,11 @@ class BaseHandler:
             resolver = get_resolver()
 
         resolver_match = resolver.resolve(request.path_info)
+        # DISPATCH BOUNDARY (GUID: URL-005): BaseHandler consumes the
+        # ResolverMatch argument contract but does not own capture
+        # classification. Dependency points from dispatch to the resolver:
+        # callback_args remains the established ordered positional sequence
+        # and callback_kwargs remains free of positional-only captures.
         callback, callback_args, callback_kwargs = resolver_match
         request.resolver_match = resolver_match
 

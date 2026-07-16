@@ -153,14 +153,17 @@ class RegexPattern(CheckURLMixin):
         self.converters = {}
 
     def match(self, path):
-        # ARCHITECTURE (GUID: URL-001, URL-002, URL-003, URL-004):
+        # ARCHITECTURE (GUID: URL-001, URL-002, URL-003, URL-004, URL-005):
         # RegexPattern owns the regex-engine-to-resolver argument boundary. Its
         # result contract selects named-capture mode from the pattern's named
         # group topology before absent values are removed. In that mode,
         # explicit values (including format) belong only in kwargs and nested
-        # unnamed captures never cross the boundary as args. URLPattern and
-        # ResolverMatch consume this classification; they must not infer it
-        # from nonempty kwargs or reconstruct captures from the regex match.
+        # unnamed captures never cross the boundary as args. In positional-only
+        # mode, the same contract carries the regex-ordered capture tuple in
+        # args and an empty kwargs mapping (URL-005). URLPattern and
+        # ResolverMatch consume this classification; they must not infer or
+        # reshape capture mode downstream or reconstruct captures from the
+        # regex match.
         # GUID: URL-001, URL-002, URL-004 (absent-value behavior)
         # PSEUDOCODE:
         # - Search the path with the compiled regular expression.
@@ -408,10 +411,14 @@ class URLPattern:
         match = self.pattern.match(path)
         if match:
             new_path, args, kwargs = match
-            # INTEGRATION SEAM (GUID: URL-001, URL-002, URL-003, URL-004): args
-            # and kwargs retain the capture-mode contract established by
+            # INTEGRATION SEAM
+            # (GUID: URL-001, URL-002, URL-003, URL-004, URL-005): args and
+            # kwargs retain the capture-mode contract established by
             # RegexPattern.match() through ResolverMatch/view dispatch. Named
-            # format values therefore remain keyword-only at this boundary.
+            # format values therefore remain keyword-only, while positional-
+            # only captures remain ordered in args with no capture entries in
+            # kwargs. This seam depends on RegexPattern's classification and
+            # must not perform its own capture conversion.
             # Pass any extra_kwargs as **kwargs.
             kwargs.update(self.default_args)
             return ResolverMatch(self.callback, args, kwargs, self.pattern.name, route=str(self.pattern))
