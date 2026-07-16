@@ -33,6 +33,35 @@ class StaticFilesStorage(FileSystemStorage):
             self.base_location = None
             self.location = None
 
+    # Staticfiles storage URL pseudocode
+    # (GUID: SCRIPTURL-005, GUID: SCRIPTURL-007):
+    #
+    # PROCEDURE url(requested_asset_path):
+    #     unprefixed_url <- generate the existing storage URL for
+    #                       requested_asset_path using the configured static
+    #                       base
+    #     parsed_url <- split unprefixed_url into scheme, authority, path,
+    #                   query, and fragment
+    #     IF parsed_url has a scheme or authority:
+    #         RETURN unprefixed_url unchanged because it is not
+    #                application-relative
+    #     active_prefix <- read the active request's script prefix
+    #     IF active_prefix is absent, empty, or the root prefix:
+    #         RETURN unprefixed_url unchanged
+    #     normalized_prefix <- active_prefix without trailing separators
+    #     IF parsed_url.path equals normalized_prefix OR begins with
+    #        normalized_prefix followed by a path separator:
+    #         RETURN unprefixed_url unchanged so the prefix occurs once
+    #     prefixed_path <- join normalized_prefix to parsed_url.path with
+    #                      exactly one separating path separator
+    #     REQUIRE prefixed_path preserves the configured static base after
+    #             normalized_prefix
+    #     REQUIRE requested_asset_path remains beneath that static base
+    #     RETURN the URL rebuilt with prefixed_path and the original scheme,
+    #            authority, query, and fragment
+    #     ON failure while generating or parsing the existing storage URL:
+    #         propagate the existing exception without returning a partial URL
+
     def path(self, name):
         if not self.location:
             raise ImproperlyConfigured("You're using the staticfiles app "
