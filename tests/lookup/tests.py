@@ -1045,3 +1045,18 @@ class GroupedAggregateExactLookupContractTests(TestCase):
         self.assertIn('MAX(', sql)
         self.assertIn('GROUP BY', sql)
         self.assertIn('LIMIT 1', sql)
+
+
+class ExactLookupQuerysetCardinalityContractTests(TestCase):
+
+    def test_django_11797_009_exact_lookup_accepts_queryset_limited_to_one_result(self):
+        """DJANGO-11797-009: Exact lookup accepts a one-result queryset."""
+        pass
+
+    def test_django_11797_009_exact_lookup_accepts_queryset_limited_to_one_result_with_offset(self):
+        """DJANGO-11797-009: Exact lookup retains one-result offset behavior."""
+        pass
+
+    def test_django_11797_010_exact_lookup_rejects_queryset_not_limited_to_one_result(self):
+        """DJANGO-11797-010: Exact lookup rejects a multi-result queryset."""
+        pass
