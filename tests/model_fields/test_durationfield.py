@@ -90,6 +90,11 @@ class TestValidation(SimpleTestCase):
     # ASSERT the rendered message reports "[DD] [[HH:]MM:]ss[.uuuuuu]".
     # FAIL if the rendered message contains the superseded expected-format text
     # or bypasses the existing translation or validation-message mechanisms.
+    # Architecture — GUID: DUR-001, DUR-002, DUR-006, DUR-007
+    # This existing validation test is the integration-contract owner: exercise
+    # DurationField.clean(), observe the ValidationError raised by to_python(),
+    # and assert the rendered default "invalid" message. No parser-level or
+    # form-field seam is required for this message-only correction.
     def test_invalid_string(self):
         field = models.DurationField()
         with self.assertRaises(exceptions.ValidationError) as cm:

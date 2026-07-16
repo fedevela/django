@@ -1595,6 +1595,12 @@ class DurationField(Field):
     # the existing code and value parameters; DO NOT alter parsing decisions.
     # ENSURE every repository-defined invalid-duration message and expectation
     # uses corrected_expected_format and none uses the superseded format.
+    # Architecture — GUID: DUR-001, DUR-002, DUR-006
+    # Ownership remains on DurationField.default_error_messages['invalid']; the
+    # gettext wrapper is the translation boundary, and to_python() remains the
+    # validation-delivery seam. The message-only implementation must depend on
+    # the existing parse_duration() failure path without changing that parser,
+    # the ValidationError contract, its code, or its value parameter.
     default_error_messages = {
         'invalid': _("'%(value)s' value has an invalid format. It must be in "
                      "[DD] [HH:[MM:]]ss[.uuuuuu] format.")
