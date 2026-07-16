@@ -20,6 +20,14 @@ class DatabaseCreation(BaseDatabaseCreation):
             return 'file:memorydb_%s?mode=memory&cache=shared' % self.connection.alias
         return test_database_name
 
+    # GUID: SQLITE-003 -- Architecture contract for named keepdb creation.
+    # This backend override owns SQLite file-name and replacement policy only.
+    # BaseDatabaseCreation.create_test_db() owns the downstream alias binding,
+    # schema initialization, and connection establishment. The dependency must
+    # continue from this override into that base flow for every alias; creation
+    # must not open, initialize, or share another alias's connection here.
+    # Post-setup writes remain owned by the alias-bound DatabaseWrapper, making
+    # this return boundary the integration seam exercised by the SQLite tests.
     def _create_test_db(self, verbosity, autoclobber, keepdb=False):
         test_database_name = self._get_test_db_name()
 
