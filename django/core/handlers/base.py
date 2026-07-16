@@ -110,6 +110,17 @@ class BaseHandler:
         if response is None:
             wrapped_callback = self.make_view_atomic(callback)
             try:
+                # GUID: URL-005 (positional-compatible view dispatch)
+                # PSEUDOCODE:
+                # - INPUT the callback and argument collections supplied by
+                #   the resolved positional-only URL pattern.
+                # - Preserve the positional collection's established order
+                #   and keep its captured values out of keyword arguments.
+                # - Invoke the compatible view with the request followed by
+                #   those positional URL arguments and the empty capture
+                #   keyword mapping.
+                # - IF invocation raises, hand the exception to the existing
+                #   exception-middleware path without reshaping arguments.
                 response = wrapped_callback(request, *callback_args, **callback_kwargs)
             except Exception as e:
                 response = self.process_exception_by_middleware(e, request)

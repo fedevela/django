@@ -197,6 +197,17 @@ class RegexPattern(CheckURLMixin):
         #   single named ``format`` value to resolver/view dispatch.
         # - FAILURE PATH: IF the regex does not match, return no resolution
         #   result and perform no argument handoff.
+        # GUID: URL-005 (positional-only capture classification)
+        # PSEUDOCODE:
+        # - INPUT a path and a pattern whose captures are exclusively
+        #   positional.
+        # - Search the path; IF it does not match, return no resolution result.
+        # - Read the captures in the order established by the expression.
+        # - IF the named-capture mapping is empty, retain every captured value
+        #   in positional arguments in that same order and keep keyword
+        #   arguments empty; do not convert any capture into a keyword.
+        # - HAND OFF the unmatched path, ordered positional arguments, and
+        #   empty keyword arguments to the resolver chain.
         match = self.regex.search(path)
         if match:
             # If there are any named groups, use those as kwargs, ignoring
@@ -608,6 +619,17 @@ class URLResolver:
                         # Otherwise, pass all non-named arguments as positional arguments.
                         sub_match_args = sub_match.args
                         if not sub_match_dict:
+                            # GUID: URL-005 (positional-only resolver handoff)
+                            # PSEUDOCODE:
+                            # - IF neither this resolver level nor the matched
+                            #   child contributes keyword arguments, append the
+                            #   child's positional captures after this level's
+                            #   captures, preserving outer-to-inner order.
+                            # - Keep the merged keyword mapping empty.
+                            # - ELSE retain the established non-positional
+                            #   resolver behavior outside URL-005's scope.
+                            # - HAND OFF the ordered positional collection and
+                            #   empty keyword mapping in the ResolverMatch.
                             sub_match_args = args + sub_match.args
                         current_route = '' if isinstance(pattern, URLPattern) else str(pattern.pattern)
                         return ResolverMatch(
