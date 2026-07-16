@@ -1710,6 +1710,15 @@ class FloatField(Field):
         })
 
 
+# Architecture -- GUID: CHOICE-003, CHOICE-005
+#
+# IntegerField owns the primitive-integer conversion contract in to_python(). A
+# private IntegerField assignment descriptor, colocated in this module and
+# selected through descriptor_class, is the integration seam that must route
+# constructor values and Model.from_db() materialization through that contract
+# before instance storage. Keep DeferredAttribute and Model.__init__ generic:
+# neither boundary should depend on IntegerChoices. The existing field
+# preparation path then persists the normalized instance value.
 class IntegerField(Field):
     empty_strings_allowed = False
     default_error_messages = {
