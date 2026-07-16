@@ -72,36 +72,64 @@ class UnionBackedModelMultipleChoiceFieldContractTests(TestCase):
 
 @skipUnlessDBFeature('supports_select_union')
 class UnionBackedModelFormRelationshipContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.entertainment = Category.objects.create(
+            name='Entertainment', slug='entertainment', url='entertainment',
+        )
+        cls.test = Category.objects.create(
+            name='A test', slug='test', url='test',
+        )
+        cls.third = Category.objects.create(
+            name='Third', slug='third', url='third',
+        )
+        cls.article = Article.objects.create(
+            headline='Union-backed relationships',
+            slug='union-backed-relationships',
+            pub_date=datetime.date(2020, 7, 3),
+            writer=Writer.objects.create(name='Test writer'),
+            article='Test article',
+        )
+
+    def union_queryset(self):
+        return Category.objects.filter(name__startswith='E').union(
+            Category.objects.filter(url='third'),
+        )
+
+    def article_form(self, data):
+        class ArticleForm(forms.ModelForm):
+            categories = forms.ModelMultipleChoiceField(
+                queryset=self.union_queryset(), required=False,
+            )
+
+            class Meta:
+                model = Article
+                fields = ['categories']
+
+        return ArticleForm(data=data, instance=self.article)
+
     def test_DJ13158_004_empty_valid_submission_save_adds_no_publication_relationships(self):
         """DJ13158-004: Saving an empty valid form adds no publications."""
-        # DJ13158-004 logic obligation:
-        # GIVEN the demonstrated model form exposes an optional publications
-        # field whose choices are the union of its component querysets,
-        # AND its related model instance begins with no publications,
-        # WHEN the form is bound with an explicitly empty publications value,
-        # THEN require validation to succeed; otherwise stop without saving.
-        # WHEN the valid form is saved, persist the model instance first and
-        # hand the cleaned empty selection to the many-to-many save operation.
-        # AFTER saving, reload the instance's publication relationships.
-        # PASS only if the reloaded relationship set is empty; any added
-        # publication is a persistence failure.
-        pass
+        form = self.article_form({'categories': []})
+
+        self.assertTrue(form.is_valid(), form.errors)
+        article = form.save()
+
+        article = Article.objects.get(pk=article.pk)
+        self.assertSequenceEqual(article.categories.all(), [])
 
     def test_DJ13158_008_valid_nonempty_union_backed_submission_save_preserves_submitted_publication_relationships(self):
         """DJ13158-008: Saving preserves the submitted publications."""
-        # DJ13158-008 logic obligation:
-        # GIVEN the demonstrated model form exposes a publications field whose
-        # choices are the union of its component querysets,
-        # AND selected matching publications belong to that union,
-        # WHEN the form is bound with exactly those publication identifiers,
-        # THEN require validation to succeed; otherwise stop without saving.
-        # WHEN the valid form is saved, persist the model instance first and
-        # hand the cleaned selected publications to the many-to-many save
-        # operation without filtering the combined queryset again.
-        # AFTER saving, reload the instance's publication relationships.
-        # PASS only if the reloaded relationship set equals the submitted set;
-        # a missing or additional publication is a persistence failure.
-        pass
+        submitted = [self.entertainment, self.third]
+        form = self.article_form({
+            'categories': [category.pk for category in submitted],
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+        article = form.save()
+
+        article = Article.objects.get(pk=article.pk)
+        self.assertCountEqual(article.categories.all(), submitted)
 
 
 class ModelChoiceFieldTests(TestCase):
