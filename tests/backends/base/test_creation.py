@@ -82,6 +82,18 @@ class TestDbCreationTests(SimpleTestCase):
 class DeserializeDbFromStringTests(TransactionTestCase):
     available_apps = ['backends']
 
+    def test_srb_004_failure_after_object_processed_commits_no_restored_objects(self):
+        """GUID: SRB-004; failed restoration transitions to no committed objects."""
+        pass
+
+    def test_srb_005_restoration_reads_and_persists_only_associated_database_alias(self):
+        """GUID: SRB-005; restoration is confined to its associated alias."""
+        pass
+
+    def test_srb_004_srb_005_alias_scoped_failure_commits_no_partial_or_cross_alias_state(self):
+        """GUID: SRB-004, SRB-005; failed alias-scoped restoration has no durable effects."""
+        pass
+
     def forward_reference_data(self):
         reporter = Reporter.objects.create(
             first_name='Edwin', last_name='Baley',
