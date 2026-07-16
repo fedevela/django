@@ -666,6 +666,11 @@ class MigrationAutodetector:
             ]
             related_dependencies.append((app_label, model_name, None, True))
             for index in indexes:
+                # ORDER-006 architecture contract: generate_created_models()
+                # owns each declared index as an independent AddIndex operation.
+                # Ordinary field indexes retain related_dependencies; only an
+                # index that consumes _order receives the private ordering-field
+                # dependency below. AddIndex remains unaware of scheduling.
                 # ORDER-006 migration-generation pseudocode
                 # INPUT: each declared index from the new model, including
                 # independent created_at and updated_at indexes and any index

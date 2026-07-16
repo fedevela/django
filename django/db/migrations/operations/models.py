@@ -753,6 +753,10 @@ class IndexOperation(Operation):
 class AddIndex(IndexOperation):
     """Add an index on a model."""
 
+    # ORDER-006 ownership boundary: one AddIndex carries one unchanged Index
+    # declaration from migration state to the schema-editor adapter. Timestamp
+    # indexes require no knowledge of _order and no coupling to sibling indexes;
+    # generation-time prerequisites remain owned by the autodetector.
     # ORDER-004 architecture boundary: AddIndex preserves the Index contract's
     # declared field order and delegates column resolution and DDL to the schema
     # editor. Its _order prerequisite is supplied by autodetector scheduling.
