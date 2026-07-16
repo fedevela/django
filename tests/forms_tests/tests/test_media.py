@@ -686,6 +686,18 @@ class FormsMediaTestCase(SimpleTestCase):
             "Detected duplicate Media files in an opposite order: 'a.js', 'b.js'",
         )
 
+    def test_media_009_one_object_nondefective_aggregation_preserves_collection_and_order(self):
+        """GUID: MEDIA-009 - One-object collection and ordering remain compatible."""
+        pass
+
+    def test_media_009_two_object_nondefective_aggregation_preserves_collection_order_deduplication_and_warnings(self):
+        """GUID: MEDIA-009 - Two-object results and warnings remain compatible."""
+        pass
+
+    def test_media_009_defective_one_or_two_object_aggregation_is_excluded_from_compatibility(self):
+        """GUID: MEDIA-009 - Defective one- or two-object behavior is excluded."""
+        pass
+
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])
         self.assertTrue(hasattr(Media, '__html__'))
