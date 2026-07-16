@@ -1152,6 +1152,14 @@ class ModelChoiceIterator:
         self.queryset = field.queryset
 
     def __iter__(self):
+        # DJ13158-005 logic obligation (unchanged union-backed rendering):
+        # INPUT: the field's configured union queryset, with no submitted data.
+        # FLOW: retain that queryset unchanged -> evaluate its combined result ->
+        # emit one choice for each object present in the component-filter union.
+        # OUTPUT: the rendered choice objects equal the union result exactly;
+        # do not add objects outside either component or omit matching objects.
+        # FAILURE: propagate queryset evaluation or choice-conversion failures;
+        # rendering must not replace a failed union evaluation with partial choices.
         if self.field.empty_label is not None:
             yield ("", self.field.empty_label)
         queryset = self.queryset
@@ -1319,6 +1327,21 @@ class ModelMultipleChoiceField(ModelChoiceField):
         return list(self._check_values(value))
 
     def clean(self, value):
+        # DJ13158-003 logic obligation (optional empty cleaning):
+        # INPUT: an empty submission for a non-required union-backed field.
+        # TRANSITION: SUBMITTED_EMPTY -> OPTIONAL_ACCEPTED -> CLEANED_EMPTY.
+        # OUTPUT: return an empty selection without attempting to constrain or
+        # otherwise alter the combined queryset; required emptiness still fails.
+        #
+        # DJ13158-007 logic obligation (valid non-empty cleaning):
+        # INPUT: a collection of submitted identifiers and the union queryset.
+        # FLOW: normalize identifiers -> reject a non-collection or malformed
+        # identifier -> resolve identifiers strictly within the union result ->
+        # reject every identifier absent from that allowed result -> run field
+        # validators -> return exactly the selected matching objects.
+        # TRANSITIONS: SUBMITTED_VALUES -> NORMALIZED -> UNION_MATCHED ->
+        # VALIDATED -> CLEANED_SELECTION; any rejection transitions to the
+        # corresponding validation error without returning a partial selection.
         value = self.prepare_value(value)
         if self.required and not value:
             raise ValidationError(self.error_messages['required'], code='required')
