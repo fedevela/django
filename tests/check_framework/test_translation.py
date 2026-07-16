@@ -159,6 +159,13 @@ class TranslationE004ContractTests(SimpleTestCase):
 
 
 class TranslationE004Trans007ContractTests(SimpleTestCase):
+    """TRANS-007 architecture boundary for LANGUAGE_CODE support outcomes.
+
+    This test-owned contract groups the base fallback, exact match, unsupported
+    code, and suite-preservation obligations at the existing E004 check seam.
+    Its dependency points to ``check_language_settings_consistent``; production
+    translation checks do not depend on this regression-coverage structure.
+    """
 
     def test_trans_007_unavailable_exact_available_base_does_not_emit_e004(self):
         """TRANS-007: An available base fallback does not emit E004."""
