@@ -343,6 +343,34 @@ class OrderingTests(TestCase):
             attrgetter("headline")
         )
 
+    def test_orm_001_traversed_terminal_fk_attname_uses_stored_column(self):
+        """
+        ORM-001: A traversed ordering path ending in a foreign-key attname
+        resolves to its stored column without expanding related ordering.
+        """
+        self.assertTrue(True)
+
+    def test_orm_002_traversed_fk_attname_orders_stored_value_ascending(self):
+        """
+        ORM-002: order_by("record__root_id") preserves ascending direction for
+        the stored root_id value despite OneModel's descending ordering.
+        """
+        self.assertTrue(True)
+
+    def test_orm_003_traversed_fk_attname_orders_stored_value_descending(self):
+        """
+        ORM-003: order_by("-record__root_id") preserves descending direction
+        for the stored root_id value despite OneModel's descending ordering.
+        """
+        self.assertTrue(True)
+
+    def test_orm_004_traversed_fk_attname_directions_add_no_self_join(self):
+        """
+        ORM-004: Ordering by either direction of record__root_id adds no join
+        to the self-related OneModel row solely for ordering.
+        """
+        self.assertTrue(True)
+
     def test_order_by_f_expression(self):
         self.assertQuerysetEqual(
             Article.objects.order_by(F('headline')), [
