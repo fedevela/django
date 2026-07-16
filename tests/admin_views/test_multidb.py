@@ -29,10 +29,36 @@ urlpatterns = [
 class PersistentSQLiteContractTests(SimpleTestCase):
     def test_sqlite_001_distinct_file_databases_keepdb_serial_run_completes_without_lock(self):
         """GUID: SQLITE-001."""
+        # GIVEN SQLite-backed "default" and "other" aliases whose TEST.NAME
+        # values resolve to distinct persistent files.
+        # WHEN the admin_views.test_multidb label is run with --keepdb and a
+        # single worker, preserving each alias's database between runs:
+        #   - initialize or reuse both test databases in deterministic alias
+        #     order;
+        #   - execute all class setup, test, and teardown transitions;
+        #   - release each transaction before the runner advances to an
+        #     operation that can acquire a conflicting SQLite write lock.
+        # THEN require the command to finish successfully.
+        # IF either backend raises sqlite3.OperationalError or Django's wrapped
+        # OperationalError with "database is locked", fail this obligation and
+        # report the alias and lifecycle transition holding/acquiring the lock.
+        # FINALLY leave both persistent database files reusable by a subsequent
+        # --keepdb invocation.
         self.assertTrue(True)
 
     def test_sqlite_002_setup_test_data_superuser_write_uses_intended_database_alias(self):
         """GUID: SQLITE-002."""
+        # FOR EACH database alias participating in MultiDatabaseTests:
+        #   - make that alias the router's current write target;
+        #   - invoke setUpTestData()'s superuser creation;
+        #   - observe that routing selects the same alias;
+        #   - require the write to complete and retain the created user under
+        #     that alias's key for the later admin-view tests.
+        # IF routing selects a different alias, fail with expected and actual
+        # aliases before allowing later setup writes to obscure the mismatch.
+        # IF SQLite reports a lock during the write, fail with the intended
+        # alias and preserve the lock error as the cause.
+        # AFTER all aliases complete, require one usable superuser per alias.
         self.assertTrue(True)
 
 
@@ -42,6 +68,12 @@ class MultiDatabaseTests(TestCase):
 
     @classmethod
     def setUpTestData(cls):
+        # GUID: SQLITE-002 -- For each connection alias, transition the router
+        # target to that alias before creating its superuser; the manager write
+        # must resolve through that target, complete without a lock, and be
+        # stored by alias before setup advances to the Book write. On routing
+        # mismatch or write failure, abort setup and surface the alias-specific
+        # cause; do not continue with partially attributed fixture state.
         cls.superusers = {}
         cls.test_book_ids = {}
         for db in connections:
