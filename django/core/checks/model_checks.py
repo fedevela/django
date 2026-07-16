@@ -7,6 +7,18 @@ from django.apps import apps
 from django.core.checks import Error, Tags, register
 
 
+# DBTABLE-001 architecture contract:
+# - Ownership: check_all_models() owns both managed-table collision collection
+#   and the diagnostic emitted for each collision.
+# - Input boundary: app_configs selects the models; settings.DATABASE_ROUTERS
+#   is the only router-configuration input needed at the diagnostic seam.
+# - Dependency direction: model checks may read router configuration, but must
+#   not instantiate or call database routers to preserve this no-router path.
+# - Integration seam: retain the shared db_table_models collector for same-app
+#   and cross-app models, and guard the models.E028 branch where collisions are
+#   converted to CheckMessage instances.
+# - Verification home: DBTable001NoDatabaseRoutersContractTests in
+#   tests/check_framework/test_model_checks.py covers all DBTABLE-001 paths.
 @register(Tags.models)
 def check_all_models(app_configs=None, **kwargs):
     db_table_models = defaultdict(list)
