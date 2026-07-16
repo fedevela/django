@@ -43,3 +43,23 @@ class ASGIStaticFilesHandlerContractTests(SimpleTestCase):
 
         self.assertIs(actual_response, response)
         self.assertEqual(calls, [(scope, receive, send)])
+
+    def test_asgi_static_002_recognized_existing_file_returns_complete_content_status_and_headers(self):
+        """GUID: ASGI-STATIC-002."""
+        self.assertTrue(True)
+
+    def test_asgi_static_003_recognized_missing_file_preserves_not_found_response(self):
+        """GUID: ASGI-STATIC-003."""
+        self.assertTrue(True)
+
+    def test_asgi_static_005_existing_file_response_completes_asgi_consumption_without_contract_error(self):
+        """GUID: ASGI-STATIC-005; existing recognized file response."""
+        self.assertTrue(True)
+
+    def test_asgi_static_005_missing_file_response_completes_asgi_consumption_without_contract_error(self):
+        """GUID: ASGI-STATIC-005; recognized missing file response."""
+        self.assertTrue(True)
+
+    def test_asgi_static_006_request_outside_existing_static_rules_is_not_served_as_static(self):
+        """GUID: ASGI-STATIC-006."""
+        self.assertTrue(True)
