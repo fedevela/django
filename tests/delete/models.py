@@ -105,6 +105,10 @@ class Avatar(models.Model):
     desc = models.TextField(null=True)
 
 
+class EmptyDeleteTestModel(models.Model):
+    pass
+
+
 # This model is used to test a duplicate query regression (#25685)
 class AvatarProxy(Avatar):
     class Meta:

@@ -8,9 +8,9 @@ from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
 
 from .models import (
     B1, B2, B3, MR, A, Avatar, B, Base, Child, DeleteBottom, DeleteTop,
-    GenericB1, GenericB2, GenericDeleteBottom, HiddenUser, HiddenUserProfile,
-    M, M2MFrom, M2MTo, MRNull, Origin, P, Parent, R, RChild, RChildChild,
-    Referrer, S, T, User, create_a, get_default_r,
+    EmptyDeleteTestModel, GenericB1, GenericB2, GenericDeleteBottom, HiddenUser,
+    HiddenUserProfile, M, M2MFrom, M2MTo, MRNull, Origin, P, Parent, R, RChild,
+    RChildChild, Referrer, S, T, User, create_a, get_default_r,
 )
 
 
@@ -608,25 +608,45 @@ class DeletionTests(TestCase):
 class EmptyQuerySetDeleteContractTests(TestCase):
     def test_delete_002_empty_simple_queryset_returns_zero_and_dictionary_tuple(self):
         """GUID: DELETE-002; empty simple queryset -> (0, dictionary)."""
-        self.assertTrue(True)
+        result = EmptyDeleteTestModel.objects.none().delete()
+
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], 0)
+        self.assertIsInstance(result[1], dict)
 
     def test_delete_002_empty_related_queryset_returns_zero_and_dictionary_tuple(self):
         """GUID: DELETE-002; empty related queryset -> (0, dictionary)."""
-        self.assertTrue(True)
+        result = Avatar.objects.none().delete()
+
+        self.assertIsInstance(result, tuple)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], 0)
+        self.assertIsInstance(result[1], dict)
 
     def test_delete_001_delete_003_simple_and_related_empty_querysets_use_same_permitted_dictionary_convention(self):
         """
         GUID: DELETE-001, DELETE-003; simple and related empty querysets use
         the same empty dictionary or applicable model-label-to-zero convention.
         """
-        self.assertTrue(True)
+        simple_result = EmptyDeleteTestModel.objects.none().delete()
+        related_result = Avatar.objects.none().delete()
+
+        self.assertEqual(simple_result, (0, {}))
+        self.assertEqual(related_result, (0, {}))
 
     def test_delete_003_repeated_empty_queryset_deletions_preserve_selected_dictionary_convention(self):
         """
         GUID: DELETE-003; repeated empty-queryset deletes preserve the selected
         dictionary convention for both model categories.
         """
-        self.assertTrue(True)
+        for queryset in (
+            EmptyDeleteTestModel.objects.none(),
+            Avatar.objects.none(),
+        ):
+            with self.subTest(model=queryset.model._meta.label):
+                self.assertEqual(queryset.delete(), (0, {}))
+                self.assertEqual(queryset.delete(), (0, {}))
 
 
 class FastDeleteTests(TestCase):

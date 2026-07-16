@@ -771,6 +771,8 @@ class QuerySet:
 
         # Clear the result cache, in case this QuerySet gets reused.
         self._result_cache = None
+        if deleted == 0:
+            _rows_count = {}
         return deleted, _rows_count
 
     delete.alters_data = True
