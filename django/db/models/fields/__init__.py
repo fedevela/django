@@ -513,6 +513,10 @@ class Field(RegisterLookupMixin):
         name, path, args, kwargs = self.deconstruct()
         return self.__class__(*args, **kwargs)
 
+    # FIELD-001, FIELD-002, FIELD-007, FIELD-009 architecture: Field owns the
+    # equality boundary; model association is comparison input, not delegated
+    # model behavior. __hash__ remains the set-collision boundary, and
+    # FieldEqualityContractTests is the integration contract seam.
     def __eq__(self, other):
         # FIELD-001, FIELD-002, FIELD-007, FIELD-009 pseudocode:
         # IF other is not a Field, RETURN NotImplemented.
