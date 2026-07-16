@@ -1,6 +1,6 @@
 from math import ceil
 
-from django.db import connection, models
+from django.db import connection, connections, models
 from django.db.models import ProtectedError, RestrictedError
 from django.db.models.deletion import Collector
 from django.db.models.sql.constants import GET_ITERATOR_CHUNK_SIZE
@@ -606,26 +606,41 @@ class DeletionTests(TestCase):
 
 
 class EmptyQuerySetDeleteContractTests(TestCase):
+    databases = '__all__'
+
     def test_delete_005_each_backend_empty_queryset_delete_returns_zero_and_dictionary(self):
         """
-        GUID: DELETE-005; on each supported backend, deleting an equivalent
+        GUID: DELETE-005; on each configured backend, deleting an equivalent
         empty queryset returns a zero total and a dictionary second element.
         """
-        self.assertTrue(True)
+        for alias in connections:
+            with self.subTest(database=alias):
+                deleted, deleted_by_model = (
+                    EmptyDeleteTestModel.objects.using(alias).all().delete()
+                )
+                self.assertEqual(deleted, 0)
+                self.assertIsInstance(deleted_by_model, dict)
 
     def test_delete_005_each_backend_preserves_selected_zero_deletion_dictionary_convention(self):
         """
-        GUID: DELETE-005; equivalent empty-queryset deletions on each supported
+        GUID: DELETE-005; equivalent empty-queryset deletions on each configured
         backend preserve the selected zero-deletion dictionary convention.
         """
-        self.assertTrue(True)
+        for alias in connections:
+            with self.subTest(database=alias):
+                result = EmptyDeleteTestModel.objects.using(alias).all().delete()
+                self.assertEqual(result, (0, {}))
 
     def test_delete_005_simple_and_foreign_key_models_preserve_convention_on_each_backend(self):
         """
         GUID: DELETE-005; backend selection and foreign-key topology do not
         change the selected empty-queryset zero-deletion dictionary convention.
         """
-        self.assertTrue(True)
+        for alias in connections:
+            for model in (EmptyDeleteTestModel, Avatar):
+                with self.subTest(database=alias, model=model._meta.label):
+                    result = model.objects.using(alias).all().delete()
+                    self.assertEqual(result, (0, {}))
 
     def test_delete_002_empty_simple_queryset_returns_zero_and_dictionary_tuple(self):
         """GUID: DELETE-002; empty simple queryset -> (0, dictionary)."""
