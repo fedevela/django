@@ -120,11 +120,25 @@ class Media:
         """
         Resolve a complete set of media declaration lists.
 
-        Architecture contract (GUID: MEDIA-001, MEDIA-002, MEDIA-005): this is
-        the integration seam between retained declarations and ordered media.
-        It owns cross-list ordering, conflict detection, and deduplication. The
-        pairwise merge() method remains the compatibility primitive for direct
-        callers.
+        Architecture contract (GUID: MEDIA-001, MEDIA-002, MEDIA-003,
+        MEDIA-004, MEDIA-005, MEDIA-006): this is the sole integration seam
+        between retained source declarations and ordered media. Media.__add__()
+        owns declaration retention; this resolver owns construction of the
+        complete dependency set, conflict detection, deterministic ordering,
+        and deduplication. It may depend on the generic stable topological-sort
+        utility, but that utility must remain unaware of media declarations.
+
+        Each item list crossing this boundary is an authoritative source
+        declaration. A resolved list must not re-enter as a source declaration,
+        because its incidental adjacency isn't an ordering contract
+        (GUID: MEDIA-003). Resolution considers all retained declarations in one
+        operation so every compatible declared relationship reaches the final
+        order (GUID: MEDIA-004). Source-list order and first-seen item order are
+        the stable tie-break inputs, not additional dependencies
+        (GUID: MEDIA-006).
+
+        The pairwise merge() method remains a compatibility primitive for
+        direct callers and is not the Media aggregation boundary.
         """
         # Pseudocode contract (GUID: MEDIA-003, MEDIA-004, MEDIA-006):
         #
@@ -221,6 +235,13 @@ class Media:
         return combined_list
 
     def __add__(self, other):
+        """
+        Retain both operands' source declarations for complete resolution.
+
+        This is the declaration-retention side of the _merge_lists() boundary:
+        it must not replace sources with an intermediate resolved order
+        (GUID: MEDIA-003, MEDIA-004, MEDIA-006).
+        """
         combined = Media()
         combined._css_lists = self._css_lists + other._css_lists
         combined._js_lists = self._js_lists + other._js_lists
