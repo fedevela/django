@@ -965,6 +965,15 @@ class BooleanField(Field):
         return super().formfield(**{**defaults, **kwargs})
 
 
+# Architecture -- GUID: CHOICE-001, CHOICE-002, CHOICE-004
+#
+# CharField owns the primitive-text conversion contract in to_python(). A
+# private CharField assignment descriptor, colocated in this module and
+# selected through descriptor_class, is the integration seam that must route
+# constructor values, later assignments, and Model.from_db() materialization
+# through that contract before instance storage. Keep DeferredAttribute and
+# Model.__init__ generic: neither boundary should depend on TextChoices. The
+# existing field preparation path then persists the normalized instance value.
 class CharField(Field):
     description = _("String (up to %(max_length)s)")
 
