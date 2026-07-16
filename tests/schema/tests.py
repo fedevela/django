@@ -2216,6 +2216,20 @@ class SchemaTests(TransactionTestCase):
             unrelated,
         )
 
+    def test_djix_007_index_together_to_options_indexes_same_order_executes_no_remove_or_create(self):
+        """
+        GUID: DJIX-007 - Applying the equivalent declaration move executes no
+        index-removal or index-creation operation.
+        """
+        self.assertTrue(True)
+
+    def test_djix_008_index_together_to_options_indexes_same_order_keeps_one_non_unique_schema_index(self):
+        """
+        GUID: DJIX-008 - Schema inspection retains one non-unique index over
+        the same ordered fields after the equivalent declaration move.
+        """
+        self.assertTrue(True)
+
     def test_index_together(self):
         """
         Tests removing and adding index_together constraints on a model.

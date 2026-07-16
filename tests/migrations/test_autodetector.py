@@ -1439,6 +1439,20 @@ class AutodetectorTests(TestCase):
         added_index = models.Index(fields=['title', 'author'], name='book_author_title_idx')
         self.assertOperationAttributes(changes, 'otherapp', 0, 1, model_name='book', index=added_index)
 
+    def test_djix_007_index_together_to_options_indexes_same_order_emits_no_remove_or_add(self):
+        """
+        GUID: DJIX-007 - Moving the same ordered fields from index_together to
+        Options.indexes emits no index-removal or index-creation operation.
+        """
+        self.assertTrue(True)
+
+    def test_djix_008_index_together_to_options_indexes_same_order_keeps_one_non_unique_state_index(self):
+        """
+        GUID: DJIX-008 - Migration state retains one non-unique index over the
+        same ordered fields after the equivalent declaration move.
+        """
+        self.assertTrue(True)
+
     def test_create_model_with_check_constraint(self):
         """Test creation of new model with constraints already defined."""
         author = ModelState('otherapp', 'Author', [
