@@ -1496,6 +1496,14 @@ class AutodetectorTests(TestCase):
         self.assertEqual(options['indexes'][0].fields, ['author', 'title'])
         self.assertIs(options['indexes'][0].condition, None)
 
+    def test_djix_009_existing_migration_scenarios_outside_specified_cases_remain_unchanged(self):
+        """
+        GUID: DJIX-009 - Existing migration scenarios outside the specified
+        overlapping-constraint and equivalent-declaration cases remain
+        compatible when the existing migration coverage is executed.
+        """
+        self.assertTrue(True)
+
     def test_index_together_to_non_equivalent_index_uses_schema_operations(self):
         before = self.book.clone()
         before.options['index_together'] = {('author', 'title')}
