@@ -39,15 +39,6 @@ MEDIA_TYPES = ('css', 'js')
 
 
 class MediaOrderConflictWarning(RuntimeWarning):
-    """
-    Report contradictory ordering declared by media sources.
-
-    Architecture contract (GUID: MEDIA-007, MEDIA-008): Media._merge_lists()
-    owns emission because it is the boundary that retains the complete set of
-    authoritative declarations. The warning payload identifies the files in
-    the contradictory cycle selected from those declarations; generic graph
-    utilities don't depend on this media-specific warning contract.
-    """
     pass
 
 
@@ -73,18 +64,15 @@ class Media:
 
     @property
     def _css(self):
-        css = self._css_lists[0]
-        # filter(None, ...) avoids calling merge with empty dicts.
-        for obj in filter(None, self._css_lists[1:]):
-            css = {
-                medium: self.merge(css.get(medium, []), obj.get(medium, []))
-                for medium in css.keys() | obj.keys()
-            }
-        return css
+        css = defaultdict(list)
+        for css_list in self._css_lists:
+            for medium, sublist in css_list.items():
+                css[medium].append(sublist)
+        return {medium: self.merge(*lists) for medium, lists in css.items()}
 
     @property
     def _js(self):
-        return self._merge_lists(*self._js_lists)
+        return self.merge(*self._js_lists)
 
     def render(self):
         return mark_safe('\n'.join(chain.from_iterable(getattr(self, 'render_' + name)() for name in MEDIA_TYPES)))
@@ -124,218 +112,40 @@ class Media:
             return Media(**{str(name): getattr(self, '_' + name)})
         raise KeyError('Unknown media type "%s"' % name)
 
-    @classmethod
-    def _merge_lists(cls, *lists):
+    @staticmethod
+    def merge(*lists):
         """
-        Resolve a complete set of media declaration lists.
+        Merge lists while trying to keep the relative order of the elements.
+        Warn if the lists have the same elements in a different relative order.
 
-        Architecture contract (GUID: MEDIA-001, MEDIA-002, MEDIA-003,
-        MEDIA-004, MEDIA-005, MEDIA-006, MEDIA-007, MEDIA-008, MEDIA-009): this
-        is the sole integration seam between retained source declarations and
-        ordered media. Media.__add__() owns declaration retention; this
-        resolver owns construction of the complete dependency set, conflict
-        detection, deterministic ordering, deduplication, selection of
-        contradictory declared edges, and emission of the media-specific
-        warning. It may depend on the generic stable topological-sort utility
-        for cycle detection, but that utility must remain unaware of media
-        declarations, conflict evidence, and MediaOrderConflictWarning.
-
-        Each item list crossing this boundary is an authoritative source
-        declaration. A resolved list must not re-enter as a source declaration,
-        because its incidental adjacency isn't an ordering contract
-        (GUID: MEDIA-003). Resolution considers all retained declarations in one
-        operation so every compatible declared relationship reaches the final
-        order (GUID: MEDIA-004). Source-list order and first-seen item order are
-        the stable tie-break inputs, not additional dependencies
-        (GUID: MEDIA-006). Only a cycle in the authoritative declaration graph
-        crosses the warning boundary (GUID: MEDIA-007); the warning contract
-        receives the graph and stable item order needed to select and identify
-        that cycle's participants (GUID: MEDIA-008).
-
-        For one or two retained source declarations, this resolver also owns
-        the compatibility decision (GUID: MEDIA-009). A nondefective case must
-        preserve its existing collection, ordering, deduplication, and warning
-        result. A case whose result depends on an aggregation-created false
-        constraint must bypass that compatibility path and use the corrected
-        general resolver. Three-or-more-source behavior remains outside this
-        compatibility contract.
-
-        The pairwise merge() method remains a compatibility primitive for
-        direct callers and is not the Media aggregation boundary.
+        For static assets it can be important to have them included in the DOM
+        in a certain order. In JavaScript you may not be able to reference a
+        global or in CSS you might want to override a style.
         """
-        # Pseudocode contract (GUID: MEDIA-003, MEDIA-004, MEDIA-006):
-        #
-        # aggregate_declared_media(source_lists):
-        #     INPUT source_lists in their supplied sequence; each source list
-        #         declares order only between its own consecutive distinct files
-        #
-        #     INITIALIZE one dependency graph and one insertion-ordered file set
-        #         for the complete aggregation
-        #
-        #     FOR EACH nonempty source list in supplied sequence:
-        #         RECORD every distinct file in first-seen order
-        #         FOR EACH consecutive pair declared by that same source list:
-        #             IF the pair contains two distinct files:
-        #                 RECORD predecessor -> successor as authoritative
-        #             ELSE:
-        #                 IGNORE the repeated-file self-dependency
-        #         DO NOT derive a dependency from adjacency in an intermediate
-        #             aggregate; only a source list may declare a dependency
-        #             (GUID: MEDIA-003)
-        #
-        #     ATTEMPT a stable topological ordering of all distinct files using
-        #         the complete dependency graph and first-seen order as the
-        #         deterministic tie-breaker
-        #     IF all declared dependencies are compatible:
-        #         RETURN an order satisfying every declared relationship
-        #             (GUID: MEDIA-004)
-        #         ALLOW unrelated files to occupy any position selected by the
-        #             deterministic tie-breaker; assign them no preferred
-        #             position as an additional constraint (GUID: MEDIA-006)
-        #     ELSE:
-        #         HAND OFF to the existing contradiction-warning policy and
-        #             deterministic first-seen fallback; contradiction semantics
-        #             are outside these requirements
-        #
-        #     GUARANTEE identical source lists in identical sequence produce the
-        #         same valid output because graph construction and tie-breaking
-        #         use stable source and first-seen order (GUID: MEDIA-006)
-        #
-        # Compatibility contract (GUID: MEDIA-009):
-        #
-        # preserve_small_aggregation_compatibility(source_lists):
-        #     INPUT the retained declarations from one or two Media objects
-        #
-        #     DETERMINE whether the case depends on an ordering constraint that
-        #         was created by aggregation rather than declared by a source
-        #     IF it depends on such a false constraint:
-        #         APPLY the corrected general aggregation flow above
-        #         DO NOT preserve the defective collection, order, deduplication,
-        #             or warning result as a compatibility requirement
-        #     ELSE IF exactly one Media object supplied a declaration:
-        #         RETURN the same distinct file collection in declared order
-        #         EMIT the same warnings as the existing one-object result
-        #     ELSE IF exactly two Media objects supplied declarations:
-        #         PRESERVE the existing union of their files
-        #         PRESERVE the existing order of files constrained by either
-        #             declaration and the existing placement of unconstrained
-        #             files
-        #         COLLAPSE duplicates exactly as in the existing result
-        #         EMIT a conflict warning exactly when the existing nondefective
-        #             result emits one; otherwise emit no conflict warning
-        #     ELSE:
-        #         APPLY the corrected general aggregation flow without a
-        #             MEDIA-009 compatibility guarantee
-        # Preserve the observable behavior of aggregations that contain no
-        # intermediate result capable of contributing an incidental ordering
-        # constraint (GUID: MEDIA-009). In particular, merge() retains the
-        # established placement of files that are independent across two
-        # declarations, as well as its deduplication and warning behavior.
-        if len(lists) == 1:
-            return list(lists[0])
-        if len(lists) == 2:
-            return cls.merge(*lists)
-
         dependency_graph = defaultdict(set)
         all_items = OrderedSet()
-        for item_list in filter(None, lists):
-            head = item_list[0]
-            # The first item depends on nothing but must be in the graph.
+        for list_ in filter(None, lists):
+            head = list_[0]
+            # The first items depend on nothing but have to be part of the
+            # dependency graph to be included in the result.
             dependency_graph.setdefault(head, set())
-            for item in item_list:
+            for item in list_:
                 all_items.add(item)
-                # Repeated paths don't create self-dependencies.
+                # No self dependencies.
                 if head != item:
                     dependency_graph[item].add(head)
                 head = item
         try:
             return stable_topological_sort(all_items, dependency_graph)
         except CyclicDependencyError:
-            # Find one cycle using first-seen order for deterministic evidence.
-            item_order = {item: index for index, item in enumerate(all_items)}
-            state = {}
-            stack = []
-            stack_indexes = {}
-
-            def find_cycle(item):
-                state[item] = 'visiting'
-                stack_indexes[item] = len(stack)
-                stack.append(item)
-                dependencies = sorted(
-                    dependency_graph[item], key=item_order.__getitem__,
-                )
-                for dependency in dependencies:
-                    if state.get(dependency) == 'visiting':
-                        return stack[stack_indexes[dependency]:]
-                    if state.get(dependency) is None:
-                        cycle = find_cycle(dependency)
-                        if cycle:
-                            return cycle
-                stack.pop()
-                stack_indexes.pop(item)
-                state[item] = 'visited'
-
-            cycle = None
-            for item in all_items:
-                if state.get(item) is None:
-                    cycle = find_cycle(item)
-                    if cycle:
-                        break
-            cycle.sort(key=item_order.__getitem__)
             warnings.warn(
                 'Detected duplicate Media files in an opposite order: {}'.format(
-                    ', '.join(repr(item) for item in cycle)
+                    ', '.join(repr(list_) for list_ in lists)
                 ), MediaOrderConflictWarning,
             )
             return list(all_items)
 
-    @staticmethod
-    def merge(list_1, list_2):
-        """
-        Merge two lists while trying to keep the relative order of the elements.
-        Warn if the lists have the same two elements in a different relative
-        order.
-
-        For static assets it can be important to have them included in the DOM
-        in a certain order. In JavaScript you may not be able to reference a
-        global or in CSS you might want to override a style.
-        """
-        # Start with a copy of list_1.
-        combined_list = list(list_1)
-        last_insert_index = len(list_1)
-        # Walk list_2 in reverse, inserting each element into combined_list if
-        # it doesn't already exist.
-        for path in reversed(list_2):
-            try:
-                # Does path already exist in the list?
-                index = combined_list.index(path)
-            except ValueError:
-                # Add path to combined_list since it doesn't exist.
-                combined_list.insert(last_insert_index, path)
-            else:
-                if index > last_insert_index:
-                    warnings.warn(
-                        'Detected duplicate Media files in an opposite order:\n'
-                        '%s\n%s' % (combined_list[last_insert_index], combined_list[index]),
-                        MediaOrderConflictWarning,
-                    )
-                # path already exists in the list. Update last_insert_index so
-                # that the following elements are inserted in front of this one.
-                last_insert_index = index
-        return combined_list
-
     def __add__(self, other):
-        """
-        Retain both operands' source declarations for complete resolution.
-
-        This is the declaration-retention side of the _merge_lists() boundary:
-        it must not replace sources with an intermediate resolved order
-        (GUID: MEDIA-003, MEDIA-004, MEDIA-006). It also preserves declaration
-        boundaries and source cardinality so _merge_lists() can identify the
-        one- and two-source compatibility scope; compatibility classification,
-        resolution, deduplication, and warnings remain owned by _merge_lists()
-        (GUID: MEDIA-009).
-        """
         combined = Media()
         combined._css_lists = self._css_lists + other._css_lists
         combined._js_lists = self._js_lists + other._js_lists
