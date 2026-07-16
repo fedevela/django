@@ -1927,45 +1927,21 @@ class Query(BaseExpression):
         primary key, and the query would be equivalent, the optimization
         will be made automatically.
         """
-        # Architecture contract (GEV-001 through GEV-008): this method owns
-        # the boundary between the query's participating-table namespace and
-        # expression-level grouping. ``alias_map`` and model field metadata
-        # supply that namespace as read-only inputs; annotation expressions
-        # remain responsible for materializing grouping columns through
-        # ``get_group_by_cols(alias=...)``. A colliding alias crosses that
-        # existing contract as ``None``, keeping the resolution internal to
-        # SQL query construction and introducing no public API (GEV-001,
-        # GEV-002, GEV-008). ``where``, join objects, and the Subquery tree are
-        # outside this ownership boundary and must pass through unchanged
-        # (GEV-003 through GEV-007). ``SQLCompiler`` consumes the resulting
-        # ``self.group_by`` tuple downstream; it does not own collision policy.
-        # Pseudocode contract for ambiguous annotation grouping:
-        #
-        # INPUT (GEV-005, GEV-006, GEV-007): retain the query's existing
-        # cross-relation OR predicate, participating relation joins, and the
-        # Subquery correlation to the outer model primary key.
-        #
-        # BUILD the set of database column names exposed by every table that
-        # participates in the query.
-        # FOR EACH selected annotation and its requested grouping alias:
-        #     IF alias grouping is disabled OR the alias collides with an
-        #     exposed column name:
-        #         derive grouping columns from the annotation expression with
-        #         no alias; for ``status``, this selects the correlated
-        #         Subquery expression instead of ``GROUP BY "status"``
-        #         (GEV-001, GEV-002, GEV-007).
-        #     ELSE:
-        #         retain the alias-based grouping reference.
-        #     APPEND the derived grouping columns without modifying filters,
-        #     joins, correlation, annotations, or external structures.
-        # OUTPUT (GEV-003, GEV-004): select ``status`` from the unchanged
-        # correlated Subquery and calculate ``total_count = Count("status")``
-        # once for each group defined by that annotation's value.
-        # PRESERVE (GEV-005, GEV-006, GEV-008): qualifying rows, join meaning,
-        # the ``status`` annotation name, models, schema, and configuration.
-        # FAILURE PATH (GEV-001, GEV-002): resolve an alias collision through
-        # expression grouping before SQL compilation; never emit an ambiguous
-        # bare grouping alias for the colliding annotation.
+        # Column names from JOINs to check collisions with aliases (GEV-001,
+        # GEV-002). Filters, joins, and expression correlation are unchanged
+        # (GEV-003 through GEV-008).
+        if allow_aliases:
+            column_names = set()
+            seen_models = set()
+            for join in list(self.alias_map.values())[1:]:  # Skip base table.
+                model = join.join_field.related_model
+                if model not in seen_models:
+                    column_names.update({
+                        field.column
+                        for field in model._meta.local_concrete_fields
+                    })
+                    seen_models.add(model)
+
         group_by = list(self.select)
         if self.annotation_select:
             for alias, annotation in self.annotation_select.items():
@@ -1979,7 +1955,7 @@ class Query(BaseExpression):
                     warnings.warn(msg, category=RemovedInDjango40Warning)
                     group_by_cols = annotation.get_group_by_cols()
                 else:
-                    if not allow_aliases:
+                    if not allow_aliases or alias in column_names:
                         alias = None
                     group_by_cols = annotation.get_group_by_cols(alias=alias)
                 group_by.extend(group_by_cols)
