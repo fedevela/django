@@ -10,6 +10,9 @@ from .models import Book
 
 
 class Router:
+    # GUID: SQLITE-002 -- Test-local database-selection boundary. The fixture
+    # owner sets this port; Django's router/manager stack is its sole consumer.
+    # Backend selection must not leak into the admin views under test.
     target_db = None
 
     def db_for_read(self, model, **hints):
@@ -64,6 +67,10 @@ class PersistentSQLiteContractTests(SimpleTestCase):
 
 @override_settings(ROOT_URLCONF=__name__, DATABASE_ROUTERS=['%s.Router' % __name__])
 class MultiDatabaseTests(TestCase):
+    # GUID: SQLITE-001, SQLITE-002 -- Integration boundary with TestCase's
+    # per-alias transaction owner. Persistent-file creation/reuse belongs to
+    # the test runner and SQLite creation backend; this module owns only the
+    # declared alias set and alias-keyed fixture state routed through Router.
     databases = {'default', 'other'}
 
     @classmethod
