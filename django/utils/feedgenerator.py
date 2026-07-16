@@ -233,6 +233,13 @@ class RssUserland091Feed(RssFeed):
     _version = "0.91"
 
     def add_item_elements(self, handler, item):
+        # Pseudocode (COMMENTS-007):
+        # INPUT: an item that may contain a resolved direct comments value.
+        # PRESERVE the RSS 0.91 field set; do not map comments to an element.
+        # CONTINUE serializing supported fields, whether comments is set or not.
+        # OUTPUT: valid RSS 0.91 with its established comments omission behavior.
+        # FAILURE PATH: comments must neither alter supported fields nor raise an
+        # error merely because this format has no comments representation.
         handler.addQuickElement("title", item['title'])
         handler.addQuickElement("link", item['link'])
         if item['description'] is not None:
@@ -244,6 +251,14 @@ class Rss201rev2Feed(RssFeed):
     _version = "2.0"
 
     def add_item_elements(self, handler, item):
+        # Pseudocode (COMMENTS-002, COMMENTS-007):
+        # INPUT: an RSS 2.0 item carrying the resolved direct comments value.
+        # SERIALIZE the established RSS 2.0 fields in their existing order.
+        # IF comments is present, emit one <comments> element containing that
+        # resolved value through the XML handler; otherwise omit the element.
+        # OUTPUT: valid RSS 2.0 retaining its format-specific comments behavior.
+        # FAILURE PATH: delegate XML-safe value serialization to the handler and
+        # do not disturb unrelated item fields when comments is absent or set.
         handler.addQuickElement("title", item['title'])
         handler.addQuickElement("link", item['link'])
         if item['description'] is not None:
@@ -339,6 +354,13 @@ class Atom1Feed(SyndicationFeed):
             handler.endElement("entry")
 
     def add_item_elements(self, handler, item):
+        # Pseudocode (COMMENTS-007):
+        # INPUT: an item that may contain a resolved direct comments value.
+        # PRESERVE the Atom field set; do not map comments to an entry element.
+        # CONTINUE serializing supported fields, whether comments is set or not.
+        # OUTPUT: valid Atom with its established comments omission behavior.
+        # FAILURE PATH: comments must neither alter supported fields nor raise an
+        # error merely because this format has no comments representation.
         handler.addQuickElement("title", item['title'])
         handler.addQuickElement("link", "", {"href": item['link'], "rel": "alternate"})
 
