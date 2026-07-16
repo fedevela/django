@@ -66,6 +66,20 @@ class OrderedByPKChild(OrderedByPKParent):
     pass
 
 
+# DJANGO-006: The parent owns the custom concrete primary-key field and the
+# inherited ordering contract; the child supplies the multi-table parent-link
+# boundary through which ``pk`` must resolve.
+class OrderedByCustomPKParent(models.Model):
+    custom_pk = models.IntegerField(primary_key=True)
+
+    class Meta:
+        ordering = ('-pk',)
+
+
+class OrderedByCustomPKChild(OrderedByCustomPKParent):
+    pass
+
+
 class OrderedByPKAscendingParent(models.Model):
     class Meta:
         ordering = ('pk',)

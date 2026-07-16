@@ -10,9 +10,9 @@ from django.db.models.functions import Upper
 from django.test import TestCase
 
 from .models import (
-    Article, Author, ChildArticle, OrderedByFArticle,
-    OrderedByPKAscendingChild, OrderedByPKAscendingParent, OrderedByPKChild,
-    OrderedByPKParent, Reference,
+    Article, Author, ChildArticle, OrderedByCustomPKChild,
+    OrderedByCustomPKParent, OrderedByFArticle, OrderedByPKAscendingChild,
+    OrderedByPKAscendingParent, OrderedByPKChild, OrderedByPKParent, Reference,
 )
 
 
