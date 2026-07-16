@@ -78,8 +78,23 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
         self.application = application
         self.base_url = urlparse(self.get_base_url())
 
+    # GUID: ASGI-STATIC-001 -- asynchronous static-response logic.
+    # async def get_response_async(request):
+    #     Hand the request to this handler's established synchronous static
+    #     response path through an async-safe boundary; do not consult the
+    #     middleware chain, because this wrapper does not initialize one.
+    #     Await the handoff and return its response, including the response
+    #     produced when static-file serving reports Http404.
+    #     If the handoff itself fails, propagate the failure to the ASGI caller.
+
     async def __call__(self, scope, receive, send):
-        # Only even look at HTTP requests
+        # GUID: ASGI-STATIC-001, ASGI-STATIC-004 -- routing logic.
+        # IF this is an HTTP scope recognized as a static-file request:
+        #     enter the ASGI response lifecycle, which obtains the response
+        #     through the specialized asynchronous static-response path above.
+        # ELSE:
+        #     await the wrapped application's established response path;
+        #     return its result unchanged and propagate any failure it raises.
         if scope['type'] == 'http' and self._should_handle(scope['path']):
             # Serve static content
             # (the one thing super() doesn't do is __call__, apparently)
