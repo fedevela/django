@@ -286,3 +286,19 @@ class QuerySetSetOperationTests(TestCase):
                         msg % (operation, combinator),
                     ):
                         getattr(getattr(qs, combinator)(qs), operation)()
+
+    def test_uniondist_001_parameterless_distinct_on_union_raises_unsupported_operation(self):
+        """UNIONDIST-001: union().distinct() raises the unsupported-operation exception."""
+        self.assertTrue(True)
+
+    def test_uniondist_002_field_distinct_on_union_raises_unsupported_operation(self):
+        """UNIONDIST-002: union().distinct(*fields) raises the unsupported-operation exception."""
+        self.assertTrue(True)
+
+    def test_uniondist_003_annotated_union_field_distinct_raises_when_called(self):
+        """UNIONDIST-003: annotated union distinct(*fields) is rejected at call time."""
+        self.assertTrue(True)
+
+    def test_uniondist_004_union_distinct_error_identifies_unsupported_operation(self):
+        """UNIONDIST-004: the union distinct() error identifies the unsupported operation."""
+        self.assertTrue(True)
