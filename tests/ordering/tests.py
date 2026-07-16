@@ -543,7 +543,43 @@ class OrderingTests(TestCase):
         rendered SQL, generated aliases, and backend quoting stay outside its
         contract.
         """
-        pass
+        queryset = Article.objects.filter(
+            pk__in=(self.a1.pk, self.a2.pk),
+        ).order_by(ordering)
+        order_by = queryset.query.get_compiler(queryset.db).get_order_by()
+
+        self.assertEqual(len(order_by), 1)
+        expression = order_by[0][0]
+        active_aliases = {
+            alias: join
+            for alias, join in queryset.query.alias_map.items()
+            if queryset.query.alias_refcount[alias]
+        }
+        target = Author._meta.get_field('editor')
+        self.assertIs(expression.expression.target, target)
+        self.assertEqual(expression.expression.target.column, 'editor_id')
+        self.assertIn(expression.expression.alias, active_aliases)
+        self.assertEqual(
+            active_aliases[expression.expression.alias].table_name,
+            Author._meta.db_table,
+        )
+        self.assertEqual(
+            sum(
+                join.table_name == Author._meta.db_table
+                for join in active_aliases.values()
+            ),
+            1,
+        )
+        return queryset, expression
+
+    def _create_orm_010_self_referential_authors(self):
+        """Create records whose stored editor IDs oppose insertion order."""
+        record_1 = Author.objects.create(editor=self.author_2)
+        record_2 = Author.objects.create(editor=self.author_1)
+        self.a1.author = record_1
+        self.a1.save(update_fields={'author'})
+        self.a2.author = record_2
+        self.a2.save(update_fields={'author'})
 
     def test_orm_010_ascending_self_fk_attname_orders_by_concrete_column_without_self_join(self):
         """
@@ -551,25 +587,17 @@ class OrderingTests(TestCase):
         values, targets the concrete column, and adds no ordering-only
         self-join.
         """
-        # ORM-010 logic obligation — ascending direction:
-        # GIVEN regression rows whose self-referential foreign-key values are
-        # deliberately out of insertion order, and whose related model has
-        # descending default ordering,
-        # WHEN a queryset is ordered by the traversed ``record__root_id``
-        # attname,
-        # THEN compile the ordering expression and identify its target by
-        # model metadata (table and concrete stored-column identity), not by
-        # matching backend-rendered SQL text,
-        # AND inspect the compiled query's active aliases/joins to confirm
-        # that traversal reaches ``record`` but does not add the self-related
-        # ``root`` table solely to satisfy ordering,
-        # AND evaluate stable identifiers from the queryset and compare them
-        # with the identifiers arranged by ascending stored ``root_id``.
-        # FAIL if direction is reversed by related default ordering, the
-        # expression targets a related/default-ordering column, an active
-        # ordering-only self-join exists, or the observed rows are not in the
-        # expected ascending order.
-        pass
+        self._create_orm_010_self_referential_authors()
+
+        queryset, expression = self._orm_010_ordering_structure(
+            'author__editor_id',
+        )
+
+        self.assertFalse(expression.descending)
+        self.assertSequenceEqual(
+            queryset.values_list('pk', flat=True),
+            [self.a2.pk, self.a1.pk],
+        )
 
     def test_orm_010_descending_self_fk_attname_orders_by_concrete_column_without_self_join(self):
         """
@@ -577,22 +605,17 @@ class OrderingTests(TestCase):
         values, targets the concrete column, and adds no ordering-only
         self-join.
         """
-        # ORM-010 logic obligation — descending direction:
-        # GIVEN the same regression rows and descending related-model default
-        # ordering used by the ascending case,
-        # WHEN a queryset is ordered by the traversed ``-record__root_id``
-        # attname,
-        # THEN compile the ordering expression, preserve the explicit
-        # descending flag, and identify the target as the concrete stored
-        # ``root_id`` column through model/compiler metadata,
-        # AND inspect active query aliases/joins to confirm that no join to
-        # the self-related ``root`` row was introduced solely for ordering,
-        # AND evaluate stable identifiers and compare them with the same
-        # expected identifiers arranged by descending stored ``root_id``.
-        # FAIL if the explicit direction is lost or compounded with related
-        # default ordering, the concrete target differs, an ordering-only
-        # self-join is active, or result order is not descending.
-        pass
+        self._create_orm_010_self_referential_authors()
+
+        queryset, expression = self._orm_010_ordering_structure(
+            '-author__editor_id',
+        )
+
+        self.assertTrue(expression.descending)
+        self.assertSequenceEqual(
+            queryset.values_list('pk', flat=True),
+            [self.a1.pk, self.a2.pk],
+        )
 
     def test_orm_010_sql_structure_checks_allow_backend_representation_differences(self):
         """
@@ -600,22 +623,13 @@ class OrderingTests(TestCase):
         aliases, and formatting while identifying the concrete column and the
         absence of an ordering-only self-join.
         """
-        # ORM-010 logic obligation — backend-portable structure:
-        # FOR EACH direction in (``record__root_id``, ``-record__root_id``):
-        #   build the regression queryset and force compiler ordering
-        #   resolution without asserting the complete rendered SQL;
-        #   resolve the ordering target's concrete column and owning table
-        #   from compiler/model metadata, treating generated alias spelling,
-        #   identifier quoting, and whitespace as non-semantic;
-        #   collect only active joins from the query alias map;
-        #   verify the required path join is present exactly as needed and
-        #   the self-related table is absent as an ordering-only join;
-        #   hand the same queryset to the direction-specific result-order
-        #   check so structural and observable behavior describe one query.
-        # FAIL only on semantic differences (wrong concrete target, extra
-        # active self-join, wrong direction, or wrong result sequence), never
-        # on backend-specific SQL representation.
-        pass
+        for ordering, descending in (
+            ('author__editor_id', False),
+            ('-author__editor_id', True),
+        ):
+            with self.subTest(ordering=ordering):
+                _, expression = self._orm_010_ordering_structure(ordering)
+                self.assertEqual(expression.descending, descending)
 
     def test_order_by_f_expression(self):
         self.assertQuerysetEqual(
