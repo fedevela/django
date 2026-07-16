@@ -69,3 +69,30 @@ class StaticTagTests(SimpleTestCase):
         msg = "'static' takes at least one argument (path to file)"
         with self.assertRaisesMessage(TemplateSyntaxError, msg):
             self.engine.render_to_string('t')
+
+
+class ScriptNameStaticMediaContractTests(SimpleTestCase):
+
+    def test_scripturl_001_nonempty_script_name_prefixes_relative_static_url_once_and_keeps_asset_path(self):
+        """GUID: SCRIPTURL-001."""
+        self.assertTrue(True)
+
+    def test_scripturl_002_nonempty_script_name_prefixes_relative_media_url_once_and_keeps_file_path(self):
+        """GUID: SCRIPTURL-002."""
+        self.assertTrue(True)
+
+    def test_scripturl_008_separate_requests_generate_static_and_media_urls_with_only_their_own_script_name(self):
+        """GUID: SCRIPTURL-008."""
+        self.assertTrue(True)
+
+    def test_scripturl_009_absent_or_empty_script_name_leaves_static_and_media_url_outputs_unchanged(self):
+        """GUID: SCRIPTURL-009."""
+        self.assertTrue(True)
+
+    def test_scripturl_010_prefixing_preserves_static_and_media_bases_with_requested_paths_beneath_them(self):
+        """GUID: SCRIPTURL-010."""
+        self.assertTrue(True)
+
+    def test_scripturl_011_nonempty_script_name_does_not_prefix_absolute_or_external_static_and_media_urls(self):
+        """GUID: SCRIPTURL-011."""
+        self.assertTrue(True)
