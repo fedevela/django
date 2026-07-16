@@ -1210,6 +1210,8 @@ class FormattingTests(SimpleTestCase):
 class MiscTests(SimpleTestCase):
     rf = RequestFactory()
 
+    # Runtime boundary (TRANS-005): fallback regression coverage remains in
+    # the i18n suite and depends on no E004 system-check implementation detail.
     def test_trans_005_base_language_check_acceptance_does_not_change_runtime_fallback(self):
         """TRANS-005: Check acceptance leaves runtime selection and fallback unchanged."""
         self.assertTrue(True)

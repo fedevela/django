@@ -86,6 +86,10 @@ class TranslationCheckTests(SimpleTestCase):
             ])
 
 
+# Architecture verification boundary (TRANS-001, TRANS-002, TRANS-003,
+# TRANS-004, TRANS-006): support-policy coverage is owned beside the E004
+# system-check tests; these placeholders expose that seam without duplicating
+# production behavior or the unrelated translation-check contracts above.
 class TranslationE004ContractTests(SimpleTestCase):
 
     def test_trans_001_available_base_language_does_not_emit_e004(self):

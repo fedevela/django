@@ -55,6 +55,13 @@ def check_setting_languages_bidi(app_configs, **kwargs):
 @register(Tags.translation)
 def check_language_settings_consistent(app_configs, **kwargs):
     """Error if language settings are not consistent with each other."""
+    # Architecture ownership (TRANS-001, TRANS-002, TRANS-003, TRANS-004,
+    # TRANS-005, TRANS-006): E004 support policy belongs entirely to this
+    # system-check boundary. Its inputs are settings.LANGUAGE_CODE and the
+    # locally constructed available-tag inventory; runtime translation
+    # resolution isn't a dependency of this check. Exact and base-tag support
+    # therefore share this local inventory seam, while the other registered
+    # translation checks retain their separate ownership above.
     # Pseudocode contract for translation.E004:
     #
     # TRANS-004 INPUT: Read LANGUAGE_CODE and build the available-code set by
