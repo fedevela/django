@@ -89,10 +89,35 @@ class ASGIStaticFilesHandler(StaticFilesHandlerMixin, ASGIHandler):
         self.application = application
         self.base_url = urlparse(self.get_base_url())
 
+    # Logic obligations (GUID: ASGI-STATIC-002, ASGI-STATIC-003,
+    # ASGI-STATIC-005, ASGI-STATIC-006):
+    # async def get_response_async(request):
+    #     Cross the async-safe boundary into the established static response
+    #     path; do not introduce an alternate lookup, storage, or serving path.
+    #     IF the existing static rules resolve the requested file:
+    #         return the resulting file response unchanged so its complete
+    #         content, status, and headers remain available to ASGI consumption.
+    #     ELSE IF the existing static path reports Http404:
+    #         preserve get_response()'s established not-found conversion and
+    #         return that response unchanged to the ASGI lifecycle.
+    #     ELSE IF response acquisition fails:
+    #         propagate the failure; do not synthesize static-file behavior.
+    #     The caller then consumes either returned response through Django's
+    #     normal ASGI response contract, including completion of its body.
     async def get_response_async(self, request):
         return await sync_to_async(self.get_response)(request)
 
     async def __call__(self, scope, receive, send):
+        # Routing logic (GUID: ASGI-STATIC-002, ASGI-STATIC-003,
+        # ASGI-STATIC-005, ASGI-STATIC-006):
+        # IF scope is HTTP AND its path matches the existing static URL rule:
+        #     hand the scope to Django's ASGI lifecycle;
+        #     acquire the response through get_response_async() above;
+        #     emit its status and headers, consume its complete body, and emit
+        #     the ASGI completion message for existing and not-found responses.
+        # ELSE:
+        #     do not perform static lookup or serving;
+        #     hand off to the wrapped application and return its result.
         if scope['type'] == 'http' and self._should_handle(scope['path']):
             # Serve static content
             # (the one thing super() doesn't do is __call__, apparently)
