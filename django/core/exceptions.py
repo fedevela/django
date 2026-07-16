@@ -222,6 +222,16 @@ class ValidationError(Exception):
     # __eq__ invokes compare_structured_content before the scalar procedure
     # whenever either operand represents list or dictionary content.
 
+    # Hashing architecture (VEQ-013, VEQ-014, VEQ-015):
+    # ValidationError.__hash__ owns the hash boundary and belongs beside
+    # __eq__, consuming the same scalar or normalized collection state without
+    # changing it. Any value-normalization or collection-combination seam is a
+    # private implementation detail colocated with ValidationError; dependency
+    # flows from hashing to the equality contract and its error_dict/error_list
+    # products, never from equality back to hashing. The boundary must not
+    # depend on presentation, serialization, collection, or raising paths and
+    # must not introduce a public helper or alter their existing contracts.
+
     # ValidationError hashing and behavior-preservation procedure (VEQ-013,
     # VEQ-014, VEQ-015):
     #
