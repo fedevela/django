@@ -646,15 +646,45 @@ class FormsMediaTestCase(SimpleTestCase):
 
     def test_media_007_aggregation_of_opposite_declared_order_emits_conflict_warning(self):
         """GUID: MEDIA-007 - A-before-B plus B-before-A emits MediaOrderConflictWarning."""
-        pass
+        media = Media(js=['a.js', 'b.js']) + Media(js=['b.js', 'a.js'])
+        with self.assertWarns(MediaOrderConflictWarning):
+            media._js
 
     def test_media_007_compatible_declarations_with_incidental_adjacency_emit_no_conflict_warning(self):
         """GUID: MEDIA-007 - Incidental adjacency in compatible declarations emits no warning."""
-        pass
+        media = Media(js=['a.js', 'b.js']) + Media(js=['c.js'])
+        intermediate = media._js
+        c_index = intermediate.index('c.js')
+        if c_index:
+            later_declaration = ['c.js', intermediate[c_index - 1]]
+        else:
+            later_declaration = [intermediate[1], 'c.js']
+
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')
+            (media + Media(js=later_declaration))._js
+        self.assertFalse(any(
+            issubclass(warning.category, MediaOrderConflictWarning)
+            for warning in caught_warnings
+        ))
 
     def test_media_008_conflict_warning_identifies_both_files_in_opposite_declared_order(self):
         """GUID: MEDIA-008 - The conflict warning identifies file A and file B."""
-        pass
+        media = (
+            Media(js=['before.js', 'a.js', 'b.js', 'after.js']) +
+            Media(js=['b.js', 'a.js'])
+        )
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter('always')
+            media._js
+        self.assertEqual(len(caught_warnings), 1)
+        self.assertTrue(issubclass(
+            caught_warnings[0].category, MediaOrderConflictWarning,
+        ))
+        self.assertEqual(
+            str(caught_warnings[0].message),
+            "Detected duplicate Media files in an opposite order: 'a.js', 'b.js'",
+        )
 
     def test_html_safe(self):
         media = Media(css={'all': ['/path/to/css']}, js=['/path/to/js'])
