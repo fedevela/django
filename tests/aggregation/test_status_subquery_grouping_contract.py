@@ -121,22 +121,72 @@ class StatusSubqueryGroupingContractTests(TestCase):
 
 class StatusGroupingRegressionContainmentContractTests(TestCase):
 
+    @classmethod
+    def setUpTestData(cls):
+        cls.first = Publisher.objects.create(name='First', num_awards=1)
+        cls.second = Publisher.objects.create(name='Second', num_awards=2)
+        contact = Author.objects.create(name='Contact', age=30, status=1)
+        for index, (publisher, rating) in enumerate((
+            (cls.first, 10),
+            (cls.first, 10),
+            (cls.second, 20),
+        )):
+            Book.objects.create(
+                isbn='REG%06d' % index,
+                name='Regression book %d' % index,
+                pages=100,
+                rating=rating,
+                price=Decimal('10.00'),
+                contact=contact,
+                publisher=publisher,
+                pubdate=datetime.date(2020, 2, index + 1),
+            )
+
+    def publishers_with_first_rating(self):
+        first_rating = Book.objects.filter(
+            publisher=OuterRef('pk'),
+        ).order_by('pk').values('rating')[:1]
+        return Publisher.objects.annotate(first_rating=Subquery(first_rating))
+
     def test_gev_009_existing_annotation_tests_continue_to_pass_after_status_collision_correction(self):
         """GUID: GEV-009 - Existing relevant annotation tests keep passing."""
-        self.assertTrue(True)
+        results = Publisher.objects.annotate(
+            book_count=Count('book'),
+        ).order_by('name').values_list('name', 'book_count')
+        self.assertEqual(list(results), [('First', 2), ('Second', 1)])
 
     def test_gev_009_existing_correlated_subquery_tests_continue_to_pass_after_status_collision_correction(self):
         """GUID: GEV-009 - Existing relevant subquery tests keep passing."""
-        self.assertTrue(True)
+        results = self.publishers_with_first_rating().order_by('name')
+        self.assertEqual(
+            [(publisher.name, publisher.first_rating) for publisher in results],
+            [('First', 10.0), ('Second', 20.0)],
+        )
 
     def test_gev_009_existing_values_tests_continue_to_pass_after_status_collision_correction(self):
         """GUID: GEV-009 - Existing relevant values() tests keep passing."""
-        self.assertTrue(True)
+        results = Publisher.objects.values('name').annotate(
+            book_count=Count('book'),
+        ).order_by('name')
+        self.assertEqual(list(results), [
+            {'name': 'First', 'book_count': 2},
+            {'name': 'Second', 'book_count': 1},
+        ])
 
     def test_gev_009_existing_aggregation_tests_continue_to_pass_after_status_collision_correction(self):
         """GUID: GEV-009 - Existing relevant aggregation tests keep passing."""
-        self.assertTrue(True)
+        self.assertEqual(
+            Publisher.objects.aggregate(book_count=Count('book')),
+            {'book_count': 3},
+        )
 
     def test_gev_009_existing_grouping_tests_continue_to_pass_after_status_collision_correction(self):
         """GUID: GEV-009 - Existing relevant grouping tests keep passing."""
-        self.assertTrue(True)
+        queryset = self.publishers_with_first_rating().values(
+            'first_rating',
+        ).annotate(publisher_count=Count('pk')).order_by('first_rating')
+        self.assertIsInstance(queryset.query.group_by[0], Ref)
+        self.assertEqual(list(queryset), [
+            {'first_rating': 10.0, 'publisher_count': 1},
+            {'first_rating': 20.0, 'publisher_count': 1},
+        ])
