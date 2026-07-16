@@ -2199,7 +2199,29 @@ class AutodetectorTests(TestCase):
 
     def test_order_006_new_ordered_model_migration_retains_created_at_and_updated_at_indexes(self):
         """ORDER-006: Migration generation retains timestamp indexes alongside an _order index."""
-        self.assertTrue(True)
+        indexes = [
+            models.Index(fields=["created_at"], name="created_at_idx"),
+            models.Index(fields=["updated_at"], name="updated_at_idx"),
+            models.Index(fields=["look", "_order"], name="look_order_idx"),
+        ]
+        ordered_model = ModelState("testapp", "OrderedModel", [
+            ("id", models.AutoField(primary_key=True)),
+            ("look", models.IntegerField()),
+            ("created_at", models.DateTimeField(auto_now_add=True)),
+            ("updated_at", models.DateTimeField(auto_now=True)),
+        ], options={
+            "order_with_respect_to": "look",
+            "indexes": indexes,
+        })
+
+        changes = self.get_changes([], [ordered_model])
+
+        added_indexes = [
+            operation.index
+            for operation in changes["testapp"][0].operations
+            if isinstance(operation, migrations.AddIndex)
+        ]
+        self.assertEqual(added_indexes, indexes)
 
     def test_alter_model_managers(self):
         """

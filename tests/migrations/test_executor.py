@@ -39,9 +39,13 @@ class ExecutorTests(MigrationTestBase):
         ordered_model_state = ModelState(app_label, "OrderedModel", [
             ("id", models.AutoField(primary_key=True)),
             ("look", models.ForeignKey("orderwrt.Look", models.CASCADE)),
+            ("created_at", models.DateTimeField(auto_now_add=True)),
+            ("updated_at", models.DateTimeField(auto_now=True)),
         ], options={
             "order_with_respect_to": "look",
             "indexes": [
+                models.Index(fields=["created_at"], name="created_at_idx"),
+                models.Index(fields=["updated_at"], name="updated_at_idx"),
                 models.Index(fields=["look", "_order"], name="look_order_idx"),
             ],
         })
@@ -95,7 +99,9 @@ class ExecutorTests(MigrationTestBase):
 
     def test_order_006_empty_database_migration_creates_created_at_and_updated_at_indexes(self):
         """ORDER-006: Applying the migration creates created_at and updated_at indexes."""
-        self.assertTrue(True)
+        with self.applied_order_with_respect_to_migration():
+            self.assertIndexExists("orderwrt_orderedmodel", ["created_at"])
+            self.assertIndexExists("orderwrt_orderedmodel", ["updated_at"])
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_run(self):
