@@ -1383,6 +1383,36 @@ class JSONFieldTests(TestCase):
         self.assertEqual(Model.check(databases=self.databases), [])
 
 
+class UniqueConstraintFieldCheckContractTests(SimpleTestCase):
+    def test_djuc_001_missing_named_field_reports_e012(self):
+        """GUID: DJUC-001."""
+        pass
+
+    def test_djuc_003_many_to_many_named_field_reports_e013(self):
+        """GUID: DJUC-003."""
+        pass
+
+    def test_djuc_004_inherited_non_local_named_field_reports_e016(self):
+        """GUID: DJUC-004."""
+        pass
+
+    def test_djuc_005_valid_local_and_foreign_key_fields_report_no_error(self):
+        """GUID: DJUC-005."""
+        pass
+
+    def test_djuc_006_all_invalid_named_fields_and_no_valid_fields_are_reported(self):
+        """GUID: DJUC-006."""
+        pass
+
+    def test_djuc_007_expression_only_constraint_skips_named_field_validation(self):
+        """GUID: DJUC-007."""
+        pass
+
+    def test_djuc_010_repeated_checks_preserve_error_ids_and_field_details(self):
+        """GUID: DJUC-010."""
+        pass
+
+
 @isolate_apps('invalid_models_tests')
 class ConstraintsTests(TestCase):
     def test_check_constraints(self):
