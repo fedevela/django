@@ -515,6 +515,11 @@ class SyndicationFeedTest(FeedTestCase):
 
 
 class SyndicationCommentsContractTests(TestCase):
+    # Architecture (COMMENTS-008): this test fixture owns the regression
+    # contract spanning Feed.get_feed() keyword assembly and RSS 2.0 item
+    # serialization. CommentsFeed represents the absent-comments pathway;
+    # test-local subclasses supply either item_comments or item_extra_kwargs.
+    # Assertions belong at the normalized feed-item and rendered-XML seams.
     class CommentsFeed(views.Feed):
         title = 'Comments feed'
         link = '/comments/'
