@@ -55,32 +55,10 @@ def check_setting_languages_bidi(app_configs, **kwargs):
 @register(Tags.translation)
 def check_language_settings_consistent(app_configs, **kwargs):
     """Error if language settings are not consistent with each other."""
-    # Architecture ownership (TRANS-001, TRANS-002, TRANS-003, TRANS-004,
-    # TRANS-005, TRANS-006): E004 support policy belongs entirely to this
-    # system-check boundary. Its inputs are settings.LANGUAGE_CODE and the
-    # locally constructed available-tag inventory; runtime translation
-    # resolution isn't a dependency of this check. Exact and base-tag support
-    # therefore share this local inventory seam, while the other registered
-    # translation checks retain their separate ownership above.
-    # Pseudocode contract for translation.E004:
-    #
-    # TRANS-004 INPUT: Read LANGUAGE_CODE and build the available-code set by
-    # preserving the check's established code representation, membership
-    # semantics, and implicit ``en-us`` availability.
-    # TRANS-003 DECISION 1: If LANGUAGE_CODE is an exact member of that set,
-    # return no translation.E004 error.
-    # TRANS-001, TRANS-004 DECISION 2: Otherwise, derive only the established
-    # base-language component of LANGUAGE_CODE. If that base code is an exact
-    # member of the same set, return no translation.E004 error. Do not add
-    # recursive, variant-to-variant, or newly normalized matching paths.
-    # TRANS-002 FAILURE: If neither comparison succeeds, return E004.
-    # TRANS-005 BOUNDARY: This procedure only reports setting consistency; it
-    # must not activate a language, select a catalog, or mutate runtime
-    # translation and fallback state.
-    # TRANS-006 HANDOFF: Return only this procedure's E004 result. Leave E001,
-    # E002, E003, and every other registered translation check to their
-    # existing procedures without suppressing, replacing, or reordering them.
     available_tags = {i for i, _ in settings.LANGUAGES} | {'en-us'}
-    if settings.LANGUAGE_CODE not in available_tags:
+    if (
+        settings.LANGUAGE_CODE not in available_tags and
+        settings.LANGUAGE_CODE.split('-')[0] not in available_tags
+    ):
         return [E004]
     return []

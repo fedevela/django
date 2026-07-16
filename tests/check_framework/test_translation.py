@@ -86,32 +86,73 @@ class TranslationCheckTests(SimpleTestCase):
             ])
 
 
-# Architecture verification boundary (TRANS-001, TRANS-002, TRANS-003,
-# TRANS-004, TRANS-006): support-policy coverage is owned beside the E004
-# system-check tests; these placeholders expose that seam without duplicating
-# production behavior or the unrelated translation-check contracts above.
 class TranslationE004ContractTests(SimpleTestCase):
 
     def test_trans_001_available_base_language_does_not_emit_e004(self):
         """TRANS-001: An available base language prevents translation.E004."""
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='de-at',
+            LANGUAGES=[('de', 'German')],
+        ):
+            self.assertEqual(check_language_settings_consistent(None), [])
 
     def test_trans_002_unavailable_exact_and_base_languages_emit_e004(self):
         """TRANS-002: No exact or base language match emits translation.E004."""
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='fr-ca',
+            LANGUAGES=[('de', 'German')],
+        ):
+            self.assertEqual(check_language_settings_consistent(None), [
+                Error(
+                    'You have provided a value for the LANGUAGE_CODE setting '
+                    'that is not in the LANGUAGES setting.',
+                    id='translation.E004',
+                ),
+            ])
 
     def test_trans_003_available_exact_regional_or_variant_match_does_not_emit_e004(self):
         """TRANS-003: An exact regional or variant match prevents translation.E004."""
-        self.assertTrue(True)
+        for language_code in ('fr-CA', 'ca-ES-valencia'):
+            with self.subTest(language_code=language_code), self.settings(
+                LANGUAGE_CODE=language_code,
+                LANGUAGES=[(language_code, 'Language')],
+            ):
+                self.assertEqual(check_language_settings_consistent(None), [])
 
     def test_trans_004_exact_match_uses_established_normalization_semantics(self):
         """TRANS-004: Exact matching retains established code normalization."""
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='fr-CA',
+            LANGUAGES=[('fr-ca', 'Canadian French')],
+        ):
+            self.assertEqual(check_language_settings_consistent(None), [
+                Error(
+                    'You have provided a value for the LANGUAGE_CODE setting '
+                    'that is not in the LANGUAGES setting.',
+                    id='translation.E004',
+                ),
+            ])
 
     def test_trans_004_base_match_uses_established_normalization_semantics(self):
         """TRANS-004: Base matching retains established code normalization."""
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='fr-CA-x-private',
+            LANGUAGES=[('fr', 'French')],
+        ):
+            self.assertEqual(check_language_settings_consistent(None), [])
 
     def test_trans_006_unrelated_translation_check_errors_remain_present(self):
         """TRANS-006: Unrelated translation check errors retain their behavior."""
-        self.assertTrue(True)
+        with self.settings(
+            LANGUAGE_CODE='de-at',
+            LANGUAGES=[('de', 'German')],
+            LANGUAGES_BIDI=['en_US'],
+        ):
+            self.assertEqual(check_language_settings_consistent(None), [])
+            self.assertEqual(check_setting_languages_bidi(None), [
+                Error(
+                    "You have provided an invalid language code in the "
+                    "LANGUAGES_BIDI setting: 'en_US'.",
+                    id='translation.E003',
+                ),
+            ])
