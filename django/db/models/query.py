@@ -712,64 +712,6 @@ class QuerySet:
 
     def delete(self):
         """Delete the records in the current QuerySet."""
-        # PSEUDOCODE CONTRACT — GUID: DELETE-001, DELETE-002, DELETE-003,
-        # DELETE-004, DELETE-005
-        #
-        # FUNCTION normalize_delete_result(total_deleted, deleted_by_model):
-        #     IF total_deleted IS NOT 0:
-        #         # DELETE-004: Preserve Collector's combined direct and
-        #         # cascaded total and its model-label counts without
-        #         # normalizing or discarding any nonzero deletion data.
-        #         RETURN (total_deleted, deleted_by_model)
-        #     END IF
-        #
-        #     # DELETE-001: Do not branch on whether this queryset's model has
-        #     # foreign-key relationships; all zero-deletion paths converge.
-        #     normalized_by_model := empty dictionary
-        #
-        #     # DELETE-002: Preserve the public two-item tuple, integer zero,
-        #     # and dictionary types when no objects were deleted.
-        #     result := (0, normalized_by_model)
-        #
-        #     # DELETE-003: Return a newly determined result from this rule on
-        #     # every call; do not retain path-specific or prior-call state.
-        #     RETURN result
-        # END FUNCTION
-        #
-        # DELETE-005 BACKEND-CONSISTENCY FLOW:
-        #     INPUT equivalent empty querysets for simple and
-        #         foreign-key-participating model configurations
-        #     selected_convention := the single zero-deletion dictionary
-        #         convention used by normalize_delete_result
-        #
-        #     FOR EACH supported database backend:
-        #         (backend_total, backend_deleted_by_model) := collect and
-        #             delete the queryset through its selected backend
-        #         IF that collection or deletion raises an error:
-        #             propagate the backend error without manufacturing a
-        #                 successful zero-deletion result
-        #         END IF
-        #
-        #         backend_result := normalize_delete_result(
-        #             backend_total, backend_deleted_by_model)
-        #         REQUIRE backend_result.total IS 0
-        #         REQUIRE backend_result.deleted_by_model IS a dictionary
-        #         REQUIRE backend_result.deleted_by_model EQUALS
-        #             selected_convention
-        #     END FOR
-        #
-        #     DO NOT branch normalization by backend capabilities, backend
-        #         identity, or the queryset model's foreign-key topology
-        #     OUTPUT the same selected zero-deletion dictionary convention
-        #         for every equivalent empty-queryset deletion
-        # END FLOW
-        #
-        # DELETE FLOW:
-        #     collect and delete the queryset using the existing procedure
-        #     IF collection or deletion raises an error:
-        #         propagate the error without manufacturing a delete result
-        #     END IF
-        #     RETURN normalize_delete_result(total_deleted, deleted_by_model)
         self._not_support_combined_queries('delete')
         assert not self.query.is_sliced, \
             "Cannot use 'limit' or 'offset' with delete."
@@ -791,23 +733,6 @@ class QuerySet:
 
         collector = Collector(using=del_query.db)
         collector.collect(del_query)
-
-        # ARCHITECTURE CONTRACT — GUID: DELETE-001, DELETE-002, DELETE-003,
-        # DELETE-004, DELETE-005
-        # Collector owns cascade discovery and deletion and supplies its raw
-        # (total, per-model dictionary) result through this integration seam.
-        # QuerySet.delete() owns normalization of the public result after this
-        # call, so Collector remains independent of queryset return conventions.
-        # Simple and relationship-participating models must share this one seam;
-        # no model-topology-specific normalization belongs upstream of it.
-        # Nonzero results cross the seam unchanged: their combined total and
-        # model-label counts remain owned by Collector and must not be rebuilt
-        # by the queryset layer.
-        # The selected database enters Collector only through del_query.db;
-        # backend-specific deletion details remain below this seam. DELETE-005
-        # therefore belongs to the queryset-owned normalization after the seam,
-        # with no backend or foreign-key-topology adapter between Collector's
-        # result and the single public zero-deletion convention.
         deleted, _rows_count = collector.delete()
 
         # Clear the result cache, in case this QuerySet gets reused.
