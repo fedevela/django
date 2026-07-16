@@ -171,6 +171,30 @@ class SimplifiedURLTests(SimpleTestCase):
         response = self.client.get('/positional/first/second/')
         self.assertEqual(response.content, b'first,second')
 
+    def test_url_006_absent_format_resolves_with_empty_args_and_no_format_keyword(self):
+        """GUID: URL-006 (absent format)."""
+        match = resolve('/module/')
+        self.assertEqual(match.args, ())
+        self.assertNotIn('format', match.kwargs)
+
+    def test_url_006_explicit_html_resolves_with_empty_args_and_only_html_format_keyword(self):
+        """GUID: URL-006 (explicit html format)."""
+        match = resolve('/module/html')
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {'format': 'html'})
+
+    def test_url_006_explicit_json_resolves_with_empty_args_and_only_json_format_keyword(self):
+        """GUID: URL-006 (explicit json format)."""
+        match = resolve('/module/json')
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {'format': 'json'})
+
+    def test_url_006_explicit_xml_resolves_with_empty_args_and_only_xml_format_keyword(self):
+        """GUID: URL-006 (explicit xml format)."""
+        match = resolve('/module/xml')
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {'format': 'xml'})
+
     def test_path_lookup_with_inclusion(self):
         match = resolve('/included_urls/extra/something/')
         self.assertEqual(match.url_name, 'inner-extra')
