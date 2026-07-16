@@ -123,6 +123,29 @@ class StaticNode(template.Node):
         return self.handle_simple(path)
 
     def render(self, context):
+        # Default static tag output pseudocode
+        # (GUID: SCRIPTURL-003, GUID: SCRIPTURL-004):
+        #
+        # PROCEDURE render_default_static_tag(context, requested_path,
+        #                                     optional_assignment_name):
+        #     resolved_path <- resolve requested_path from context
+        #     asset_url <- build the static asset URL once for resolved_path
+        #                  using the active request's script prefix
+        #     IF the active script prefix is non-empty and non-root AND the
+        #        configured static base is application-relative:
+        #         REQUIRE asset_url contains it exactly once, before the
+        #                 configured static path
+        #     ELSE IF the active script prefix is absent, empty, or root:
+        #         REQUIRE asset_url equals the existing unprefixed output
+        #     escaped_url <- conditionally escape asset_url according to the
+        #                    current context's existing autoescape behavior
+        #     IF optional_assignment_name is absent:
+        #         RETURN escaped_url for direct rendering
+        #     context[optional_assignment_name] <- escaped_url
+        #     RETURN an empty rendering, so assignment stores exactly the URL
+        #            that direct rendering would return for the same inputs
+        #     ON path resolution, URL construction, or escaping failure:
+        #         propagate the existing error and do not assign a partial URL
         url = self.url(context)
         if context.autoescape:
             url = conditional_escape(url)
