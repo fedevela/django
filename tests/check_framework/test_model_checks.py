@@ -1,23 +1,77 @@
 from django.core import checks
 from django.core.checks import Error
 from django.db import models
-from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+from django.test import (
+    SimpleTestCase, TestCase, override_settings, skipUnlessDBFeature,
+)
 from django.test.utils import (
     isolate_apps, modify_settings, override_system_checks,
 )
 
 
+@isolate_apps('check_framework', attr_name='apps')
+@override_settings(DATABASE_ROUTERS=[])
+@override_system_checks([checks.model_checks.check_all_models])
 class DBTable001NoDatabaseRoutersContractTests(SimpleTestCase):
-    """Placeholder verification obligations for GUID: DBTABLE-001."""
+    """Verification obligations for GUID: DBTABLE-001."""
 
     def test_dbtable_001_duplicate_managed_table_without_routers_when_checked_reports_e028(self):
-        self.assertTrue(True)
+        class Model1(models.Model):
+            class Meta:
+                db_table = 'dbtable_001_general'
 
-    def test_dbtable_001_duplicate_managed_table_across_apps_without_routers_when_checked_reports_e028(self):
-        self.assertTrue(True)
+        class Model2(models.Model):
+            class Meta:
+                db_table = 'dbtable_001_general'
+
+        self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+            Error(
+                "db_table 'dbtable_001_general' is used by multiple models: "
+                "check_framework.Model1, check_framework.Model2.",
+                obj='dbtable_001_general',
+                id='models.E028',
+            ),
+        ])
+
+    @modify_settings(INSTALLED_APPS={'append': 'basic'})
+    @isolate_apps('basic', 'check_framework', kwarg_name='apps')
+    def test_dbtable_001_duplicate_managed_table_across_apps_without_routers_when_checked_reports_e028(self, apps):
+        class Model1(models.Model):
+            class Meta:
+                app_label = 'basic'
+                db_table = 'dbtable_001_across_apps'
+
+        class Model2(models.Model):
+            class Meta:
+                app_label = 'check_framework'
+                db_table = 'dbtable_001_across_apps'
+
+        self.assertEqual(checks.run_checks(app_configs=apps.get_app_configs()), [
+            Error(
+                "db_table 'dbtable_001_across_apps' is used by multiple models: "
+                "basic.Model1, check_framework.Model2.",
+                obj='dbtable_001_across_apps',
+                id='models.E028',
+            ),
+        ])
 
     def test_dbtable_001_duplicate_managed_table_in_same_app_without_routers_when_checked_reports_e028(self):
-        self.assertTrue(True)
+        class Model1(models.Model):
+            class Meta:
+                db_table = 'dbtable_001_same_app'
+
+        class Model2(models.Model):
+            class Meta:
+                db_table = 'dbtable_001_same_app'
+
+        self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [
+            Error(
+                "db_table 'dbtable_001_same_app' is used by multiple models: "
+                "check_framework.Model1, check_framework.Model2.",
+                obj='dbtable_001_same_app',
+                id='models.E028',
+            ),
+        ])
 
 
 @isolate_apps('check_framework', attr_name='apps')

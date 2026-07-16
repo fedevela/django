@@ -4,6 +4,7 @@ from collections import defaultdict
 from itertools import chain
 
 from django.apps import apps
+from django.conf import settings
 from django.core.checks import Error, Tags, register
 
 
@@ -61,7 +62,7 @@ def check_all_models(app_configs=None, **kwargs):
         for model_constraint in model._meta.constraints:
             constraints[model_constraint.name].append(model._meta.label)
     for db_table, model_labels in db_table_models.items():
-        if len(model_labels) != 1:
+        if len(model_labels) != 1 and not settings.DATABASE_ROUTERS:
             errors.append(
                 Error(
                     "db_table '%s' is used by multiple models: %s."
