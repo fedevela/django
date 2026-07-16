@@ -175,6 +175,17 @@ def parse_http_date(date):
         raise ValueError("%r is not in a valid HTTP date format" % date)
     try:
         year = int(m.group('year'))
+        # RFC 850 two-digit-year resolution pseudocode:
+        # - HTTPDATE-001: When RFC850_DATE supplied the matched year, read the
+        #   calendar year at call time; combine its century with the supplied
+        #   final two digits to form the current-century candidate.
+        # - HTTPDATE-002 / HTTPDATE-004: If candidate - current year is less
+        #   than or equal to 50, retain the candidate (including exactly 50).
+        # - HTTPDATE-003: Otherwise, candidate is more than 50 years ahead;
+        #   subtract 100 and use that past year, preserving the supplied final
+        #   two digits.
+        # - Continue with the shared month/day/time construction below; let its
+        #   existing exception path reject invalid date components.
         if year < 100:
             if year < 70:
                 year += 2000
