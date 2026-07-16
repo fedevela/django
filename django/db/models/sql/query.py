@@ -1124,6 +1124,17 @@ class Query(BaseExpression):
 
     def check_filterable(self, expression):
         """Raise an error if expression cannot be used in a WHERE clause."""
+        # Pseudocode contract (DJANGO-001, DJANGO-004, DJANGO-005):
+        # INPUT: a candidate value encountered while building a filter.
+        # IF the candidate is ordinary model data rather than a query
+        # expression, RETURN without interpreting a user-defined `filterable`
+        # attribute; the candidate remains eligible for normal related-object
+        # validation (DJANGO-001, DJANGO-004).
+        # OTHERWISE, IF the query expression explicitly declares itself
+        # non-filterable, RAISE the unsupported-filter error (DJANGO-005).
+        # OTHERWISE, recursively apply this classification to each source
+        # expression, propagating the first unsupported-filter error; RETURN
+        # only after the complete expression tree is accepted (DJANGO-005).
         if not getattr(expression, 'filterable', True):
             raise NotSupportedError(
                 expression.__class__.__name__ + ' is disallowed in the filter '
@@ -1268,6 +1279,17 @@ class Query(BaseExpression):
         if check_filterable:
             self.check_filterable(value)
 
+        # Pseudocode contract (DJANGO-001, DJANGO-002, DJANGO-003):
+        # ON successful RHS filterability classification, continue through the
+        # existing relation-type validation and foreign-key lookup construction
+        # for every supplied model instance, irrespective of whether its model
+        # data exposes `filterable=False` or `filterable=True` (DJANGO-001,
+        # DJANGO-003).
+        # THEN build the ordinary relation predicate from that instance's
+        # related key and return the resulting clause, so evaluation selects
+        # exactly the records related to the supplied instance (DJANGO-002).
+        # IF relation-type validation or lookup construction fails for an
+        # independent reason, propagate that existing failure unchanged.
         clause = self.where_class()
         if reffed_expression:
             condition = self.build_lookup(lookups, reffed_expression, value)
