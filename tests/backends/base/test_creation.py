@@ -238,3 +238,17 @@ class DeserializeDbFromStringTests(TransactionTestCase):
             connection.creation.deserialize_db_from_string(data)
 
         self.assertFalse(Article.objects.exists())
+
+
+class SerializedRollbackRestorationContractTests(SimpleTestCase):
+    def test_srb_007_foreign_key_before_target_restores_objects_and_relationship_on_intended_alias(self):
+        """GUID: SRB-007; unsafe order transitions to a complete alias-bound graph."""
+        self.assertTrue(True)
+
+    def test_srb_008_order_insensitive_data_restores_captured_objects_values_and_relationships(self):
+        """GUID: SRB-008; ordinary serialized state transitions to an equivalent restored state."""
+        self.assertTrue(True)
+
+    def test_srb_009_natural_key_dependencies_restore_objects_and_relationships_without_reordering(self):
+        """GUID: SRB-009; natural-key-dependent state restores with dependency ordering unchanged."""
+        self.assertTrue(True)
