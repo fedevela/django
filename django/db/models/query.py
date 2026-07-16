@@ -712,6 +712,32 @@ class QuerySet:
 
     def delete(self):
         """Delete the records in the current QuerySet."""
+        # PSEUDOCODE CONTRACT — GUID: DELETE-001, DELETE-002, DELETE-003
+        #
+        # FUNCTION normalize_delete_result(total_deleted, deleted_by_model):
+        #     IF total_deleted IS NOT 0:
+        #         RETURN (total_deleted, deleted_by_model)
+        #     END IF
+        #
+        #     # DELETE-001: Do not branch on whether this queryset's model has
+        #     # foreign-key relationships; all zero-deletion paths converge.
+        #     normalized_by_model := empty dictionary
+        #
+        #     # DELETE-002: Preserve the public two-item tuple, integer zero,
+        #     # and dictionary types when no objects were deleted.
+        #     result := (0, normalized_by_model)
+        #
+        #     # DELETE-003: Return a newly determined result from this rule on
+        #     # every call; do not retain path-specific or prior-call state.
+        #     RETURN result
+        # END FUNCTION
+        #
+        # DELETE FLOW:
+        #     collect and delete the queryset using the existing procedure
+        #     IF collection or deletion raises an error:
+        #         propagate the error without manufacturing a delete result
+        #     END IF
+        #     RETURN normalize_delete_result(total_deleted, deleted_by_model)
         self._not_support_combined_queries('delete')
         assert not self.query.is_sliced, \
             "Cannot use 'limit' or 'offset' with delete."
