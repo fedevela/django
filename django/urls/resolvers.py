@@ -153,11 +153,14 @@ class RegexPattern(CheckURLMixin):
         self.converters = {}
 
     def match(self, path):
-        # ARCHITECTURE (GUID: URL-001, URL-002, URL-004): RegexPattern owns the
-        # regex-engine-to-resolver argument boundary. Its result contract must
-        # distinguish named-capture mode from positional-capture mode before
-        # absent named values are removed. URLPattern and ResolverMatch consume
-        # that classification; they must not infer it from nonempty kwargs.
+        # ARCHITECTURE (GUID: URL-001, URL-002, URL-003, URL-004):
+        # RegexPattern owns the regex-engine-to-resolver argument boundary. Its
+        # result contract selects named-capture mode from the pattern's named
+        # group topology before absent values are removed. In that mode,
+        # explicit values (including format) belong only in kwargs and nested
+        # unnamed captures never cross the boundary as args. URLPattern and
+        # ResolverMatch consume this classification; they must not infer it
+        # from nonempty kwargs or reconstruct captures from the regex match.
         # GUID: URL-001, URL-002, URL-004 (absent-value behavior)
         # PSEUDOCODE:
         # - Search the path with the compiled regular expression.
@@ -394,9 +397,10 @@ class URLPattern:
         match = self.pattern.match(path)
         if match:
             new_path, args, kwargs = match
-            # INTEGRATION SEAM (GUID: URL-001, URL-002, URL-004): args and
-            # kwargs retain the capture-mode contract established by
-            # RegexPattern.match() through ResolverMatch/view dispatch.
+            # INTEGRATION SEAM (GUID: URL-001, URL-002, URL-003, URL-004): args
+            # and kwargs retain the capture-mode contract established by
+            # RegexPattern.match() through ResolverMatch/view dispatch. Named
+            # format values therefore remain keyword-only at this boundary.
             # Pass any extra_kwargs as **kwargs.
             kwargs.update(self.default_args)
             return ResolverMatch(self.callback, args, kwargs, self.pattern.name, route=str(self.pattern))
