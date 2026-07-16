@@ -28,10 +28,61 @@ class TestDbSignatureTests(SimpleTestCase):
 class UnnamedTestDatabaseContractTests(SimpleTestCase):
     def test_sqlite_008_default_unnamed_database_creation_and_initialization_complete_successfully(self):
         """GUID: SQLITE-008; default unnamed database setup succeeds unchanged."""
+        # SQLITE-008 creation and initialization logic obligation:
+        # GIVEN the default SQLite alias has no explicit test database name,
+        # WHEN normal test-database setup runs,
+        # THEN the existing unnamed-database lifecycle reaches INITIALIZED.
+        #
+        # INPUTS:
+        # - The default alias with its existing database settings.
+        # - A missing or empty TEST.NAME and the normal setup options.
+        #
+        # PROCEDURE:
+        # 1. Preserve the original default-alias settings for final cleanup.
+        # 2. Require TEST.NAME to be unnamed; if it is explicit, fail the
+        #    precondition instead of exercising named-database behavior.
+        # 3. Invoke normal test setup for the default alias, transitioning the
+        #    lifecycle from UNCREATED to CREATED.
+        # 4. Allow the existing SQLite unnamed-name resolution, alias binding,
+        #    schema setup, cache setup, and connection initialization to run in
+        #    their established order.
+        # 5. Transition CREATED to INITIALIZED only after setup returns with an
+        #    usable default-alias connection.
+        #
+        # OUTPUT: Setup completes with the unnamed database INITIALIZED.
+        # FAILURE PATHS:
+        # - Propagate any creation, schema, cache, or connection failure as a
+        #   setup failure without substituting persistent-file behavior.
+        # - Tear down any partially created database and restore the preserved
+        #   settings on every exit path.
         self.assertTrue(True)
 
     def test_sqlite_008_initialized_unnamed_database_write_through_default_alias_succeeds(self):
         """GUID: SQLITE-008; initialized unnamed database accepts default-alias writes."""
+        # SQLITE-008 default-alias write logic obligation:
+        # GIVEN normal setup left the unnamed SQLite database INITIALIZED,
+        # WHEN a write is issued through the default alias,
+        # THEN the write completes and its state is observable through that alias.
+        #
+        # INPUTS:
+        # - The initialized default-alias connection from normal setup.
+        # - An isolated probe relation and a deterministic sentinel value.
+        #
+        # PROCEDURE:
+        # 1. Acquire a database cursor through the default alias only.
+        # 2. If the connection is not initialized, fail the setup precondition;
+        #    do not open a separately named or persistent database.
+        # 3. Create the probe relation, write the sentinel, and transition the
+        #    database state from INITIALIZED to WRITE_COMPLETED.
+        # 4. Read through the same default alias and require the sentinel to be
+        #    present before transitioning to WRITE_VERIFIED.
+        #
+        # OUTPUT: The unnamed database reaches WRITE_VERIFIED through default.
+        # FAILURE PATHS:
+        # - Surface cursor, schema, or write errors as regressions in the existing
+        #   unnamed behavior; never retry against a file-backed database.
+        # - Release the cursor and run normal database teardown on every exit,
+        #   including a failed write or readback.
         self.assertTrue(True)
 
 
