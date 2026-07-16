@@ -74,10 +74,33 @@ class UnionBackedModelMultipleChoiceFieldContractTests(TestCase):
 class UnionBackedModelFormRelationshipContractTests(TestCase):
     def test_DJ13158_004_empty_valid_submission_save_adds_no_publication_relationships(self):
         """DJ13158-004: Saving an empty valid form adds no publications."""
+        # DJ13158-004 logic obligation:
+        # GIVEN the demonstrated model form exposes an optional publications
+        # field whose choices are the union of its component querysets,
+        # AND its related model instance begins with no publications,
+        # WHEN the form is bound with an explicitly empty publications value,
+        # THEN require validation to succeed; otherwise stop without saving.
+        # WHEN the valid form is saved, persist the model instance first and
+        # hand the cleaned empty selection to the many-to-many save operation.
+        # AFTER saving, reload the instance's publication relationships.
+        # PASS only if the reloaded relationship set is empty; any added
+        # publication is a persistence failure.
         pass
 
     def test_DJ13158_008_valid_nonempty_union_backed_submission_save_preserves_submitted_publication_relationships(self):
         """DJ13158-008: Saving preserves the submitted publications."""
+        # DJ13158-008 logic obligation:
+        # GIVEN the demonstrated model form exposes a publications field whose
+        # choices are the union of its component querysets,
+        # AND selected matching publications belong to that union,
+        # WHEN the form is bound with exactly those publication identifiers,
+        # THEN require validation to succeed; otherwise stop without saving.
+        # WHEN the valid form is saved, persist the model instance first and
+        # hand the cleaned selected publications to the many-to-many save
+        # operation without filtering the combined queryset again.
+        # AFTER saving, reload the instance's publication relationships.
+        # PASS only if the reloaded relationship set equals the submitted set;
+        # a missing or additional publication is a persistence failure.
         pass
 
 
