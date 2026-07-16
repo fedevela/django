@@ -204,19 +204,29 @@ class TestUtilsText(SimpleTestCase):
         self.assertEqual(sys.intern(text.slugify('a')), 'a')
 
     def test_SLUG_001_slugify_strips_all_mixed_dashes_and_underscores_from_boundaries(self):
-        pass
+        values = (
+            ('-slug', 'slug'),
+            ('_slug', 'slug'),
+            ('slug-', 'slug'),
+            ('slug_', 'slug'),
+            ('_-_-slug-_-_', 'slug'),
+            ('_-slug_with-internal-boundaries-_', 'slug_with-internal-boundaries'),
+        )
+        for value, expected in values:
+            with self.subTest(value=value):
+                self.assertEqual(text.slugify(value), expected)
 
     def test_SLUG_002_slugify_regression_input_returns_this_is_a_test(self):
-        pass
+        self.assertEqual(text.slugify('___This is a test ---'), 'this-is-a-test')
 
     def test_SLUG_006_slugify_strips_boundaries_exposed_by_character_filtering(self):
-        pass
+        self.assertEqual(text.slugify('&_-slug-_#'), 'slug')
 
     def test_SLUG_008_slugify_boundary_only_dashes_and_underscores_returns_empty(self):
-        pass
+        self.assertEqual(text.slugify('_-_-'), '')
 
     def test_SLUG_009_slugify_empty_input_remains_empty(self):
-        pass
+        self.assertEqual(text.slugify(''), '')
 
     @ignore_warnings(category=RemovedInDjango40Warning)
     def test_unescape_entities(self):
