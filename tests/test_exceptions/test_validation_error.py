@@ -1,7 +1,7 @@
 import unittest
 from copy import deepcopy
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 
 
 class TestValidationError(unittest.TestCase):
@@ -54,27 +54,53 @@ class ValidationErrorEqualityContractTests(unittest.TestCase):
 
     # VEQ-003
     def test_veq_003_same_field_errors_in_different_orders_compare_equal(self):
-        self.assertTrue(True)
+        first = ValidationError({'name': ['Required', 'Invalid']})
+        second = ValidationError({'name': ['Invalid', 'Required']})
+
+        self.assertEqual(first, second)
 
     # VEQ-004
     def test_veq_004_non_field_errors_in_different_orders_compare_equal(self):
-        self.assertTrue(True)
+        first = ValidationError({NON_FIELD_ERRORS: ['First', 'Second']})
+        second = ValidationError({NON_FIELD_ERRORS: ['Second', 'First']})
+
+        self.assertEqual(first, second)
 
     # VEQ-005
     def test_veq_005_fields_inserted_in_different_orders_compare_equal(self):
-        self.assertTrue(True)
+        first = ValidationError({'name': ['Required'], 'email': ['Invalid']})
+        second = ValidationError({'email': ['Invalid'], 'name': ['Required']})
+
+        self.assertEqual(first, second)
 
     # VEQ-006
     def test_veq_006_equivalent_errors_under_different_fields_compare_unequal(self):
-        self.assertTrue(True)
+        first = ValidationError({'name': ['Required']})
+        second = ValidationError({'email': ['Required']})
+
+        self.assertNotEqual(first, second)
 
     # VEQ-007
     def test_veq_007_different_equivalent_error_occurrence_counts_compare_unequal(self):
-        self.assertTrue(True)
+        first = ValidationError({'name': ['Required', 'Required']})
+        second = ValidationError({'name': ['Required']})
+
+        self.assertNotEqual(first, second)
 
     # VEQ-008
     def test_veq_008_normalized_nested_content_with_permitted_ordering_compares_equal(self):
-        self.assertTrue(True)
+        required = ValidationError('Required', code='required')
+        invalid = ValidationError('Invalid', code='invalid')
+        first = ValidationError({
+            'name': ValidationError([[required], ValidationError([invalid])]),
+            NON_FIELD_ERRORS: ValidationError([required, invalid]),
+        })
+        second = ValidationError({
+            NON_FIELD_ERRORS: ValidationError([invalid, required]),
+            'name': ValidationError([invalid, ValidationError([[required]])]),
+        })
+
+        self.assertEqual(first, second)
 
     # VEQ-009
     def test_veq_009_error_compared_with_itself_compares_equal(self):

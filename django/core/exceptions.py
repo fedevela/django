@@ -222,11 +222,38 @@ class ValidationError(Exception):
     # __eq__ invokes compare_structured_content before the scalar procedure
     # whenever either operand represents list or dictionary content.
 
+    @staticmethod
+    def _error_list_equal(left, right):
+        if len(left) != len(right):
+            return False
+        unmatched = list(right)
+        for error in left:
+            for index, candidate in enumerate(unmatched):
+                if error == candidate:
+                    del unmatched[index]
+                    break
+            else:
+                return False
+        return True
+
     def __eq__(self, other):
         if self is other:
             return True
         if not isinstance(other, ValidationError):
             return False
+        self_has_error_dict = hasattr(self, 'error_dict')
+        other_has_error_dict = hasattr(other, 'error_dict')
+        if self_has_error_dict or other_has_error_dict:
+            if not self_has_error_dict or not other_has_error_dict:
+                return False
+            if self.error_dict.keys() != other.error_dict.keys():
+                return False
+            return all(
+                self._error_list_equal(errors, other.error_dict[field])
+                for field, errors in self.error_dict.items()
+            )
+        if not hasattr(self, 'message') or not hasattr(other, 'message'):
+            return self._error_list_equal(self.error_list, other.error_list)
         return (
             self.message == other.message and
             self.code == other.code and
