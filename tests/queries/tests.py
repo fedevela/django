@@ -2632,19 +2632,47 @@ class IsNullTests(TestCase):
 
     # GUID: ISNULL-004
     def test_isnull_004_direct_field_isnull_true_retains_null_matching_results(self):
-        pass
+        custom = CustomPk.objects.create(name='custom')
+        null = Related.objects.create()
+        Related.objects.create(custom=custom)
+
+        self.assertSequenceEqual(
+            Related.objects.filter(custom_id__isnull=True),
+            [null],
+        )
 
     # GUID: ISNULL-005
     def test_isnull_005_direct_field_isnull_false_retains_non_null_matching_results(self):
-        pass
+        custom = CustomPk.objects.create(name='custom')
+        Related.objects.create()
+        not_null = Related.objects.create(custom=custom)
+
+        self.assertSequenceEqual(
+            Related.objects.filter(custom_id__isnull=False),
+            [not_null],
+        )
 
     # GUID: ISNULL-006
     def test_isnull_006_relationship_spanning_isnull_true_retains_join_types_and_null_results(self):
-        pass
+        custom = CustomPk.objects.create(name='custom')
+        null = Related.objects.create()
+        Related.objects.create(custom=custom)
+        query = Related.objects.filter(custom__name__isnull=True)
+
+        self.assertEqual(str(query.query).count('LEFT OUTER JOIN'), 1)
+        self.assertNotIn('INNER JOIN', str(query.query))
+        self.assertSequenceEqual(query, [null])
 
     # GUID: ISNULL-006
     def test_isnull_006_relationship_spanning_isnull_false_retains_join_types_and_non_null_results(self):
-        pass
+        custom = CustomPk.objects.create(name='custom')
+        Related.objects.create()
+        not_null = Related.objects.create(custom=custom)
+        query = Related.objects.filter(custom__name__isnull=False)
+
+        self.assertNotIn('LEFT OUTER JOIN', str(query.query))
+        self.assertEqual(str(query.query).count('INNER JOIN'), 1)
+        self.assertSequenceEqual(query, [not_null])
 
     # GUID: ISNULL-007
     def test_isnull_007_iterator_evaluation_rejects_non_boolean_rhs_before_results(self):
@@ -2660,11 +2688,29 @@ class IsNullTests(TestCase):
 
     # GUID: ISNULL-009
     def test_isnull_009_non_isnull_lookup_accepted_values_and_errors_remain_unchanged(self):
-        pass
+        custom = CustomPk.objects.create(name='custom')
+        related = Related.objects.create(custom=custom)
+
+        self.assertSequenceEqual(
+            Related.objects.filter(custom__name__in=['custom']),
+            [related],
+        )
+        with self.assertRaisesMessage(ValueError, 'Cannot use None as a query value'):
+            Related.objects.filter(custom__name__in=None)
 
     # GUID: ISNULL-009
     def test_isnull_009_non_isnull_lookup_sql_semantics_and_results_remain_unchanged(self):
-        pass
+        custom = CustomPk.objects.create(name='custom')
+        related = Related.objects.create(custom=custom)
+        query = Related.objects.filter(custom__name__exact='custom')
+
+        sql, params = query.query.sql_with_params()
+        self.assertIn('INNER JOIN', sql)
+        self.assertIn(' = %s', sql)
+        self.assertNotIn(' IS NULL', sql)
+        self.assertNotIn(' IS NOT NULL', sql)
+        self.assertEqual(params, ('custom',))
+        self.assertSequenceEqual(query, [related])
 
     def test_primary_key(self):
         custom = CustomPk.objects.create(name='pk')
