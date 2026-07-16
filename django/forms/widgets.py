@@ -130,15 +130,15 @@ class Media:
         Resolve a complete set of media declaration lists.
 
         Architecture contract (GUID: MEDIA-001, MEDIA-002, MEDIA-003,
-        MEDIA-004, MEDIA-005, MEDIA-006, MEDIA-007, MEDIA-008): this is the
-        sole integration seam between retained source declarations and ordered
-        media. Media.__add__() owns declaration retention; this resolver owns
-        construction of the complete dependency set, conflict detection,
-        deterministic ordering, deduplication, selection of contradictory
-        declared edges, and emission of the media-specific warning. It may
-        depend on the generic stable topological-sort utility for cycle
-        detection, but that utility must remain unaware of media declarations,
-        conflict evidence, and MediaOrderConflictWarning.
+        MEDIA-004, MEDIA-005, MEDIA-006, MEDIA-007, MEDIA-008, MEDIA-009): this
+        is the sole integration seam between retained source declarations and
+        ordered media. Media.__add__() owns declaration retention; this
+        resolver owns construction of the complete dependency set, conflict
+        detection, deterministic ordering, deduplication, selection of
+        contradictory declared edges, and emission of the media-specific
+        warning. It may depend on the generic stable topological-sort utility
+        for cycle detection, but that utility must remain unaware of media
+        declarations, conflict evidence, and MediaOrderConflictWarning.
 
         Each item list crossing this boundary is an authoritative source
         declaration. A resolved list must not re-enter as a source declaration,
@@ -151,6 +151,14 @@ class Media:
         crosses the warning boundary (GUID: MEDIA-007); the warning contract
         receives the graph and stable item order needed to select and identify
         that cycle's participants (GUID: MEDIA-008).
+
+        For one or two retained source declarations, this resolver also owns
+        the compatibility decision (GUID: MEDIA-009). A nondefective case must
+        preserve its existing collection, ordering, deduplication, and warning
+        result. A case whose result depends on an aggregation-created false
+        constraint must bypass that compatibility path and use the corrected
+        general resolver. Three-or-more-source behavior remains outside this
+        compatibility contract.
 
         The pairwise merge() method remains a compatibility primitive for
         direct callers and is not the Media aggregation boundary.
@@ -312,7 +320,11 @@ class Media:
 
         This is the declaration-retention side of the _merge_lists() boundary:
         it must not replace sources with an intermediate resolved order
-        (GUID: MEDIA-003, MEDIA-004, MEDIA-006).
+        (GUID: MEDIA-003, MEDIA-004, MEDIA-006). It also preserves declaration
+        boundaries and source cardinality so _merge_lists() can identify the
+        one- and two-source compatibility scope; compatibility classification,
+        resolution, deduplication, and warnings remain owned by _merge_lists()
+        (GUID: MEDIA-009).
         """
         combined = Media()
         combined._css_lists = self._css_lists + other._css_lists
