@@ -10,7 +10,8 @@ from django.db.models.functions import Upper
 from django.test import TestCase
 
 from .models import (
-    Article, Author, ChildArticle, OrderedByFArticle, OrderedByPKChild,
+    Article, Author, ChildArticle, OrderedByFArticle,
+    OrderedByPKAscendingChild, OrderedByPKAscendingParent, OrderedByPKChild,
     OrderedByPKParent, Reference,
 )
 
@@ -20,6 +21,9 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.children = [OrderedByPKChild.objects.create() for _ in range(3)]
+        cls.ascending_children = [
+            OrderedByPKAscendingChild.objects.create(pk=pk) for pk in (3, 1, 2)
+        ]
 
     def test_DJANGO_001_child_inherited_minus_pk_compiles_parent_pk_descending(self):
         """DJANGO-001: inherited -pk compiles the concrete parent PK descending."""
@@ -53,11 +57,26 @@ class InheritedPrimaryKeyOrderingContractTests(TestCase):
 
     def test_DJANGO_004_child_inherited_pk_compiles_parent_concrete_pk_ascending(self):
         """DJANGO-004: inherited pk compiles the concrete parent PK ascending."""
-        assert True
+        query = OrderedByPKAscendingChild.objects.all().query
+        compiler = query.get_compiler(connection=connection)
+        order_by = compiler.get_order_by()
+        self.assertEqual(len(order_by), 1)
+        expression, (sql, params, is_ref) = order_by[0]
+        self.assertIs(
+            expression.expression.target.target_field,
+            OrderedByPKAscendingParent._meta.pk,
+        )
+        self.assertIs(expression.descending, False)
+        self.assertTrue(sql.endswith(' ASC'))
+        self.assertEqual(params, [])
+        self.assertIs(is_ref, False)
 
     def test_DJANGO_005_child_default_queryset_returns_parent_pks_lowest_to_highest(self):
         """DJANGO-005: evaluating the child queryset returns ascending parent PKs."""
-        assert True
+        self.assertSequenceEqual(
+            list(OrderedByPKAscendingChild.objects.values_list('pk', flat=True)),
+            sorted(child.pk for child in self.ascending_children),
+        )
 
     def test_DJANGO_009_supported_backend_compiles_inherited_parent_pk_descending(self):
         """DJANGO-009: supported backends compile the inherited parent PK descending."""
