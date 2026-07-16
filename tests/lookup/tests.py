@@ -1049,14 +1049,35 @@ class GroupedAggregateExactLookupContractTests(TestCase):
 
 class ExactLookupQuerysetCardinalityContractTests(TestCase):
 
+    @classmethod
+    def setUpTestData(cls):
+        cls.users = [
+            User.objects.create_user(username='cardinality-%d' % index)
+            for index in range(3)
+        ]
+
     def test_django_11797_009_exact_lookup_accepts_queryset_limited_to_one_result(self):
         """DJANGO-11797-009: Exact lookup accepts a one-result queryset."""
-        pass
+        rhs = User.objects.order_by('pk')[:1]
+        self.assertSequenceEqual(
+            User.objects.filter(pk=rhs),
+            self.users[:1],
+        )
 
     def test_django_11797_009_exact_lookup_accepts_queryset_limited_to_one_result_with_offset(self):
         """DJANGO-11797-009: Exact lookup retains one-result offset behavior."""
-        pass
+        rhs = User.objects.order_by('pk')[1:2]
+        queryset = User.objects.filter(pk=rhs)
+        lookup_rhs = queryset.query.where.children[0].rhs
+        self.assertEqual((lookup_rhs.low_mark, lookup_rhs.high_mark), (1, 2))
+        self.assertSequenceEqual(queryset, self.users[1:2])
 
     def test_django_11797_010_exact_lookup_rejects_queryset_not_limited_to_one_result(self):
         """DJANGO-11797-010: Exact lookup rejects a multi-result queryset."""
-        pass
+        msg = (
+            'The QuerySet value for an exact lookup must be limited to one '
+            'result using slicing.'
+        )
+        queryset = User.objects.filter(pk=User.objects.order_by('pk')[:2])
+        with self.assertRaisesMessage(ValueError, msg):
+            list(queryset)
