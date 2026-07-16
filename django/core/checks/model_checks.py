@@ -38,6 +38,23 @@ from django.core.checks import Error, Tags, Warning, register
 #   groups enter the same seam; DBTABLE-004 defines its diagnostic payload.
 # - Verification home: RoutedDuplicateDBTableContractTests in
 #   tests/check_framework/test_model_checks.py covers the routed output contract.
+# DBTABLE-005 architecture contract:
+# - Ownership: check_all_models() retains ownership of model selection,
+#   duplicate-table eligibility, model.check() delegation, and index and
+#   constraint collision checks; routed diagnostics introduce no new owner.
+# - Boundary: the managed, non-proxy guard encloses only insertion into the
+#   db_table_models collector. Abstract-model selection remains upstream in the
+#   application registry, while proxy and unmanaged models continue through the
+#   pre-existing model.check(), index, and constraint paths.
+# - Dependency direction: settings.DATABASE_ROUTERS may select a diagnostic only
+#   after duplicate-table groups are collected; model selection, grouping
+#   eligibility, and unrelated check results must not depend on router state.
+# - Integration seam: routed behavior is confined to the existing
+#   db_table_models diagnostic branch. The model iteration and the independent
+#   index and constraint collectors remain structurally unchanged.
+# - Verification home: DBTable005UnaffectedModelCheckOutcomesContractTests in
+#   tests/check_framework/test_model_checks.py traces the abstract, proxy,
+#   unmanaged, and unrelated-check preservation obligations.
 @register(Tags.models)
 def check_all_models(app_configs=None, **kwargs):
     db_table_models = defaultdict(list)
