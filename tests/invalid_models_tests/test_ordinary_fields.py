@@ -1,4 +1,5 @@
 import unittest
+from unittest import mock
 
 from django.core.checks import Error, Warning as DjangoWarning
 from django.db import connection, models
@@ -100,15 +101,61 @@ class CharFieldTests(SimpleTestCase):
 
     def test_choice_001_repeated_model_checks_report_same_oversized_choice_failure(self):
         """GUID: CHOICE-001"""
-        self.assertTrue(True)
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=2,
+                choices=[('short', 'Short'), ('ok', 'Okay')],
+            )
+
+        field = Model._meta.get_field('field')
+        expected = [
+            Error(
+                "'max_length' is too small to fit the longest value in "
+                "'choices' (5 characters).",
+                obj=field,
+                id='fields.E009',
+            ),
+        ]
+        self.assertEqual(Model.check(), expected)
+        self.assertEqual(Model.check(), expected)
 
     def test_choice_002_choice_length_failure_identifies_field_and_insufficient_max_length(self):
         """GUID: CHOICE-002"""
-        self.assertTrue(True)
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=3,
+                choices=[('oversized', 'Oversized')],
+            )
+
+        field = Model._meta.get_field('field')
+        self.assertEqual(Model.check(), [
+            Error(
+                "'max_length' is too small to fit the longest value in "
+                "'choices' (9 characters).",
+                obj=field,
+                id='fields.E009',
+            ),
+        ])
 
     def test_choice_004_model_checks_report_choice_length_failure_without_saving_instance(self):
         """GUID: CHOICE-004"""
-        self.assertTrue(True)
+        class Model(models.Model):
+            field = models.CharField(
+                max_length=1,
+                choices=[('long', 'Long')],
+            )
+
+        field = Model._meta.get_field('field')
+        with mock.patch.object(Model, 'save') as save:
+            self.assertEqual(Model.check(), [
+                Error(
+                    "'max_length' is too small to fit the longest value in "
+                    "'choices' (4 characters).",
+                    obj=field,
+                    id='fields.E009',
+                ),
+            ])
+        save.assert_not_called()
 
     def test_missing_max_length(self):
         class Model(models.Model):

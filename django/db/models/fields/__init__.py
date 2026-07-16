@@ -293,16 +293,27 @@ class Field(RegisterLookupMixin):
 
     def _check_choice_value_length(self):
         """
-        Architecture contract for CHOICE-001, CHOICE-002, and CHOICE-004.
+        Check that max_length can contain the longest choice value.
 
-        Receive structurally valid choices from _check_choices(), inspect
-        meaningfully length-comparable stored values in deterministic order,
-        and compare their greatest length with a configured max_length. Return
-        one deterministic checks.Error bound to this field when max_length is
-        insufficient. This seam belongs exclusively to the model-check path
-        and must not construct or save a model instance. Malformed choices
-        remain owned by _check_choices().
+        GUID: CHOICE-001, CHOICE-002, CHOICE-004.
         """
+        choice_max_length = 0
+        for value, _ in self.flatchoices:
+            if isinstance(value, str):
+                choice_max_length = max(choice_max_length, len(value))
+        if (
+            isinstance(self.max_length, int) and
+            not isinstance(self.max_length, bool) and
+            choice_max_length > self.max_length
+        ):
+            return [
+                checks.Error(
+                    "'max_length' is too small to fit the longest value in "
+                    "'choices' (%d characters)." % choice_max_length,
+                    obj=self,
+                    id='fields.E009',
+                ),
+            ]
         return []
 
     def _check_db_index(self):
