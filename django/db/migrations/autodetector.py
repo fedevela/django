@@ -1003,8 +1003,9 @@ class MigrationAutodetector:
         # - Equivalent moves require state convergence without schema churn.
         #   SeparateDatabaseAndState is the existing operation port for that
         #   handoff: the target declaration belongs to its state side while its
-        #   database side remains empty. BaseDatabaseSchemaEditor therefore
-        #   remains only a downstream physical-mutation boundary.
+        #   database side contains no action for the equivalent index.
+        #   BaseDatabaseSchemaEditor therefore remains only a downstream
+        #   physical-mutation boundary.
         option_name = operations.AddIndex.option_name
         for app_label, model_name in sorted(self.kept_model_keys):
             old_model_name = self.renamed_models.get((app_label, model_name), model_name)
@@ -1016,9 +1017,32 @@ class MigrationAutodetector:
             add_idx = [idx for idx in new_indexes if idx not in old_indexes]
             rem_idx = [idx for idx in old_indexes if idx not in new_indexes]
 
+            old_index_together = old_model_state.options.get('index_together') or set()
+            new_index_together = new_model_state.options.get('index_together') or set()
+            moved_indexes = []
+            for index in add_idx:
+                fields = tuple(index.fields)
+                if (
+                    index.__class__ is models.Index and
+                    index.db_tablespace is None and
+                    not index.opclasses and
+                    index.condition is None and
+                    fields in old_index_together and
+                    fields not in new_index_together
+                ):
+                    moved_indexes.append(index)
+                    old_index_together = {
+                        together for together in old_index_together
+                        if tuple(together) != fields
+                    }
+
+            add_idx = [idx for idx in add_idx if idx not in moved_indexes]
+
             self.altered_indexes.update({
                 (app_label, model_name): {
-                    'added_indexes': add_idx, 'removed_indexes': rem_idx,
+                    'added_indexes': add_idx,
+                    'removed_indexes': rem_idx,
+                    'moved_indexes': moved_indexes,
                 }
             })
 
@@ -1103,9 +1127,11 @@ class MigrationAutodetector:
             ))
         return dependencies
 
-    def _generate_altered_foo_together(self, operation):
+    def _generate_altered_foo_together(self, operation, model_keys=None):
         option_name = operation.option_name
-        for app_label, model_name in sorted(self.kept_model_keys):
+        if model_keys is None:
+            model_keys = self.kept_model_keys
+        for app_label, model_name in sorted(model_keys):
             old_model_name = self.renamed_models.get((app_label, model_name), model_name)
             old_model_state = self.from_state.models[app_label, old_model_name]
             new_model_state = self.to_state.models[app_label, model_name]
@@ -1144,7 +1170,67 @@ class MigrationAutodetector:
         self._generate_altered_foo_together(operations.AlterUniqueTogether)
 
     def generate_altered_index_together(self):
-        self._generate_altered_foo_together(operations.AlterIndexTogether)
+        option_name = operations.AlterIndexTogether.option_name
+        for app_label, model_name in sorted(self.kept_model_keys):
+            moved_indexes = self.altered_indexes[
+                app_label, model_name
+            ]['moved_indexes']
+            if not moved_indexes:
+                continue
+
+            old_model_name = self.renamed_models.get(
+                (app_label, model_name), model_name,
+            )
+            old_value = self.from_state.models[
+                app_label, old_model_name
+            ].options.get(option_name)
+            old_value = {
+                tuple(
+                    self.renamed_fields.get((app_label, model_name, name), name)
+                    for name in together
+                )
+                for together in old_value
+            } if old_value else set()
+            new_value = self.to_state.models[
+                app_label, model_name
+            ].options.get(option_name)
+            new_value = set(new_value) if new_value else set()
+            database_value = new_value | {
+                tuple(index.fields) for index in moved_indexes
+            }
+
+            database_operations = []
+            if old_value != database_value:
+                database_operations.append(operations.AlterIndexTogether(
+                    name=model_name,
+                    index_together=database_value,
+                ))
+            state_operations = [
+                operations.AlterIndexTogether(
+                    name=model_name,
+                    index_together=new_value,
+                ),
+                *[
+                    operations.AddIndex(model_name=model_name, index=index)
+                    for index in moved_indexes
+                ],
+            ]
+            self.add_operation(
+                app_label,
+                operations.SeparateDatabaseAndState(
+                    database_operations=database_operations,
+                    state_operations=state_operations,
+                ),
+            )
+
+        moved_model_keys = {
+            key for key, indexes in self.altered_indexes.items()
+            if indexes['moved_indexes']
+        }
+        self._generate_altered_foo_together(
+            operations.AlterIndexTogether,
+            self.kept_model_keys - moved_model_keys,
+        )
 
     def generate_altered_db_table(self):
         models_to_check = self.kept_model_keys.union(self.kept_proxy_keys, self.kept_unmanaged_keys)

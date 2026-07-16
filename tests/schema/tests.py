@@ -8,6 +8,8 @@ from django.core.management.color import no_style
 from django.db import (
     DatabaseError, DataError, IntegrityError, OperationalError, connection,
 )
+from django.db.migrations.autodetector import MigrationAutodetector
+from django.db.migrations.state import ModelState, ProjectState
 from django.db.models import (
     CASCADE, PROTECT, AutoField, BigAutoField, BigIntegerField, BinaryField,
     BooleanField, CharField, CheckConstraint, DateField, DateTimeField,
@@ -51,6 +53,7 @@ class SchemaTests(TransactionTestCase):
     models = [
         Author, AuthorCharFieldWithIndex, AuthorTextFieldWithIndex,
         AuthorWithDefaultHeight, AuthorWithEvenLongerName, Book, BookWeak,
+        AuthorWithIndexedNameAndBirthday,
         AuthorWithIndexAndUniqueNameAndBirthday, BookWithLongName, BookWithO2O,
         BookWithSlug, IntegerPK, Node, Note, Tag, TagIndexed, TagM2MTest,
         TagUniqueRename, Thing, UniqueTest,
@@ -2143,6 +2146,36 @@ class SchemaTests(TransactionTestCase):
             if details['columns'] == ['name', 'birthday']
         }
 
+    def get_equivalent_index_move(self):
+        before_model = ModelState.from_model(
+            AuthorWithIndexedNameAndBirthday,
+        )
+        after_model = before_model.clone()
+        after_model.options['index_together'] = set()
+        after_model.options['indexes'] = [Index(
+            fields=['name', 'birthday'],
+            name='schema_author_moved_idx',
+        )]
+        from_state = ProjectState()
+        from_state.add_model(before_model)
+        to_state = ProjectState()
+        to_state.add_model(after_model)
+        changes = MigrationAutodetector(
+            from_state, to_state,
+        )._detect_changes()
+        return from_state, changes['schema'][0].operations
+
+    def apply_equivalent_index_move(self, editor, from_state, operations):
+        state = from_state
+        for operation in operations:
+            to_state = state.clone()
+            operation.state_forwards('schema', to_state)
+            operation.database_forwards(
+                'schema', editor, state, to_state,
+            )
+            state = to_state
+        return state
+
     @skipUnlessDBFeature('allows_multiple_constraints_on_same_fields')
     def test_djix_001_remove_overlapping_index_together_avoids_wrong_constraint_count(self):
         """GUID: DJIX-001 - Removal completes without a constraint-count error."""
@@ -2221,32 +2254,53 @@ class SchemaTests(TransactionTestCase):
         GUID: DJIX-007 - Applying the equivalent declaration move executes no
         index-removal or index-creation operation.
         """
-        # LOGIC OBLIGATION DJIX-007 (schema execution):
-        # GIVEN a table with one non-unique index over ordered_fields created
-        # from the source index_together declaration, record its constraints.
-        # WHEN the migration for the equivalent Options.indexes declaration is
-        # applied, capture schema-editor actions and executed schema SQL.
-        #   IF an action or statement removes/drops the existing index, fail.
-        #   IF an action or statement creates/adds a replacement index, fail.
-        #   OTHERWISE complete the transition without schema mutation.
-        # Index-name equality must not be required for this decision.
-        pass
+        with connection.schema_editor() as editor:
+            editor.create_model(AuthorWithIndexedNameAndBirthday)
+        from_state, operations = self.get_equivalent_index_move()
+
+        with connection.schema_editor() as editor:
+            with mock.patch.object(editor, 'add_index') as add_index, \
+                    mock.patch.object(editor, 'remove_index') as remove_index, \
+                    mock.patch.object(
+                        editor, 'alter_index_together',
+                    ) as alter_index_together:
+                self.apply_equivalent_index_move(
+                    editor, from_state, operations,
+                )
+
+        add_index.assert_not_called()
+        remove_index.assert_not_called()
+        alter_index_together.assert_not_called()
 
     def test_djix_008_index_together_to_options_indexes_same_order_keeps_one_non_unique_schema_index(self):
         """
         GUID: DJIX-008 - Schema inspection retains one non-unique index over
         the same ordered fields after the equivalent declaration move.
         """
-        # LOGIC OBLIGATION DJIX-008 (database-schema transition):
-        # GIVEN the database state produced by applying the equivalent move:
-        # WHEN constraints are introspected, select entries whose ordered
-        # columns equal ordered_fields and whose index flag is true.
-        # THEN require exactly one selected entry and require unique to be false.
-        #   IF none is selected, fail because the declaration move lost the index.
-        #   IF more than one is selected, fail because the move duplicated it.
-        #   IF the ordered columns differ or unique is true, fail because schema
-        #   semantics no longer agree with the resulting migration state.
-        pass
+        with connection.schema_editor() as editor:
+            editor.create_model(AuthorWithIndexedNameAndBirthday)
+        from_state, operations = self.get_equivalent_index_move()
+        with connection.schema_editor() as editor:
+            result_state = self.apply_equivalent_index_move(
+                editor, from_state, operations,
+            )
+
+        indexes = [
+            details for details in self.get_constraints(
+                AuthorWithIndexedNameAndBirthday._meta.db_table,
+            ).values()
+            if details['columns'] == ['name', 'birthday'] and details['index']
+        ]
+        self.assertEqual(len(indexes), 1)
+        self.assertIs(indexes[0]['unique'], False)
+        options = result_state.models[
+            'schema', 'authorwithindexednameandbirthday'
+        ].options
+        self.assertEqual(options['index_together'], set())
+        self.assertEqual(
+            [index.fields for index in options['indexes']],
+            [['name', 'birthday']],
+        )
 
     def test_index_together(self):
         """

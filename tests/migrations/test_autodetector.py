@@ -1444,38 +1444,90 @@ class AutodetectorTests(TestCase):
         GUID: DJIX-007 - Moving the same ordered fields from index_together to
         Options.indexes emits no index-removal or index-creation operation.
         """
-        # LOGIC OBLIGATION DJIX-007 (migration emission):
-        # GIVEN a source ProjectState whose model declares index_together for
-        # ordered_fields, and a target ProjectState whose model replaces only
-        # that declaration with one non-unique Index over ordered_fields:
-        #   source_signature = (model, ordered_fields, unique=False)
-        #   target_signature = (model, ordered_fields, unique=False)
-        # WHEN the migration autodetector compares source and target states:
-        #   IF the signatures are equal and the target index has no additional
-        #   attributes, classify the difference as an equivalent declaration
-        #   move and consume both sides of the index difference.
-        #   ELSE leave the difference to the existing remove/add detection path.
-        # THEN collect every emitted operation for the model and fail if any
-        # operation removes the legacy index or creates the replacement index;
-        # physical index-name identity is not part of the comparison.
-        pass
+        before = self.book.clone()
+        before.options['index_together'] = {('author', 'title')}
+        after = self.book.clone()
+        after.options['indexes'] = [models.Index(
+            fields=['author', 'title'],
+            name='book_author_title_moved_idx',
+        )]
+
+        changes = self.get_changes(
+            [self.author_empty, before],
+            [self.author_empty, after],
+        )
+
+        self.assertNumberMigrations(changes, 'otherapp', 1)
+        self.assertOperationTypes(
+            changes, 'otherapp', 0, ['SeparateDatabaseAndState'],
+        )
+        operation = changes['otherapp'][0].operations[0]
+        self.assertEqual(operation.database_operations, [])
+        self.assertEqual(
+            [op.__class__.__name__ for op in operation.state_operations],
+            ['AlterIndexTogether', 'AddIndex'],
+        )
 
     def test_djix_008_index_together_to_options_indexes_same_order_keeps_one_non_unique_state_index(self):
         """
         GUID: DJIX-008 - Migration state retains one non-unique index over the
         same ordered fields after the equivalent declaration move.
         """
-        # LOGIC OBLIGATION DJIX-008 (migration-state transition):
-        # GIVEN the same source and target ProjectStates used for DJIX-007:
-        # WHEN the autodetected migration operations are applied to the source
-        # state, derive the resulting model state without touching a database.
-        # THEN normalize all non-unique index declarations on the model to their
-        # ordered field sequences and select those equal to ordered_fields.
-        #   IF the selection contains exactly one entry, require its ordered
-        #   fields to equal ordered_fields and its uniqueness to remain false.
-        #   ELSE fail because state lost the index or represents it more than
-        #   once after the declaration move.
-        pass
+        before = self.book.clone()
+        before.options['index_together'] = {('author', 'title')}
+        after = self.book.clone()
+        after.options['indexes'] = [models.Index(
+            fields=['author', 'title'],
+            name='book_author_title_moved_idx',
+        )]
+        from_state = self.make_project_state([self.author_empty, before])
+        changes = MigrationAutodetector(
+            from_state,
+            self.make_project_state([self.author_empty, after]),
+        )._detect_changes()
+
+        result_state = from_state.clone()
+        for operation in changes['otherapp'][0].operations:
+            operation.state_forwards('otherapp', result_state)
+
+        options = result_state.models['otherapp', 'book'].options
+        self.assertEqual(options['index_together'], set())
+        self.assertEqual(len(options['indexes']), 1)
+        self.assertEqual(options['indexes'][0].fields, ['author', 'title'])
+        self.assertIs(options['indexes'][0].condition, None)
+
+    def test_index_together_to_non_equivalent_index_uses_schema_operations(self):
+        before = self.book.clone()
+        before.options['index_together'] = {('author', 'title')}
+        indexes = [
+            models.Index(
+                fields=['title', 'author'],
+                name='book_reordered_idx',
+            ),
+            models.Index(
+                fields=['author', 'title'],
+                condition=models.Q(title__isnull=False),
+                name='book_conditional_idx',
+            ),
+            models.Index(
+                fields=['author', 'title'],
+                db_tablespace='other',
+                name='book_tablespace_idx',
+            ),
+        ]
+
+        for index in indexes:
+            with self.subTest(index=index):
+                after = self.book.clone()
+                after.options['indexes'] = [index]
+                changes = self.get_changes(
+                    [self.author_empty, before],
+                    [self.author_empty, after],
+                )
+                self.assertOperationTypes(
+                    changes, 'otherapp', 0,
+                    ['AlterIndexTogether', 'AddIndex'],
+                )
 
     def test_create_model_with_check_constraint(self):
         """Test creation of new model with constraints already defined."""
