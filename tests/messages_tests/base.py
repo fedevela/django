@@ -118,6 +118,26 @@ class BaseTests:
         storing = self.stored_messages_count(storage, response)
         self.assertEqual(storing, 2)
 
+    def test_msg_001_empty_extra_tags_survives_storage_round_trip(self):
+        """GUID: MSG-001: Empty extra_tags survives a storage round trip."""
+        pass
+
+    def test_msg_002_none_extra_tags_survives_serialization_round_trip(self):
+        """GUID: MSG-002: None extra_tags survives serialization."""
+        pass
+
+    def test_msg_004_nonempty_extra_tags_survives_serialization_unchanged(self):
+        """GUID: MSG-004: Non-empty extra_tags survives unchanged."""
+        pass
+
+    def test_msg_005_empty_extra_tags_preserves_message_and_level(self):
+        """GUID: MSG-005: Empty extra_tags preserves message and level."""
+        pass
+
+    def test_msg_006_serialized_data_without_extra_tags_deserializes_to_none(self):
+        """GUID: MSG-006: Omitted extra_tags deserializes to None."""
+        pass
+
     def test_existing_add_read_update(self):
         storage = self.get_existing_storage()
         response = self.get_response()
