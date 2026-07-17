@@ -619,6 +619,9 @@ class ChoiceWidget(Widget):
         return groups
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        # Architecture (BWID-004): ChoiceWidget owns option identity. The
+        # emitted name and index are inputs to BoundWidget's data boundary,
+        # never outputs of its label-target contract.
         # BWID-004 — choice identity non-interference:
         #   INPUT: the existing choice name, outer index, and optional subindex.
         #   DERIVE option_index with the existing outer/subindex formatting.

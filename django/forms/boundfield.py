@@ -42,6 +42,9 @@ class BoundField:
         This property is cached so that only one database query occurs when
         rendering ModelChoiceFields.
         """
+        # Architecture (BWID-003): This property is the sole BoundField seam
+        # for admitting auto_id into choice generation. ChoiceWidget owns
+        # indexed input IDs; BoundWidget owns their template-facing exposure.
         # BWID-003 — default auto_id association preservation:
         #   INPUT: a bound choice field using the form's default auto_id.
         #   SELECT base_id := explicit widget ID, otherwise BoundField.auto_id.
@@ -230,6 +233,9 @@ class BoundField:
         Useful, for example, for focusing on this field regardless of whether
         it has a single widget or a MultiWidget.
         """
+        # Architecture (BWID-005): BoundField retains this field-level label
+        # contract and depends only on Widget.id_for_label(). It must not
+        # depend on the BoundWidget option-data boundary.
         # BWID-005 — BoundField label-target non-interference:
         #   INPUT: the field widget, its optional explicit ID, and auto_id.
         #   SELECT base_id := explicit widget ID, otherwise BoundField.auto_id.
@@ -281,6 +287,10 @@ class BoundWidget:
         return self.tag(wrap_label=True)
 
     def tag(self, wrap_label=False):
+        # Architecture (BWID-006): Rendering remains owned by the parent
+        # widget. BoundWidget is only an adapter from option data to that
+        # existing template/renderer boundary; label-ID selection is isolated
+        # in id_for_label below.
         # BWID-006 — unrelated rendering non-interference:
         #   INPUT: existing subwidget data and the requested wrap_label state.
         #   COPY all render data unchanged; override only wrap_label in context.
