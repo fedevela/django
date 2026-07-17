@@ -134,6 +134,10 @@ class URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
         with self.assertRaises(ValidationError):
             URLField().clean('////]@N.AN')
 
+    # ARCHITECTURE (GUID: URL-004, URL-005, URL-006, URL-007): This group is
+    # the URLField.clean() compatibility seam. Later implementation replaces
+    # these placeholders in place and exercises behavior only through the
+    # public field pipeline, leaving parser mechanics at their owning locus.
     def test_url_004_accepted_url_clean_preserves_established_cleaned_value(self):
         """GUID: URL-004 - Accepted URLs retain their cleaned values."""
         pass

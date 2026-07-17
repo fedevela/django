@@ -675,6 +675,13 @@ class URLField(CharField):
     }
     default_validators = [validators.URLValidator()]
 
+    # ARCHITECTURE (GUID: URL-004, URL-005, URL-006, URL-007): URLField owns
+    # URL conversion and normalization through to_python(). The inherited
+    # Field.clean() pipeline remains the owner of empty-value policy, validator
+    # sequencing, and the cleaned-value return contract; default_validators is
+    # the dependency seam to URLValidator. Preserve these boundaries when
+    # handling parser failures so unaffected behavior continues through the
+    # established pipeline.
     # URL-004, URL-005, URL-006 -- inherited clean(value) pseudocode:
     #   converted_value = to_python(value)
     #   IF converted_value is empty AND the field is required:
