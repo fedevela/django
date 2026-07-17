@@ -1297,6 +1297,13 @@ class Model(metaclass=ModelBase):
 
     @classmethod
     def _check_default_pk(cls):
+        # Architecture -- GUIDs: PKW-001, PKW-002
+        # This method owns default-primary-key warning policy. Inheritance
+        # origin remains an input supplied by Options-owned pk/parents metadata;
+        # keep that dependency directed from this check to Options, and keep
+        # suppression at this seam before the W042 message and hint are built.
+        # Model.check() remains the sole aggregator, so no new public contract
+        # or inheritance-metadata API is required for either requirement.
         # Pseudocode -- GUID: PKW-001
         # Verification:
         # test_pkw_001_descendant_with_explicit_pk_from_supported_ancestor_does_not_produce_w042
