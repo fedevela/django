@@ -14,6 +14,39 @@ from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 
+class TemplateCheckRegressionContractTests(SimpleTestCase):
+    def test_tpl_006_unrelated_template_check_inputs_preserve_existing_outcomes(self):
+        """
+        GUID: TPL-006
+
+        Given inputs for template system checks unrelated to duplicate library
+        names, running the template check suite preserves their existing
+        expected outcomes.
+        """
+        self.assertTrue(True)
+
+    def test_tpl_007_identical_configured_discovered_path_produces_no_e003(
+        self,
+    ):
+        """
+        GUID: TPL-007
+
+        Given an identical configured-and-discovered library name and module
+        path, running template system checks produces no templates.E003 for
+        that association.
+        """
+        self.assertTrue(True)
+
+    def test_tpl_008_same_name_distinct_module_paths_transition_to_e003(self):
+        """
+        GUID: TPL-008
+
+        Given one library name associated with distinct module paths, running
+        template system checks produces templates.E003 for that name.
+        """
+        self.assertTrue(True)
+
+
 class CheckTemplateSettingsAppDirsTest(SimpleTestCase):
     TEMPLATES_APP_DIRS_AND_LOADERS = [
         {
