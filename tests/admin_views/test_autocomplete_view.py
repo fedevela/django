@@ -371,15 +371,105 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
 
     def test_ACJ_010_same_search_request_and_database_state_selects_same_queryset_objects(self):
         """GUID: ACJ-010 search and queryset filtering preserve object membership."""
-        self.assertTrue(True)
+        selected = Question.objects.create(question='Selected match')
+        Question.objects.create(question='Selected other')
+        Question.objects.create(question='Filtered match')
+
+        class FilteredQuestionAdmin(QuestionAdmin):
+            ordering = ['big_id']
+
+            def get_queryset(self, request):
+                return super().get_queryset(request).exclude(
+                    question__startswith='Filtered',
+                )
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            serialized_objects = []
+
+            def serialize_result(self, obj, to_field_name):
+                self.serialized_objects.append(obj)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, {'term': 'match', **self.opts})
+        request.user = self.superuser
+
+        with model_admin(Question, FilteredQuestionAdmin):
+            response = RecordingAutocompleteJsonView.as_view(
+                **self.as_view_args
+            )(request)
+
+        self.assertEqual(RecordingAutocompleteJsonView.serialized_objects, [selected])
+        self.assertEqual(
+            [result['id'] for result in json.loads(response.content)['results']],
+            [str(selected.big_id)],
+        )
 
     def test_ACJ_010_relation_search_requiring_distinct_preserves_membership_without_new_duplicates(self):
         """GUID: ACJ-010 relation search preserves distinct object membership."""
-        self.assertTrue(True)
+        selected = Question.objects.create(question='Selected')
+        related_questions = [
+            Question.objects.create(question='Related match %s' % index)
+            for index in range(2)
+        ]
+        selected.related_questions.add(*related_questions)
+
+        class RelationSearchQuestionAdmin(QuestionAdmin):
+            ordering = ['big_id']
+            search_fields = ['related_questions__question']
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            serialized_objects = []
+
+            def serialize_result(self, obj, to_field_name):
+                self.serialized_objects.append(obj)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, {
+            'term': 'related match',
+            **self.opts,
+        })
+        request.user = self.superuser
+
+        with model_admin(Question, RelationSearchQuestionAdmin):
+            response = RecordingAutocompleteJsonView.as_view(
+                **self.as_view_args
+            )(request)
+
+        self.assertEqual(RecordingAutocompleteJsonView.serialized_objects, [selected])
+        self.assertEqual(
+            [result['id'] for result in json.loads(response.content)['results']],
+            [str(selected.big_id)],
+        )
 
     def test_ACJ_010_limit_choices_to_preserves_constraints_and_serialization_eligibility(self):
         """GUID: ACJ-010 limit_choices_to preserves eligible object membership."""
-        self.assertTrue(True)
+        eligible = Question.objects.create(question='Eligible match')
+        Question.objects.create(question='Not eligible match')
+        Question.objects.create(question='Eligible other')
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            serialized_objects = []
+
+            def serialize_result(self, obj, to_field_name):
+                self.serialized_objects.append(obj)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, {
+            'term': 'match',
+            **self.opts,
+            'field_name': 'question_with_to_field',
+        })
+        request.user = self.superuser
+
+        response = RecordingAutocompleteJsonView.as_view(
+            **self.as_view_args
+        )(request)
+
+        self.assertEqual(RecordingAutocompleteJsonView.serialized_objects, [eligible])
+        self.assertEqual(
+            [result['id'] for result in json.loads(response.content)['results']],
+            [str(eligible.uuid)],
+        )
 
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
