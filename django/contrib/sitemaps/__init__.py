@@ -163,6 +163,9 @@ class Sitemap:
         return self._urls(page, protocol, domain)
 
     def get_latest_lastmod(self):
+        # Architecture boundary (SITEMAP-001, SITEMAP-003, SITEMAP-004,
+        # SITEMAP-005, SITEMAP-006): Sitemap owns lastmod resolution and exposes
+        # only its resolved value (or None) to index-rendering consumers.
         # Pseudocode contract for latest-lastmod resolution:
         # SITEMAP-005: IF lastmod is absent, RETURN None.
         # SITEMAP-006: OTHERWISE, IF lastmod is not callable, RETURN it directly

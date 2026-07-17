@@ -73,6 +73,9 @@ def index(
         protocol = req_protocol if site.protocol is None else site.protocol
         sitemap_url = reverse(sitemap_url_name, kwargs={"section": section})
         absolute_url = "%s://%s%s" % (protocol, req_site.domain, sitemap_url)
+        # Integration seam (SITEMAP-001, SITEMAP-003, SITEMAP-004,
+        # SITEMAP-005, SITEMAP-006): the index consumes Sitemap's nullable,
+        # resolved lastmod contract; resolution remains owned by Sitemap.
         site_lastmod = site.get_latest_lastmod()
         if all_indexes_lastmod:
             if site_lastmod is not None:
