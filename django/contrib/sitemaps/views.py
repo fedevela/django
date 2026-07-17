@@ -73,7 +73,13 @@ def index(
         protocol = req_protocol if site.protocol is None else site.protocol
         sitemap_url = reverse(sitemap_url_name, kwargs={"section": section})
         absolute_url = "%s://%s%s" % (protocol, req_site.domain, sitemap_url)
-        # Integration seam (SITEMAP-001, SITEMAP-002, SITEMAP-003,
+        # Architecture integration seam (SITEMAP-002, SITEMAP-007): Sitemap
+        # owns nullable latest-lastmod resolution; the index view owns only
+        # consumption of that resolved value for entry and response metadata.
+        # Dependency direction remains index -> Sitemap.get_latest_lastmod(),
+        # keeping item discovery and callable evaluation outside this view.
+        #
+        # Pseudocode obligations (SITEMAP-001, SITEMAP-002, SITEMAP-003,
         # SITEMAP-004, SITEMAP-005, SITEMAP-006, SITEMAP-007):
         # RESOLVE the sitemap's latest modification date through its existing
         # nullable lastmod contract.
