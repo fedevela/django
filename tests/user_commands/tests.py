@@ -9,6 +9,7 @@ from django.apps import apps
 from django.core import management
 from django.core.checks import Tags
 from django.core.management import BaseCommand, CommandError, find_commands
+from django.core.management.base import DjangoHelpFormatter
 from django.core.management.utils import (
     find_command,
     get_random_secret_key,
@@ -474,25 +475,94 @@ class CommandHelpFormattingContractTests(SimpleTestCase):
 
 
 class CommandHelpCompletenessAndDefaultFormattingContractTests(SimpleTestCase):
-    """Placeholder verification obligations for MCFMT-005, MCFMT-006, MCFMT-009."""
+    """Verification obligations for MCFMT-005, MCFMT-006, and MCFMT-009."""
+
+    default_help_text = (
+        "This command uses the established formatter and wraps its ordinary "
+        "description when the description extends beyond the standard help width."
+    )
+    multiline_help_text = (
+        "First source line contains ordinary prose that is deliberately long enough "
+        "to reach beyond the normal formatter width.\n"
+        "Second source line also contains ordinary prose and must be reflowed as part "
+        "of the same description paragraph."
+    )
+
+    def format_default_help(self, help_text):
+        class Command(BaseCommand):
+            help = help_text
+
+        with mock.patch.dict(os.environ, {"COLUMNS": "80", "LINES": "24"}):
+            parser = Command().create_parser("manage.py", "format_contract")
+            return parser, parser.format_help()
+
+    def get_description(self, formatted_help):
+        return formatted_help.split("\n\n", 2)[1]
 
     def test_mcfmt_005_customized_help_includes_usage_positional_and_optional_docs(
         self,
     ):
         """GUID: MCFMT-005 - Customized help keeps every argument section."""
-        pass
+        class Command(BaseCommand):
+            help = "Import a contract."
+
+            def create_parser(command_self, *args, **kwargs):
+                return super().create_parser(
+                    *args,
+                    usage="%(prog)s [options] contract",
+                    formatter_class=RawTextHelpFormatter,
+                    **kwargs,
+                )
+
+            def add_arguments(command_self, parser):
+                parser.add_argument("contract", help="Contract identifier.")
+                parser.add_argument(
+                    "--dry-run", action="store_true", help="Preview the import."
+                )
+
+        parser = Command().create_parser("manage.py", "import_contract")
+        formatted_help = parser.format_help()
+
+        self.assertIn(
+            "usage: manage.py import_contract [options] contract", formatted_help
+        )
+        self.assertIn("%s:\n" % parser._positionals.title, formatted_help)
+        self.assertIn("contract", formatted_help)
+        self.assertIn("Contract identifier.", formatted_help)
+        self.assertIn("%s:\n" % parser._optionals.title, formatted_help)
+        self.assertIn("--dry-run", formatted_help)
+        self.assertIn("Preview the import.", formatted_help)
 
     def test_mcfmt_006_default_help_keeps_established_wrapping_and_formatting(self):
         """GUID: MCFMT-006 - A command without opt-in keeps default formatting."""
-        pass
+        parser, formatted_help = self.format_default_help(self.default_help_text)
+
+        self.assertIs(parser.formatter_class, DjangoHelpFormatter)
+        self.assertEqual(
+            self.get_description(formatted_help),
+            "This command uses the established formatter and wraps its ordinary "
+            "description\nwhen the description extends beyond the standard help width.",
+        )
 
     def test_mcfmt_009_multiline_default_help_does_not_imply_preformatted_text(self):
         """GUID: MCFMT-009 - Line breaks alone do not opt into preformatting."""
-        pass
+        parser, formatted_help = self.format_default_help(self.multiline_help_text)
+
+        self.assertIs(parser.formatter_class, DjangoHelpFormatter)
+        self.assertNotIn(self.multiline_help_text, formatted_help)
 
     def test_mcfmt_009_multiline_default_help_keeps_established_wrapping(self):
         """GUID: MCFMT-009 - Multiline default help retains default wrapping."""
-        pass
+        _, formatted_help = self.format_default_help(self.multiline_help_text)
+
+        self.assertEqual(
+            self.get_description(formatted_help),
+            "First source line contains ordinary prose that is deliberately long "
+            "enough "
+            "to\nreach beyond the normal formatter width. Second source line also "
+            "contains\nordinary prose and must be reflowed as part of the same "
+            "description paragraph.",
+        )
 
 
 class CommandRunTests(AdminScriptTestCase):
