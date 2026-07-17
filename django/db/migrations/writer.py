@@ -23,6 +23,11 @@ class OperationWriter:
 
     def serialize(self):
 
+        # Operation integration boundary (GUID: MIG-003, MIG-004, MIG-005,
+        # MIG-006, MIG-008): this layer preserves the CreateModel argument
+        # structure and aggregates serializer-owned imports. Type-specific
+        # reference/import decisions remain owned by serializer.py.
+
         # Mixed-inheritance migration pseudocode (GUID: MIG-003, MIG-004,
         # MIG-005, MIG-006, MIG-008, MIG-009):
         #
@@ -185,6 +190,11 @@ class MigrationWriter:
                 imports.remove(line)
                 self.needs_manual_porting = True
 
+        # Module rendering boundary (GUID: MIG-001, MIG-002, MIG-006, MIG-007,
+        # MIG-009): serializer imports cross into the generated module here.
+        # This layer only consolidates an explicitly requested models import;
+        # its absence remains meaningful and must not be replaced by scanning
+        # rendered operation text.
         # django.db.migrations is always used, but models import may not be.
         # If models import exists, merge it with migrations import.
         if "from django.db import models" in imports:

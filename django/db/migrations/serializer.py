@@ -272,6 +272,11 @@ class TupleSerializer(BaseSequenceSerializer):
 
 class TypeSerializer(BaseSerializer):
     def serialize(self):
+        # Serialization ownership boundary (GUID: MIG-001, MIG-002, MIG-003,
+        # MIG-006, MIG-007, MIG-008): TypeSerializer owns the indivisible
+        # contract between a type's emitted reference and the imports needed
+        # to resolve it. OperationWriter and MigrationWriter consume that
+        # contract; they must not infer imports from serialized text.
         # models.Model reference pseudocode (GUID: MIG-001, MIG-002, MIG-003,
         # MIG-006, MIG-007, MIG-008):
         #
