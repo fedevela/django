@@ -1497,12 +1497,16 @@ class MigrationDatabaseTraceabilityTests(TestCase):
     databases = {"default", "other"}
 
     @staticmethod
-    def _permission(using):
-        return Permission.objects.using(using).get(
+    def _permission_queryset(using):
+        return Permission.objects.using(using).filter(
             content_type__app_label="auth",
             content_type__model="permission",
             codename="add_permission",
         )
+
+    @classmethod
+    def _permission(cls, using):
+        return cls._permission_queryset(using).get()
 
     def _remove_other_permission_content_type(self):
         """Give auth.Permission content types different keys on each database."""
@@ -1586,15 +1590,81 @@ class MigrationDatabaseTraceabilityTests(TestCase):
 
     def test_MIGDB_004_allowed_selected_database_processing_is_not_redirected(self):
         """GUID: MIGDB-004 — allowed processing stays on the selected database."""
-        pass
+        self._permission_queryset("default").delete()
+        self._permission_queryset("other").delete()
+        database_router = mock.Mock()
+        database_router.allow_migrate.return_value = True
+
+        with override_settings(DATABASE_ROUTERS=[database_router]):
+            with self.assertNumQueries(0, using="default"):
+                create_permissions(
+                    apps.get_app_config("auth"),
+                    interactive=False,
+                    verbosity=0,
+                    using="other",
+                )
+
+        database_router.allow_migrate.assert_any_call(
+            "other",
+            "auth",
+            model_name="permission",
+            model=Permission,
+        )
+        self.assertTrue(self._permission_queryset("other").exists())
+        self.assertFalse(self._permission_queryset("default").exists())
 
     def test_MIGDB_004_rejection_creates_no_selected_database_permission_data(self):
         """GUID: MIGDB-004 — rejection leaves selected-database data unchanged."""
-        pass
+        self._permission_queryset("other").delete()
+        permission_count = Permission.objects.using("other").count()
+        database_router = mock.Mock()
+        database_router.allow_migrate.side_effect = (
+            lambda db, app_label, **hints: hints.get("model_name") != "permission"
+        )
+
+        with override_settings(DATABASE_ROUTERS=[database_router]):
+            create_permissions(
+                apps.get_app_config("auth"),
+                interactive=False,
+                verbosity=0,
+                using="other",
+            )
+
+        database_router.allow_migrate.assert_any_call(
+            "other",
+            "auth",
+            model_name="permission",
+            model=Permission,
+        )
+        self.assertEqual(Permission.objects.using("other").count(), permission_count)
+        self.assertFalse(self._permission_queryset("other").exists())
 
     def test_MIGDB_004_rejection_does_not_read_or_write_a_fallback_database(self):
         """GUID: MIGDB-004 — rejection performs no fallback database access."""
-        pass
+        self._permission_queryset("other").delete()
+        database_router = mock.Mock()
+        database_router.allow_migrate.side_effect = (
+            lambda db, app_label, **hints: hints.get("model_name") != "permission"
+        )
+        database_router.db_for_read.side_effect = AssertionError(
+            "Unexpected fallback database read selection."
+        )
+        database_router.db_for_write.side_effect = AssertionError(
+            "Unexpected fallback database write selection."
+        )
+
+        with override_settings(DATABASE_ROUTERS=[database_router]):
+            with self.assertNumQueries(0, using="default"):
+                create_permissions(
+                    apps.get_app_config("auth"),
+                    interactive=False,
+                    verbosity=0,
+                    using="other",
+                )
+
+        database_router.db_for_read.assert_not_called()
+        database_router.db_for_write.assert_not_called()
+        self.assertFalse(self._permission_queryset("other").exists())
 
     def test_MIGDB_006_prior_behavior_detects_wrong_content_type_database(self):
         """GUID: MIGDB-006 — prior behavior -> wrong database is detected."""
