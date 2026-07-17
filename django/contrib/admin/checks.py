@@ -921,13 +921,14 @@ class ModelAdminChecks(BaseModelAdminChecks):
             return must_be(
                 "a list or tuple", option="list_display", obj=obj, id="admin.E107"
             )
-        else:
-            return list(
-                chain.from_iterable(
-                    self._check_list_display_item(obj, item, "list_display[%d]" % index)
-                    for index, item in enumerate(obj.list_display)
+        errors = []
+        for index, item in enumerate(obj.list_display):
+            errors.extend(
+                self._check_list_display_item(
+                    obj, item, "list_display[%d]" % index
                 )
             )
+        return errors
 
     # GEV-001 / GEV-002 / GEV-003 / GEV-004 / GEV-005 / GEV-006 / GEV-007 /
     # GEV-008 / GEV-009 — architecture contract for list_display resolution.
