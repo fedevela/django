@@ -97,18 +97,60 @@ class OnlyThenDeferContractTests(TestCase):
 
     def test_defer_008_valid_only_outside_affected_chain_preserves_selected_fields(self):
         """GUID: DEFER-008"""
+        # Pseudocode [GUID: DEFER-008]:
+        #   INPUT a valid only("name") queryset with no following defer() call.
+        #   EVALUATE exactly one Primary row.
+        #   DERIVE the initially loaded concrete fields from the model field set
+        #       minus the instance's deferred-field set.
+        #   VERIFY the loaded set is {primary key, "name"}; all other concrete
+        #       fields remain deferred, preserving established only() behavior.
+        #   FAILURE PATH: fail if evaluation changes the selected-field boundary
+        #       or if inspecting deferred state triggers an additional query.
         pass
 
     def test_defer_008_valid_defer_outside_affected_chain_preserves_selected_fields(self):
         """GUID: DEFER-008"""
+        # Pseudocode [GUID: DEFER-008]:
+        #   INPUT a valid defer("name") queryset with no preceding only() call.
+        #   EVALUATE exactly one Primary row.
+        #   DERIVE the initially loaded concrete fields from the model field set
+        #       minus the instance's deferred-field set.
+        #   VERIFY only "name" is deferred and every other concrete field,
+        #       including the primary key, remains initially loaded.
+        #   FAILURE PATH: fail if unrelated fields change loading state or if
+        #       inspecting deferred state triggers an additional query.
         pass
 
     def test_defer_009_unevaluated_only_defer_chain_executes_no_queries(self):
         """GUID: DEFER-009"""
+        # Pseudocode [GUID: DEFER-009]:
+        #   ENTER a zero-query observation boundary.
+        #   CONSTRUCT Primary.objects.only("name").defer("name").
+        #   RETAIN the queryset without iterating, indexing, counting, coercing,
+        #       or otherwise requesting results.
+        #   EXIT the observation boundary and VERIFY zero queries were recorded.
+        #   VERIFY the queryset remains unevaluated so later use controls the
+        #       transition from construction state to execution state.
+        #   FAILURE PATH: any query during chaining, or premature result-cache
+        #       population, violates laziness and fails the regression case.
         pass
 
     def test_defer_010_affected_chain_initial_columns_ignore_backend_quoting(self):
         """GUID: DEFER-010"""
+        # Pseudocode [GUID: DEFER-010]:
+        #   DEFINE affected chains and expected initially loaded field-name sets:
+        #       only("name").defer("name") -> {primary key};
+        #       only("name").defer("name").defer("value") -> {primary key};
+        #       only("name", "value").defer("name") -> {primary key, "value"};
+        #       only("name", "value").defer("name").defer("value")
+        #           -> {primary key}.
+        #   FOR EACH chain:
+        #       EVALUATE one row without reading any deferred attribute.
+        #       DERIVE initially loaded concrete field names from model metadata
+        #           and the instance's deferred-field set.
+        #       COMPARE field-name sets, never rendered SQL or quoted identifiers.
+        #   FAILURE PATH: fail on any missing or extra selected field; do not
+        #       normalize, strip, or assume a database backend's quoting syntax.
         pass
 
 
