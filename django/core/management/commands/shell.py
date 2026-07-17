@@ -98,6 +98,11 @@ class Command(BaseCommand):
 
         # Execute stdin if it has anything to read and exit. Not supported on
         # Windows due to select.select() limitations.
+        # GUID: SHELL-007 - Non-interactive stdin restriction pseudocode:
+        # IF the platform is Windows, do not inspect, read, or execute stdin;
+        # transition directly to the existing interactive-shell flow.
+        # OTHERWISE, execute stdin only when it is non-interactive and ready;
+        # if either condition fails, transition to the same interactive flow.
         if sys.platform != 'win32' and not sys.stdin.isatty() and select.select([sys.stdin], [], [], 0)[0]:
             # GUID: SHELL-002 - Use a single namespace for the entire snippet.
             namespace = {}
@@ -108,6 +113,13 @@ class Command(BaseCommand):
             # GUID: SHELL-004 - Don't start an interactive shell afterwards.
             return
 
+        # GUID: SHELL-006 - Interactive preservation pseudocode:
+        # GIVEN no command was executed and no supported stdin was executed,
+        # IF an interface was requested, consider only that interface;
+        # OTHERWISE, consider shells in the existing self.shells order.
+        # FOR EACH candidate, hand off the unchanged options to its adapter;
+        # return when startup succeeds, but on ImportError try the next one.
+        # IF every candidate raises ImportError, raise the existing CommandError.
         available_shells = [options['interface']] if options['interface'] else self.shells
 
         for shell in available_shells:
