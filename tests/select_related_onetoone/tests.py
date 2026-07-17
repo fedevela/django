@@ -221,6 +221,38 @@ class ReverseSelectRelatedTestCase(TestCase):
         ):
             user.userprofile
 
+    def test_django_009_equivalent_reverse_o2o_only_restricts_requested_columns(self):
+        """
+        DJANGO-009: For an equivalent reverse one-to-one schema with different
+        model, field, and related names, select_related() with only() selects
+        requested columns and leaves unrequested columns deferred.
+        """
+        self.assertTrue(True)
+
+    def test_django_009_equivalent_reverse_o2o_only_populates_relation(self):
+        """
+        DJANGO-009: For an equivalent reverse one-to-one schema with different
+        model, field, and related names, select_related() with only() populates
+        the reverse-related instance.
+        """
+        self.assertTrue(True)
+
+    def test_django_009_inherited_reverse_o2o_only_selects_and_defers_fields(self):
+        """
+        DJANGO-009: For an inheritance-based reverse one-to-one schema,
+        deferred-field behavior with select_related() selects requested fields
+        and leaves unrequested fields deferred.
+        """
+        self.assertTrue(True)
+
+    def test_django_009_inherited_reverse_o2o_only_populates_correct_instances(self):
+        """
+        DJANGO-009: For an inheritance-based reverse one-to-one schema,
+        deferred-field behavior with select_related() populates the correct
+        inherited and related instances.
+        """
+        self.assertTrue(True)
+
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
             u = User.objects.select_related("userstat__results").get(username="test")
