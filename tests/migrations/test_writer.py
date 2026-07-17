@@ -21,6 +21,7 @@ from django.conf import SettingsReference, settings
 from django.core.validators import EmailValidator, RegexValidator
 from django.db import migrations, models
 from django.db.migrations.serializer import BaseSerializer
+from django.db.migrations.state import ProjectState
 from django.db.migrations.writer import MigrationWriter, OperationWriter
 from django.test import SimpleTestCase
 from django.utils.deconstruct import deconstructible
@@ -575,11 +576,67 @@ class WriterTests(SimpleTestCase):
 
     def test_migser_003_generated_migration_imports_without_missing_attribute(self):
         """MIGSER-003: Import resolves the nested-class method default."""
-        self.assertTrue(True)
+        with mock.patch.object(
+            Profile.Capability,
+            "__module__",
+            custom_migration_operations.operations.__name__,
+        ), mock.patch.object(
+            custom_migration_operations.operations, "Profile", Profile, create=True
+        ):
+            migration = migrations.Migration("0001_initial", "testapp")
+            migration.operations = [
+                migrations.CreateModel(
+                    "UserProfile",
+                    [
+                        ("id", models.AutoField(primary_key=True)),
+                        (
+                            "capabilities",
+                            models.JSONField(default=Profile.Capability.default),
+                        ),
+                    ],
+                )
+            ]
+            result = self.safe_exec(MigrationWriter(migration).as_string())
+
+        default = result["Migration"].operations[0].fields[1][1].default
+        self.assertIs(default.__self__, Profile.Capability)
+        self.assertIs(default.__func__, Profile.Capability.default.__func__)
 
     def test_migser_003_imported_migration_applies_without_missing_attribute(self):
         """MIGSER-003: Application preserves the resolved default reference."""
-        self.assertTrue(True)
+        with mock.patch.object(
+            Profile.Capability,
+            "__module__",
+            custom_migration_operations.operations.__name__,
+        ), mock.patch.object(
+            custom_migration_operations.operations, "Profile", Profile, create=True
+        ):
+            migration = migrations.Migration("0001_initial", "testapp")
+            migration.operations = [
+                migrations.CreateModel(
+                    "UserProfile",
+                    [
+                        ("id", models.AutoField(primary_key=True)),
+                        (
+                            "capabilities",
+                            models.JSONField(default=Profile.Capability.default),
+                        ),
+                    ],
+                )
+            ]
+            result = self.safe_exec(MigrationWriter(migration).as_string())
+        imported_migration = result["Migration"]("0001_initial", "testapp")
+        schema_editor = mock.Mock(atomic_migration=True)
+        schema_editor.connection.alias = "default"
+
+        new_state = imported_migration.apply(ProjectState(), schema_editor)
+
+        schema_editor.create_model.assert_called_once()
+        default = new_state.models["testapp", "userprofile"].fields[
+            "capabilities"
+        ].default
+        self.assertIs(default.__self__, Profile.Capability)
+        self.assertIs(default.__func__, Profile.Capability.default.__func__)
 
     def test_migser_004_nested_class_method_reference_resolves_same_callable(self):
         """MIGSER-004: Resolution returns the original field-default callable."""
