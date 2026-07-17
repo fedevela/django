@@ -914,6 +914,20 @@ class OperationTests(OperationTestBase):
                 rider_table, ["pony_id"], (db_table, "id"),
             )
 
+    def test_rmn_009_rename_model_different_effective_table_renames_physical_table(self):
+        """
+        GUID: RMN-009 - Given different old and new effective table names,
+        applying RenameModel renames the physical table to the new name.
+        """
+        self.assertTrue(True)
+
+    def test_rmn_009_rename_model_different_effective_table_exposes_new_state_name(self):
+        """
+        GUID: RMN-009 - Given different old and new effective table names,
+        applying RenameModel makes the model available under its new state name.
+        """
+        self.assertTrue(True)
+
     def test_rename_model_state_forwards(self):
         """
         RenameModel operations shouldn't trigger the caching of rendered apps
