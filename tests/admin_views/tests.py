@@ -4986,6 +4986,10 @@ class SeleniumTests(AdminSeleniumTestCase):
 
 @override_settings(ROOT_URLCONF='admin_views.urls')
 class ReadonlyForeignKeyAdminSiteContractTests(TestCase):
+    # DJA-007/DJA-008 architecture contract: this shared fixture is the
+    # equivalence boundary between the custom-site and default-site scenarios.
+    # Site selection, not model or ModelAdmin variation, is the only input
+    # allowed to differ.
 
     @classmethod
     def setUpTestData(cls):
@@ -5010,6 +5014,10 @@ class ReadonlyForeignKeyAdminSiteContractTests(TestCase):
         self.client.force_login(self.superuser)
 
     def get_change_response(self, admin_site):
+        # DJA-007/DJA-008 integration seam: the supplied AdminSite owns URL
+        # namespace selection; the configured URLconf owns the resulting
+        # prefix. Regression assertions remain in their requirement-named
+        # tests so this helper does not encode either expected prefix.
         url = reverse(
             'admin:admin_views_readonlyrelatedfield_change',
             args=(self.obj.pk,),
@@ -5089,6 +5097,8 @@ class ReadonlyForeignKeyAdminSiteContractTests(TestCase):
 
     def test_dja_007_custom_site_readonly_foreignkey_link_uses_custom_prefix_not_admin(self):
         """DJA-007: The custom-site readonly link uses its prefix, not /admin/."""
+        # Verification locus: get_change_response(site2) supplies the custom
+        # namespace and the shared `user` ForeignKey supplies the anchor.
         # DJA-007 logic obligation:
         # GIVEN the shared object whose ForeignKey is exposed by readonly_fields
         # AND the object is registered with the custom AdminSite (`site2`)
@@ -5105,6 +5115,8 @@ class ReadonlyForeignKeyAdminSiteContractTests(TestCase):
 
     def test_dja_008_default_site_readonly_foreignkey_link_remains_unchanged(self):
         """DJA-008: The default-site readonly link keeps its existing URL."""
+        # Verification locus: get_change_response(site) supplies the default
+        # namespace while reusing DJA-007's fixture and `user` ForeignKey.
         # DJA-008 logic obligation:
         # GIVEN the equivalent shared object whose ForeignKey is exposed by
         # readonly_fields AND the object is registered with the default AdminSite
