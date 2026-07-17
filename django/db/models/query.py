@@ -892,6 +892,12 @@ class QuerySet(AltersData):
                     obj_with_pk._state.db = self.db
             if objs_without_pk:
                 fields = [f for f in fields if not isinstance(f, AutoField)]
+                # BULKUPSERT-011 architecture: QuerySet owns hydration and
+                # saved-state transitions for ordinary inserts; _batched_insert()
+                # remains the persistence seam, while the backend return
+                # capability and opts.db_returning_fields remain its contracts.
+                # The on_conflict=None boundary keeps this responsibility
+                # independent from conflict-handling modes.
                 # GUID: BULKUPSERT-011 -- ordinary bulk-create primary-key
                 # population preservation.
                 # INPUT: ordered objects without primary keys, no selected
