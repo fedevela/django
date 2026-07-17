@@ -219,13 +219,43 @@ class BulkCreateUpdateConflictsContractTests(TestCase):
         self,
     ):
         """GUID: BULKUPSERT-009"""
-        pass
+        msg = "This database backend does not support updating conflicts."
+        with mock.patch.object(
+            connection.features, "supports_update_conflicts", False
+        ), self.assertNumQueries(0), self.assertRaisesMessage(NotSupportedError, msg):
+            Country.objects.bulk_create(
+                [Country(name="Germany", iso_two_letter="DE")],
+                update_conflicts=True,
+                update_fields=["description"],
+            )
 
+    @skipUnlessDBFeature("supports_update_conflicts")
     def test_BULKUPSERT_010_backend_without_row_returning_retains_conflict_update_without_pk_guarantee(
         self,
     ):
         """GUID: BULKUPSERT-010"""
-        pass
+        existing = UpsertConflict.objects.create(number=1, rank=1, name="original")
+        conflicting = UpsertConflict(number=1, rank=2, name="updated")
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["number"]
+
+        with mock.patch.object(
+            connection.features.__class__,
+            "can_return_rows_from_bulk_insert",
+            False,
+        ):
+            UpsertConflict.objects.bulk_create(
+                [conflicting],
+                update_conflicts=True,
+                update_fields=["rank", "name"],
+                unique_fields=unique_fields,
+            )
+
+        self.assertIsNone(conflicting.pk)
+        existing.refresh_from_db()
+        self.assertEqual(existing.rank, 2)
+        self.assertEqual(existing.name, "updated")
 
     @skipUnlessDBFeature(
         "supports_update_conflicts", "can_return_rows_from_bulk_insert"
