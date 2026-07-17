@@ -221,14 +221,6 @@ class Query(BaseExpression):
         self.extra_tables = ()
         self.extra_order_by = ()
 
-        # Deferred-loading state contract [GUID: DEFER-001, DEFER-002,
-        # DEFER-003, DEFER-004, DEFER-005, DEFER-006]: the first item is a set
-        # of model field names and the second selects its interpretation.
-        # True owns an exclusion set; False owns the complete immediate-loading
-        # set, including an empty set. Mutation belongs to add_deferred_loading()
-        # and add_immediate_loading(); deferred_to_data() is the boundary that
-        # translates this state, including required primary-key selection, for
-        # column-selection consumers.
         self.deferred_loading = (frozenset(), True)
 
         self._filtered_relations = {}
@@ -683,18 +675,7 @@ class Query(BaseExpression):
         "target", and the model and list of fields being added for that model.
         """
         field_names, defer = self.deferred_loading
-        # Pseudocode [GUID: DEFER-001, DEFER-002, DEFER-004]:
-        #   INPUT the stored field-name set and its loading mode.
-        #   IF the set is empty AND the mode means "deferred exclusions":
-        #       RETURN without a restriction; automatic selection loads all fields.
-        #   ELSE IF the set is empty AND the mode means "immediate-only":
-        #       EMIT the model's required primary key through the selection callback.
-        #       RETURN with no other model field selected.
-        #   ELSE continue converting the nonempty restriction below; the existing
-        #       required-field rules add the primary key to every restricted model.
-        #   FAILURE PATH: propagate field-resolution errors from the normal
-        #       conversion path; an empty immediate-only set needs no field lookup.
-        if not field_names and defer:
+        if not field_names:
             return
         orig_opts = self.get_meta()
         seen = {}
@@ -2097,28 +2078,16 @@ class Query(BaseExpression):
         # splitting and handling when computing the SQL column names (as part of
         # get_columns()).
         existing, defer = self.deferred_loading
-        # Pseudocode [GUID: DEFER-001, DEFER-002, DEFER-003, DEFER-004,
-        #             DEFER-005, DEFER-006]:
-        #   INPUT the current field-name set, its loading mode, and names requested
-        #       by this defer() call.
-        #   IF the current mode means "deferred exclusions":
-        #       ADD every requested name to the excluded set.
-        #   ELSE the current mode means "immediate-only":
-        #       REMOVE only requested names that occur in the immediate set.
-        #       KEEP every unrelated immediate name unchanged.
-        #       IGNORE requested names already absent from the immediate set.
-        #       KEEP immediate-only mode even when the resulting set is empty.
-        #   STORE the resulting set and unchanged mode.
-        #   HAND OFF the stored state to selection conversion, where an empty
-        #       immediate-only set selects the required primary key and nothing else.
-        #   FAILURE PATH: do not introduce lookup or validation here; preserve the
-        #       existing downstream field-resolution behavior for requested names.
         if defer:
             # Add to existing deferred names.
             self.deferred_loading = existing.union(field_names), True
         else:
             # Remove names from the set of any existing "immediate load" names.
-            self.deferred_loading = existing.difference(field_names), False
+            new_only = existing.difference(field_names)
+            if new_only:
+                self.deferred_loading = new_only, False
+            else:
+                self.clear_deferred_loading()
 
     def add_immediate_loading(self, field_names):
         """
