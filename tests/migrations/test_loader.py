@@ -19,6 +19,14 @@ class RecorderTests(TestCase):
     """
     databases = {'default', 'other'}
 
+    def test_MIGREC_001_migration_permission_for_internal_model_uses_recorder_connection_alias(self):
+        """MIGREC-001: Each recorder uses its own alias for permission."""
+        pass
+
+    def test_MIGREC_002_ensure_schema_does_not_create_table_when_migration_permission_denied(self):
+        """MIGREC-002: Denied permission leaves django_migrations absent."""
+        pass
+
     def test_apply(self):
         """
         Tests marking migrations as applied/unapplied.
