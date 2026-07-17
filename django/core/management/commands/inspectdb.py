@@ -1,5 +1,6 @@
 import keyword
 import re
+from collections import Counter
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import DEFAULT_DB_ALIAS, connections
@@ -131,15 +132,16 @@ class Command(BaseCommand):
                 yield ""
                 yield "class %s(models.Model):" % table2model(table_name)
                 known_models.append(table2model(table_name))
-                # Architecture contract — GUID: INSP-001:
-                # Repeated-target membership is table-scoped metadata owned by
-                # handle_inspection(). Its structural home is between relation
-                # introspection and this model's field-emission loop, so backend
-                # introspection and field-name normalization remain independent.
-                # Pseudocode — GUID: INSP-001 (repeated-target detection):
-                #   GROUP relation columns by their referenced database table.
-                #   MARK every column in each group whose size is at least two;
-                #   leave singleton-target relations unmarked and unchanged.
+                # GUID: INSP-001 - Track relation targets within this model so all
+                # members of a repeated-target group can receive a reverse name.
+                relation_target_counts = Counter(
+                    ref_db_table for _, ref_db_table in relations.values()
+                )
+                repeated_relation_columns = {
+                    column_name
+                    for column_name, (_, ref_db_table) in relations.items()
+                    if relation_target_counts[ref_db_table] > 1
+                }
                 used_column_names = []  # Holds column names used in the table so far
                 column_to_field_name = {}  # Maps column names to names of model fields
                 for row in table_description:
@@ -153,10 +155,6 @@ class Command(BaseCommand):
                     att_name, params, notes = self.normalize_col_name(
                         column_name, used_column_names, is_relation
                     )
-                    # Architecture contract — GUID: INSP-002:
-                    # normalize_col_name() owns the final generated attribute name;
-                    # repeated-target naming may consume att_name only through this
-                    # existing return boundary and must not duplicate normalization.
                     extra_params.update(params)
                     comment_notes.extend(notes)
 
@@ -177,29 +175,23 @@ class Command(BaseCommand):
 
                     if is_relation:
                         ref_db_column, ref_db_table = relations[column_name]
-                        # Integration seam — GUID: INSP-001, INSP-002, INSP-004:
-                        # The table-scoped membership metadata selects fields here;
-                        # att_name supplies the deterministic name component, and
-                        # extra_params is the private contract with the existing
-                        # serializer. Reverse-name validation belongs before that
-                        # mapping is mutated; relation construction stays unchanged.
-                        # Pseudocode — GUID: INSP-001, INSP-002, INSP-004:
-                        #   IF column_name is marked as a repeated-target relation:
-                        #     TAKE att_name only after normalize_col_name() has
-                        #     resolved identifier cleanup and field-name conflicts.
-                        #     REQUIRE att_name to be unique among this model's final
-                        #     field names, as maintained by used_column_names.
-                        #     DERIVE related_name as att_name plus the fixed "_set"
-                        #     suffix; do not use traversal order or mutable counters.
-                        #     REQUIRE related_name to be a non-keyword Python
-                        #     identifier that neither ends in "_" nor contains
-                        #     LOOKUP_SEP; otherwise stop rather than emit an invalid
-                        #     reverse-relation name.
-                        #     STORE related_name in extra_params so the existing
-                        #     field serializer emits it for this relation.
-                        #   END IF
-                        #   RESULT: every member of a repeated-target group receives
-                        #   a stable, pairwise-distinct, reverse-namespace-valid name.
+                        if column_name in repeated_relation_columns:
+                            # GUID: INSP-002 - Derive the reverse name from the final,
+                            # normalized attribute name, without traversal counters.
+                            related_name = "%s_set" % att_name
+                            # GUID: INSP-004 - Never emit a reverse query name that
+                            # Django's relation checks will reject.
+                            if (
+                                keyword.iskeyword(related_name)
+                                or not related_name.isidentifier()
+                                or related_name.endswith("_")
+                                or LOOKUP_SEP in related_name
+                            ):
+                                raise CommandError(
+                                    "Unable to generate a valid related_name for %r."
+                                    % att_name
+                                )
+                            extra_params["related_name"] = related_name
                         if extra_params.pop("unique", False) or extra_params.get(
                             "primary_key"
                         ):

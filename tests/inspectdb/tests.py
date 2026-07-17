@@ -4,7 +4,7 @@ from io import StringIO
 from unittest import mock, skipUnless
 
 from django.core.management import call_command
-from django.db import connection
+from django.db import connection, models
 from django.db.backends.base.introspection import TableInfo
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
 
@@ -263,25 +263,46 @@ class InspectDBTestCase(TestCase):
             out.getvalue(),
         )
 
+    def get_related_names(self, table_name):
+        out = StringIO()
+        call_command("inspectdb", table_name, stdout=out)
+        return re.findall(r"related_name='([^']+)'", out.getvalue())
+
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_001_two_relations_to_same_target_receive_distinct_related_names(self):
         """GUID: INSP-001 - Two repeated-target relations have distinct names."""
-        self.assertTrue(True)
+        related_names = self.get_related_names("inspectdb_relationstwo")
+        self.assertEqual(["first_set", "second_set"], related_names)
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_001_larger_repeated_target_group_is_pairwise_distinct(self):
         """GUID: INSP-001 - Every larger repeated-target group is distinct."""
-        self.assertTrue(True)
+        related_names = self.get_related_names("inspectdb_relationsthree")
+        self.assertEqual(3, len(related_names))
+        self.assertEqual(len(related_names), len(set(related_names)))
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_002_related_name_is_derived_from_final_generated_attribute_name(self):
         """GUID: INSP-002 - A reverse name derives from the final field name."""
-        self.assertTrue(True)
+        related_names = self.get_related_names("inspectdb_relationsthree")
+        self.assertIn("class_field_set", related_names)
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_002_identical_schema_runs_generate_the_same_related_names(self):
         """GUID: INSP-002 - Repeated runs preserve deterministic reverse names."""
-        self.assertTrue(True)
+        first_run = self.get_related_names("inspectdb_relationsthree")
+        second_run = self.get_related_names("inspectdb_relationsthree")
+        self.assertEqual(first_run, second_run)
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_004_generated_related_names_are_valid_reverse_namespace_names(self):
         """GUID: INSP-004 - Generated names pass reverse-namespace validation."""
-        self.assertTrue(True)
+        for related_name in self.get_related_names("inspectdb_relationsthree"):
+            field = models.ForeignKey(
+                "self", models.DO_NOTHING, related_name=related_name
+            )
+            self.assertEqual([], field._check_related_name_is_valid())
+            self.assertEqual([], field._check_related_query_name_is_valid())
 
     def test_digits_column_name_introspection(self):
         """Introspection of column names consist/start with digits (#16536/#17676)"""
