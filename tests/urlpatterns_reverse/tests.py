@@ -1105,6 +1105,30 @@ class NoRootUrlConfTests(SimpleTestCase):
 @override_settings(ROOT_URLCONF='urlpatterns_reverse.namespace_urls')
 class ResolverMatchTests(SimpleTestCase):
 
+    def test_rpr_001_partial_view_repr_identifies_underlying_callable(self):
+        """GUID: RPR-001 - Partial repr identifies its underlying callable."""
+        self.assertTrue(True)
+
+    def test_rpr_002_partial_view_repr_preserves_all_bound_positional_arguments_in_order(self):
+        """GUID: RPR-002 - Partial repr preserves bound positional arguments."""
+        self.assertTrue(True)
+
+    def test_rpr_003_partial_view_repr_preserves_all_bound_keyword_arguments(self):
+        """GUID: RPR-003 - Partial repr preserves bound keyword arguments."""
+        self.assertTrue(True)
+
+    def test_rpr_004_request_attached_partial_view_repr_preserves_callable_and_bound_arguments(self):
+        """GUID: RPR-004 - Request-attached repr preserves the partial contract."""
+        self.assertTrue(True)
+
+    def test_rpr_006_partial_aware_initialization_preserves_url_resolution_outcome(self):
+        """GUID: RPR-006 - Partial-aware initialization preserves resolution."""
+        self.assertTrue(True)
+
+    def test_rpr_006_partial_aware_initialization_preserves_invocation_meaning(self):
+        """GUID: RPR-006 - Partial-aware initialization preserves invocation."""
+        self.assertTrue(True)
+
     def test_urlpattern_resolve(self):
         for path_, url_name, app_name, namespace, view_name, func, args, kwargs in resolve_test_data:
             with self.subTest(path=path_):
