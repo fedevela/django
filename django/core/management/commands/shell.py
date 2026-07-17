@@ -15,6 +15,9 @@ class Command(BaseCommand):
     )
 
     requires_system_checks = []
+    # GUID: SHELL-006 - This registry owns interactive-shell availability and
+    # precedence; non-interactive dispatch must fall through to its existing
+    # selection seam rather than introduce a parallel interactive path.
     shells = ['ipython', 'bpython', 'python']
 
     def add_arguments(self, parser):
@@ -98,6 +101,9 @@ class Command(BaseCommand):
 
         # Execute stdin if it has anything to read and exit. Not supported on
         # Windows due to select.select() limitations.
+        # GUID: SHELL-007 - The platform restriction is owned at this dispatch
+        # boundary, keeping stdin readiness dependencies out of the interactive
+        # shell adapters.
         # GUID: SHELL-007 - Non-interactive stdin restriction pseudocode:
         # IF the platform is Windows, do not inspect, read, or execute stdin;
         # transition directly to the existing interactive-shell flow.
@@ -120,6 +126,8 @@ class Command(BaseCommand):
         # FOR EACH candidate, hand off the unchanged options to its adapter;
         # return when startup succeeds, but on ImportError try the next one.
         # IF every candidate raises ImportError, raise the existing CommandError.
+        # GUID: SHELL-006 - This is the integration seam shared by ordinary
+        # interactive startup and fallthrough from non-interactive dispatch.
         available_shells = [options['interface']] if options['interface'] else self.shells
 
         for shell in available_shells:
