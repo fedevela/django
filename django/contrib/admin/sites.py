@@ -430,11 +430,31 @@ class AdminSite:
                     return HttpResponsePermanentRedirect(path)
         raise Http404
 
-    def _build_app_dict(self, request, label=None):
+    def build_app_dict(self, request, label=None):
         """
         Build the app dictionary. The optional `label` parameter filters models
         of a specific app.
         """
+        # Pseudocode contract — ADMIN-001, ADMIN-005, ADMIN-006, ADMIN-007:
+        # INPUT request, optional app label, and the existing model registry.
+        # SELECT the existing registry entries matching label, when supplied;
+        # otherwise SELECT every existing registry entry.
+        # FOR EACH (registered_model_class, model_admin) in selection order:
+        #     IF module permission is absent, SKIP the entry.
+        #     COMPUTE the existing model permissions.
+        #     IF every permission is false, SKIP the entry.
+        #     BUILD the existing model dictionary with its established keys
+        #     and values; TRY each permitted URL resolution and, on the
+        #     existing no-match failure, RETAIN its established fallback.
+        #     ADD only "model": registered_model_class, preserving the exact
+        #     class object used as the registry key.  (ADMIN-001, ADMIN-006)
+        #     APPEND the dictionary through the existing app grouping flow.
+        # Therefore a class reference crosses the handoff only after the same
+        # visibility decisions as its model; skipped entries expose neither.
+        # (ADMIN-005)
+        # RETURN the same label-filtered app dictionary (including None) or the
+        # same complete dictionary, without changing inclusion or empty state.
+        # (ADMIN-007)
         app_dict = {}
 
         if label:
@@ -460,7 +480,18 @@ class AdminSite:
                 continue
 
             info = (app_label, model._meta.model_name)
+            # Architecture contract — ADMIN-001, ADMIN-005, ADMIN-006,
+            # ADMIN-008:
+            # build_app_dict() owns the permission-gated projection from an
+            # AdminSite registry entry to its model dictionary. The registry
+            # key is the authoritative model-class dependency, and this
+            # dictionary-construction seam is the sole home for exposing it;
+            # the surrounding permission boundary and existing fields remain
+            # owned by this method. Both the unfiltered get_app_list() path and
+            # the label-filtered build_app_dict() path consume this same
+            # projection, so exact class identity has one structural owner.
             model_dict = {
+                'model': model,
                 'name': capfirst(model._meta.verbose_name_plural),
                 'object_name': model._meta.object_name,
                 'perms': perms,
@@ -503,11 +534,20 @@ class AdminSite:
         Return a sorted list of all the installed apps that have been
         registered in this site.
         """
-        app_dict = self._build_app_dict(request)
+        # Pseudocode contract — ADMIN-007:
+        # RECEIVE the app dictionary from the unchanged build/filter flow.
+        # SORT apps by the existing case-insensitive name key.
+        # FOR EACH app, SORT its model dictionaries by the existing name key.
+        # RETURN the sorted list; if the dictionary is empty, RETURN the same
+        # empty list produced by the established behavior.
+        app_dict = self.build_app_dict(request)
 
         # Sort the apps alphabetically.
         app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
 
+        # Architecture boundary — ADMIN-007: get_app_list() consumes model
+        # dictionaries opaquely and retains sole ownership of presentation
+        # ordering; adding registry-derived data must not widen this boundary.
         # Sort the models alphabetically within each app.
         for app in app_list:
             app['models'].sort(key=lambda x: x['name'])
@@ -534,7 +574,7 @@ class AdminSite:
         return TemplateResponse(request, self.index_template or 'admin/index.html', context)
 
     def app_index(self, request, app_label, extra_context=None):
-        app_dict = self._build_app_dict(request, app_label)
+        app_dict = self.build_app_dict(request, app_label)
         if not app_dict:
             raise Http404('The requested admin page does not exist.')
         # Sort the models alphabetically within each app.

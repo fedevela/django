@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from django.contrib import admin
 from django.contrib.admin.actions import delete_selected
 from django.contrib.auth.models import User
@@ -74,6 +76,286 @@ class SiteEachContextTest(TestCase):
         self.assertEqual(user['admin_url'], '/test_admin/admin/auth/user/')
         self.assertEqual(user['add_url'], '/test_admin/admin/auth/user/add/')
         self.assertEqual(user['name'], 'Users')
+
+
+@override_settings(ROOT_URLCONF='admin_views.test_adminsite')
+class SiteAppListModelClassContractTests(SimpleTestCase):
+    # Architecture contract — ADMIN-008: this class owns verification at the
+    # two public app-list integration seams. Full-list identity belongs at
+    # get_app_list(); label-filtered identity belongs at build_app_dict(). The
+    # existing ADMIN-001/005/006/007 tests remain the behavioral-preservation
+    # boundary, sharing this fixture rather than introducing another test seam.
+    request_factory = RequestFactory()
+
+    def request_with_permissions(self, has_permissions):
+        request = self.request_factory.get('/test_admin/admin/')
+        request.user = Mock()
+        request.user.has_module_perms.return_value = True
+        request.user.has_perm.return_value = has_permissions
+        return request
+
+    def test_admin_001_visible_registered_model_dictionary_exposes_exact_registered_model_class(self):
+        """ADMIN-001: A visible model gains its exact registered class."""
+        app_list = site.get_app_list(self.request_with_permissions(True))
+
+        models = {
+            model['object_name']: model
+            for app in app_list
+            for model in app['models']
+        }
+        self.assertIs(models['Article']['model'], Article)
+        self.assertIs(models['User']['model'], User)
+
+    def test_admin_005_invisible_registered_model_and_class_reference_remain_unexposed(self):
+        """ADMIN-005: Permissions hide both the model and its class reference."""
+        request = self.request_with_permissions(False)
+
+        self.assertEqual(site.build_app_dict(request), {})
+        self.assertEqual(site.get_app_list(request), [])
+
+    def test_admin_006_model_class_field_is_only_change_to_existing_model_dictionary_contract(self):
+        """ADMIN-006: Existing model dictionary data remains unchanged."""
+        app = site.build_app_dict(
+            self.request_with_permissions(True), label='admin_views',
+        )
+
+        self.assertEqual(len(app['models']), 1)
+        model_dict = app['models'][0]
+        self.assertEqual(set(model_dict), {
+            'model', 'name', 'object_name', 'perms', 'admin_url', 'add_url',
+            'view_only',
+        })
+        self.assertIs(model_dict['model'], Article)
+        self.assertEqual(model_dict['name'], 'Articles')
+        self.assertEqual(model_dict['object_name'], 'Article')
+        self.assertEqual(model_dict['perms'], {
+            'add': True,
+            'change': True,
+            'delete': True,
+            'view': True,
+        })
+        self.assertEqual(
+            model_dict['admin_url'],
+            '/test_admin/admin/admin_views/article/',
+        )
+        self.assertEqual(
+            model_dict['add_url'],
+            '/test_admin/admin/admin_views/article/add/',
+        )
+        self.assertIs(model_dict['view_only'], False)
+
+    def test_admin_007_registration_permissions_and_app_label_filter_preserve_app_list_behavior(self):
+        """ADMIN-007: Inclusion, filtering, and ordering remain unchanged."""
+        request = self.request_with_permissions(True)
+
+        app_list = site.get_app_list(request)
+        self.assertEqual(
+            [app['app_label'] for app in app_list],
+            ['admin_views', 'auth'],
+        )
+        auth_app = site.build_app_dict(request, label='auth')
+        self.assertEqual(auth_app['app_label'], 'auth')
+        self.assertEqual(len(auth_app['models']), 1)
+        self.assertIs(auth_app['models'][0]['model'], User)
+        self.assertIsNone(site.build_app_dict(request, label='sessions'))
+
+    def test_admin_007_empty_app_list_result_preserves_empty_behavior(self):
+        """ADMIN-007: An established empty app list remains empty."""
+        empty_site = admin.AdminSite(name='empty')
+
+        self.assertEqual(
+            empty_site.get_app_list(self.request_with_permissions(True)),
+            [],
+        )
+
+    def test_admin_008_full_app_list_for_visible_registered_model_references_exact_model_class(self):
+        """ADMIN-008: The full app list exposes the exact model class."""
+        app_list = site.get_app_list(self.request_with_permissions(True))
+
+        admin_views = next(
+            app for app in app_list if app['app_label'] == 'admin_views'
+        )
+        article = next(
+            model for model in admin_views['models']
+            if model['object_name'] == 'Article'
+        )
+        self.assertIs(article['model'], Article)
+
+    def test_admin_008_app_label_filtered_app_list_for_visible_registered_model_references_exact_model_class(self):
+        """ADMIN-008: The app-filtered list exposes the exact model class."""
+        app = site.build_app_dict(
+            self.request_with_permissions(True), label='admin_views',
+        )
+
+        self.assertEqual(app['app_label'], 'admin_views')
+        self.assertEqual(
+            [model['object_name'] for model in app['models']],
+            ['Article'],
+        )
+        self.assertIs(app['models'][0]['model'], Article)
+
+    def test_admin_008_model_class_and_public_builder_changes_preserve_established_app_list_behavior(self):
+        """ADMIN-008: Established app-list behavior remains covered."""
+        visible_request = self.request_with_permissions(True)
+        app_list = site.get_app_list(visible_request)
+
+        self.assertEqual(
+            [app['app_label'] for app in app_list],
+            ['admin_views', 'auth'],
+        )
+        self.assertEqual(
+            [[model['object_name'] for model in app['models']]
+             for app in app_list],
+            [['Article'], ['User']],
+        )
+        admin_views = app_list[0]
+        self.assertEqual(
+            admin_views['app_url'],
+            '/test_admin/admin/admin_views/',
+        )
+        self.assertIs(admin_views['has_module_perms'], True)
+        article = admin_views['models'][0]
+        self.assertEqual(article['name'], 'Articles')
+        self.assertEqual(article['perms'], {
+            'add': True,
+            'change': True,
+            'delete': True,
+            'view': True,
+        })
+        self.assertEqual(
+            article['admin_url'],
+            '/test_admin/admin/admin_views/article/',
+        )
+        self.assertEqual(
+            article['add_url'],
+            '/test_admin/admin/admin_views/article/add/',
+        )
+        self.assertIs(article['view_only'], False)
+
+        auth_app = site.build_app_dict(visible_request, label='auth')
+        self.assertEqual(auth_app['app_label'], 'auth')
+        self.assertEqual(
+            [model['object_name'] for model in auth_app['models']],
+            ['User'],
+        )
+        self.assertIsNone(
+            site.build_app_dict(visible_request, label='sessions'),
+        )
+
+        invisible_request = self.request_with_permissions(False)
+        self.assertEqual(site.build_app_dict(invisible_request), {})
+        self.assertEqual(site.get_app_list(invisible_request), [])
+
+        empty_site = admin.AdminSite(name='admin_008_empty')
+        self.assertEqual(empty_site.get_app_list(visible_request), [])
+
+
+class SiteAppIndexPublicBuilderContractTests(SimpleTestCase):
+    def test_admin_004_app_index_calls_public_builder_with_request_and_app_label(self):
+        """ADMIN-004: The app index delegates filtered lookup publicly."""
+        admin_site = admin.AdminSite(name='app_index_builder')
+        request = RequestFactory().get('/app/')
+        admin_site.each_context = Mock(return_value={})
+        app_dict = {'name': 'Admin views', 'models': []}
+        admin_site.build_app_dict = Mock(return_value=app_dict)
+
+        admin_site.app_index(request, 'admin_views')
+
+        admin_site.build_app_dict.assert_called_once_with(
+            request, 'admin_views',
+        )
+
+    def test_admin_004_app_index_context_uses_filtered_public_builder_result_without_behavior_change(self):
+        """ADMIN-004: The app index context preserves the filtered result."""
+        admin_site = admin.AdminSite(name='app_index_builder_result')
+        request = RequestFactory().get('/app/')
+        admin_site.each_context = Mock(return_value={})
+        article = {'name': 'Articles'}
+        author = {'name': 'Authors'}
+        app_dict = {
+            'name': 'Admin views',
+            'models': [author, article],
+        }
+        admin_site.build_app_dict = Mock(return_value=app_dict)
+
+        response = admin_site.app_index(request, 'admin_views')
+
+        self.assertEqual(response.context_data['app_list'], [app_dict])
+        self.assertIs(response.context_data['app_list'][0], app_dict)
+        self.assertEqual(app_dict['models'], [article, author])
+        self.assertEqual(response.context_data['app_label'], 'admin_views')
+
+
+@override_settings(ROOT_URLCONF='admin_views.test_adminsite')
+class SiteBuildAppDictPublicMethodContractTests(SimpleTestCase):
+    request_factory = RequestFactory()
+
+    def request_with_permissions(self):
+        request = self.request_factory.get('/test_admin/admin/')
+        request.user = Mock()
+        request.user.has_module_perms.return_value = True
+        request.user.has_perm.return_value = True
+        return request
+
+    def test_admin_002_valid_request_without_app_label_returns_unfiltered_app_dictionary(self):
+        """ADMIN-002: The public builder preserves unfiltered invocation."""
+        app_dict = site.build_app_dict(self.request_with_permissions())
+
+        self.assertEqual(set(app_dict), {'admin_views', 'auth'})
+        self.assertEqual(app_dict['admin_views']['app_label'], 'admin_views')
+        self.assertEqual(app_dict['auth']['app_label'], 'auth')
+
+    def test_admin_002_valid_request_with_app_label_returns_filtered_app_dictionary(self):
+        """ADMIN-002: The public builder preserves app-label filtering."""
+        app = site.build_app_dict(
+            self.request_with_permissions(), label='admin_views',
+        )
+
+        self.assertEqual(app['app_label'], 'admin_views')
+        self.assertEqual(
+            [model['object_name'] for model in app['models']],
+            ['Article'],
+        )
+
+    def test_admin_002_admin_site_exposes_callable_public_app_dictionary_builder(self):
+        """ADMIN-002: The app-dictionary builder has a callable public name."""
+        self.assertTrue(callable(site.build_app_dict))
+
+
+class SiteIndexPublicAppDictionaryBuilderContractTests(SimpleTestCase):
+    def test_admin_003_main_admin_index_obtains_app_dictionary_through_public_builder(self):
+        """ADMIN-003: The main index obtains its dictionary publicly."""
+        admin_site = admin.AdminSite(name='index_builder')
+        request = RequestFactory().get('/index/')
+        admin_site.each_context = Mock(return_value={})
+        admin_site.build_app_dict = Mock(return_value={})
+
+        response = admin_site.index(request)
+
+        admin_site.build_app_dict.assert_called_once_with(request)
+        self.assertEqual(response.context_data['app_list'], [])
+
+    def test_admin_003_public_builder_full_dictionary_flows_to_index_app_list_without_behavior_change(self):
+        """ADMIN-003: The builder result reaches the established app list."""
+        admin_site = admin.AdminSite(name='index_builder_result')
+        request = RequestFactory().get('/index/')
+        admin_site.each_context = Mock(return_value={})
+        article = {'name': 'Articles'}
+        group = {'name': 'Groups'}
+        user = {'name': 'Users'}
+        app_dict = {
+            'auth': {'name': 'Authentication', 'models': [user, group]},
+            'admin_views': {'name': 'Admin views', 'models': [article]},
+        }
+        admin_site.build_app_dict = Mock(return_value=app_dict)
+
+        response = admin_site.index(request)
+
+        self.assertEqual(
+            response.context_data['app_list'],
+            [app_dict['admin_views'], app_dict['auth']],
+        )
+        self.assertEqual(app_dict['auth']['models'], [group, user])
 
 
 class SiteActionsTests(SimpleTestCase):
