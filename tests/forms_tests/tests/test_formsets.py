@@ -1275,7 +1275,47 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
 
     def test_nonform_003_adding_class_preserves_validation_rules_validity_errors_and_messages(self):
         """GUID: NONFORM-003"""
-        pass
+        def choice_formset(votes):
+            return ChoiceFormSet({
+                'form-TOTAL_FORMS': '1',
+                'form-INITIAL_FORMS': '0',
+                'form-0-choice': 'Calexico',
+                'form-0-votes': votes,
+            })
+
+        test_cases = (
+            (
+                'valid',
+                choice_formset('100'),
+                True,
+                [{}],
+                [],
+            ),
+            (
+                'field error',
+                choice_formset(''),
+                False,
+                [{'votes': ['This field is required.']}],
+                [],
+            ),
+            (
+                'non-form error',
+                FavoriteDrinksFormSet({
+                    'form-TOTAL_FORMS': '2',
+                    'form-INITIAL_FORMS': '0',
+                    'form-0-name': 'Gin and tonic',
+                    'form-1-name': 'Gin and tonic',
+                }),
+                False,
+                [{}, {}],
+                ['You may only specify a drink once.'],
+            ),
+        )
+        for name, formset, is_valid, errors, non_form_errors in test_cases:
+            with self.subTest(name=name):
+                self.assertIs(formset.is_valid(), is_valid)
+                self.assertEqual(formset.errors, errors)
+                self.assertEqual(formset.non_form_errors(), non_form_errors)
 
     def test_nonform_004_minimum_count_error_list_is_classified_as_nonform(self):
         """GUID: NONFORM-004; minimum-count validation path."""
@@ -1320,11 +1360,32 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
 
     def test_nonform_005_form_non_field_errors_remain_nonfield_without_nonform(self):
         """GUID: NONFORM-005"""
-        pass
+        class InvalidForm(Form):
+            def clean(self):
+                raise ValidationError('Non-field error.')
+
+        errors = InvalidForm({}).non_field_errors()
+        self.assertEqual(errors, ['Non-field error.'])
+        self.assertEqual(errors.error_class, 'errorlist nonfield')
+        self.assertNotIn('nonform', errors.error_class.split())
+        self.assertHTMLEqual(
+            errors.as_ul(),
+            '<ul class="errorlist nonfield"><li>Non-field error.</li></ul>',
+        )
 
     def test_nonform_006_form_field_errors_remain_without_nonform_classification(self):
         """GUID: NONFORM-006"""
-        pass
+        class InvalidForm(Form):
+            name = CharField()
+
+        errors = InvalidForm({}).errors['name']
+        self.assertEqual(errors, ['This field is required.'])
+        self.assertEqual(errors.error_class, 'errorlist')
+        self.assertNotIn('nonform', errors.error_class.split())
+        self.assertHTMLEqual(
+            errors.as_ul(),
+            '<ul class="errorlist"><li>This field is required.</li></ul>',
+        )
 
     def test_nonform_007_configured_error_list_subclass_is_preserved_and_classified_as_nonform(self):
         """GUID: NONFORM-007"""
