@@ -145,6 +145,15 @@ class UserCreationForm(forms.ModelForm):
 
 
 class UserChangeForm(forms.ModelForm):
+    # Architecture contract (GUID: UCP-004): ReadOnlyPasswordHashField owns the
+    # password presentation and raw-password secrecy boundary. UserChangeForm
+    # supplies explanatory help with one link placeholder; initialization may
+    # replace that placeholder but must not replace the field or its widget.
+    # Pseudocode (GUID: UCP-004):
+    # DECLARE the password field as a read-only hash presentation.
+    # PRESENT explanatory help text that states raw passwords are unavailable.
+    # INPUT only the stored password representation for safe-summary rendering;
+    # NEVER derive, display, or return a raw password.
     password = ReadOnlyPasswordHashField(
         label=_("Password"),
         help_text=_(
@@ -162,8 +171,41 @@ class UserChangeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         password = self.fields.get("password")
+        # Architecture contract (GUID: UCP-001, UCP-002, UCP-003, UCP-004,
+        # UCP-005): this optional field lookup is the boundary between form
+        # composition and password help-link integration. This form owns only
+        # the link target and derives its object identity from
+        # ``self.instance.pk``. The relative link is the integration seam with
+        # UserAdmin's PK-addressed ``<id>/password/`` route; change-page lookup
+        # fields and forms that omit password remain outside that boundary.
+        # Pseudocode (GUID: UCP-001, UCP-002, UCP-003, UCP-004, UCP-005):
+        # INPUT: the password field and this form's persisted user instance.
+        # IF the password field exists:
+        #     UCP-004 PRESERVE its read-only field and explanatory help content;
+        #     replace only the help text's password-change link placeholder.
+        #     UCP-001 DECISION: READ the user's primary key from the instance,
+        #     independently of the identifier or `_to_field` used to reach the
+        #     admin change page.
+        #     BUILD a relative password-change path that first leaves the current
+        #     change-page object path, then selects the user by that primary key.
+        #     FORMAT the password help text with that primary-key-based path.
+        #     UCP-002 TRANSITION: from a non-PK change-page entry path, following
+        #     the link hands that same user's PK to the password-change endpoint.
+        #     UCP-003 TRANSITION: from a PK change-page entry path, following the
+        #     link hands that same user's PK to the password-change endpoint.
+        # ELSE:
+        #     UCP-005 DO NOT read, format, or assign password help text; continue
+        #     form initialization without a password-field transition.
+        # OUTPUT: an initialized form whose included password field remains
+        # read-only and raw-password-secret, or whose excluded field stays absent.
+        # FAILURE PATH: never substitute the incoming change-page identifier for
+        # the persisted primary key, because the password endpoint resolves by PK.
+        # FAILURE PATH: never require a password field or expose its stored value
+        # as a raw password while correcting the help-link target.
         if password:
-            password.help_text = password.help_text.format("../password/")
+            password.help_text = password.help_text.format(
+                f"../../{self.instance.pk}/password/"
+            )
         user_permissions = self.fields.get("user_permissions")
         if user_permissions:
             user_permissions.queryset = user_permissions.queryset.select_related(

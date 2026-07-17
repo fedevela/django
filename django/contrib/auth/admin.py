@@ -99,6 +99,9 @@ class UserAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         return [
+            # Endpoint identity contract (GUID: UCP-001, UCP-002, UCP-003):
+            # ``id`` is the user's primary key. UserChangeForm owns adapting
+            # any change-page lookup identity to this route boundary.
             path(
                 "<id>/password/",
                 self.admin_site.admin_view(self.user_change_password),

@@ -914,7 +914,33 @@ class UserChangeFormTest(TestDataMixin, TestCase):
         self.assertEqual(form.cleaned_data["username"], "testclient")
         self.assertEqual(form.cleaned_data["date_of_birth"], datetime.date(1998, 2, 24))
 
-    def test_password_excluded(self):
+    def test_ucp_004_included_password_remains_read_only_with_explanatory_help(self):
+        """GUID: UCP-004."""
+        form = UserChangeForm(instance=self.u1)
+        password = form.fields["password"]
+
+        self.assertIsInstance(password, ReadOnlyPasswordHashField)
+        self.assertIs(password.disabled, True)
+        self.assertIs(password.widget.read_only, True)
+        self.assertIn("Raw passwords are not stored", password.help_text)
+        self.assertIn(
+            f'<a href="../../{self.u1.pk}/password/">this form</a>',
+            password.help_text,
+        )
+
+    def test_ucp_004_stored_password_is_not_exposed_as_raw_password(self):
+        """GUID: UCP-004."""
+        raw_password = "ucp-004-raw-secret"
+        self.u1.set_password(raw_password)
+        self.u1.save()
+
+        form = UserChangeForm(instance=self.u1)
+
+        self.assertNotEqual(form.initial["password"], raw_password)
+        self.assertNotIn(raw_password, form.as_table())
+
+    def test_ucp_005_excluded_password_initializes_without_help_text_access(self):
+        """GUID: UCP-005."""
         class UserChangeFormWithoutPassword(UserChangeForm):
             password = None
 
