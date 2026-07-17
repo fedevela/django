@@ -1543,36 +1543,40 @@ class ChangelistTests(AuthViewsTestCase):
         self, to_field_allowed
     ):
         """GUID: UCP-006."""
-        # Pseudocode (GUID: UCP-006; non-primary-key `_to_field` access):
-        # INPUT: a persisted user with both a primary key and a distinct
-        # non-primary-key field accepted by the admin change view.
-        # BUILD the user change URL with the non-primary-key field value.
-        # REQUEST that URL while selecting the field through `_to_field`.
-        # REQUIRE a successful change-page response; otherwise FAIL because the
-        # password help-text link cannot be observed on this access path.
-        # EXTRACT the password-change link from the password field's help text.
-        # RESOLVE the extracted link relative to the requested change-page URL.
-        # BUILD the expected password-change URL from the persisted user's PK.
-        # COMPARE the resolved link with the expected PK-addressed URL.
-        # PASS only when both URLs identify the same user's password-change form;
-        # FAIL if the link retains the non-PK lookup value or targets another user.
-        self.assertTrue(True)
+        user_change_url = reverse(
+            "auth_test_admin:auth_user_change", args=(self.admin.username,)
+        )
+        password_change_url = reverse(
+            "auth_test_admin:auth_user_password_change", args=(self.admin.pk,)
+        )
+
+        response = self.client.get(user_change_url, {"_to_field": "username"})
+
+        self.assertEqual(response.status_code, 200)
+        rel_link = re.search(
+            r'you can change the password using <a href="([^"]*)">this form</a>',
+            response.content.decode(),
+        )[1]
+        self.assertEqual(urljoin(user_change_url, rel_link), password_change_url)
+        to_field_allowed.assert_called_once()
 
     def test_ucp_006_ordinary_pk_access_links_to_same_user_password_change(self):
         """GUID: UCP-006."""
-        # Pseudocode (GUID: UCP-006; ordinary primary-key access):
-        # INPUT: a persisted user with a primary key.
-        # BUILD the user change URL from that primary key with no `_to_field`.
-        # REQUEST the ordinary primary-key change page.
-        # REQUIRE a successful change-page response; otherwise FAIL because the
-        # password help-text link cannot be observed on this access path.
-        # EXTRACT the password-change link from the password field's help text.
-        # RESOLVE the extracted link relative to the requested change-page URL.
-        # BUILD the expected password-change URL from the same user's PK.
-        # COMPARE the resolved link with the expected password-change URL.
-        # PASS only when the link targets that same user's password-change form;
-        # FAIL if the link is absent, malformed, or identifies another user.
-        self.assertTrue(True)
+        user_change_url = reverse(
+            "auth_test_admin:auth_user_change", args=(self.admin.pk,)
+        )
+        password_change_url = reverse(
+            "auth_test_admin:auth_user_password_change", args=(self.admin.pk,)
+        )
+
+        response = self.client.get(user_change_url)
+
+        self.assertEqual(response.status_code, 200)
+        rel_link = re.search(
+            r'you can change the password using <a href="([^"]*)">this form</a>',
+            response.content.decode(),
+        )[1]
+        self.assertEqual(urljoin(user_change_url, rel_link), password_change_url)
 
     def test_user_change_different_user_password(self):
         u = User.objects.get(email="staffmember@example.com")
