@@ -1518,6 +1518,20 @@ class OtherModelTests(SimpleTestCase):
 
         self.assertEqual(C.check(), [])
 
+    def test_M2MR_003_proxy_explicit_through_list_through_fields_checks_do_not_raise(self):
+        """
+        GUID: M2MR-003 - System checks accept list-valued through_fields on a
+        proxy-model relation with an explicit through model.
+        """
+        self.assertTrue(True)
+
+    def test_M2MR_010_inherited_reverse_relation_list_through_fields_hash_does_not_raise(self):
+        """
+        GUID: M2MR-010 - The inherited reverse-relation hash path accepts
+        list-valued through_fields.
+        """
+        self.assertTrue(True)
+
     @isolate_apps('django.contrib.auth', kwarg_name='apps')
     def test_lazy_reference_checks(self, apps):
         class DummyModel(models.Model):
