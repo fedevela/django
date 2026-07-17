@@ -32,6 +32,11 @@ class DatabaseClient(BaseDatabaseClient):
             args += ["-h", host]
         if port:
             args += ["-p", str(port)]
+        # Architecture boundary for PGSQL-001 through PGSQL-004:
+        # ``settings_to_cmd_args_env()`` owns PostgreSQL argv composition. Treat
+        # ``parameters`` as an opaque, ordered input at this boundary, place it
+        # relative to ``dbname`` here, and expose only the completed argv to the
+        # inherited shell runner; no downstream layer should reorder or parse it.
         # Pseudocode for GUIDs PGSQL-001, PGSQL-002, PGSQL-003, PGSQL-004:
         # - INPUT: the ordered ``parameters`` sequence and optional ``dbname``.
         # - FOR EACH parameter, in its original order:
