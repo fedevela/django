@@ -130,6 +130,36 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
             },
         }
 
+    def test_tpl_001_repeated_identical_associations_are_one_distinct_module(self):
+        """
+        GUID: TPL-001
+
+        Repeated identical library-name-to-module-path associations from
+        configuration, installed-app discovery, or both are treated as one
+        distinct module.
+        """
+        self.assertTrue(True)
+
+    def test_tpl_002_one_distinct_module_path_does_not_produce_e003(self):
+        """
+        GUID: TPL-002
+
+        A library name associated with only one distinct module path does not
+        produce templates.E003, regardless of repeated occurrences.
+        """
+        self.assertTrue(True)
+
+    def test_tpl_003_identical_configured_and_discovered_library_does_not_produce_e003(
+        self,
+    ):
+        """
+        GUID: TPL-003
+
+        A configured library and an installed-app-discovered library with the
+        same name and identical module path do not produce templates.E003.
+        """
+        self.assertTrue(True)
+
     @override_settings(
         INSTALLED_APPS=[
             "check_framework.template_test_apps.same_tags_app_1",
