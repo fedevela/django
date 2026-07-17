@@ -877,7 +877,15 @@ class RemoveIndex(IndexOperation):
 
 
 class RenameIndex(IndexOperation):
-    """Rename an index."""
+    """Rename an index.
+
+    Architecture contract (RIX-001, RIX-002, RIX-003, RIX-004):
+    RenameIndex owns the stable old_fields/new_name operation identity and selects
+    the historical ProjectState models for each transition. Database-specific
+    index-name derivation and physical renaming remain SchemaEditor concerns. Keep
+    that dependency directed from this migration operation to the schema editor;
+    neither ProjectState nor backend schema editors own the rename lifecycle.
+    """
 
     def __init__(self, model_name, new_name, old_name=None, old_fields=None):
         if not old_name and not old_fields:
