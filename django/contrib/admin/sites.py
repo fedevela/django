@@ -430,6 +430,22 @@ class AdminSite:
                     return HttpResponsePermanentRedirect(path)
         raise Http404
 
+    # ADMIN-002 logic obligation:
+    # PUBLIC METHOD build_app_dict(request, optional label=None):
+    #     RECEIVE the valid request and optional app-label filter.
+    #     IF label is absent:
+    #         HAND OFF the request to the established builder flow with the
+    #         complete registered-model selection.
+    #     ELSE:
+    #         HAND OFF the request and label to that same flow with only
+    #         registered models whose application label matches label.
+    #     PRESERVE every existing permission decision, dictionary transition,
+    #     ordering rule, and URL-resolution failure fallback in the flow.
+    #     RETURN the established complete dictionary when unfiltered, or the
+    #     established matching application dictionary (including None when
+    #     no visible match exists) when filtered.
+    # EXPOSE this procedure as a callable attribute named build_app_dict;
+    # do not require or retain a private compatibility entry point.
     def _build_app_dict(self, request, label=None):
         """
         Build the app dictionary. The optional `label` parameter filters models
