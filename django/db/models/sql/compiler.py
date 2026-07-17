@@ -1269,60 +1269,13 @@ class SQLCompiler:
                 )
                 get_related_klass_infos(klass_info, next_klass_infos)
 
-            # Multi-level filtered-relation assignment contract:
-            #
-            # DJFR-001, DJFR-004
-            # INPUT: the resolved filtered path, its terminal related object,
-            # and the root result object being populated from the selected row.
-            # FOR each relationship level in the resolved path:
-            #     reuse a known object only when its model and path position
-            #     match the object required at that relationship level.
-            # ASSIGN the terminal object to the filtered annotation on the root
-            # result; do not assign it through an intermediate path field.
-            #
-            # DJFR-002, DJFR-003, DJFR-005
-            # PRESERVE the root object's ordinary relationship caches and each
-            # intermediate object's relationships while assigning the alias.
-            # AFTER assignment, traversal through both the ordinary path and
-            # the annotated terminal object must reach equal Tournament objects.
-            #
-            # DJFR-006, DJFR-007
-            # MATERIALIZE every assigned object from the existing selected row
-            # so assignment adds no query; retain the existing single-level
-            # setter flow for all other known-related/select-related cases.
-            #
-            # FAILURE PATHS
-            # IF the terminal row is absent: assign None to the annotation and
-            # leave ordinary relationships unchanged.
-            # IF a reusable object has the wrong model or relationship level:
-            # do not reuse or cache it at that position; continue with the
-            # correctly materialized object from the selected row.
-
-            # Filtered-relation klass_info architecture (DJFR-001..DJFR-007):
-            #
-            # This branch is the adapter boundary between setup_joins() path
-            # resolution and RelatedPopulator's model-agnostic row materializer.
-            # SQLCompiler owns the resolved terminal model, alias, selected
-            # columns, and setter contract; RelatedPopulator depends only on
-            # that klass_info contract and must not interpret relation paths.
-            #
-            # For a filtered alias, ``model`` and ``select_fields`` describe
-            # the terminal path level, while ``remote_setter`` owns attachment
-            # of that terminal object to the root annotation name. A
-            # ``local_setter`` reverse-cache link is structurally valid only
-            # when the resolved field directly relates the root and terminal
-            # objects. Multi-level paths must keep intermediate cache ownership
-            # with their own relationship levels; they must not project the
-            # terminal field's reverse cache onto the root object.
-            #
-            # Keeping this distinction in the existing klass_info seam avoids
-            # a new public contract or query stage: ordinary select_related()
-            # and known-related-object population retain their current owners,
-            # and all filtered objects continue to come from the selected row.
             def local_setter(final_field, obj, from_obj):
                 # Set a reverse fk object when relation is non-empty.
                 if from_obj:
                     final_field.remote_field.set_cached_value(from_obj, obj)
+
+            def local_setter_noop(obj, from_obj):
+                pass
 
             def remote_setter(name, obj, from_obj):
                 setattr(from_obj, name, obj)
@@ -1345,7 +1298,11 @@ class SQLCompiler:
                         "model": model,
                         "field": final_field,
                         "reverse": True,
-                        "local_setter": partial(local_setter, final_field),
+                        "local_setter": (
+                            partial(local_setter, final_field)
+                            if len(joins) <= 2
+                            else local_setter_noop
+                        ),
                         "remote_setter": partial(remote_setter, name),
                         "from_parent": from_parent,
                     }
