@@ -909,34 +909,6 @@ class Model(metaclass=ModelBase):
         )
 
     def _prepare_related_fields_for_save(self, operation_name):
-        # FKPK-001/FKPK-002 architecture boundary: reconciliation of a cached
-        # forward relation belongs here, before save() hands local field values
-        # to the write pipeline. The related target field is the source of
-        # truth and field.attname is the only write-side destination.
-        #
-        # FKPK-003/FKPK-004 integration contract: this boundary must remain
-        # independent of transaction management and query construction. It
-        # supplies a coherent local foreign-key value; the existing save,
-        # database-constraint, and relation-filtering layers retain ownership
-        # of atomicity, referential integrity, and lookup behavior.
-        # FKPK-001/FKPK-002/FKPK-003/FKPK-004 pseudocode:
-        # FOR EACH cached forward relation on the referencing object:
-        #     READ the related object's current target-field value.
-        #     READ the referencing object's locally stored foreign-key value.
-        #     IF assignment captured an empty CharField primary key AND the
-        #     assigned related object was subsequently saved with a populated
-        #     primary key:
-        #         FKPK-001: REPLACE the stale local value with the related
-        #         object's current populated value before constructing the write.
-        #         FKPK-002: NEVER hand the captured empty value to the write.
-        #     OTHERWISE preserve the existing unsaved-object validation and
-        #     relationship-cache invalidation paths.
-        # HAND OFF the reconciled foreign-key value to the normal save pipeline.
-        # FKPK-003: ON database-write failure, propagate the error so an enclosing
-        # atomic transaction rolls back; ON success, commit the populated key
-        # with referential integrity intact.
-        # FKPK-004: AFTER success, relation filtering by the saved related object
-        # uses that populated key and resolves the referencing row.
         # Ensure that a model instance without a PK hasn't been assigned to
         # a ForeignKey or OneToOneField on this model. If the field is
         # nullable, allowing the save would result in silent data loss.
@@ -961,7 +933,7 @@ class Model(metaclass=ModelBase):
                         "%s() prohibited to prevent data loss due to unsaved "
                         "related object '%s'." % (operation_name, field.name)
                     )
-                elif getattr(self, field.attname) is None:
+                elif getattr(self, field.attname) in field.empty_values:
                     # Use pk from related object if it has been saved after
                     # an assignment.
                     setattr(self, field.attname, obj.pk)

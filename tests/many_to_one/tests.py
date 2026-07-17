@@ -3,32 +3,69 @@ from copy import deepcopy
 
 from django.core.exceptions import FieldError, MultipleObjectsReturned
 from django.db import IntegrityError, models, transaction
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.utils.translation import gettext_lazy
 
 from .models import (
-    Article, Category, Child, ChildNullableParent, City, Country, District,
-    First, Parent, Record, Relation, Reporter, School, Student, Third,
-    ToFieldChild,
+    Article, Category, Child, ChildNullableParent, ChildStringPrimaryKeyParent,
+    City, Country, District, First, Parent, ParentStringPrimaryKey, Record,
+    Relation, Reporter, School, Student, Third, ToFieldChild,
 )
 
 
-class ForeignKeyCharPrimaryKeyContractTests(TestCase):
+class ForeignKeyCharPrimaryKeyContractTests(TransactionTestCase):
+    available_apps = ['many_to_one']
+
+    def save_related_then_referencing(self):
+        with transaction.atomic():
+            parent = ParentStringPrimaryKey()
+            child = ChildStringPrimaryKeyParent(parent=parent)
+            parent.name = 'foo'
+            parent.save()
+            child.save()
+        return parent, child
+
     def test_fkpk_001_save_referencing_object_persists_current_related_char_primary_key(self):
         """GUID: FKPK-001 - Saving the reference persists the current related key."""
-        self.assertTrue(True)
+        parent, child = self.save_related_then_referencing()
+
+        child.refresh_from_db()
+        self.assertEqual(child.parent_id, parent.pk)
+        self.assertEqual(child.parent_id, 'foo')
 
     def test_fkpk_002_stale_value_sequence_does_not_persist_empty_string_foreign_key(self):
         """GUID: FKPK-002 - The assigned empty key transitions to the saved key."""
-        self.assertTrue(True)
+        parent, child = self.save_related_then_referencing()
+
+        self.assertFalse(ChildStringPrimaryKeyParent.objects.filter(parent_id='').exists())
+        self.assertEqual(
+            ChildStringPrimaryKeyParent.objects.get(pk=child.pk).parent_id,
+            parent.pk,
+        )
 
     def test_fkpk_003_related_then_referencing_saves_in_atomic_commit_valid_foreign_key(self):
         """GUID: FKPK-003 - Ordered atomic saves commit a valid relationship."""
-        self.assertTrue(True)
+        parent = ParentStringPrimaryKey()
+        child = ChildStringPrimaryKeyParent(parent=parent)
+        parent.name = 'foo'
+
+        with transaction.atomic():
+            parent.save()
+            child.save()
+
+        self.assertEqual(
+            ChildStringPrimaryKeyParent.objects.get(pk=child.pk).parent_id,
+            ParentStringPrimaryKey.objects.get(pk='foo').pk,
+        )
 
     def test_fkpk_004_saved_related_object_query_returns_referencing_row(self):
         """GUID: FKPK-004 - Querying by the saved relation returns its reference."""
-        self.assertTrue(True)
+        parent, child = self.save_related_then_referencing()
+
+        self.assertSequenceEqual(
+            ChildStringPrimaryKeyParent.objects.filter(parent=parent),
+            [child],
+        )
 
 
 class ManyToOneTests(TestCase):
