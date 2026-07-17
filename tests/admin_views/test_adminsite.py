@@ -203,11 +203,37 @@ class SiteBuildAppDictPublicMethodContractTests(SimpleTestCase):
 class SiteIndexPublicAppDictionaryBuilderContractTests(SimpleTestCase):
     def test_admin_003_main_admin_index_obtains_app_dictionary_through_public_builder(self):
         """ADMIN-003: The main index obtains its dictionary publicly."""
-        self.assertTrue(True)
+        admin_site = admin.AdminSite(name='index_builder')
+        request = RequestFactory().get('/index/')
+        admin_site.each_context = Mock(return_value={})
+        admin_site.build_app_dict = Mock(return_value={})
+
+        response = admin_site.index(request)
+
+        admin_site.build_app_dict.assert_called_once_with(request)
+        self.assertEqual(response.context_data['app_list'], [])
 
     def test_admin_003_public_builder_full_dictionary_flows_to_index_app_list_without_behavior_change(self):
         """ADMIN-003: The builder result reaches the established app list."""
-        self.assertTrue(True)
+        admin_site = admin.AdminSite(name='index_builder_result')
+        request = RequestFactory().get('/index/')
+        admin_site.each_context = Mock(return_value={})
+        article = {'name': 'Articles'}
+        group = {'name': 'Groups'}
+        user = {'name': 'Users'}
+        app_dict = {
+            'auth': {'name': 'Authentication', 'models': [user, group]},
+            'admin_views': {'name': 'Admin views', 'models': [article]},
+        }
+        admin_site.build_app_dict = Mock(return_value=app_dict)
+
+        response = admin_site.index(request)
+
+        self.assertEqual(
+            response.context_data['app_list'],
+            [app_dict['admin_views'], app_dict['auth']],
+        )
+        self.assertEqual(app_dict['auth']['models'], [group, user])
 
 
 class SiteActionsTests(SimpleTestCase):
