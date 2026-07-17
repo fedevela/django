@@ -887,6 +887,12 @@ class RenameIndex(IndexOperation):
     neither ProjectState nor backend schema editors own the rename lifecycle.
     """
 
+    # Architecture extension (RIX-006): the forward/backward/reapply lifecycle
+    # and its state-derived old/new Index identities are owned by this operation.
+    # Each resolved identity pair crosses the existing SchemaEditor.rename_index()
+    # seam; backend capability policy and physical DDL stay downstream of it, and
+    # backend schema editors must not depend on migration state or operation history.
+
     def __init__(self, model_name, new_name, old_name=None, old_fields=None):
         if not old_name and not old_fields:
             raise ValueError(
