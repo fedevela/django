@@ -685,23 +685,86 @@ class BulkCreateTests(TestCase):
         self,
     ):
         """GUID: BULKUPSERT-008"""
-        pass
+        msg = "Country has no field named 'nonexistent'"
+        with self.assertNumQueries(0), self.assertRaisesMessage(
+            FieldDoesNotExist, msg
+        ):
+            Country.objects.bulk_create(
+                self.data,
+                update_conflicts=True,
+                update_fields=["nonexistent"],
+            )
 
     def test_BULKUPSERT_008_invalid_unique_fields_remain_rejected_for_conflict_update(
         self,
     ):
         """GUID: BULKUPSERT-008"""
-        pass
+        msg = "Country has no field named 'nonexistent'"
+        with self.assertNumQueries(0), self.assertRaisesMessage(
+            FieldDoesNotExist, msg
+        ):
+            Country.objects.bulk_create(
+                self.data,
+                update_conflicts=True,
+                update_fields=["description"],
+                unique_fields=["nonexistent"],
+            )
 
     def test_BULKUPSERT_008_ignore_and_update_conflict_flags_remain_mutually_exclusive(
         self,
     ):
         """GUID: BULKUPSERT-008"""
-        pass
+        msg = "ignore_conflicts and update_conflicts are mutually exclusive."
+        with self.assertNumQueries(0), self.assertRaisesMessage(ValueError, msg):
+            Country.objects.bulk_create(
+                self.data,
+                ignore_conflicts=True,
+                update_conflicts=True,
+                update_fields=["description"],
+            )
 
     def test_BULKUPSERT_008_unsupported_conflict_options_remain_rejected(self):
         """GUID: BULKUPSERT-008"""
-        pass
+        options = [
+            (
+                "ignore_conflicts",
+                {"supports_ignore_conflicts": False},
+                {"ignore_conflicts": True},
+                "This database backend does not support ignoring conflicts.",
+            ),
+            (
+                "update_conflicts",
+                {"supports_update_conflicts": False},
+                {
+                    "update_conflicts": True,
+                    "update_fields": ["description"],
+                },
+                "This database backend does not support updating conflicts.",
+            ),
+            (
+                "unique_fields",
+                {
+                    "supports_update_conflicts": True,
+                    "supports_update_conflicts_with_target": False,
+                },
+                {
+                    "update_conflicts": True,
+                    "update_fields": ["description"],
+                    "unique_fields": ["name"],
+                },
+                (
+                    "This database backend does not support updating conflicts "
+                    "with specifying unique fields that can trigger the upsert."
+                ),
+            ),
+        ]
+        for option, feature_values, kwargs, msg in options:
+            with self.subTest(option=option):
+                with self.assertNumQueries(0), mock.patch.multiple(
+                    connection.features, **feature_values
+                ):
+                    with self.assertRaisesMessage(NotSupportedError, msg):
+                        Country.objects.bulk_create(self.data, **kwargs)
 
     @skipIfDBFeature("supports_update_conflicts")
     def test_update_conflicts_unsupported(self):
