@@ -3,7 +3,12 @@ from itertools import chain
 
 from django.apps import apps
 from django.conf import settings
-from django.contrib.admin.utils import NotRelationField, flatten, get_fields_from_path
+from django.contrib.admin.utils import (
+    NotRelationField,
+    flatten,
+    get_fields_from_path,
+    label_for_field,
+)
 from django.core import checks
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
@@ -986,25 +991,30 @@ class ModelAdminChecks(BaseModelAdminChecks):
                     )
                 ]
         else:
-            # GEV-001 / GEV-002: Reverse relations are also addressable by
-            # their query name in Options.get_field(), but only their accessor
-            # name is available when lookup_field() renders a model instance.
-            if field.auto_created and not hasattr(obj.model, item):
-                return [
-                    checks.Error(
-                        "The value of '%s' refers to '%s', which is not a "
-                        "callable, an attribute of '%s', or an attribute or "
-                        "method on '%s'."
-                        % (
-                            label,
-                            item,
-                            obj.__class__.__name__,
-                            obj.model._meta.label,
-                        ),
-                        obj=obj.__class__,
-                        id="admin.E108",
-                    )
-                ]
+            # GEV-001 / GEV-002 / GEV-003 / GEV-004: A name found only in
+            # model metadata must also be resolvable by changelist label
+            # lookup. In particular, reverse relations can be addressable by
+            # their query name in Options.get_field() without being available
+            # from the model namespace used by the changelist.
+            if not hasattr(obj.model, item):
+                try:
+                    label_for_field(item, obj.model, obj)
+                except AttributeError:
+                    return [
+                        checks.Error(
+                            "The value of '%s' refers to '%s', which is not a "
+                            "callable, an attribute of '%s', or an attribute or "
+                            "method on '%s'."
+                            % (
+                                label,
+                                item,
+                                obj.__class__.__name__,
+                                obj.model._meta.label,
+                            ),
+                            obj=obj.__class__,
+                            id="admin.E108",
+                        )
+                    ]
         if isinstance(field, models.ManyToManyField) or (
             getattr(field, "rel", None) and field.rel.field.many_to_one
         ):

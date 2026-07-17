@@ -1,10 +1,12 @@
+from unittest import mock
+
 from django import forms
 from django.contrib import admin
 from django.contrib.admin import BooleanFieldListFilter, SimpleListFilter
 from django.contrib.admin.options import VERTICAL, ModelAdmin, TabularInline
 from django.contrib.admin.sites import AdminSite
 from django.core.checks import Error
-from django.db.models import CASCADE, F, Field, ForeignKey, Model
+from django.db.models import CASCADE, F, Field, ForeignKey, ManyToManyField, Model
 from django.db.models.functions import Upper
 from django.forms.models import BaseModelFormSet
 from django.test import SimpleTestCase
@@ -552,12 +554,67 @@ class ListDisplayTests(CheckTestCase):
     def test_gev_003_metadata_only_reverse_relation_unresolved_by_label_emits_e108(
         self,
     ):
-        self.assertTrue(True)
+        class ReverseParent(Model):
+            pass
+
+        class ReverseChild(Model):
+            parent = ForeignKey(
+                ReverseParent,
+                CASCADE,
+                related_name="children",
+                related_query_name="child",
+            )
+
+        class ReverseParentAdmin(ModelAdmin):
+            list_display = ["child"]
+
+        self.assertTrue(ReverseParent._meta.get_field("child").one_to_many)
+        self.assertFalse(hasattr(ReverseParent, "child"))
+        with mock.patch(
+            "django.contrib.admin.checks.label_for_field",
+            side_effect=AttributeError,
+        ) as mocked_label_lookup:
+            self.assertIsInvalid(
+                ReverseParentAdmin,
+                ReverseParent,
+                "The value of 'list_display[0]' refers to 'child', which is not a "
+                "callable, an attribute of 'ReverseParentAdmin', or an attribute or "
+                "method on 'modeladmin.ReverseParent'.",
+                "admin.E108",
+            )
+        mocked_label_lookup.assert_called_once()
 
     def test_gev_004_metadata_only_m2m_related_name_unresolved_by_label_emits_e108(
         self,
     ):
-        self.assertTrue(True)
+        class M2MParent(Model):
+            pass
+
+        class M2MChild(Model):
+            parents = ManyToManyField(
+                M2MParent,
+                related_name="children",
+                related_query_name="child",
+            )
+
+        class M2MParentAdmin(ModelAdmin):
+            list_display = ["child"]
+
+        self.assertTrue(M2MParent._meta.get_field("child").many_to_many)
+        self.assertFalse(hasattr(M2MParent, "child"))
+        with mock.patch(
+            "django.contrib.admin.checks.label_for_field",
+            side_effect=AttributeError,
+        ) as mocked_label_lookup:
+            self.assertIsInvalid(
+                M2MParentAdmin,
+                M2MParent,
+                "The value of 'list_display[0]' refers to 'child', which is not a "
+                "callable, an attribute of 'M2MParentAdmin', or an attribute or "
+                "method on 'modeladmin.M2MParent'.",
+                "admin.E108",
+            )
+        mocked_label_lookup.assert_called_once()
 
     def test_not_iterable(self):
         class TestModelAdmin(ModelAdmin):
