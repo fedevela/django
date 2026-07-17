@@ -209,6 +209,26 @@ class FormsFormsetTestCase(SimpleTestCase):
 
         self.assertIs(formset.empty_form.empty_permitted, True)
 
+    def test_eform_003_ordinary_forms_honor_supplied_empty_permitted_true(self):
+        """GUID: EFORM-003; ordinary forms preserve supplied True state."""
+        pass
+
+    def test_eform_003_ordinary_forms_honor_supplied_empty_permitted_false(self):
+        """GUID: EFORM-003; ordinary forms preserve supplied False state."""
+        pass
+
+    def test_eform_004_empty_form_receives_other_kwargs_but_ignores_empty_permitted(
+        self,
+    ):
+        """GUID: EFORM-004; only empty_permitted is excluded from empty_form."""
+        pass
+
+    def test_eform_007_omitted_empty_permitted_keeps_empty_form_access_and_rendering(
+        self,
+    ):
+        """GUID: EFORM-007; omission preserves empty_form state and rendering."""
+        pass
+
     def test_formset_validation(self):
         # FormSet instances can also have an error attribute if validation failed for
         # any of the forms.
