@@ -365,6 +365,21 @@ class RenameModel(ModelOperation):
         #   and emit no foreign-key DDL.
         # - FAILURE: propagate model-resolution failure before this decision;
         #   do not begin constraint mutation or attempt compensating creation.
+        # GUID: RMN-004
+        # LOGIC OBLIGATION (SQLite table-recreation prevention):
+        # - INPUT: the resolved old and new models and their effective
+        #   _meta.db_table names.
+        # - DECISION: compare effective table identity before handing the
+        #   operation to the schema editor.
+        # - IF equal: terminate the database transition before SQLite receives
+        #   alter_db_table(), alter_field(), or any related-model alteration;
+        #   the existing table remains in place and is not remade.
+        # - ELSE: hand off to the existing database-visible rename flow; table
+        #   recreation for a changed effective table is outside RMN-004.
+        # - OUTPUT: an unchanged effective table name produces no SQLite schema
+        #   mutation while the migration-state rename remains preserved.
+        # - FAILURE: propagate model-resolution failure before the equality
+        #   decision; do not initiate or compensate for a partial table remake.
         if old_model._meta.db_table == new_model._meta.db_table:
             return
         if self.allow_migrate_model(schema_editor.connection.alias, new_model):
