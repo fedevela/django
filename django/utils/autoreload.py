@@ -358,7 +358,7 @@ class BaseReloader:
         raise NotImplementedError('subclasses must implement check_availability().')
 
     def notify_file_changed(self, path):
-        # Autoreload ownership boundary (ARLD-001, ARLD-003): signal
+        # Autoreload ownership boundary (ARLD-001, ARLD-002, ARLD-003): signal
         # receivers may consume specialized file changes; otherwise this
         # method retains responsibility for the project-wide reload fallback.
         results = file_changed.send(sender=self, file_path=path)

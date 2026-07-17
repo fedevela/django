@@ -61,8 +61,8 @@ def template_changed(sender, file_path, **kwargs):
     # with the unchanged settings.py path.
     # FAILURE PATH: never reset template loaders or suppress the general reload
     # merely because BASE_DIR contains both templates and settings.py.
-    # Integration seam (ARLD-001, ARLD-003): this receiver owns template
-    # cache invalidation only; project reload authority remains with
+    # Integration seam (ARLD-001, ARLD-002, ARLD-003): this receiver owns
+    # template cache invalidation only; project reload authority remains with
     # BaseReloader.notify_file_changed() across overlapping watch paths.
     if file_path.suffix == '.py':
         return
