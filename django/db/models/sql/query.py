@@ -1075,6 +1075,20 @@ class Query(BaseExpression):
                 self, reuse=can_reuse, allow_joins=allow_joins,
             )
         elif isinstance(value, (list, tuple)):
+            # RANGE-001..RANGE-008 pseudocode contract:
+            # - Resolve every item recursively, once, in input order
+            #   (RANGE-002, RANGE-005, RANGE-006, RANGE-008).
+            # - If the input is a named 2-tuple, reconstruct its original
+            #   class with resolved_item_1 and resolved_item_2 as two separate
+            #   positional arguments (RANGE-003, RANGE-004); never pass the
+            #   resolved items as one generator argument (RANGE-001).
+            # - Otherwise, reconstruct a list or plain tuple through the
+            #   existing iterable-constructor path so its order, arity, and
+            #   lookup results remain unchanged (RANGE-008).
+            # - Return the reconstructed value to lookup preparation; for a
+            #   range lookup, its ordered two bounds must yield the same
+            #   inclusive result set as equivalent plain-tuple bounds,
+            #   including records equal to either bound (RANGE-007).
             # The items of the iterable may be expressions and therefore need
             # to be resolved independently.
             return type(value)(
