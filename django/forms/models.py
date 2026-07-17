@@ -1187,6 +1187,9 @@ class ModelChoiceField(ChoiceField):
     """A ChoiceField whose choices are a model QuerySet."""
     # This class is a subclass of ChoiceField for purity, but it doesn't
     # actually use any of ChoiceField's implementation.
+    # Architecture — GUID: MCF-011
+    # This message catalog remains the localization boundary; gettext_lazy and
+    # ValidationError's named parameters own translation and interpolation.
     # Pseudocode — GUID: MCF-011
     # DEFINE the default invalid_choice message with Django's existing lazy
     # translation mechanism and retain the named ``value`` interpolation slot.
@@ -1314,6 +1317,9 @@ class ModelChoiceField(ChoiceField):
         # Architecture — GUID: MCF-007, MCF-008
         # Empty-value policy remains owned by Field.validate(); this model-field
         # boundary only delegates to that contract and adds no competing policy.
+        # Architecture — GUID: MCF-010
+        # Unrelated diagnostics remain owned by Field.validate(); delegation is
+        # the integration seam and preserves its message, code, and parameters.
         # Pseudocode — GUID: MCF-007, MCF-008
         # RECEIVE the value produced by to_python() in the normal clean flow.
         # DELEGATE empty-value policy unchanged to Field.validate():
