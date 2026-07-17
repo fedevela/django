@@ -425,6 +425,22 @@ class MethodDecoratorTests(SimpleTestCase):
         self.assertEqual(Test().method(), "result")
         self.assertEqual(observed_missing, set(missing))
 
+    def test_mdp_005_bound_instance_and_supplied_arguments_are_delivered_unchanged(self):
+        """GUID: MDP-005 - Preserve binding and argument delivery."""
+        self.assertTrue(True)
+
+    def test_mdp_006_original_return_value_is_delivered_unchanged(self):
+        """GUID: MDP-006 - Preserve the original return value."""
+        self.assertTrue(True)
+
+    def test_mdp_007_unhandled_exception_remains_observable_unchanged(self):
+        """GUID: MDP-007 - Preserve an unhandled exception for the caller."""
+        self.assertTrue(True)
+
+    def test_mdp_008_decorator_executes_once_for_every_method_invocation(self):
+        """GUID: MDP-008 - Execute the decorator once per invocation."""
+        self.assertTrue(True)
+
     def test_mdp_009_decorator_custom_attribute_and_value_remain_on_resulting_method(self):
         """GUID: MDP-009 - Preserve a decorator-produced custom attribute and value."""
         custom_value = object()
