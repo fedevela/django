@@ -60,19 +60,34 @@ class ModelChoiceFieldTests(TestCase):
 
     def test_mcf_006_value_present_in_queryset_resolves_to_same_model_object(self):
         """GUID: MCF-006 - A value in the queryset resolves to the same object."""
-        pass
+        field = forms.ModelChoiceField(Category.objects.filter(pk=self.c2.pk))
+
+        self.assertEqual(field.clean(str(self.c2.pk)), self.c2)
 
     def test_mcf_007_required_empty_submission_preserves_validation_result_message_code_and_params(self):
         """GUID: MCF-007 - Required empty-submission validation is unchanged."""
-        pass
+        field = forms.ModelChoiceField(Category.objects.all())
+
+        with self.assertRaises(ValidationError) as cm:
+            field.clean('')
+        error = cm.exception.error_list[0]
+        self.assertEqual(error.message, 'This field is required.')
+        self.assertEqual(error.code, 'required')
+        self.assertIsNone(error.params)
 
     def test_mcf_008_optional_allowed_empty_submission_preserves_validation_result(self):
         """GUID: MCF-008 - Optional allowed-empty handling is unchanged."""
-        pass
+        field = forms.ModelChoiceField(Category.objects.all(), required=False)
+
+        self.assertIsNone(field.clean(''))
 
     def test_mcf_009_value_for_object_outside_queryset_remains_invalid_and_is_not_returned(self):
         """GUID: MCF-009 - An object outside the queryset remains unavailable."""
-        pass
+        field = forms.ModelChoiceField(Category.objects.exclude(pk=self.c3.pk))
+
+        with self.assertRaises(ValidationError) as cm:
+            field.clean(str(self.c3.pk))
+        self.assertEqual(cm.exception.error_list[0].code, 'invalid_choice')
 
     def test_basics(self):
         f = forms.ModelChoiceField(Category.objects.all())
