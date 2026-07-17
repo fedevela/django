@@ -121,6 +121,11 @@ class URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
 
     def test_url_003_malformed_authority_clean_raises_validationerror(self):
         """GUID: URL-003 - Cleaning ////]@N.AN raises ValidationError."""
+        # PSEUDOCODE:
+        #   ARRANGE a forms.URLField and the malformed value "////]@N.AN".
+        #   ACT by passing the value to the field's public clean operation.
+        #   ASSERT that clean raises ValidationError.
+        #   FAIL the regression if ValueError escapes instead.
         self.assertTrue(True)
 
     def test_urlfield_clean_required(self):

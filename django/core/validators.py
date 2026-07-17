@@ -97,6 +97,17 @@ class URLValidator(RegexValidator):
         if schemes is not None:
             self.schemes = schemes
 
+    # GUID: URL-001, URL-002 - URL parser exception boundary.
+    # PSEUDOCODE:
+    #   INPUT value submitted to URL validation.
+    #   RUN the existing scheme, regular-expression, IDN, IPv6, and host-length
+    #   validation flow without changing which URLs it accepts.
+    #   WHEN any urlsplit operation in that flow raises ValueError:
+    #       DISCARD the parser exception as a public validation result.
+    #       RAISE ValidationError using self.message, self.code, and value params.
+    #   OTHERWISE preserve every existing validation branch and result.
+    #   OUTPUT either successful validation or the established invalid-URL
+    #   ValidationError; never expose the parser-originated ValueError.
     def __call__(self, value):
         if not isinstance(value, str):
             raise ValidationError(self.message, code=self.code, params={'value': value})
