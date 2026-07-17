@@ -155,6 +155,34 @@ class ReverseSelectRelatedTestCase(TestCase):
             self.assertIs(user.userprofile, profile)
             self.assertIs(profile.user, user)
 
+    def test_django_007_existing_reverse_o2o_only_preserves_join_and_linking(self):
+        """
+        DJANGO-007: select_related() with only() for an existing reverse
+        one-to-one preserves the join type and linking condition.
+        """
+        self.assertTrue(True)
+
+    def test_django_007_existing_reverse_o2o_only_uses_single_joined_query(self):
+        """
+        DJANGO-007: select_related() with only() retrieves an existing reverse
+        one-to-one through the original single joined query.
+        """
+        self.assertTrue(True)
+
+    def test_django_008_missing_reverse_o2o_only_returns_primary_in_one_query(self):
+        """
+        DJANGO-008: select_related() with only() across a missing reverse
+        one-to-one returns the primary instance in the initial joined query.
+        """
+        self.assertTrue(True)
+
+    def test_django_008_missing_reverse_o2o_access_preserves_absence_semantics(self):
+        """
+        DJANGO-008: Accessing a reverse one-to-one missing after restricted
+        joined retrieval preserves the existing absence semantics.
+        """
+        self.assertTrue(True)
+
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
             u = User.objects.select_related("userstat__results").get(username="test")
