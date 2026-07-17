@@ -363,17 +363,42 @@ class CaseInsensitiveMixin:
         return rhs, rhs_params
 
 
+# JSONNULL-001, JSONNULL-002, JSONNULL-003: Use key-presence semantics on
+# SQLite and Oracle.
+# JSONNULL-005 architecture boundary: backend-specific key-presence SQL is
+# owned here; backends without an override retain the inherited IsNull path.
 class KeyTransformIsNull(lookups.IsNull):
+    # JSONNULL-005 logic obligation: preserve unaffected-backend membership.
+    # INPUT: a resolved key-transform ``isnull`` lookup and its connection.
+    # IF the backend is SQLite or Oracle, dispatch only to the specialized
+    # key-presence compiler below.
+    # ELSE (MariaDB, MySQL, PostgreSQL, or another backend), hand off to the
+    # inherited ``IsNull`` compiler without changing result membership.
+    # JSONNULL-006 logic obligation: preserve unrelated JSONField operations.
+    # IF an operation does not resolve to ``KeyTransformIsNull``, leave it on
+    # its existing JSONField lookup/transform path without changing its input,
+    # output, state, or failure propagation.
     # key__isnull=False is the same as has_key='key'
     def as_oracle(self, compiler, connection):
+        sql, params = HasKey(
+            self.lhs.lhs,
+            self.lhs.key_name,
+        ).as_oracle(compiler, connection)
         if not self.rhs:
-            return HasKey(self.lhs.lhs, self.lhs.key_name).as_oracle(compiler, connection)
-        return super().as_sql(compiler, connection)
+            return sql, params
+        # Column doesn't have a key or IS NULL.
+        lhs, lhs_params, _ = self.lhs.preprocess_lhs(compiler, connection)
+        return '(NOT %s OR %s IS NULL)' % (sql, lhs), tuple(params) + tuple(lhs_params)
 
     def as_sqlite(self, compiler, connection):
+        template = 'JSON_TYPE(%s, %%s) IS NULL'
         if not self.rhs:
-            return HasKey(self.lhs.lhs, self.lhs.key_name).as_sqlite(compiler, connection)
-        return super().as_sql(compiler, connection)
+            template = 'JSON_TYPE(%s, %%s) IS NOT NULL'
+        return HasKey(self.lhs.lhs, self.lhs.key_name).as_sql(
+            compiler,
+            connection,
+            template=template,
+        )
 
 
 class KeyTransformIn(lookups.In):
@@ -502,6 +527,8 @@ class KeyTransformGte(KeyTransformNumericLookupMixin, lookups.GreaterThanOrEqual
 KeyTransform.register_lookup(KeyTransformIn)
 KeyTransform.register_lookup(KeyTransformExact)
 KeyTransform.register_lookup(KeyTransformIExact)
+# JSONNULL-006 integration seam: scope the specialized lookup to KeyTransform
+# so other JSONField operations retain their existing lookup ownership.
 KeyTransform.register_lookup(KeyTransformIsNull)
 KeyTransform.register_lookup(KeyTransformIContains)
 KeyTransform.register_lookup(KeyTransformStartsWith)

@@ -1,4 +1,5 @@
 import operator
+import unittest
 import uuid
 from unittest import mock
 
@@ -319,6 +320,43 @@ class TestQuerying(TestCase):
             [self.objs[0]],
         )
 
+    @unittest.skipUnless(
+        connection.vendor in ('mysql', 'postgresql'),
+        'MariaDB, MySQL, and PostgreSQL specific regression test.',
+    )
+    def test_jsonnull_005_mariadb_mysql_postgresql_key_transform_isnull_preserves_result_membership(self):
+        """JSONNULL-005: Unaffected backends preserve result membership."""
+        tests = (
+            (True, self.objs[:4] + self.objs[5:]),
+            (False, [self.objs[4]]),
+        )
+        for isnull, expected in tests:
+            with self.subTest(isnull=isnull):
+                self.assertCountEqual(
+                    NullableJSONModel.objects.filter(value__j__isnull=isnull),
+                    expected,
+                )
+
+    def test_jsonnull_006_unrelated_jsonfield_operation_preserves_observable_result(self):
+        """JSONNULL-006: Unrelated JSONField operations remain unchanged."""
+        self.assertSequenceEqual(
+            NullableJSONModel.objects.filter(value__exact={}),
+            [self.objs[2]],
+        )
+
+    def test_jsonnull_007_isnull_outside_json_key_transform_preserves_semantics(self):
+        """JSONNULL-007: isnull outside JSON key transforms remains unchanged."""
+        tests = (
+            (True, [self.objs[0]]),
+            (False, self.objs[1:]),
+        )
+        for isnull, expected in tests:
+            with self.subTest(isnull=isnull):
+                self.assertSequenceEqual(
+                    NullableJSONModel.objects.filter(value__isnull=isnull),
+                    expected,
+                )
+
     def test_ordering_by_transform(self):
         mariadb = connection.vendor == 'mysql' and connection.mysql_is_mariadb
         values = [
@@ -580,6 +618,30 @@ class TestQuerying(TestCase):
         query = NullableJSONModel.objects.distinct('value__k__l').values_list('value__k__l')
         self.assertSequenceEqual(query, [('m',), (None,)])
 
+    def test_jsonnull_001_sqlite_oracle_isnull_true_includes_record_when_key_absent(self):
+        """JSONNULL-001: An absent key is included by key__isnull=True."""
+        obj = self.objs[3]
+        self.assertSequenceEqual(
+            NullableJSONModel.objects.filter(pk=obj.pk, value__j__isnull=True),
+            [obj],
+        )
+
+    def test_jsonnull_002_sqlite_oracle_isnull_true_excludes_existing_json_null(self):
+        """JSONNULL-002: An existing JSON null is excluded by key__isnull=True."""
+        obj = self.objs[4]
+        self.assertSequenceEqual(
+            NullableJSONModel.objects.filter(pk=obj.pk, value__j__isnull=True),
+            [],
+        )
+
+    def test_jsonnull_003_sqlite_oracle_isnull_false_includes_existing_json_null(self):
+        """JSONNULL-003: An existing JSON null is included by key__isnull=False."""
+        obj = self.objs[4]
+        self.assertSequenceEqual(
+            NullableJSONModel.objects.filter(pk=obj.pk, value__j__isnull=False),
+            [obj],
+        )
+
     def test_isnull_key(self):
         # key__isnull=False works the same as has_key='key'.
         self.assertSequenceEqual(
@@ -589,6 +651,10 @@ class TestQuerying(TestCase):
         self.assertSequenceEqual(
             NullableJSONModel.objects.filter(value__a__isnull=False),
             [self.objs[3], self.objs[4]],
+        )
+        self.assertSequenceEqual(
+            NullableJSONModel.objects.filter(value__j__isnull=True),
+            self.objs[:4] + self.objs[5:],
         )
         self.assertSequenceEqual(
             NullableJSONModel.objects.filter(value__j__isnull=False),

@@ -501,12 +501,23 @@ class Range(FieldGetDbPrepValueIterableMixin, BuiltinLookup):
         return "BETWEEN %s AND %s" % (rhs[0], rhs[1])
 
 
+# JSONNULL-007 ownership boundary: general field-level isnull compilation stays
+# in this registered lookup; JSON key transforms may specialize it downstream.
 @Field.register_lookup
 class IsNull(BuiltinLookup):
     lookup_name = 'isnull'
     prepare_rhs = False
 
     def as_sql(self, compiler, connection):
+        # JSONNULL-007 logic obligation: preserve generic ``isnull`` semantics.
+        # INPUT: an ``isnull`` compilation request with lhs and rhs, including
+        # any subclass handoff that has not selected a specialized compiler.
+        # VALIDATE rhs through the existing boolean/deprecation path.
+        # COMPILE lhs using the existing compiler; propagate compilation
+        # failures unchanged.
+        # IF rhs is true, OUTPUT ``lhs IS NULL`` with the compiled parameters.
+        # ELSE, OUTPUT ``lhs IS NOT NULL`` with the compiled parameters.
+        # Do not introduce JSON key-presence decisions into this generic path.
         if not isinstance(self.rhs, bool):
             # When the deprecation ends, replace with:
             # raise ValueError(
