@@ -243,6 +243,25 @@ class BaseCommand:
     """
 
     # Metadata about this command.
+    #
+    # MCFMT-001 architecture: command-specific help-formatting selection belongs
+    # beside this help metadata. BaseCommand owns the selection; create_parser()
+    # is its sole consumer, and formatter implementations must not depend on the
+    # command.
+    #
+    # MCFMT-002, MCFMT-003, MCFMT-004 architecture: help crosses the parser
+    # boundary as opaque text. Preservation of its line breaks and indentation,
+    # including the motivating three-line example, belongs to the selected
+    # argparse formatter contract rather than to BaseCommand preprocessing.
+    #
+    # MCFMT-009 architecture: formatter selection is configuration metadata,
+    # separate from this opaque help payload. Neither BaseCommand nor
+    # CommandParser may infer the formatter contract by inspecting the payload.
+    #
+    # MCFMT-007 architecture: BaseCommand owns help as an opaque semantic
+    # payload. create_parser() may pass it across the presentation boundary,
+    # but formatter implementations must not become producers or editors of
+    # command meaning.
     help = ""
 
     # Configuration shortcuts that alter various logic.
@@ -286,10 +305,107 @@ class BaseCommand:
         Create and return the ``ArgumentParser`` which will be used to
         parse the arguments to this command.
         """
+        # Pseudocode — command help formatting obligations:
+        #
+        # INPUTS: this command's help text, any command-selected help-formatting
+        # behavior, and the parser construction arguments.
+        #
+        # MCFMT-001:
+        #   IF the command has selected command-specific help formatting:
+        #       use that selected behavior when formatting this command's help
+        #       text.
+        #   ELSE:
+        #       use the default management-command help formatting behavior.
+        #
+        # MCFMT-002:
+        #   IF the selected behavior preserves newlines:
+        #       read the help text as ordered line content plus newline
+        #       delimiters;
+        #       emit every intentional delimiter unchanged, including those
+        #       that delimit blank lines, without joining or rewrapping lines.
+        #
+        # MCFMT-003:
+        #   IF the selected behavior preserves indentation:
+        #       FOR EACH help-text line in source order:
+        #           copy its intentional leading whitespace unchanged before
+        #           emitting its remaining content.
+        #
+        # MCFMT-004:
+        #   GIVEN source lines [introductory text, "Example usage:",
+        #   indented invocation]:
+        #       emit them in the same order as three separate output lines;
+        #       retain the invocation's leading indentation.
+        #
+        # MCFMT-005:
+        #   AFTER selecting command-specific help formatting:
+        #       construct the parser with the command's usage and description;
+        #       register every positional argument and every optional argument;
+        #       WHEN help is rendered:
+        #           emit the usage section;
+        #           emit documentation for all registered positional arguments;
+        #           emit documentation for all registered optional arguments.
+        #   The formatting selection changes presentation only; it must not
+        #   remove any part of the parser's argument model.
+        #
+        # MCFMT-006:
+        #   IF the command has not explicitly selected customized formatting:
+        #       select the established default formatter;
+        #       pass the command help and complete argument model to it without
+        #       altering the established wrapping, ordering, or section format.
+        #
+        # MCFMT-007:
+        #   retain the command help as the authoritative ordered sequence of
+        #   words and semantic statements;
+        #   pass that same help value to the parser for every formatter choice;
+        #   WHEN customized help is rendered:
+        #       allow the selected formatter to change presentation only;
+        #       emit every source word once, in source order, without adding,
+        #       removing, substituting, or reinterpreting semantic content.
+        #
+        # MCFMT-008 parser boundary:
+        #   construct one argument model from the same base arguments and the
+        #   same command-defined arguments for every formatter choice;
+        #   keep formatter selection outside argument definitions, parsing
+        #   rules, defaults, validation, and the values produced by parsing;
+        #   hand the unchanged model to the command-line parsing path.
+        #
+        # MCFMT-009:
+        #   determine customized formatting from explicit command selection,
+        #   not from the presence of newline characters in the help text;
+        #   IF multiline help has no explicit customized-formatting selection:
+        #       follow the MCFMT-006 default branch;
+        #       treat the text as an ordinary description and apply the
+        #       established default wrapping and formatting.
+        #
+        # OUTPUT: a parser whose command description follows the selected
+        # formatting behavior when help is rendered and whose help retains the
+        # complete usage, positional-argument, and optional-argument sections.
+        # FAILURE: if a selected behavior cannot format the help text, surface
+        # that failure through the parser help-formatting path; do not silently
+        # substitute the default behavior and violate the command's selection;
+        # do not repair a formatting failure by mutating help words or meaning,
+        # argument definitions, parsed values, or execution inputs;
+        # likewise, do not infer a fallback or customized branch from help-text
+        # line breaks, and do not return partially rendered argument sections.
+        # MCFMT-001, MCFMT-006, MCFMT-009 integration seam: parser construction
+        # receives an explicit command-owned formatter through kwargs; otherwise
+        # this boundary supplies DjangoHelpFormatter. Selection depends only on
+        # configuration, never on the content or line structure of self.help.
+        #
+        # MCFMT-005 ownership boundary: formatter_class controls presentation of
+        # the CommandParser model only. BaseCommand continues to populate that
+        # single model with base options and self.add_arguments() below, so a
+        # selected formatter cannot replace or bypass usage or argument metadata.
+        #
+        # MCFMT-007, MCFMT-008 dependency boundary: CommandParser receives help
+        # and formatter_class as description-presentation inputs. Argument
+        # ownership remains with BaseCommand and add_arguments(); downstream
+        # parsing and execution depend on the completed parser model, never on
+        # its formatter_class.
+        kwargs.setdefault("formatter_class", DjangoHelpFormatter)
         parser = CommandParser(
             prog="%s %s" % (os.path.basename(prog_name), subcommand),
             description=self.help or None,
-            formatter_class=DjangoHelpFormatter,
             missing_args_message=getattr(self, "missing_args_message", None),
             called_from_command_line=getattr(self, "_called_from_command_line", None),
             **kwargs,
@@ -390,6 +506,24 @@ class BaseCommand:
         to stderr. If the ``--traceback`` option is present or the raised
         ``Exception`` is not ``CommandError``, raise it.
         """
+        # MCFMT-008 architecture: this is the formatter-independent integration
+        # seam from the parser-owned argument model to command execution. Keep
+        # formatter dependencies inside create_parser()'s presentation boundary.
+        # MCFMT-008 — formatting-independent parse and execution flow:
+        #   INPUT: the command-line token sequence after program and command.
+        #   create the parser, allowing its formatter choice to affect help
+        #   presentation only;
+        #   parse the input tokens through the parser's unchanged argument
+        #   model;
+        #   IF parsing fails:
+        #       preserve the established parser error and stop before execute;
+        #   ELSE:
+        #       separate positional values from option values exactly as in the
+        #       default-formatting path;
+        #       apply the same default-option environment transitions;
+        #       hand the same positional and option values to execute;
+        #       preserve execute's output, side effects, return behavior, and
+        #       exception flow without consulting the selected formatter.
         self._called_from_command_line = True
         parser = self.create_parser(argv[0], argv[1])
 

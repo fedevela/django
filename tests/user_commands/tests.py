@@ -1,4 +1,5 @@
 import os
+from argparse import RawTextHelpFormatter
 from io import StringIO
 from unittest import mock
 
@@ -8,6 +9,7 @@ from django.apps import apps
 from django.core import management
 from django.core.checks import Tags
 from django.core.management import BaseCommand, CommandError, find_commands
+from django.core.management.base import DjangoHelpFormatter
 from django.core.management.utils import (
     find_command,
     get_random_secret_key,
@@ -417,6 +419,249 @@ class CommandTests(SimpleTestCase):
             management.call_command("outputwrapper", stdout=out)
         self.assertIn("Working...", out.getvalue())
         self.assertIs(mocked_flush.called, True)
+
+
+class CommandHelpFormattingContractTests(SimpleTestCase):
+    """
+    Architecture locus for MCFMT-001 through MCFMT-004.
+
+    Command fixtures own formatter selection; BaseCommand.create_parser() adapts
+    that selection to CommandParser; the selected formatter owns whitespace
+    rendering. The assertions below verify the manifested behavior.
+    """
+
+    help_text = (
+        "Import a contract from tzkt.\n\n"
+        "Example usage:\n\n"
+        "    ./manage.py tzkt_import 'Tezos Mainnet' "
+        "KT1HTDtMBRCKoNHjfWEEvXneGQpCfPAt6BRe"
+    )
+
+    def setUp(self):
+        class Command(BaseCommand):
+            help = self.help_text
+
+            def create_parser(command_self, *args, **kwargs):
+                return super().create_parser(
+                    *args, formatter_class=RawTextHelpFormatter, **kwargs
+                )
+
+        self.parser = Command().create_parser("manage.py", "tzkt_import")
+        self.formatted_help = self.parser.format_help()
+
+    def test_mcfmt_001_opted_in_command_uses_command_specific_help_formatting(self):
+        """GUID: MCFMT-001 - An opted-in command uses its selected formatting."""
+        self.assertIs(self.parser.formatter_class, RawTextHelpFormatter)
+
+    def test_mcfmt_002_whitespace_preserving_help_retains_intentional_newlines(self):
+        """GUID: MCFMT-002 - Displayed help retains every intentional newline."""
+        self.assertIn(self.help_text, self.formatted_help)
+
+    def test_mcfmt_003_indentation_preserving_help_retains_each_leading_indent(self):
+        """GUID: MCFMT-003 - Each help line retains its leading indentation."""
+        invocation = self.help_text.splitlines()[-1]
+        self.assertIn("\n%s\n" % invocation, self.formatted_help)
+
+    def test_mcfmt_004_intro_label_and_indented_invocation_remain_separate_lines(
+        self,
+    ):
+        """GUID: MCFMT-004 - Intro, label, and indented invocation stay separate."""
+        output_lines = self.formatted_help.splitlines()
+        expected_lines = self.help_text.splitlines()
+        start = output_lines.index(expected_lines[0])
+        self.assertEqual(
+            output_lines[start : start + len(expected_lines)], expected_lines
+        )
+
+
+class CommandHelpCompletenessAndDefaultFormattingContractTests(SimpleTestCase):
+    """Verification obligations for MCFMT-005, MCFMT-006, and MCFMT-009."""
+
+    default_help_text = (
+        "This command uses the established formatter and wraps its ordinary "
+        "description when the description extends beyond the standard help width."
+    )
+    multiline_help_text = (
+        "First source line contains ordinary prose that is deliberately long enough "
+        "to reach beyond the normal formatter width.\n"
+        "Second source line also contains ordinary prose and must be reflowed as part "
+        "of the same description paragraph."
+    )
+
+    def format_default_help(self, help_text):
+        class Command(BaseCommand):
+            help = help_text
+
+        with mock.patch.dict(os.environ, {"COLUMNS": "80", "LINES": "24"}):
+            parser = Command().create_parser("manage.py", "format_contract")
+            return parser, parser.format_help()
+
+    def get_description(self, formatted_help):
+        return formatted_help.split("\n\n", 2)[1]
+
+    def test_mcfmt_005_customized_help_includes_usage_positional_and_optional_docs(
+        self,
+    ):
+        """GUID: MCFMT-005 - Customized help keeps every argument section."""
+        class Command(BaseCommand):
+            help = "Import a contract."
+
+            def create_parser(command_self, *args, **kwargs):
+                return super().create_parser(
+                    *args,
+                    usage="%(prog)s [options] contract",
+                    formatter_class=RawTextHelpFormatter,
+                    **kwargs,
+                )
+
+            def add_arguments(command_self, parser):
+                parser.add_argument("contract", help="Contract identifier.")
+                parser.add_argument(
+                    "--dry-run", action="store_true", help="Preview the import."
+                )
+
+        parser = Command().create_parser("manage.py", "import_contract")
+        formatted_help = parser.format_help()
+
+        self.assertIn(
+            "usage: manage.py import_contract [options] contract", formatted_help
+        )
+        self.assertIn("%s:\n" % parser._positionals.title, formatted_help)
+        self.assertIn("contract", formatted_help)
+        self.assertIn("Contract identifier.", formatted_help)
+        self.assertIn("%s:\n" % parser._optionals.title, formatted_help)
+        self.assertIn("--dry-run", formatted_help)
+        self.assertIn("Preview the import.", formatted_help)
+
+    def test_mcfmt_006_default_help_keeps_established_wrapping_and_formatting(self):
+        """GUID: MCFMT-006 - A command without opt-in keeps default formatting."""
+        parser, formatted_help = self.format_default_help(self.default_help_text)
+
+        self.assertIs(parser.formatter_class, DjangoHelpFormatter)
+        self.assertEqual(
+            self.get_description(formatted_help),
+            "This command uses the established formatter and wraps its ordinary "
+            "description\nwhen the description extends beyond the standard help width.",
+        )
+
+    def test_mcfmt_009_multiline_default_help_does_not_imply_preformatted_text(self):
+        """GUID: MCFMT-009 - Line breaks alone do not opt into preformatting."""
+        parser, formatted_help = self.format_default_help(self.multiline_help_text)
+
+        self.assertIs(parser.formatter_class, DjangoHelpFormatter)
+        self.assertNotIn(self.multiline_help_text, formatted_help)
+
+    def test_mcfmt_009_multiline_default_help_keeps_established_wrapping(self):
+        """GUID: MCFMT-009 - Multiline default help retains default wrapping."""
+        _, formatted_help = self.format_default_help(self.multiline_help_text)
+
+        self.assertEqual(
+            self.get_description(formatted_help),
+            "First source line contains ordinary prose that is deliberately long "
+            "enough "
+            "to\nreach beyond the normal formatter width. Second source line also "
+            "contains\nordinary prose and must be reflowed as part of the same "
+            "description paragraph.",
+        )
+
+
+class CommandHelpSemanticsAndBehaviorContractTests(SimpleTestCase):
+    """Verification obligations for MCFMT-007 and MCFMT-008."""
+
+    help_text = (
+        "Synchronize the selected contract without changing its stored metadata."
+    )
+    command_arguments = [
+        "KT1-contract",
+        "--count",
+        "3",
+        "--mode",
+        "replace",
+        "--enabled",
+    ]
+
+    def setUp(self):
+        class Command(BaseCommand):
+            help = self.help_text
+            requires_system_checks = []
+
+            def add_arguments(command_self, parser):
+                parser.add_argument("contract")
+                parser.add_argument("--count", type=int, default=1)
+                parser.add_argument("--mode", choices=("merge", "replace"))
+                parser.add_argument("--enabled", action="store_true")
+
+            def handle(command_self, *args, **options):
+                command_self.execution = {
+                    "args": args,
+                    "contract": options["contract"],
+                    "count": options["count"],
+                    "mode": options["mode"],
+                    "enabled": options["enabled"],
+                }
+                message = (
+                    "Synchronized %(count)d copy of %(contract)s in %(mode)s mode."
+                )
+                return message % {
+                    "count": options["count"],
+                    "contract": options["contract"],
+                    "mode": options["mode"],
+                }
+
+        class CustomizedCommand(Command):
+            def create_parser(command_self, *args, **kwargs):
+                return super().create_parser(
+                    *args, formatter_class=RawTextHelpFormatter, **kwargs
+                )
+
+        self.command_class = Command
+        self.customized_command_class = CustomizedCommand
+        self.customized_parser = CustomizedCommand().create_parser(
+            "manage.py", "synchronize_contract"
+        )
+        self.formatted_description = self.customized_parser.format_help().split(
+            "\n\n", 2
+        )[1]
+
+    def test_mcfmt_007_displaying_customized_help_preserves_help_text_words(self):
+        """GUID: MCFMT-007 - Formatting preserves every help-text word."""
+        self.assertCountEqual(
+            self.formatted_description.split(), self.help_text.split()
+        )
+
+    def test_mcfmt_007_displaying_customized_help_preserves_help_text_word_order(self):
+        """GUID: MCFMT-007 - Formatting preserves help-text word ordering."""
+        self.assertEqual(
+            self.formatted_description.split(), self.help_text.split()
+        )
+
+    def test_mcfmt_007_displaying_customized_help_preserves_semantic_content(self):
+        """GUID: MCFMT-007 - Formatting preserves help-text semantics."""
+        self.assertEqual(self.formatted_description, self.help_text)
+
+    def test_mcfmt_008_customized_help_parses_defined_arguments_the_same_way(self):
+        """GUID: MCFMT-008 - Defined arguments retain their parsing behavior."""
+        default_options = self.command_class().create_parser(
+            "manage.py", "synchronize_contract"
+        ).parse_args(self.command_arguments)
+        customized_options = self.customized_parser.parse_args(self.command_arguments)
+
+        self.assertEqual(vars(customized_options), vars(default_options))
+
+    def test_mcfmt_008_customized_help_executes_same_inputs_the_same_way(self):
+        """GUID: MCFMT-008 - The same inputs retain their execution behavior."""
+        commands = []
+        outputs = []
+        argv = ["manage.py", "synchronize_contract", *self.command_arguments]
+        for command_class in (self.command_class, self.customized_command_class):
+            output = StringIO()
+            command = command_class(stdout=output)
+            command.run_from_argv(argv)
+            commands.append(command)
+            outputs.append(output.getvalue())
+
+        self.assertEqual(commands[1].execution, commands[0].execution)
+        self.assertEqual(outputs[1], outputs[0])
 
 
 class CommandRunTests(AdminScriptTestCase):
