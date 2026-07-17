@@ -52,6 +52,13 @@ class TestModel1:
     thing = models.FileField(upload_to=upload_to)
 
 
+class Profile:
+    class Capability:
+        @classmethod
+        def default(cls):
+            return []
+
+
 class TextEnum(enum.Enum):
     A = "a-value"
     B = "value-b"
@@ -545,15 +552,33 @@ class WriterTests(SimpleTestCase):
 
     def test_migser_001_nested_class_method_default_preserves_complete_path(self):
         """MIGSER-001: Serialization preserves every enclosing class."""
-        self.assertTrue(True)
+        field = models.CharField(default=Profile.Capability.default)
+        self.assertSerializedResultEqual(
+            field.default,
+            (
+                f"{__name__}.Profile.Capability.default",
+                {f"import {__name__}"},
+            ),
+        )
 
     def test_migser_002_profile_capability_default_serializes_exact_path(self):
         """MIGSER-002: Profile.Capability.default has its exact required path."""
-        self.assertTrue(True)
+        with mock.patch.object(Profile.Capability, "__module__", "appname.models"):
+            field = models.CharField(default=Profile.Capability.default)
+            self.assertSerializedResultEqual(
+                field.default,
+                (
+                    "appname.models.Profile.Capability.default",
+                    {"import appname.models"},
+                ),
+            )
 
     def test_migser_004_nested_class_method_reference_resolves_same_callable(self):
         """MIGSER-004: Resolution returns the original field-default callable."""
-        self.assertTrue(True)
+        field = models.CharField(default=Profile.Capability.default)
+        resolved = self.serialize_round_trip(field.default)
+        self.assertIs(resolved.__self__, field.default.__self__)
+        self.assertIs(resolved.__func__, field.default.__func__)
 
     def test_serialize_datetime(self):
         self.assertSerializedEqual(datetime.datetime.now())

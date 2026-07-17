@@ -161,34 +161,14 @@ class FrozensetSerializer(BaseUnorderedSequenceSerializer):
         return "frozenset([%s])"
 
 
-# MIGSER-001, MIGSER-002, MIGSER-004 architecture boundary:
-# FunctionTypeSerializer owns the complete import path for callable values. Bound
-# class methods stay within its existing (serialized reference, module imports)
-# contract; MigrationWriter remains the consumer and Python's dotted attribute
-# lookup remains the resolution boundary. No model- or field-specific adapter is
-# required for Profile.Capability.default.
 class FunctionTypeSerializer(BaseSerializer):
     def serialize(self):
-        # MIGSER-001, MIGSER-002, MIGSER-004 — nested class-method reference flow:
-        # INPUT: the callable supplied as a field default.
-        # IF the callable is bound to a class:
-        #   READ the class module, the class's complete qualified name (including
-        #   every enclosing class), and the callable name.
-        #   IF those components do not describe a stable importable path:
-        #     HAND OFF to the existing unsupported-callable error flow.
-        #   BUILD the reference as <module>.<complete class path>.<callable name>.
-        #   REQUIRE Profile.Capability.default from appname.models to produce
-        #   exactly appname.models.Profile.Capability.default.  [MIGSER-002]
-        #   EMIT the reference together with the module import.  [MIGSER-001]
-        #   ON resolution, import the module and traverse each remaining path
-        #   component in order; REQUIRE the result to identify the input
-        #   callable, otherwise fail serialization as non-importable.  [MIGSER-004]
         if getattr(self.value, "__self__", None) and isinstance(
             self.value.__self__, type
         ):
             klass = self.value.__self__
             module = klass.__module__
-            return "%s.%s.%s" % (module, klass.__name__, self.value.__name__), {
+            return "%s.%s.%s" % (module, klass.__qualname__, self.value.__name__), {
                 "import %s" % module
             }
         # Further error checking
@@ -370,8 +350,6 @@ class Serializer:
             types.FunctionType,
             types.BuiltinFunctionType,
             types.MethodType,
-            # MIGSER-001, MIGSER-002, MIGSER-004: MethodType is the registry seam
-            # that assigns nested bound class methods to FunctionTypeSerializer.
         ): FunctionTypeSerializer,
         collections.abc.Iterable: IterableSerializer,
         (COMPILED_REGEX_TYPE, RegexObject): RegexSerializer,
