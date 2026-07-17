@@ -116,7 +116,11 @@ class NamedTupleRangeLookupContractTests(TestCase):
         # - If its constructor raises the missing-positional-argument TypeError,
         #   record that the erroneous reconstruction path was exposed;
         #   otherwise, fail the regression check.
-        self.assertTrue(True)
+        bounds = NamedTupleRangeBounds(2000, 2002)
+        with self.assertRaisesMessage(
+            TypeError, "missing 1 required positional argument: 'upper'",
+        ):
+            type(bounds)(iter(bounds))
 
     def test_range_009_positional_reconstruction_returns_inclusive_named_tuple_range_results(self):
         """GUID: RANGE-009 - Positional reconstruction returns inclusive results."""
@@ -126,7 +130,18 @@ class NamedTupleRangeLookupContractTests(TestCase):
         #   class by passing lower and upper as separate positional arguments.
         # - Hand the reconstructed bounds to the range lookup, collect ordered
         #   results, and require both endpoints and every value between them.
-        self.assertTrue(True)
+        resolved_values = []
+        bounds = NamedTupleRangeBounds(
+            ResolvableLookupValue(2000, resolved_values),
+            ResolvableLookupValue(2002, resolved_values),
+        )
+
+        resolved = self.resolve(bounds)
+
+        self.assertIs(type(resolved), NamedTupleRangeBounds)
+        self.assertEqual(resolved, NamedTupleRangeBounds(2000, 2002))
+        self.assertEqual(resolved_values, [2000, 2002])
+        self.assertEqual(self.range_years(resolved), [2000, 2001, 2002])
 
     def test_range_009_named_and_plain_tuple_range_cases_continue_to_pass(self):
         """GUID: RANGE-009 - Named and plain tuple range cases remain passing."""
@@ -136,7 +151,11 @@ class NamedTupleRangeLookupContractTests(TestCase):
         #   branches.
         # - Require each result to equal the expected inclusive sequence; if
         #   either branch differs, fail that compatibility case independently.
-        self.assertTrue(True)
+        named_results = self.range_years(NamedTupleRangeBounds(2000, 2002))
+        plain_results = self.range_years((2000, 2002))
+
+        self.assertEqual(named_results, [2000, 2001, 2002])
+        self.assertEqual(plain_results, [2000, 2001, 2002])
 
 
 class LookupTests(TestCase):
