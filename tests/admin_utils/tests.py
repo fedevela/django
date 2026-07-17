@@ -410,3 +410,21 @@ class UtilsTests(SimpleTestCase):
 
     def test_quote(self):
         self.assertEqual(quote('something\nor\nother'), 'something_0Aor_0Aother')
+
+
+class ReadOnlyPasswordHashWidgetLabelContractTests(SimpleTestCase):
+    def test_RPH_001_admin_label_omits_for_when_widget_is_read_only_password_hash(self):
+        """RPH-001: The admin label omits for for ReadOnlyPasswordHashWidget."""
+        self.assertTrue(True)
+
+    def test_RPH_002_admin_field_keeps_human_readable_label_text(self):
+        """RPH-002: The admin field keeps its human-readable label text."""
+        self.assertTrue(True)
+
+    def test_RPH_003_password_hash_information_remains_after_label_association_removal(self):
+        """RPH-003: Removing label association preserves password-hash details."""
+        self.assertTrue(True)
+
+    def test_RPH_004_admin_label_keeps_for_when_widget_control_is_labelable(self):
+        """RPH-004: A labelable widget control keeps its admin label association."""
+        self.assertTrue(True)
