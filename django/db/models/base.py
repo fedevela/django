@@ -269,6 +269,24 @@ class ModelBase(type):
             else:
                 base_parents = base._meta.parents.copy()
 
+                # Pseudocode -- GUID: PKW-003
+                # Verification:
+                # test_pkw_003_descendant_effective_pk_preserves_inherited_
+                # manually_declared_field_identity_and_semantics
+                # INPUT a supported abstract ancestor field and the descendant's
+                # declared and previously inherited field names.
+                # IF the ancestor field is overridden or otherwise ineligible for
+                # inheritance, follow the existing exclusion or clash path.
+                # ELSE copy the ancestor declaration into the descendant while
+                # preserving its name, field class, primary_key=True designation,
+                # and all other configured semantics.
+                # REGISTER that descendant-bound inherited field unchanged so
+                # primary-key selection adopts it as the descendant's effective
+                # primary key; DO NOT synthesize, promote, or substitute another
+                # primary-key field.
+                # OUTPUT descendant._meta.pk as that registered inherited field;
+                # propagate existing copy, binding, and registration failures.
+
                 # Add fields from abstract base class if it wasn't overridden.
                 for field in parent_fields:
                     if (field.name not in field_names and
