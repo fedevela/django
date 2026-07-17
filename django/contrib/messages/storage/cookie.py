@@ -16,6 +16,15 @@ class MessageEncoder(json.JSONEncoder):
 
     def default(self, obj):
         if isinstance(obj, Message):
+            # Pseudocode obligations: MSG-001, MSG-002, MSG-004, MSG-005.
+            # INPUT: a Message with level, body, and extra_tags.
+            # BUILD the compact payload with the level and body unchanged.
+            # IF extra_tags is None:
+            #     OMIT the optional extra_tags slot.
+            # ELSE:
+            #     APPEND extra_tags exactly, including an empty string.
+            # OUTPUT: a payload that distinguishes "" from None while
+            # preserving non-empty extra_tags, level, and body values.
             # Using 0/1 here instead of False/True to produce more compact json
             is_safedata = 1 if isinstance(obj.message, SafeData) else 0
             message = [self.message_key, is_safedata, obj.level, obj.message]
@@ -33,6 +42,19 @@ class MessageDecoder(json.JSONDecoder):
     def process_messages(self, obj):
         if isinstance(obj, list) and obj:
             if obj[0] == MessageEncoder.message_key:
+                # Pseudocode obligations: MSG-001, MSG-002, MSG-004, MSG-005,
+                # MSG-006.
+                # INPUT: a recognized serialized Message payload.
+                # RESTORE the safe-data marker without changing the body.
+                # READ the level and body from their required slots unchanged.
+                # IF the optional extra_tags slot exists:
+                #     USE its exact value, including "" or a non-empty value.
+                # ELSE:
+                #     USE None for legacy payload compatibility.
+                # OUTPUT: a Message preserving level, body, and the distinct
+                # extra_tags state.
+                # FAILURE/HANDOFF: malformed recognized payloads retain the
+                # codec's established exception flow to the calling backend.
                 if obj[1]:
                     obj[3] = mark_safe(obj[3])
                 return Message(*obj[2:])
