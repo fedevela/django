@@ -117,6 +117,16 @@ class ModelIterable(BaseIterable):
             )
             for field, related_objs in queryset._known_related_objects.items()
         ]
+        # DJANGO-003, DJANGO-004, DJANGO-005 pseudocode (primary instance):
+        # FOR each row returned by the single joined query:
+        #     construct the primary instance from its selected field names and
+        #     matching row values.
+        #     FOR each requested primary field:
+        #         retain its row value on the instance for query-free access.
+        #     FOR each omitted primary field:
+        #         leave its attribute absent so it retains deferred status.
+        #     hand the same row and primary instance to every related populator.
+        #     yield only after related instances and relationship caches are set.
         for row in compiler.results_iter(results):
             obj = model_cls.from_db(
                 db, init_list, row[model_fields_start:model_fields_end]
@@ -2618,6 +2628,20 @@ class RelatedPopulator:
         self.remote_setter = klass_info["remote_setter"]
 
     def populate(self, row, from_obj):
+        # DJANGO-003, DJANGO-004, DJANGO-005 pseudocode (reverse instance):
+        # derive reverse-related values from the original joined row, reordering
+        # them first when inheritance requires model field order.
+        # IF the related identity is NULL:
+        #     represent the missing relationship as None.
+        # ELSE:
+        #     construct the related instance using only selected field names;
+        #     requested fields retain their joined-row values for query-free use;
+        #     omitted fields remain absent and therefore deferred;
+        #     recursively populate any deeper joined relationships.
+        # cache the related result on the primary instance.
+        # IF a related instance exists:
+        #     cache the primary instance on the related side as the matching
+        #     object, completing the bidirectional relationship from this row.
         if self.reorder_for_init:
             obj_data = self.reorder_for_init(row)
         else:
