@@ -131,6 +131,10 @@ class Command(BaseCommand):
                 yield ""
                 yield "class %s(models.Model):" % table2model(table_name)
                 known_models.append(table2model(table_name))
+                # Pseudocode — GUID: INSP-001 (repeated-target detection):
+                #   GROUP relation columns by their referenced database table.
+                #   MARK every column in each group whose size is at least two;
+                #   leave singleton-target relations unmarked and unchanged.
                 used_column_names = []  # Holds column names used in the table so far
                 column_to_field_name = {}  # Maps column names to names of model fields
                 for row in table_description:
@@ -164,6 +168,23 @@ class Command(BaseCommand):
 
                     if is_relation:
                         ref_db_column, ref_db_table = relations[column_name]
+                        # Pseudocode — GUID: INSP-001, INSP-002, INSP-004:
+                        #   IF column_name is marked as a repeated-target relation:
+                        #     TAKE att_name only after normalize_col_name() has
+                        #     resolved identifier cleanup and field-name conflicts.
+                        #     REQUIRE att_name to be unique among this model's final
+                        #     field names, as maintained by used_column_names.
+                        #     DERIVE related_name as att_name plus the fixed "_set"
+                        #     suffix; do not use traversal order or mutable counters.
+                        #     REQUIRE related_name to be a non-keyword Python
+                        #     identifier that neither ends in "_" nor contains
+                        #     LOOKUP_SEP; otherwise stop rather than emit an invalid
+                        #     reverse-relation name.
+                        #     STORE related_name in extra_params so the existing
+                        #     field serializer emits it for this relation.
+                        #   END IF
+                        #   RESULT: every member of a repeated-target group receives
+                        #   a stable, pairwise-distinct, reverse-namespace-valid name.
                         if extra_params.pop("unique", False) or extra_params.get(
                             "primary_key"
                         ):
