@@ -90,6 +90,8 @@ class Combinable:
         return self._combine(other, self.POW, False)
 
     def __and__(self, other):
+        # QEX-001 / QEX-002 integration seam: conditional expression pairs
+        # depend on Q for logical-tree composition and query handoff.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
             return Q(self) & Q(other)
         raise NotImplementedError(
