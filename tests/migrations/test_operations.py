@@ -1,5 +1,6 @@
 from django.core.exceptions import FieldDoesNotExist
 from django.db import IntegrityError, connection, migrations, models, transaction
+from django.db.migrations.autodetector import MigrationAutodetector
 from django.db.migrations.migration import Migration
 from django.db.migrations.operations.fields import FieldOperation
 from django.db.migrations.state import ModelState, ProjectState
@@ -2809,29 +2810,118 @@ class OperationTests(OperationTestBase):
             operation.describe(), "Alter unique_together for Pony (0 constraint(s))"
         )
 
+    def _apply_fk_in_unique_together_changed_to_m2m(self):
+        app_label = "test_mig_combined_transition"
+        project_state = self.apply_operations(
+            app_label,
+            ProjectState(),
+            operations=[
+                migrations.CreateModel(
+                    "Target",
+                    fields=[("id", models.AutoField(primary_key=True))],
+                ),
+                migrations.CreateModel(
+                    "Source",
+                    fields=[
+                        ("id", models.AutoField(primary_key=True)),
+                        (
+                            "target",
+                            models.ForeignKey(
+                                "%s.Target" % app_label,
+                                models.CASCADE,
+                            ),
+                        ),
+                        ("name", models.CharField(max_length=20)),
+                    ],
+                    options={"unique_together": {("target", "name")}},
+                ),
+            ],
+        )
+        self.assertUniqueConstraintExists(
+            "%s_source" % app_label,
+            ["target_id", "name"],
+        )
+        target_state = project_state.clone()
+        target_operations = [
+            migrations.AlterUniqueTogether("Source", set()),
+            migrations.RemoveField("Source", "target"),
+            migrations.AddField(
+                "Source",
+                "target",
+                models.ManyToManyField("%s.Target" % app_label),
+            ),
+        ]
+        for operation in target_operations:
+            operation.state_forwards(app_label, target_state)
+
+        # Exercise the generated combined migration rather than a hand-built
+        # approximation of its operation order (GUID: MIG-003/MIG-004/MIG-005).
+        changes = MigrationAutodetector(
+            project_state,
+            target_state,
+        )._detect_changes()
+        self.assertEqual(len(changes[app_label]), 1)
+        migration = changes[app_label][0]
+        self.assertEqual(
+            [operation.__class__ for operation in migration.operations],
+            [
+                migrations.AlterUniqueTogether,
+                migrations.RemoveField,
+                migrations.AddField,
+            ],
+        )
+        with connection.schema_editor() as editor:
+            project_state = migration.apply(project_state, editor)
+        return app_label, project_state
+
     def test_mig_003_combined_relationship_transition_applies_without_constraint_count_value_error(
         self,
     ):
         """GUID: MIG-003 - The combined migration applies without the ValueError."""
-        self.assertTrue(True)
+        app_label, project_state = self._apply_fk_in_unique_together_changed_to_m2m()
+
+        self.assertIn((app_label, "source"), project_state.models)
 
     def test_mig_004_applied_combined_relationship_transition_removes_obsolete_uniqueness_constraint(
         self,
     ):
         """GUID: MIG-004 - The obsolete uniqueness constraint is absent."""
-        self.assertTrue(True)
+        app_label, _ = self._apply_fk_in_unique_together_changed_to_m2m()
+
+        self.assertUniqueConstraintExists(
+            "%s_source" % app_label,
+            ["target_id", "name"],
+            value=False,
+        )
 
     def test_mig_005_applied_combined_relationship_transition_has_m2m_migration_state(
         self,
     ):
         """GUID: MIG-005 - Migration state represents the field as many-to-many."""
-        self.assertTrue(True)
+        app_label, project_state = self._apply_fk_in_unique_together_changed_to_m2m()
+
+        field = project_state.models[app_label, "source"].get_field("target")
+        self.assertIsInstance(field, models.ManyToManyField)
+        self.assertTrue(field.many_to_many)
 
     def test_mig_005_applied_combined_relationship_transition_has_m2m_database_storage(
         self,
     ):
         """GUID: MIG-005 - Database storage persists the many-to-many relationship."""
-        self.assertTrue(True)
+        app_label, project_state = self._apply_fk_in_unique_together_changed_to_m2m()
+
+        source_table = "%s_source" % app_label
+        through_table = "%s_source_target" % app_label
+        self.assertColumnNotExists(source_table, "target_id")
+        self.assertTableExists(through_table)
+        Source = project_state.apps.get_model(app_label, "Source")
+        Target = project_state.apps.get_model(app_label, "Target")
+        with atomic():
+            source = Source.objects.create(name="source")
+            target = Target.objects.create()
+            source.target.add(target)
+            self.assertEqual(source.target.get(), target)
+            self.assertEqual(Source.target.through.objects.count(), 1)
 
     @skipUnlessDBFeature("allows_multiple_constraints_on_same_fields")
     def test_remove_unique_together_on_pk_field(self):
