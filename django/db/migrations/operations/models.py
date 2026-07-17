@@ -914,6 +914,14 @@ class RenameIndex(IndexOperation):
         return (self.__class__.__qualname__, [], kwargs)
 
     def state_forwards(self, app_label, state):
+        # RIX-001 / RIX-004 state-transition pseudocode:
+        # INPUT: the pre-rename project state and this operation's old identity.
+        # IF the old identity is an unnamed unique_together-derived index:
+        #   ADD an explicitly named Index carrying old_fields and new_name.
+        #   REMOVE the legacy grouped-field option that represented the unnamed index.
+        # ELSE rename the explicitly named index in place.
+        # OUTPUT: the forward state identifies exactly the index name that the
+        # database forward transition must leave in the schema.
         if self.old_fields:
             state.add_index(
                 app_label,
@@ -932,6 +940,20 @@ class RenameIndex(IndexOperation):
             )
 
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        # RIX-001 / RIX-003 / RIX-004 forward-transition pseudocode:
+        # INPUT: historical from_state, forward to_state, and the target database.
+        # IF migration is disallowed for the target model, RETURN without mutation.
+        # IF old_fields identifies an unnamed index:
+        #   MAP the historical field names to their database columns.
+        #   DISCOVER index names on the historical table matching those columns.
+        #   IF exactly one name is not found, FAIL before attempting a rename.
+        #   USE that sole name as the original index identity.
+        # ELSE obtain the original explicitly named index from from_state.
+        # OBTAIN the requested named index from to_state.
+        # RENAME original identity -> requested identity on the same table.
+        # OUTPUT: only new_name exists and the schema agrees with to_state; after a
+        # backward restoration, the same discovery selects the original identity,
+        # so a subsequent forward rename cannot collide with a leftover new_name.
         model = to_state.apps.get_model(app_label, self.model_name)
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
@@ -966,6 +988,20 @@ class RenameIndex(IndexOperation):
         schema_editor.rename_index(model, old_index, new_index)
 
     def database_backwards(self, app_label, schema_editor, from_state, to_state):
+        # RIX-002 / RIX-003 / RIX-004 backward-transition pseudocode:
+        # INPUT: current from_state (new_name) and historical to_state (unnamed index).
+        # IF old_fields identifies the historical unnamed index:
+        #   RESOLVE the current named index from from_state.
+        #   RESOLVE its historical table and columns from to_state.
+        #   DETERMINISTICALLY RECOVER the generated original name by applying the
+        #   historical unnamed-index naming rule to that table and those columns.
+        #   RENAME new_name -> recovered original name on the same table.
+        #   OUTPUT: new_name is absent; the recovered name exists; schema identity
+        #   agrees with to_state; RETURN without changing operation attributes.
+        # ELSE temporarily reverse the explicit names, delegate to the forward
+        # rename procedure, and RESTORE the operation attributes even after use.
+        # A later forward call therefore receives the original operation identity
+        # and can transition the restored schema to new_name again without collision.
         if self.old_fields:
             # Backward operation with unnamed index is a no-op.
             return
