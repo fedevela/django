@@ -1159,6 +1159,66 @@ class OptimizerTests(SimpleTestCase):
             ]
         )
 
+    def test_create_model_rename_index_together_to_index(self):
+        """DJANGO-001, DJANGO-002, DJANGO-006."""
+        existing_index = models.Index(fields=["weight"], name="weight_idx")
+        self.assertOptimizesTo(
+            [
+                migrations.CreateModel(
+                    "Pony",
+                    [
+                        ("weight", models.IntegerField()),
+                        ("pink", models.IntegerField()),
+                    ],
+                    options={
+                        "indexes": [existing_index],
+                        "index_together": {
+                            ("weight", "pink"),
+                            ("pink", "weight"),
+                        },
+                    },
+                ),
+                migrations.RenameIndex(
+                    "Pony",
+                    new_name="new_pony_test_idx",
+                    old_fields=("weight", "pink"),
+                ),
+            ],
+            [
+                migrations.CreateModel(
+                    "Pony",
+                    [
+                        ("weight", models.IntegerField()),
+                        ("pink", models.IntegerField()),
+                    ],
+                    options={
+                        "indexes": [
+                            existing_index,
+                            models.Index(
+                                fields=["weight", "pink"],
+                                name="new_pony_test_idx",
+                            ),
+                        ],
+                        "index_together": {("pink", "weight")},
+                    },
+                ),
+            ],
+        )
+        self.assertDoesNotOptimize(
+            [
+                migrations.CreateModel(
+                    "Pony",
+                    [("weight", models.IntegerField())],
+                    options={"index_together": {("weight",)}},
+                ),
+                migrations.RenameIndex(
+                    "Pony",
+                    new_name="other_idx",
+                    old_fields=("other",),
+                ),
+            ]
+        )
+
     def test_add_remove_index(self):
         self.assertOptimizesTo(
             [

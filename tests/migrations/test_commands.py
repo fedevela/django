@@ -4,6 +4,8 @@ import io
 import os
 import shutil
 import sys
+import warnings
+from contextlib import contextmanager
 from unittest import mock
 
 from django.apps import apps
@@ -19,10 +21,13 @@ from django.db import (
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.utils import truncate_name
 from django.db.migrations.exceptions import InconsistentMigrationHistory
+from django.db.migrations.loader import MigrationLoader
 from django.db.migrations.recorder import MigrationRecorder
+from django.db.migrations.state import ProjectState
 from django.test import TestCase, override_settings, skipUnlessDBFeature
 from django.test.utils import captured_stdout
 from django.utils import timezone
+from django.utils.deprecation import RemovedInDjango51Warning
 from django.utils.version import get_docs_version
 
 from .models import UnicodeModel, UnserializableModel
@@ -2719,26 +2724,87 @@ class SquashMigrationsTests(MigrationTestBase):
     Tests running the squashmigrations command.
     """
 
+    migration_module = "migrations.test_migrations_index_together"
+
+    @contextmanager
+    def squash_index_together_migrations(self):
+        with self.temporary_migration_module(
+            module=self.migration_module
+        ) as migration_dir:
+            call_command(
+                "squashmigrations",
+                "migrations",
+                "0002",
+                interactive=False,
+                verbosity=0,
+            )
+            migration_name = "0001_squashed_0002_rename_index"
+            migration_file = os.path.join(migration_dir, f"{migration_name}.py")
+            with open(migration_file, encoding="utf-8") as fp:
+                migration_source = fp.read()
+            historical_sources = []
+            for name in ("0001_initial.py", "0002_rename_index.py"):
+                with open(os.path.join(migration_dir, name), encoding="utf-8") as fp:
+                    historical_sources.append(fp.read())
+            migration = MigrationLoader(connection).get_migration(
+                "migrations", migration_name
+            )
+            yield migration_source, migration, historical_sources
+
     def test_django_001_fully_superseded_index_together_keeps_final_indexes(self):
         """
         GUID: DJANGO-001 - Normal squashing of a fully superseded index_together
         transition keeps only the final indexes state.
         """
-        self.assertTrue(True)
+        with self.squash_index_together_migrations() as (
+            migration_source,
+            migration,
+            _,
+        ):
+            self.assertNotIn("index_together", migration_source)
+            self.assertNotIn("RenameIndex", migration_source)
+            self.assertEqual(len(migration.operations), 1)
+            operation = migration.operations[0]
+            self.assertNotIn("index_together", operation.options)
+            self.assertEqual(
+                operation.options["indexes"],
+                [models.Index(fields=["author", "title"], name="book_idx")],
+            )
 
     def test_django_002_squashed_transition_emits_no_deprecation_warning(self):
         """
         GUID: DJANGO-002 - Checks on the unmodified squashed migration emit no
         index_together warning attributable to the superseded transition.
         """
-        self.assertTrue(True)
+        with self.squash_index_together_migrations() as (_, migration, _):
+            state = ProjectState()
+            with warnings.catch_warnings(record=True) as caught_warnings:
+                warnings.simplefilter("always", RemovedInDjango51Warning)
+                for operation in migration.operations:
+                    operation.state_forwards("migrations", state)
+                    model = state.apps.get_model("migrations", "Book")
+                    model.check()
+            self.assertFalse(
+                any(
+                    issubclass(warning.category, RemovedInDjango51Warning)
+                    and "index_together" in str(warning.message)
+                    for warning in caught_warnings
+                )
+            )
 
     def test_django_006_normal_squashing_needs_no_manual_history_rewrite(self):
         """
         GUID: DJANGO-006 - The normal squashing workflow eliminates the
         transition warning without manual historical migration rewrites.
         """
-        self.assertTrue(True)
+        with self.squash_index_together_migrations() as (
+            migration_source,
+            _,
+            historical_sources,
+        ):
+            self.assertIn("migrations.CreateModel(", migration_source)
+            self.assertIn("index_together", historical_sources[0])
+            self.assertIn("migrations.RenameIndex(", historical_sources[1])
 
     def test_squashmigrations_squashes(self):
         """

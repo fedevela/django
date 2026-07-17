@@ -215,32 +215,35 @@ class CreateModel(ModelOperation):
                     managers=self.managers,
                 ),
             ]
-        # ARCHITECTURE: DJANGO-001, DJANGO-002, DJANGO-006
-        # OWNER: CreateModel.reduce() owns this squash-time integration seam;
-        # RenameIndex remains the operation/state contract, while migration
-        # commands, serialization, and system checks consume the reduced state.
-        # DEPENDENCY: CreateModel -> RenameIndex contract -> replacement
-        # CreateModel options. No command or checks-layer dependency belongs here.
-        # BOUNDARY: Only same-model RenameIndex(old_fields=...) operations may
-        # cross this seam; unmatched or retained index_together state stays with
-        # the existing reduction handoff and deprecation policy.
-        # GUID: DJANGO-001, DJANGO-002, DJANGO-006
-        # LOGIC OBLIGATION: During normal migration optimization, fold a later
-        # RenameIndex(old_fields=...) transition into this CreateModel when it
-        # replaces an index_together entry on the same model.
-        # INPUTS: this CreateModel's options and the candidate later operation.
-        # IF the candidate is a same-model RenameIndex identified by old_fields:
-        #   - Locate the equivalent field tuple in options["index_together"].
-        #   - IF the tuple is present, copy the options before changing state.
-        #   - Remove only that superseded tuple; remove the index_together key
-        #     itself when no active tuples remain.
-        #   - Append the named replacement Index to options["indexes"], keeping
-        #     any existing final indexes.
-        #   - Return one replacement CreateModel carrying the resulting final
-        #     options, so serialization contains no obsolete transition and
-        #     model construction cannot emit its attributable deprecation warning.
-        # ELSE preserve the normal reduction handoff; unmatched or still-active
-        # index_together state is not suppressed and retains existing behavior.
+        # DJANGO-001, DJANGO-002, DJANGO-006: Fold a fully superseded
+        # index_together entry into the final named index during squashing.
+        elif (
+            isinstance(operation, RenameIndex)
+            and self.name_lower == operation.model_name_lower
+            and operation.old_fields
+            and tuple(operation.old_fields)
+            in normalize_together(self.options.get("index_together"))
+        ):
+            options = self.options.copy()
+            index_together = set(normalize_together(options["index_together"]))
+            index_together.remove(tuple(operation.old_fields))
+            if index_together:
+                options["index_together"] = index_together
+            else:
+                del options["index_together"]
+            options["indexes"] = [
+                *options.get("indexes", []),
+                models.Index(fields=operation.old_fields, name=operation.new_name),
+            ]
+            return [
+                CreateModel(
+                    self.name,
+                    fields=self.fields,
+                    options=options,
+                    bases=self.bases,
+                    managers=self.managers,
+                ),
+            ]
         elif (
             isinstance(operation, FieldOperation)
             and self.name_lower == operation.model_name_lower
