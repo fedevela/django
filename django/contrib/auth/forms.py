@@ -162,6 +162,11 @@ class UserChangeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         password = self.fields.get("password")
+        # Architecture contract (GUID: UCP-001, UCP-002, UCP-003): this form
+        # owns the password help-link target and derives its object identity
+        # from ``self.instance.pk``. The relative link is the integration seam
+        # with UserAdmin's PK-addressed ``<id>/password/`` route; change-page
+        # lookup fields remain outside that boundary.
         # Pseudocode (GUID: UCP-001, UCP-002, UCP-003):
         # INPUT: the password field and this form's persisted user instance.
         # IF the password field exists:
