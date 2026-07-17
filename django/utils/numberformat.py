@@ -4,6 +4,11 @@ from django.conf import settings
 from django.utils.safestring import mark_safe
 
 
+# Architecture boundary (GUIDs: NFMT-004, NFMT-005, NFMT-006): This module's
+# existing format() entry point owns non-null input normalization, sign handling,
+# and output composition. Keep those stages behind this function boundary and
+# preserve its one-way dependencies on Decimal, settings, and mark_safe; the
+# established TestNumberFormat suite is the integration seam for regressions.
 def format(
     number,
     decimal_sep,
