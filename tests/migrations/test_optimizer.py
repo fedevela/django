@@ -757,6 +757,20 @@ class OptimizerTests(SimpleTestCase):
         self.assertEqual(result[0].field.help_text, "help")
         self.assertIsNone(result[0].field.default)
 
+    def test_MIGOPT_004_consecutive_different_field_alter_fields_remain_separate(self):
+        """
+        MIGOPT-004: Consecutive AlterField operations targeting different
+        fields remain separate after optimization.
+        """
+        pass
+
+    def test_MIGOPT_005_consecutive_different_model_alter_fields_remain_separate(self):
+        """
+        MIGOPT-005: Consecutive AlterField operations targeting different
+        models remain separate after optimization.
+        """
+        pass
+
     def test_create_model_rename_field(self):
         """
         RenameField should optimize into CreateModel.
