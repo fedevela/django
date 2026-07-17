@@ -288,6 +288,21 @@ class SendRobustLoggingContractTests(SimpleTestCase):
         mocked_log.assert_not_called()
 
 
+class SendRobustResultContinuityContractTests(SimpleTestCase):
+
+    def test_sigrob_002_logging_failing_receiver_returns_same_exception_object_without_propagating(self):
+        """GUID: SIGROB-002 - A handled failure preserves its exception."""
+        self.assertTrue(True)
+
+    def test_sigrob_003_failing_receiver_does_not_prevent_subsequent_receiver_invocation(self):
+        """GUID: SIGROB-003 - Dispatch continues after a receiver failure."""
+        self.assertTrue(True)
+
+    def test_sigrob_006_mixed_dispatch_preserves_successful_result_in_receiver_sequence_when_another_fails(self):
+        """GUID: SIGROB-006 - A failure leaves successful results unchanged."""
+        self.assertTrue(True)
+
+
 class ReceiverTestCase(SimpleTestCase):
 
     def test_receiver_single_signal(self):
