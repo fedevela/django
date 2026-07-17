@@ -2024,6 +2024,10 @@ class InlineModelAdmin(BaseModelAdmin):
     min_num = None
     max_num = None
     template = None
+    # INLINE-001, INLINE-002, INLINE-003, INLINE-004: InlineModelAdmin owns the
+    # naming-resolution boundary. These attributes are its declarative inputs;
+    # model._meta is the fallback dependency, and concrete Inline types inherit
+    # the resulting contract without subtype-specific resolution paths.
     verbose_name = None
     verbose_name_plural = None
     can_delete = True
