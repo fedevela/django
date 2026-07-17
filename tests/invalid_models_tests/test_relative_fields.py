@@ -128,6 +128,156 @@ class RelativeFieldTests(SimpleTestCase):
             ),
         ])
 
+    def test_m2m_001_effectively_symmetrical_related_name_checks_report_error(self):
+        """GUID: M2M-001 -- Model checks report the offending field error."""
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=True, related_name='related_models'
+            )
+
+        field = Model._meta.get_field('relations')
+        self.assertEqual(Model.check(), [
+            Error(
+                'related_name is ineffective on a symmetrical '
+                'ManyToManyField because a symmetrical relationship has no '
+                'reverse relation.',
+                obj=field,
+                id='fields.E341',
+            ),
+        ])
+
+    def test_m2m_002_explicit_and_default_symmetry_report_same_check_error(self):
+        """GUID: M2M-002 -- Explicit and inferred symmetry have parity."""
+        class ExplicitSymmetry(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=True, related_name='explicit_relations'
+            )
+
+        class DefaultSymmetry(models.Model):
+            relations = models.ManyToManyField(
+                'self', related_name='default_relations'
+            )
+
+        explicit_error = ExplicitSymmetry.check()[0]
+        default_error = DefaultSymmetry.check()[0]
+        self.assertEqual(explicit_error.msg, default_error.msg)
+        self.assertEqual(explicit_error.id, default_error.id)
+        self.assertIsInstance(explicit_error, Error)
+        self.assertIsInstance(default_error, Error)
+
+    def test_m2m_003_check_error_names_field_and_explains_no_reverse_relation(self):
+        """GUID: M2M-003 -- The diagnostic explains ineffective related_name."""
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', related_name='related_models'
+            )
+
+        field = Model._meta.get_field('relations')
+        error = Model.check()[0]
+        self.assertIs(error.obj, field)
+        self.assertIn('related_name is ineffective', error.msg)
+        self.assertIn('symmetrical relationship has no reverse relation', error.msg)
+
+    def test_m2m_004_self_reference_with_explicit_non_symmetry_and_related_name_has_no_new_check_error(self):
+        """GUID: M2M-004 -- The valid field produces no new check error."""
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=False, related_name='related_models'
+            )
+
+        self.assertEqual(Model.check(), [])
+
+    def test_m2m_004_self_reference_with_explicit_non_symmetry_creates_named_reverse_relation(self):
+        """GUID: M2M-004 -- The named reverse relation remains eligible."""
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=False, related_name='related_models'
+            )
+
+        self.assertTrue(hasattr(Model, 'related_models'))
+
+    def test_m2m_005_non_symmetrical_relationship_with_related_name_has_no_new_check_error(self):
+        """GUID: M2M-005 -- The valid field produces no new check error."""
+        class Target(models.Model):
+            pass
+
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                Target, related_name='related_models'
+            )
+
+        self.assertEqual(Model.check(), [])
+
+    def test_m2m_005_non_symmetrical_relationship_creates_named_reverse_relation(self):
+        """GUID: M2M-005 -- The named reverse relation remains eligible."""
+        class Target(models.Model):
+            pass
+
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                Target, related_name='related_models'
+            )
+
+        self.assertTrue(hasattr(Target, 'related_models'))
+
+    def test_m2m_006_symmetrical_relationship_without_related_name_has_no_new_check_error(self):
+        """GUID: M2M-006 -- The valid field produces no new check error."""
+        class Model(models.Model):
+            relations = models.ManyToManyField('self', symmetrical=True)
+
+        self.assertEqual(Model.check(), [])
+
+    def test_m2m_007_symmetrical_relationship_metadata_omits_reverse_related_field(self):
+        """GUID: M2M-007 -- Symmetry omits the reverse related field."""
+        class Model(models.Model):
+            relations = models.ManyToManyField('self', symmetrical=True)
+
+        field = Model._meta.get_field('relations')
+        reverse_fields = [
+            candidate for candidate in Model._meta.get_fields()
+            if candidate.auto_created and not candidate.concrete
+        ]
+        self.assertIn(field, Model._meta.get_fields())
+        self.assertEqual(reverse_fields, [])
+        self.assertIsNone(field.remote_field.get_accessor_name())
+
+    def test_m2m_007_after_validation_symmetrical_relationship_metadata_still_omits_reverse_related_field(self):
+        """GUID: M2M-007 -- Validation preserves reverse-field omission."""
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=True, related_name='related_models'
+            )
+
+        errors = Model.check()
+        field = Model._meta.get_field('relations')
+        reverse_fields = [
+            candidate for candidate in Model._meta.get_fields()
+            if candidate.auto_created and not candidate.concrete
+        ]
+        self.assertEqual([error.id for error in errors], ['fields.E341'])
+        self.assertEqual(reverse_fields, [])
+        self.assertIsNone(field.remote_field.get_accessor_name())
+        self.assertFalse(hasattr(Model, 'related_models'))
+
+    def test_m2m_008_construction_succeeds_then_model_checks_report_error(self):
+        """GUID: M2M-008 -- Validation is deferred to model system checks."""
+        field = models.ManyToManyField(
+            'self', symmetrical=True, related_name='related_models'
+        )
+
+        class Model(models.Model):
+            relations = field
+
+        self.assertEqual(Model.check(), [
+            Error(
+                'related_name is ineffective on a symmetrical '
+                'ManyToManyField because a symmetrical relationship has no '
+                'reverse relation.',
+                obj=field,
+                id='fields.E341',
+            ),
+        ])
+
     def test_ambiguous_relationship_model_from(self):
         class Person(models.Model):
             pass

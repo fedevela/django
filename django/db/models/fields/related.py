@@ -1257,6 +1257,15 @@ class ManyToManyField(RelatedField):
                     id='fields.W343',
                 )
             )
+        if self.remote_field.symmetrical and self._related_name:
+            warnings.append(
+                checks.Warning(
+                    'related_name has no effect on ManyToManyField with a '
+                    'symmetrical relationship, e.g. to "self".',
+                    obj=self,
+                    id='fields.W345',
+                )
+            )
 
         return warnings
 
@@ -1626,6 +1635,18 @@ class ManyToManyField(RelatedField):
         return getattr(self, cache_attr)
 
     def contribute_to_class(self, cls, name, **kwargs):
+        # Architecture ownership (GUID M2M-007): this hook owns the hidden
+        # relation state consumed by Options.get_fields(); validation must not
+        # rewrite that state or invoke either contribution hook.
+        # Pseudocode trace: GUID M2M-007 (initial metadata state).
+        # INPUT: a symmetrical many-to-many field targeting its owning model.
+        # IF the target denotes that same model:
+        #   REPLACE any externally supplied reverse name with a generated
+        #   internal name ending in '+'.
+        #   MARK the resulting reverse relation hidden through that suffix.
+        #   CONTINUE normal forward-field and intermediary-model contribution.
+        # OUTPUT: retain the forward many-to-many field while default related
+        # metadata inspection omits its hidden reverse related field.
         # To support multiple relations to self, it's useful to have a non-None
         # related name on symmetrical relations for internal reasons. The
         # concept doesn't make a lot of sense externally ("you want me to
@@ -1669,6 +1690,21 @@ class ManyToManyField(RelatedField):
         self.m2m_db_table = partial(self._get_m2m_db_table, cls._meta)
 
     def contribute_to_related_class(self, cls, related):
+        # Integration seam (GUIDs M2M-004, M2M-005): valid named reverse
+        # relations enter the related model only through this existing field
+        # contribution hook; the validation check must not own or bypass it.
+        # Pseudocode trace: GUID M2M-004, M2M-005, M2M-007.
+        # INPUT: a resolved many-to-many relation and its visibility state.
+        # IF the reverse relation is visible AND its source model is active:
+        #   DERIVE the reverse accessor name from the related relation.
+        #   CREATE the reverse many-to-many descriptor under that name.
+        # OTHERWISE:
+        #   CREATE no reverse descriptor and preserve established hidden or
+        #   swapped-model behavior without raising a new validation failure.
+        # GUID M2M-007 HANDOFF:
+        #   A symmetrical self-relation arrives hidden from contribute_to_class.
+        #   TAKE the hidden branch, CREATE no reverse descriptor, and leave the
+        #   reverse related field omitted from default metadata inspection.
         # Internal M2Ms (i.e., those with a related name ending with '+')
         # and swapped models don't get a related descriptor.
         if not self.remote_field.is_hidden() and not related.related_model._meta.swapped:
