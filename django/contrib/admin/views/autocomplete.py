@@ -77,6 +77,14 @@ class AutocompleteJsonView(BaseListView):
             qs = qs.distinct()
         return qs
 
+    # Target-field resolution boundary (GUID: ACJ-009): process_request() owns
+    # source-field lookup, relation traversal, target-field normalization, and
+    # the related ModelAdmin policy check. Model metadata is its resolution
+    # dependency and ModelAdmin.to_field_allowed() is its policy authority.
+    # get() may consume only the validated source_field and to_field_name
+    # returned across this seam; querying and serialize_result() remain
+    # downstream and must not re-resolve, broaden, or translate that decision.
+
     def process_request(self, request):
         """
         Validate request integrity, extract and return request parameters.
