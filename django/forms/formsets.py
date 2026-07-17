@@ -257,6 +257,20 @@ class BaseFormSet(RenderableFormMixin):
 
     @property
     def empty_form(self):
+        # Pseudocode obligation: GUID EFORM-005.
+        # ON each empty_form access:
+        #   obtain a distinct working copy of the caller-supplied form_kwargs;
+        #   remove empty_permitted only from that working copy;
+        #   construct and return the empty form from the remaining arguments;
+        #   leave the supplied form_kwargs unchanged.
+        # REPEAT the same copy-filter-construct flow independently on every
+        # access, without retaining or reusing a previously filtered mapping.
+        # WHEN ordinary forms are constructed after any empty_form access:
+        #   obtain their arguments from the unchanged supplied form_kwargs and
+        #   hand them to the ordinary-form construction path unchanged.
+        # Failure path: if argument handling or empty-form construction fails,
+        # discard the working copy and propagate the failure without changing
+        # the supplied form_kwargs used by later accesses or ordinary forms.
         form_kwargs = self.get_form_kwargs(None)
         # empty_permitted is an empty form invariant. (EFORM-001, EFORM-002)
         form_kwargs.pop("empty_permitted", None)
