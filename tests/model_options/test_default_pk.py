@@ -11,9 +11,18 @@ from .fields import (
 
 @isolate_apps('model_options')
 class TestDefaultPK(SimpleTestCase):
-    def test_AUTOPK_004_preparation_without_explicit_pk_rejects_unrelated_default_auto_field_with_subclass_error(self):
+    @override_settings(DEFAULT_AUTO_FIELD='django.db.models.TextField')
+    def test_AUTOPK_004_preparation_without_explicit_pk_rejects_unrelated_default_auto_field_with_subclass_error(
+        self,
+    ):
         """AUTOPK-004: An unrelated default PK class must subclass AutoField."""
-        self.assertTrue(True)
+        msg = (
+            "Primary key 'django.db.models.TextField' referred by "
+            "DEFAULT_AUTO_FIELD must subclass AutoField."
+        )
+        with self.assertRaisesMessage(ValueError, msg):
+            class Model(models.Model):
+                pass
 
     @override_settings(
         DEFAULT_AUTO_FIELD='model_options.fields.DirectBigAutoField',
