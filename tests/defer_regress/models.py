@@ -45,6 +45,15 @@ class Proxy(Item):
         proxy = True
 
 
+# Test integration seam [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
+# PROXYONLY-004, PROXYONLY-005, PROXYONLY-006, PROXYONLY-007]: the nullable
+# relation is declared against the proxy while Item supplies inherited concrete
+# fields and its primary key. Runtime behavior remains owned by the ORM.
+class ProxyItemRelation(models.Model):
+    item = models.ForeignKey(Proxy, models.SET_NULL, null=True)
+    value = models.IntegerField(default=0)
+
+
 class SimpleItem(models.Model):
     name = models.CharField(max_length=15)
     value = models.IntegerField()

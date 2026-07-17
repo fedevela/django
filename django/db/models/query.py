@@ -2572,6 +2572,11 @@ class RelatedPopulator:
         #  - local_setter, remote_setter: Methods to set cached values on
         #    the object being populated and on the remote object. Usually
         #    these are Field.set_cached_value() methods.
+        # ARCHITECTURE [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
+        # PROXYONLY-004, PROXYONLY-005, PROXYONLY-006, PROXYONLY-007]: This
+        # boundary consumes SQLCompiler's ordered select metadata, owns proxy
+        # instantiation and relation-cache population, and must not widen the
+        # compiler's field-selection policy.
         # PSEUDOCODE [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
         # PROXYONLY-004, PROXYONLY-007]:
         # INPUT: related-model metadata and the compiler's selected columns.

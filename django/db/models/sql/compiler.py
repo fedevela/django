@@ -819,6 +819,10 @@ class SQLCompiler:
         # be used by local fields.
         seen_models = {None: start_alias}
 
+        # ARCHITECTURE [PROXYONLY-001, PROXYONLY-003, PROXYONLY-004,
+        # PROXYONLY-007]: SQLCompiler owns construction-column availability.
+        # RelatedPopulator consumes this method's select metadata and must not
+        # compensate for a construction-required column omitted here.
         # PSEUDOCODE [PROXYONLY-001, PROXYONLY-003, PROXYONLY-004,
         # PROXYONLY-007]:
         # INPUT: the model options, the only()/defer() field mask, and the
