@@ -909,6 +909,16 @@ class Model(metaclass=ModelBase):
         )
 
     def _prepare_related_fields_for_save(self, operation_name):
+        # FKPK-001/FKPK-002 architecture boundary: reconciliation of a cached
+        # forward relation belongs here, before save() hands local field values
+        # to the write pipeline. The related target field is the source of
+        # truth and field.attname is the only write-side destination.
+        #
+        # FKPK-003/FKPK-004 integration contract: this boundary must remain
+        # independent of transaction management and query construction. It
+        # supplies a coherent local foreign-key value; the existing save,
+        # database-constraint, and relation-filtering layers retain ownership
+        # of atomicity, referential integrity, and lookup behavior.
         # FKPK-001/FKPK-002/FKPK-003/FKPK-004 pseudocode:
         # FOR EACH cached forward relation on the referencing object:
         #     READ the related object's current target-field value.
