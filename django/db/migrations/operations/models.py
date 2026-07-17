@@ -298,6 +298,15 @@ class RenameModel(ModelOperation):
     # backend-specific RenameModel contract is required. This keeps the
     # dependency directed from the migration operation to the schema editor,
     # without coupling migration state to backend schema implementation.
+    #
+    # ARCHITECTURE (GUID: RMN-005, RMN-006, RMN-007, RMN-008): The effective
+    # table-identity gate in database_forwards() is also the preservation
+    # boundary for stored rows, constraints, indexes, and relationships. When
+    # identity is unchanged, those objects remain owned by the existing
+    # physical database table and no schema-editor adapter is entered. For a
+    # database-visible rename, the existing schema-editor seams continue to
+    # own table, related-field, and M2M transitions. Preservation therefore
+    # adds no backend dependency, runtime adapter, or public operation API.
 
     def __init__(self, old_name, new_name):
         self.old_name = old_name
