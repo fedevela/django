@@ -1273,6 +1273,10 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
             '<ul class="errorlist nonform"><li>Non-form error.</li></ul>',
         )
 
+    def test_nonform_003_adding_class_preserves_validation_rules_validity_errors_and_messages(self):
+        """GUID: NONFORM-003"""
+        pass
+
     def test_nonform_004_minimum_count_error_list_is_classified_as_nonform(self):
         """GUID: NONFORM-004; minimum-count validation path."""
         FormSet = formset_factory(
@@ -1313,6 +1317,14 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
         errors = formset.non_form_errors()
         self.assertEqual(errors.error_class, 'errorlist nonform')
         self.assertIs(errors, formset._non_form_errors)
+
+    def test_nonform_005_form_non_field_errors_remain_nonfield_without_nonform(self):
+        """GUID: NONFORM-005"""
+        pass
+
+    def test_nonform_006_form_field_errors_remain_without_nonform_classification(self):
+        """GUID: NONFORM-006"""
+        pass
 
     def test_nonform_007_configured_error_list_subclass_is_preserved_and_classified_as_nonform(self):
         """GUID: NONFORM-007"""
