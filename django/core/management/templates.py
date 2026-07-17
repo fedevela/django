@@ -73,6 +73,12 @@ class TemplateCommand(BaseCommand):
             except OSError as e:
                 raise CommandError(e)
         else:
+            # Target-path ownership boundary (DJANGO-001, DJANGO-002,
+            # DJANGO-004, DJANGO-005, DJANGO-006, DJANGO-007): keep the name
+            # used for app-directory validation distinct from the destination
+            # root consumed by context construction and template rendering.
+            # Native component handling belongs only to the validation side;
+            # destination resolution continues to own the supplied target.
             # Target-path pseudocode contract:
             # DJANGO-001, DJANGO-004: DERIVE the actual final non-empty path
             # component using native path semantics; VALIDATE that component,
