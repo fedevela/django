@@ -81,6 +81,10 @@ class ErrorList(UserList, list):
     """
     A collection of errors that knows how to display itself in various formats.
     """
+    # Architecture [GUID: NONFORM-009]: ErrorList.error_class is the existing
+    # renderer-facing classification contract and the documentation seam for
+    # custom ErrorList consumers. BaseFormSet owns producing ``nonform``;
+    # renderers own interpreting it alongside ``nonfield`` and field metadata.
     # Pseudocode [GUID: NONFORM-009; renderer documentation contract]:
     # WHEN describing ErrorList classification metadata to a custom renderer,
     # IDENTIFY the exact token ``nonform`` as FormSet non-form errors.
