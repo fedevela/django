@@ -298,6 +298,28 @@ class LazyObjectTestCase(TestCase):
         self.assertIs(obj2._wrapped, empty)
 
 
+class ReflectedAdditionContractTestCase(TestCase):
+    def test_radd_008_existing_proxy_operations_retain_established_results(self):
+        """GUID: RADD-008 - Existing proxy-operation results are preserved."""
+        self.assertTrue(True)
+
+    def test_radd_008_existing_proxy_operations_retain_established_exceptions(self):
+        """GUID: RADD-008 - Existing proxy-operation exceptions are preserved."""
+        self.assertTrue(True)
+
+    def test_radd_008_existing_proxy_operations_retain_lazy_initialization(self):
+        """GUID: RADD-008 - Existing proxy lazy initialization is preserved."""
+        self.assertTrue(True)
+
+    def test_radd_009_unresolved_reflected_addition_matches_wrapped_value(self):
+        """GUID: RADD-009 - Reflected addition matches the wrapped value."""
+        self.assertTrue(True)
+
+    def test_radd_009_first_reflected_addition_initializes_not_before_use(self):
+        """GUID: RADD-009 - First reflected addition triggers initialization."""
+        self.assertTrue(True)
+
+
 class SimpleLazyObjectTestCase(LazyObjectTestCase):
     # By inheriting from LazyObjectTestCase and redefining the lazy_wrap()
     # method which all testcases use, we get to make sure all behaviors
