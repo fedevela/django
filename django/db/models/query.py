@@ -679,6 +679,13 @@ class QuerySet(AltersData):
         Conflict-mode contract (BULKUPSERT-006): this boundary owns selection
         of OnConflict.IGNORE; returned-field and primary-key assignment remain
         downstream responsibilities.
+
+        Validation ownership contract (BULKUPSERT-008): bulk_create() owns
+        model-field name resolution and passes resolved fields inward; this
+        boundary owns conflict-flag compatibility, backend feature gating, and
+        resolved-field shape validation. OnConflict is the only successful
+        handoff to the insert pipeline, so validation dependencies point from
+        bulk_create() through this boundary and never into backend operations.
         """
         # GUID: BULKUPSERT-008 -- conflict-option validation preservation.
         # INPUT: conflict flags, resolved update_fields and unique_fields, and
