@@ -2948,6 +2948,21 @@ class SquashMigrationsTests(MigrationTestBase):
         fully superseded index_together transition, applying the squashed
         migration preserves their observable behavior and resulting state.
         """
+        # DJANGO-007 logic obligation:
+        # GIVEN an original migration sequence containing:
+        #   - an index_together definition,
+        #   - its fully superseding RenameIndex transition, and
+        #   - unrelated operations before, between, or after that transition;
+        # WHEN the sequence is squashed and both the original and replacement
+        # histories are applied to equivalent empty databases;
+        # THEN compare each unrelated operation retained in the replacement,
+        # its externally observable database effect, and its projected final
+        # state with the corresponding original-history result.
+        # IF the optimizer removes, reorders incompatibly, or changes the state
+        # produced by any unrelated operation, fail with the differing
+        # operation, database observation, or state value.
+        # OTHERWISE confirm that only the fully superseded index transition was
+        # reduced and hand both equivalent results to cleanup.
         pass
 
     def test_django_008_partially_superseded_transition_preserves_necessary_index_behavior(
@@ -2958,6 +2973,22 @@ class SquashMigrationsTests(MigrationTestBase):
         supersedes index_together, squashing preserves the necessary earlier
         index behavior.
         """
+        # DJANGO-008 logic obligation:
+        # GIVEN an index_together state with multiple required field tuples and
+        # a later indexes state that supersedes only a strict subset of them;
+        # WHEN the migration operations are reduced for squashing;
+        # THEN match each earlier tuple against the final index definitions.
+        # FOR EACH earlier tuple:
+        #   - IF exactly one final index supersedes it, represent that tuple by
+        #     the final index and remove only that tuple from index_together;
+        #   - OTHERWISE retain the tuple in index_together as necessary index
+        #     behavior, including ambiguous or unmatched candidates.
+        # AFTER applying the squashed history, compare all retained and
+        # transitioned index definitions with the original-history database
+        # and project state.
+        # IF any necessary tuple has no equivalent final index behavior, fail
+        # with the missing or changed tuple; OTHERWISE hand the preserved index
+        # set to cleanup.
         pass
 
     def test_django_009_final_state_depending_on_index_together_is_not_fully_transitioned(
@@ -2968,6 +2999,19 @@ class SquashMigrationsTests(MigrationTestBase):
         index_together, squashing does not represent it as fully transitioned
         solely to suppress its deprecation warning.
         """
+        # DJANGO-009 logic obligation:
+        # GIVEN a migration history whose terminal project state contains an
+        # active index_together tuple with no unique, equivalent final index;
+        # WHEN the history is squashed and the reduced operations are loaded;
+        # THEN retain index_together in the squashed operation and terminal
+        # project state rather than synthesizing a completed indexes-only
+        # transition.
+        # IF the retained legacy state emits its legitimate deprecation
+        # warning, accept that warning as evidence of active dependency.
+        # IF index_together disappears solely to silence the warning, or its
+        # database index behavior disappears after application, fail with the
+        # squashed source, terminal state, or database definition mismatch.
+        # OTHERWISE hand the faithfully represented terminal state to cleanup.
         pass
 
     def test_django_010_regression_coverage_reduces_fully_superseded_transition_and_preserves_squashing_behavior(
@@ -2978,6 +3022,24 @@ class SquashMigrationsTests(MigrationTestBase):
         fully superseded transition while preserving unrelated operations and
         index behavior that remains necessary during migration squashing.
         """
+        # DJANGO-010 logic obligation:
+        # ARRANGE independent histories for the fully superseded transition,
+        # unrelated-operation boundary, partially superseded state, and active
+        # index_together terminal state described by DJANGO-007..DJANGO-009.
+        # FOR EACH history, squash through the normal command workflow, load
+        # the generated replacement, apply original and replacement histories
+        # to equivalent databases, and collect operation, project-state,
+        # warning, and database-index observations.
+        # ASSERT the fully superseded case reduces to final indexes without its
+        # obsolete index_together transition.
+        # ASSERT DJANGO-007 observations preserve unrelated behavior and state.
+        # ASSERT DJANGO-008 observations preserve every still-required index.
+        # ASSERT DJANGO-009 observations retain active index_together state and
+        # do not suppress its legitimate warning by falsifying the transition.
+        # IF any setup cannot be loaded or applied, fail at that history's
+        # generation, loading, planning, or execution handoff rather than
+        # treating missing evidence as preservation.
+        # FINALLY unapply every history from every database, even after failure.
         pass
 
     def test_squashmigrations_squashes(self):
