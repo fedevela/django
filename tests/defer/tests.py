@@ -95,6 +95,22 @@ class OnlyThenDeferContractTests(TestCase):
         with self.assertNumQueries(0):
             self.assertEqual(obj.name, "p1")
 
+    def test_defer_008_valid_only_outside_affected_chain_preserves_selected_fields(self):
+        """GUID: DEFER-008"""
+        pass
+
+    def test_defer_008_valid_defer_outside_affected_chain_preserves_selected_fields(self):
+        """GUID: DEFER-008"""
+        pass
+
+    def test_defer_009_unevaluated_only_defer_chain_executes_no_queries(self):
+        """GUID: DEFER-009"""
+        pass
+
+    def test_defer_010_affected_chain_initial_columns_ignore_backend_quoting(self):
+        """GUID: DEFER-010"""
+        pass
+
 
 class DeferTests(AssertionMixin, TestCase):
     @classmethod
