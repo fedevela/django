@@ -238,7 +238,8 @@ class Expressions(TableColumns):
         expressions = deepcopy(self.expressions)
         self.columns = []
         for col in self.compiler.query._gen_cols([expressions]):
-            col.alias = new_table
+            if col.alias:
+                col.alias = new_table
         self.expressions = expressions
         super().rename_table_references(old_table, new_table)
 

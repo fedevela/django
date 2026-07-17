@@ -1,3 +1,5 @@
+from unittest import skipUnless
+
 from django.core.exceptions import FieldDoesNotExist
 from django.db import (
     IntegrityError, connection, migrations, models, transaction,
@@ -3734,41 +3736,143 @@ class TestCreateModel(SimpleTestCase):
         ).references_model('other_model', 'migrations')
 
 
-class SQLiteExpressionUniqueConstraintRemakeContractTests(SimpleTestCase):
+@skipUnless(connection.vendor == 'sqlite', 'SQLite-specific tests.')
+@skipUnlessDBFeature('supports_expression_indexes')
+class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
+    app_label = 'test_sqlite_expr_unique_remake'
+    constraint_name = 'unique_name_value'
+    table_name = '%s_tag' % app_label
+
+    def _operations(self):
+        return (
+            migrations.CreateModel(
+                name='Tag',
+                fields=[
+                    ('id', models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name='ID',
+                    )),
+                    ('name', models.SlugField(help_text='The tag key.')),
+                    ('value', models.CharField(
+                        help_text='The tag value.',
+                        max_length=200,
+                    )),
+                ],
+                options={'ordering': ['name', 'value']},
+            ),
+            migrations.AddConstraint(
+                model_name='tag',
+                constraint=models.UniqueConstraint(
+                    models.F('name'),
+                    models.F('value'),
+                    name=self.constraint_name,
+                ),
+            ),
+            migrations.AlterField(
+                model_name='tag',
+                name='value',
+                field=models.CharField(
+                    help_text='The tag value.',
+                    max_length=150,
+                ),
+            ),
+        )
+
+    def _apply_migration_sequence(self):
+        create_model, add_constraint, alter_field = self._operations()
+        project_state = ProjectState()
+        project_state = self.apply_operations(
+            self.app_label,
+            project_state,
+            [create_model, add_constraint],
+        )
+        with CaptureQueriesContext(connection) as queries:
+            project_state = self.apply_operations(
+                self.app_label,
+                project_state,
+                [alter_field],
+            )
+        return project_state, [query['sql'] for query in queries]
+
+    def _schema_sql(self, type_, name):
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'SELECT sql FROM sqlite_master WHERE type = %s AND name = %s',
+                [type_, name],
+            )
+            return cursor.fetchone()[0]
+
     def test_sqlite_001_alter_field_remakes_table_with_named_multicolumn_f_expression_unique_constraint(self):
         """
         GUID: SQLITE-001. AlterField remakes a SQLite table containing a named
         multi-column F() expression UniqueConstraint without OperationalError.
         """
-        self.assertTrue(True)
+        self._apply_migration_sequence()
+        self.assertTableExists(self.table_name)
+        self.assertIndexNameExists(self.table_name, self.constraint_name)
 
     def test_sqlite_002_recreated_unique_expression_index_sql_omits_table_qualified_columns(self):
         """
         GUID: SQLITE-002. Recreating the unique expression index emits
         SQLite-valid SQL without table-qualified column references.
         """
-        self.assertTrue(True)
+        _, queries = self._apply_migration_sequence()
+        index_sql = next(
+            sql for sql in queries
+            if 'CREATE UNIQUE INDEX' in sql and self.constraint_name in sql
+        )
+        for column in ('name', 'value'):
+            qualified_column = '%s.%s' % (
+                connection.ops.quote_name(self.table_name),
+                connection.ops.quote_name(column),
+            )
+            self.assertNotIn(qualified_column, index_sql)
+        self.assertIn('("name", "value")', index_sql)
 
     def test_sqlite_003_alter_value_max_length_200_to_150_remakes_table_with_final_definition(self):
         """
         GUID: SQLITE-003. AlterField changing value.max_length from 200 to 150
         leaves the remade SQLite table with max_length=150.
         """
-        self.assertTrue(True)
+        project_state, _ = self._apply_migration_sequence()
+        value_field = project_state.apps.get_model(
+            self.app_label,
+            'Tag',
+        )._meta.get_field('value')
+        self.assertEqual(value_field.max_length, 150)
+        table_sql = self._schema_sql('table', self.table_name)
+        self.assertIn('"value" varchar(150)', table_sql)
 
     def test_sqlite_005_recreated_named_unique_constraint_targets_remade_name_and_value_columns(self):
         """
         GUID: SQLITE-005. The recreated named unique constraint remains bound
         to the remade table's corresponding name and value columns.
         """
-        self.assertTrue(True)
+        project_state, _ = self._apply_migration_sequence()
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        constraint = Tag._meta.constraints[0]
+        self.assertEqual(constraint.name, self.constraint_name)
+        self.assertEqual(
+            constraint.expressions,
+            (models.F('name'), models.F('value')),
+        )
+        index_sql = self._schema_sql('index', self.constraint_name)
+        self.assertIn('("name", "value")', index_sql)
+        Tag.objects.create(name='name', value='value')
+        with self.assertRaises(IntegrityError):
+            Tag.objects.create(name='name', value='value')
 
     def test_sqlite_008_unchanged_create_model_add_constraint_alter_field_sequence_executes(self):
         """
         GUID: SQLITE-008. The unchanged CreateModel, AddConstraint, and
         AlterField migration sequence executes successfully on SQLite.
         """
-        self.assertTrue(True)
+        project_state, _ = self._apply_migration_sequence()
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        tag = Tag.objects.create(name='name', value='value')
+        self.assertEqual((tag.name, tag.value), ('name', 'value'))
 
 
 class FieldOperationTests(SimpleTestCase):
