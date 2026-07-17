@@ -190,6 +190,10 @@ class AdminReadonlyField:
             'is_hidden': is_hidden,
         }
         self.form = form
+        # DJA-001/DJA-002/DJA-003 architecture boundary: AdminReadonlyField
+        # retains the active ModelAdmin as its site-context dependency. Related
+        # admin URL construction must obtain the AdminSite namespace through
+        # this object; helpers.py must not depend on the global default site.
         self.model_admin = model_admin
         self.is_first = is_first
         self.is_checkbox = False
@@ -204,6 +208,13 @@ class AdminReadonlyField:
         return format_html('<label{}>{}{}</label>', flatatt(attrs), capfirst(label), self.form.label_suffix)
 
     def get_admin_url(self, remote_field, remote_obj):
+        # DJA-001/DJA-002/DJA-003/DJA-004/DJA-006 architecture seam: keep
+        # related change-link construction and its NoReverseMatch fallback in
+        # this private rendering helper. Dependency direction is
+        # AdminReadonlyField -> ModelAdmin.admin_site -> URL resolver; the
+        # related model metadata and quoted primary key remain resolver inputs.
+        # DJA-005 remains owned by contents(), which alone decides whether a
+        # relation reaches this seam.
         # DJA-001/DJA-002/DJA-003/DJA-004/DJA-006 pseudocode:
         # INPUT: the related field, its object, and this read-only field's
         # active ModelAdmin.
