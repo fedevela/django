@@ -581,13 +581,37 @@ def first(value):
         return ""
 
 
+# JOIN-001/JOIN-002/JOIN-003 architecture boundary: filter registration is the
+# integration seam that supplies the active autoescape state to this sole owner;
+# the already-resolved separator enters through ``arg`` independent of whether it
+# originated as a literal or a context value.
+# JOIN-004/JOIN-005 ownership boundary: this filter retains responsibility for
+# valid join semantics and its established noniterable fallback. No adapter or
+# dependency outside this module is required for the correction.
 @register.filter(is_safe=True, needs_autoescape=True)
 def join(value, arg, autoescape=True):
     """Join a list with a string, like Python's ``str.join(list)``."""
+    # JOIN-001/JOIN-002/JOIN-003/JOIN-004/JOIN-005 logic obligation:
+    # INPUT the original value, the resolved separator (literal or contextual),
+    # and the template's active autoescape state.
+    # TRY the complete joining operation so its established TypeError fallback is
+    # preserved under either autoescape state.
+    # IF autoescape is enabled:
+    #     conditionally escape each item without changing its order;
+    #     conditionally escape the resolved separator, regardless of its origin.
+    # ELSE:
+    #     retain every item and the resolved separator exactly as supplied.
+    # JOIN the resulting items once, in iteration order, with the resulting
+    # separator, preserving all otherwise-valid joining semantics.
+    # IF a TypeError identifies an unsupported/noniterable joining input:
+    #     RETURN the original value through the existing observable fallback.
+    # OTHERWISE mark the joined result safe and RETURN it, preventing a second
+    # escaping pass after the active autoescape policy has already been applied.
     try:
         if autoescape:
             value = [conditional_escape(v) for v in value]
-        data = conditional_escape(arg).join(value)
+            arg = conditional_escape(arg)
+        data = arg.join(value)
     except TypeError:  # Fail silently if arg isn't iterable.
         return value
     return mark_safe(data)
