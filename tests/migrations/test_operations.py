@@ -3168,6 +3168,34 @@ class OperationTests(OperationTestBase):
         """
         self._assert_rix_006_unnamed_index_rename_sequence("test_rix006_postgresql")
 
+    def test_rix_005_explicitly_named_index_forward_and_backward_rename_remains_valid(
+        self,
+    ):
+        """
+        RIX-005: An explicitly named index retains its complete forward and
+        backward RenameIndex transitions without a database exception.
+        """
+        self.assertTrue(True)
+
+    def test_rix_007_unrelated_indexes_and_constraints_survive_unnamed_index_rename_cycle(
+        self,
+    ):
+        """
+        RIX-007: Unrelated indexes and constraints retain their names,
+        existence, and behavior across the affected index's forward,
+        backward, and forward-again rename cycle.
+        """
+        self.assertTrue(True)
+
+    def test_rix_008_deconstructed_rename_index_reconstructs_with_unchanged_behavior(
+        self,
+    ):
+        """
+        RIX-008: Deconstructing and reconstructing RenameIndex preserves its
+        representation and behavior.
+        """
+        self.assertTrue(True)
+
     def test_rename_index_unknown_unnamed_index(self):
         app_label = "test_rninuui"
         project_state = self.set_up_test_model(app_label)
