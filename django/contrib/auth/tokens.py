@@ -27,14 +27,16 @@ class PasswordResetTokenGenerator:
         """
         return self._make_token_with_timestamp(user, self._num_seconds(self._now()))
 
-    # Architecture contract (GUID: PRT-004, PRT-005):
+    # Architecture contract (GUID: PRT-004, PRT-005, PRT-006):
     # check_token() owns the token-validity lifecycle boundary. Generation and
     # signature validation share _make_token_with_timestamp(), whose private
     # _make_hash_value() dependency remains the single owner of all
     # token-relevant user state. Expiration remains a separate policy boundary
     # owned here through settings.PASSWORD_RESET_TIMEOUT. Email binding must
     # extend the hash-state seam without replacing established state inputs or
-    # bypassing this timeout boundary.
+    # bypassing this timeout boundary. Cross-user isolation enters through the
+    # validation user passed down this same private chain; rejection remains
+    # owned by the signature-comparison boundary here.
     def check_token(self, user, token):
         """
         Check that a password reset token is correct for a given user.
@@ -101,13 +103,16 @@ class PasswordResetTokenGenerator:
         ).hexdigest()[::2]  # Limit to shorten the URL.
         return "%s-%s" % (ts_b36, hash_string)
 
-    # Architecture contract (GUID: PRT-001, PRT-002, PRT-003):
+    # Architecture contract (GUID: PRT-001, PRT-002, PRT-003, PRT-006):
     # _make_hash_value() owns the configured-email token binding. Keeping the
     # binding at this private hash-input boundary makes generation and
     # validation consume the same state without adding a second integration
     # path. This module depends only on the user contract
     # get_email_field_name() plus tolerant attribute access; it must not depend
     # on a concrete user model or require that the configured attribute exists.
+    # The existing user.pk input is the identity-isolation contract: it remains
+    # independent of effective email so equal email values cannot merge two
+    # users' signed state.
     def _make_hash_value(self, user, timestamp):
         """
         Hash the user's primary key and some user state that's sure to change
