@@ -58,6 +58,9 @@ class BaseDatabaseCreation:
         settings.DATABASES[self.connection.alias]["NAME"] = test_database_name
         self.connection.settings_dict["NAME"] = test_database_name
 
+        # Ownership boundary -- GUID: DJANGO-006. BaseDatabaseCreation owns the
+        # migration-enabled default path; TEST.MIGRATE=False is the only schema
+        # substitution seam, and migration execution remains behind call_command.
         # Pseudocode -- GUID: DJANGO-006
         # Verification:
         # test_django_006_migrations_enabled_creation_behavior_remains_unchanged
@@ -120,6 +123,9 @@ class BaseDatabaseCreation:
         Designed only for test runner usage; will not handle large
         amounts of data.
         """
+        # Integration contract -- GUID: DJANGO-006. Migration-aware model
+        # selection remains local to the base serializer; its dependencies point
+        # to the connection, MigrationLoader, router, and serializer interfaces.
         # Pseudocode -- GUID: DJANGO-006
         # Verification:
         # test_django_006_migrations_enabled_serialization_behavior_remains_unchanged
