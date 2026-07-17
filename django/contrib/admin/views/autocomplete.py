@@ -13,6 +13,12 @@ class AutocompleteJsonView(BaseListView):
         """Convert the provided model object to a dictionary."""
         return {'id': str(getattr(obj, to_field_name)), 'text': str(obj)}
 
+    # Successful-response boundary (GUID: ACJ-006, ACJ-007): get() alone owns
+    # the top-level results/pagination envelope. Per-result mappings enter that
+    # boundary through serialize_result(), while next-page state enters through
+    # BaseListView's page_obj; neither dependency owns or may replace the
+    # response shape or the pagination.more integration contract.
+
     def get(self, request, *args, **kwargs):
         """
         Return a JsonResponse with search results of the form:
