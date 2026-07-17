@@ -354,6 +354,33 @@ class Options:
                 # IF instantiation or registration fails:
                 #     PROPAGATE the existing error; do not substitute another
                 #     automatic-field class.
+                # AUTOPK-005 pseudocode -- preserve a directly configured
+                # built-in automatic field class:
+                # PRECONDITION: the model has neither an explicit primary key
+                # nor a parent link eligible for promotion.
+                # INPUT: DEFAULT_AUTO_FIELD directly names AutoField,
+                # BigAutoField, or SmallAutoField.
+                # RESOLVE and validate the configured class through the
+                # existing default-primary-key-class handoff.
+                # IF resolution or validation fails:
+                #     PROPAGATE the existing error without attaching a field.
+                # IF the resolved class is AutoField:
+                #     PRESERVE AutoField as the implicit-key class.
+                # ELSE IF the resolved class is BigAutoField:
+                #     PRESERVE BigAutoField as the implicit-key class.
+                # ELSE IF the resolved class is SmallAutoField:
+                #     PRESERVE SmallAutoField as the implicit-key class.
+                # DO NOT normalize or substitute any accepted configured
+                # class before construction.
+                # INSTANTIATE the preserved class as the auto-created
+                # primary-key ID.
+                # HAND OFF that instance to model field registration.
+                # TRANSITION model state from "implicit primary key absent"
+                # to "implicit primary key is an instance of the directly
+                # configured class".
+                # IF construction or registration fails:
+                #     PROPAGATE the existing error without creating a fallback
+                #     automatic field.
                 pk_class = self._get_default_pk_class()
                 auto = pk_class(verbose_name='ID', primary_key=True, auto_created=True)
                 model.add_to_class('id', auto)
