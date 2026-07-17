@@ -1207,6 +1207,17 @@ class ManyToManyField(RelatedField):
         self.db_table = db_table
         self.swappable = swappable
 
+    # Architecture trace: GUID M2M-001, M2M-002, M2M-003, M2M-008.
+    #
+    # ManyToManyField owns this validation through a private
+    # _check_ineffective_symmetrical_related_name() seam. The checker belongs
+    # beside the other field-specific check helpers below and is aggregated
+    # only by check(); construction and relation-contribution paths must not
+    # depend on it. Its inward dependencies are the normalized
+    # remote_field.symmetrical flag and the preserved _related_name argument;
+    # its outward contract is a list of standard checks.Error instances whose
+    # obj is this field. This keeps relation metadata below the checker and the
+    # model system-check result boundary above it.
     def check(self, **kwargs):
         # Pseudocode trace: GUID M2M-001, M2M-002, M2M-003, M2M-008.
         #
