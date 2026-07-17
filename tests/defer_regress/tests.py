@@ -314,35 +314,91 @@ class SelectRelatedOnlyProxyTargetContractTests(TestCase):
 
 
 class SelectRelatedOnlyConcreteTargetContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.child = Child.objects.create(name="selected", value=7)
+        cls.leaf = Leaf.objects.create(
+            name="deferred", child=cls.child, second_child=None, value=9
+        )
+
+    def get_leaf(self):
+        return (
+            Leaf.objects.select_related("child")
+            .only("child__name")
+            .get(pk=self.leaf.pk)
+        )
+
     def test_PROXYONLY_008_concrete_fk_preserves_related_object_population(self):
         """GUID: PROXYONLY-008"""
-        self.assertTrue(True)
+        leaf = self.get_leaf()
+        self.assertIsInstance(leaf.child, Child)
 
     def test_PROXYONLY_008_concrete_fk_preserves_selected_field_values(self):
         """GUID: PROXYONLY-008"""
-        self.assertTrue(True)
+        leaf = self.get_leaf()
+        self.assertEqual(leaf.child.name, "selected")
 
     def test_PROXYONLY_008_concrete_fk_preserves_primary_key_availability(self):
         """GUID: PROXYONLY-008"""
-        self.assertTrue(True)
+        leaf = self.get_leaf()
+        self.assertEqual(leaf.child.pk, self.child.pk)
+        self.assertNotIn("id", leaf.child.get_deferred_fields())
 
     def test_PROXYONLY_008_concrete_fk_preserves_deferred_field_behavior(self):
         """GUID: PROXYONLY-008"""
-        self.assertTrue(True)
+        leaf = self.get_leaf()
+        self.assertEqual(
+            leaf.get_deferred_fields(), {"name", "second_child_id", "value"}
+        )
+        self.assertEqual(leaf.child.get_deferred_fields(), {"value"})
+        with self.assertNumQueries(1):
+            self.assertEqual(leaf.child.value, 7)
+        self.assertEqual(leaf.child.get_deferred_fields(), set())
 
     def test_PROXYONLY_008_concrete_fk_preserves_query_behavior(self):
         """GUID: PROXYONLY-008"""
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            leaf = self.get_leaf()
+        with self.assertNumQueries(0):
+            self.assertIsInstance(leaf.child, Child)
+            self.assertEqual(leaf.child.pk, self.child.pk)
+            self.assertEqual(leaf.child.name, "selected")
 
 
 class SelectRelatedOnlyBackendIndependenceContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.item = Proxy.objects.create(
+            name="selected", text="deferred", value=7, other_value=8
+        )
+        cls.relation = ProxyItemRelation.objects.create(item=cls.item, value=9)
+        cls.null_relation = ProxyItemRelation.objects.create(item=None, value=10)
+
+    def get_relation(self, relation):
+        return (
+            ProxyItemRelation.objects.select_related("item")
+            .only("item__name")
+            .get(pk=relation.pk)
+        )
+
     def test_PROXYONLY_009_non_null_proxy_fk_outcome_is_backend_independent(self):
         """GUID: PROXYONLY-009"""
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            relation = self.get_relation(self.relation)
+        with self.assertNumQueries(0):
+            self.assertIsInstance(relation.item, Proxy)
+            self.assertEqual(relation.item.pk, self.item.pk)
+            self.assertEqual(relation.item.name, "selected")
+        self.assertEqual(
+            relation.item.get_deferred_fields(), {"other_value", "text", "value"}
+        )
 
     def test_PROXYONLY_009_null_proxy_fk_outcome_is_backend_independent(self):
         """GUID: PROXYONLY-009"""
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            relation = self.get_relation(self.null_relation)
+        with self.assertNumQueries(0):
+            self.assertIsNone(relation.item)
 
 
 class DeferAnnotateSelectRelatedTest(TestCase):
