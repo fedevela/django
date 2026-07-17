@@ -211,23 +211,48 @@ class FormsFormsetTestCase(SimpleTestCase):
 
     def test_eform_003_ordinary_forms_honor_supplied_empty_permitted_true(self):
         """GUID: EFORM-003; ordinary forms preserve supplied True state."""
-        pass
+        FormSet = formset_factory(Choice, extra=0)
+        formset = FormSet(
+            initial=[{"choice": "Calexico", "votes": 100}],
+            form_kwargs={"empty_permitted": True},
+        )
+
+        self.assertIs(formset.forms[0].empty_permitted, True)
 
     def test_eform_003_ordinary_forms_honor_supplied_empty_permitted_false(self):
         """GUID: EFORM-003; ordinary forms preserve supplied False state."""
-        pass
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": False})
+
+        self.assertIs(formset.forms[0].empty_permitted, False)
 
     def test_eform_004_empty_form_receives_other_kwargs_but_ignores_empty_permitted(
         self,
     ):
         """GUID: EFORM-004; only empty_permitted is excluded from empty_form."""
-        pass
+        FormSet = formset_factory(CustomKwargForm)
+        formset = FormSet(
+            form_kwargs={"custom_kwarg": "sentinel", "empty_permitted": False}
+        )
+
+        empty_form = formset.empty_form
+        self.assertEqual(empty_form.custom_kwarg, "sentinel")
+        self.assertIs(empty_form.empty_permitted, True)
 
     def test_eform_007_omitted_empty_permitted_keeps_empty_form_access_and_rendering(
         self,
     ):
         """GUID: EFORM-007; omission preserves empty_form state and rendering."""
-        pass
+        FormSet = formset_factory(Choice)
+        formset = FormSet(auto_id=False, prefix="choices")
+
+        empty_form = formset.empty_form
+        self.assertIs(empty_form.empty_permitted, True)
+        self.assertHTMLEqual(
+            empty_form.as_ul(),
+            """<li>Choice: <input type="text" name="choices-__prefix__-choice"></li>
+<li>Votes: <input type="number" name="choices-__prefix__-votes"></li>""",
+        )
 
     def test_formset_validation(self):
         # FormSet instances can also have an error attribute if validation failed for
