@@ -50,6 +50,17 @@ def watch_for_template_changes(sender, **kwargs):
 
 @receiver(file_changed, dispatch_uid='template_loaders_file_changed')
 def template_changed(sender, file_path, **kwargs):
+    # Pseudocode contract — ARLD-002
+    # Verification: test_arld_002_saving_settings_in_base_dir_template_dirs_triggers_autoreload
+    # INPUT: a changed settings.py path monitored by the development reloader,
+    # with its accessible BASE_DIR also configured as a template directory.
+    # IF the changed path identifies a Python project file, decline template
+    # handling before testing template-directory containment.
+    # HANDOFF: return an unconsumed result to BaseReloader.notify_file_changed().
+    # IF no other file_changed receiver consumes the event, trigger autoreload
+    # with the unchanged settings.py path.
+    # FAILURE PATH: never reset template loaders or suppress the general reload
+    # merely because BASE_DIR contains both templates and settings.py.
     # Integration seam (ARLD-001, ARLD-003): this receiver owns template
     # cache invalidation only; project reload authority remains with
     # BaseReloader.notify_file_changed() across overlapping watch paths.
