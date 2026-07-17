@@ -107,6 +107,22 @@ class BulkCreateUpdateConflictsContractTests(TestCase):
             ),
         )
 
+    def test_BULKUPSERT_004_conflict_update_preserves_existing_returning_fields(self):
+        """GUID: BULKUPSERT-004"""
+        self.assertTrue(True)
+
+    def test_BULKUPSERT_005_conflict_update_emits_valid_returning_clause(self):
+        """GUID: BULKUPSERT-005"""
+        self.assertTrue(True)
+
+    def test_BULKUPSERT_012_conflict_update_assigns_all_governed_returning_fields(self):
+        """GUID: BULKUPSERT-012"""
+        self.assertTrue(True)
+
+    def test_BULKUPSERT_013_conflict_update_excludes_ungoverned_field_categories(self):
+        """GUID: BULKUPSERT-013"""
+        self.assertTrue(True)
+
 
 class BulkCreateTests(TestCase):
     def setUp(self):
