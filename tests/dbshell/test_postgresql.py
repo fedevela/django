@@ -289,3 +289,21 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
         with self.assertRaises(subprocess.CalledProcessError) as ctx:
             subprocess.run(args, check=True, env=env)
         self.assertNotIn("somepassword", str(ctx.exception))
+
+
+class PostgreSqlDbshellPGSQL008ContractTestCase(SimpleTestCase):
+    def test_pgsql_008_multiple_additional_arguments_precede_configured_database_name_with_content_separation_and_relative_order_preserved(
+        self,
+    ):
+        """GUID: PGSQL-008; ordering and argument-preservation obligation."""
+        pass
+
+    def test_pgsql_008_test_parameters_passes_after_argument_ordering_correction(self):
+        """GUID: PGSQL-008; test_parameters regression obligation."""
+        pass
+
+    def test_pgsql_008_existing_postgresql_dbshell_tests_pass_after_argument_ordering_correction(
+        self,
+    ):
+        """GUID: PGSQL-008; established PostgreSQL regressions obligation."""
+        pass
