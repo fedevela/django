@@ -1187,14 +1187,8 @@ class ModelChoiceField(ChoiceField):
     """A ChoiceField whose choices are a model QuerySet."""
     # This class is a subclass of ChoiceField for purity, but it doesn't
     # actually use any of ChoiceField's implementation.
-    # Architecture (MCF-001, MCF-003): ModelChoiceField owns the complete
-    # invalid-choice message contract; neither ChoiceField nor the queryset
-    # adapter supplies diagnostic message context.
-    # GUID: MCF-001 -- Default invalid-choice diagnostic logic.
-    # Pseudocode: DEFINE the default ``invalid_choice`` message with a
-    # ``%(value)s`` placeholder so rendering identifies the submitted value.
     default_error_messages = {
-        'invalid_choice': _('Select a valid choice. That choice is not one of'
+        'invalid_choice': _('Select a valid choice. %(value)s is not one of'
                             ' the available choices.'),
     }
     iterator = ModelChoiceIterator
@@ -1282,34 +1276,20 @@ class ModelChoiceField(ChoiceField):
         return super().prepare_value(value)
 
     def to_python(self, value):
-        # Architecture (MCF-002, MCF-004, MCF-005): This method is the
-        # integration seam between submitted values and queryset resolution.
-        # Only a resolved model crosses the success boundary; lookup failures
-        # cross the field boundary as the existing invalid_choice contract.
-        # GUID: MCF-002, MCF-003, MCF-004, MCF-005 -- Invalid-choice flow.
-        # Pseudocode:
-        #   submitted_value <- value; retain it unchanged for diagnostics.
-        #   IF submitted_value is empty: RETURN None through existing semantics.
-        #   lookup_key <- configured model field name, otherwise primary key.
-        #   lookup_value <- model attribute when input is a model instance;
-        #       otherwise use submitted_value for the lookup without accepting
-        #       it as a resolved choice.
-        #   TRY to resolve exactly one model from the field queryset.
-        #   IF lookup conversion, type validation, or model lookup fails:
-        #       RAISE ValidationError using the configured invalid_choice
-        #       message (including a custom message), code='invalid_choice',
-        #       and params={'value': submitted_value}.
-        #       DO NOT return or transform the rejected submitted_value.
-        #   ELSE: RETURN the resolved model instance.
         if value in self.empty_values:
             return None
+        submitted_value = value
         try:
             key = self.to_field_name or 'pk'
             if isinstance(value, self.queryset.model):
                 value = getattr(value, key)
             value = self.queryset.get(**{key: value})
         except (ValueError, TypeError, self.queryset.model.DoesNotExist):
-            raise ValidationError(self.error_messages['invalid_choice'], code='invalid_choice')
+            raise ValidationError(
+                self.error_messages['invalid_choice'],
+                code='invalid_choice',
+                params={'value': submitted_value},
+            )
         return value
 
     def validate(self, value):

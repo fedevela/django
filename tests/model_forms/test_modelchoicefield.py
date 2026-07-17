@@ -19,23 +19,44 @@ class ModelChoiceFieldTests(TestCase):
 
     def test_mcf_001_default_invalid_choice_message_identifies_submitted_value(self):
         """GUID: MCF-001 - Default invalid_choice reports the submitted value."""
-        self.assertTrue(True)
+        field = forms.ModelChoiceField(Category.objects.all())
+        msg = "['Select a valid choice. invalid is not one of the available choices.']"
+        with self.assertRaisesMessage(ValidationError, msg):
+            field.clean('invalid')
 
     def test_mcf_002_lookup_or_validation_failure_exposes_original_value_in_params(self):
         """GUID: MCF-002 - All invalid_choice paths expose the original value."""
-        self.assertTrue(True)
+        field = forms.ModelChoiceField(Category.objects.all())
+        invalid_values = ('invalid', [['invalid']], 0)
+        for value in invalid_values:
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError) as cm:
+                    field.clean(value)
+                self.assertEqual(cm.exception.error_list[0].params['value'], value)
 
     def test_mcf_003_custom_invalid_choice_message_interpolates_original_value(self):
         """GUID: MCF-003 - Custom invalid_choice interpolates the original value."""
-        self.assertTrue(True)
+        field = forms.ModelChoiceField(
+            Category.objects.all(),
+            error_messages={'invalid_choice': '%(value)s is unavailable.'},
+        )
+        with self.assertRaisesMessage(ValidationError, "['invalid is unavailable.']"):
+            field.clean('invalid')
 
     def test_mcf_004_parameterized_invalid_choice_preserves_error_code(self):
         """GUID: MCF-004 - Parameterization preserves the invalid_choice code."""
-        self.assertTrue(True)
+        field = forms.ModelChoiceField(Category.objects.all())
+        with self.assertRaises(ValidationError) as cm:
+            field.clean('invalid')
+        self.assertEqual(cm.exception.error_list[0].code, 'invalid_choice')
 
     def test_mcf_005_diagnostic_context_keeps_invalid_value_rejected_untransformed(self):
         """GUID: MCF-005 - Diagnostics leave invalid values rejected and unchanged."""
-        self.assertTrue(True)
+        field = forms.ModelChoiceField(Category.objects.exclude(pk=self.c1.pk))
+        invalid_value = self.c1
+        with self.assertRaises(ValidationError) as cm:
+            field.clean(invalid_value)
+        self.assertIs(cm.exception.error_list[0].params['value'], invalid_value)
 
     def test_basics(self):
         f = forms.ModelChoiceField(Category.objects.all())
@@ -71,7 +92,7 @@ class ModelChoiceFieldTests(TestCase):
         # instantiated. This proves clean() checks the database during clean()
         # rather than caching it at instantiation time.
         Category.objects.get(url='4th').delete()
-        msg = "['Select a valid choice. That choice is not one of the available choices.']"
+        msg = "['Select a valid choice. %s is not one of the available choices.']" % c4.id
         with self.assertRaisesMessage(ValidationError, msg):
             f.clean(c4.id)
 
@@ -79,9 +100,10 @@ class ModelChoiceFieldTests(TestCase):
         f = forms.ModelChoiceField(Category.objects.all())
         self.assertEqual(f.clean(self.c1), self.c1)
         # An instance of incorrect model.
-        msg = "['Select a valid choice. That choice is not one of the available choices.']"
+        book = Book.objects.create()
+        msg = "['Select a valid choice. %s is not one of the available choices.']" % book
         with self.assertRaisesMessage(ValidationError, msg):
-            f.clean(Book.objects.create())
+            f.clean(book)
 
     def test_clean_to_field_name(self):
         f = forms.ModelChoiceField(Category.objects.all(), to_field_name='slug')
@@ -236,7 +258,10 @@ class ModelChoiceFieldTests(TestCase):
         form = ModelChoiceForm({}, instance=book)
         self.assertEqual(
             form.errors['author'],
-            ['Select a valid choice. That choice is not one of the available choices.']
+            [
+                'Select a valid choice. %s is not one of the available choices.' %
+                book.author_id,
+            ]
         )
 
     def test_disabled_modelchoicefield_has_changed(self):
