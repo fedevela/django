@@ -763,20 +763,156 @@ class OperationTests(OperationTestBase):
         self.assertTableExists(db_table)
 
     def test_rmn_005_no_op_rename_model_preserves_existing_table_rows_and_values(self):
-        """GUID: RMN-005"""
-        self.assertTrue(True)
+        """GUID: RMN-005 - Existing rows and their values are unchanged."""
+        app_label = "test_rmn_005"
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(app_label, db_table=db_table)
+        Pony = project_state.apps.get_model(app_label, "Pony")
+        Pony.objects.create(pink=2, weight=3.5)
+        Pony.objects.create(pink=7, weight=11.25)
+        expected_rows = list(
+            Pony.objects.order_by("id").values_list("id", "pink", "weight")
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        Horse = new_state.apps.get_model(app_label, "Horse")
+        self.assertEqual(
+            list(Horse.objects.order_by("id").values_list("id", "pink", "weight")),
+            expected_rows,
+        )
 
     def test_rmn_006_no_op_rename_model_preserves_existing_table_constraints(self):
-        """GUID: RMN-006"""
-        self.assertTrue(True)
+        """GUID: RMN-006 - Existing constraints are unchanged."""
+        app_label = "test_rmn_006"
+        db_table = "%s_pony" % app_label
+        constraint_name = "rmn_006_pink_weight_uniq"
+        project_state = self.set_up_test_model(
+            app_label,
+            db_table=db_table,
+            constraints=[models.UniqueConstraint(
+                fields=["pink", "weight"],
+                name=constraint_name,
+            )],
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        with connection.cursor() as cursor:
+            constraints_before = connection.introspection.get_constraints(
+                cursor, db_table,
+            )
+        self.assertIn(constraint_name, constraints_before)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        with connection.cursor() as cursor:
+            constraints_after = connection.introspection.get_constraints(
+                cursor, db_table,
+            )
+        self.assertEqual(constraints_after, constraints_before)
 
     def test_rmn_007_no_op_rename_model_preserves_existing_table_indexes(self):
-        """GUID: RMN-007"""
-        self.assertTrue(True)
+        """GUID: RMN-007 - Existing indexes are unchanged."""
+        app_label = "test_rmn_007"
+        db_table = "%s_pony" % app_label
+        index_name = "rmn_007_pink_idx"
+        project_state = self.set_up_test_model(
+            app_label,
+            db_table=db_table,
+            indexes=[models.Index(fields=["pink"], name=index_name)],
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        with connection.cursor() as cursor:
+            indexes_before = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, db_table,
+                ).items()
+                if details["index"]
+            }
+        self.assertIn(index_name, indexes_before)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        with connection.cursor() as cursor:
+            indexes_after = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, db_table,
+                ).items()
+                if details["index"]
+            }
+        self.assertEqual(indexes_after, indexes_before)
 
     def test_rmn_008_no_op_rename_model_preserves_relationship_tables_and_columns(self):
-        """GUID: RMN-008"""
-        self.assertTrue(True)
+        """GUID: RMN-008 - Existing relationship topology is unchanged."""
+        app_label = "test_rmn_008"
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(
+            app_label,
+            related_model=True,
+            db_table=db_table,
+        )
+        rider_table = "%s_rider" % app_label
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        columns_before = [
+            field.name for field in self.get_table_description(rider_table)
+        ]
+        with connection.cursor() as cursor:
+            relationships_before = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, rider_table,
+                ).items()
+                if details["foreign_key"]
+            }
+        if connection.features.supports_foreign_keys:
+            self.assertTrue(relationships_before)
+            self.assertFKExists(
+                rider_table, ["pony_id"], (db_table, "id"),
+            )
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        self.assertTableExists(db_table)
+        self.assertTableExists(rider_table)
+        self.assertEqual(
+            [field.name for field in self.get_table_description(rider_table)],
+            columns_before,
+        )
+        with connection.cursor() as cursor:
+            relationships_after = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, rider_table,
+                ).items()
+                if details["foreign_key"]
+            }
+        self.assertEqual(relationships_after, relationships_before)
+        if connection.features.supports_foreign_keys:
+            self.assertFKExists(
+                rider_table, ["pony_id"], (db_table, "id"),
+            )
 
     def test_rename_model_state_forwards(self):
         """
