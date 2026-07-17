@@ -1250,6 +1250,11 @@ class SQLCompiler:
                 if o.field.unique and not o.many_to_many
             ]
             for related_field, model in related_fields:
+                # DJANGO-001, DJANGO-002 architecture contract: Query owns
+                # normalization of a reverse relation's only() mask to this
+                # concrete forward field key. This compiler seam consumes that
+                # nested mask unchanged when selecting the related model's
+                # columns, including when related_field is also its primary key.
                 related_select_mask = select_mask.get(related_field) or {}
                 if not select_related_descend(
                     related_field,
