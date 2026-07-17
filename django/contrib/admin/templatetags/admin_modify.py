@@ -99,8 +99,28 @@ def submit_row(context):
                 and change
                 and context.get("show_delete", True)
             ),
-            "show_save_as_new": not is_popup
+            # SAVEAS-001..SAVEAS-006 pseudocode — determine whether the
+            # submit row exposes the "Save as new" action:
+            #
+            # INPUTS: has_add_permission, has_change_permission, change,
+            #         is_popup, and save_as.
+            # SET the visibility result to hidden.
+            # IF has_add_permission is false:
+            #     KEEP the result hidden.                         [SAVEAS-001]
+            # ELSE IF has_change_permission is false:
+            #     KEEP the result hidden.                         [SAVEAS-002]
+            # ELSE IF is_popup is true:
+            #     KEEP the result hidden.                         [SAVEAS-003]
+            # ELSE IF change is false (no existing object is being changed):
+            #     KEEP the result hidden.                         [SAVEAS-004]
+            # ELSE IF save_as is false:
+            #     KEEP the result hidden.                         [SAVEAS-005]
+            # ELSE:
+            #     TRANSITION the result from hidden to visible.   [SAVEAS-006]
+            # PUBLISH the result as show_save_as_new for the template.
+            "show_save_as_new": has_add_permission
             and has_change_permission
+            and not is_popup
             and change
             and save_as,
             "show_save_and_add_another": can_save_and_add_another,

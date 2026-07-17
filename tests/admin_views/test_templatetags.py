@@ -99,6 +99,97 @@ class AdminTemplateTagsTest(AdminViewBasicTestCase):
         self.assertContains(response, "override-search_form")
 
 
+class SubmitRowSaveAsNewContractTests(TestCase):
+    # SAVEAS-007/SAVEAS-008 architecture:
+    # This class owns the focused Save as new visibility contract at the
+    # admin_modify.submit_row boundary. submit_row_context() is the single
+    # test adapter from contract inputs to that template-tag boundary; the
+    # dependency points from this test module to admin_modify, never back into
+    # the test suite. Keeping the cases in this module also places them inside
+    # the existing admin template-tag discovery seam required by SAVEAS-008.
+
+    @staticmethod
+    def submit_row_context(**overrides):
+        # SAVEAS-007 contract fixture: the baseline represents every required
+        # visibility condition; individual contract tests own only their input
+        # override and the observation of show_save_as_new.
+        context = {
+            "add": False,
+            "change": True,
+            "is_popup": False,
+            "save_as": True,
+            "has_add_permission": True,
+            "has_change_permission": True,
+            "has_view_permission": True,
+            "has_editable_inline_admin_formsets": False,
+            "has_delete_permission": True,
+        }
+        context.update(overrides)
+        return submit_row(context)
+
+    def test_saveas_001_without_add_permission_hides_save_as_new(self):
+        """SAVEAS-001: Missing add permission hides Save as new."""
+        context = self.submit_row_context(has_add_permission=False)
+        self.assertIs(context["show_save_as_new"], False)
+
+    def test_saveas_002_without_change_permission_hides_save_as_new(self):
+        """SAVEAS-002: Missing change permission hides Save as new."""
+        context = self.submit_row_context(has_change_permission=False)
+        self.assertIs(context["show_save_as_new"], False)
+
+    def test_saveas_003_popup_view_hides_save_as_new(self):
+        """SAVEAS-003: Popup state hides Save as new."""
+        context = self.submit_row_context(is_popup=True)
+        self.assertIs(context["show_save_as_new"], False)
+
+    def test_saveas_004_without_existing_object_change_hides_save_as_new(self):
+        """SAVEAS-004: Missing existing-object change state hides Save as new."""
+        context = self.submit_row_context(change=False, add=True)
+        self.assertIs(context["show_save_as_new"], False)
+
+    def test_saveas_005_with_save_as_disabled_hides_save_as_new(self):
+        """SAVEAS-005: Disabled save_as hides Save as new."""
+        context = self.submit_row_context(save_as=False)
+        self.assertIs(context["show_save_as_new"], False)
+
+    def test_saveas_006_with_all_visibility_conditions_shows_save_as_new(self):
+        """SAVEAS-006: All required visibility conditions show Save as new."""
+        context = self.submit_row_context()
+        self.assertIs(context["show_save_as_new"], True)
+
+    def test_saveas_007_without_add_permission_hides_save_as_new(self):
+        """SAVEAS-007: Missing add permission hides Save as new."""
+        # SAVEAS-007 pseudocode — absent-add-permission outcome:
+        # GIVEN the shared submit-row context in which change permission,
+        # existing-object change state, non-popup state, and save_as are true,
+        # OVERRIDE has_add_permission to false.
+        # WHEN the context is handed to submit_row,
+        # READ show_save_as_new from the returned template context.
+        # IF show_save_as_new is false:
+        #     ACCEPT the required hidden outcome.
+        # ELSE:
+        #     FAIL this verification because the action was exposed without
+        #     add permission.
+        context = self.submit_row_context(has_add_permission=False)
+        self.assertIs(context["show_save_as_new"], False)
+
+    def test_saveas_007_with_all_required_conditions_shows_save_as_new(self):
+        """SAVEAS-007: All required conditions show Save as new."""
+        # SAVEAS-007 pseudocode — all-required-conditions outcome:
+        # GIVEN a submit-row context where has_add_permission,
+        # has_change_permission, change, and save_as are true and is_popup is
+        # false,
+        # WHEN the context is handed to submit_row,
+        # READ show_save_as_new from the returned template context.
+        # IF show_save_as_new is true:
+        #     ACCEPT the required visible outcome.
+        # ELSE:
+        #     FAIL this verification because at least one required condition
+        #     did not produce visibility.
+        context = self.submit_row_context()
+        self.assertIs(context["show_save_as_new"], True)
+
+
 class DateHierarchyTests(TestCase):
     factory = RequestFactory()
 

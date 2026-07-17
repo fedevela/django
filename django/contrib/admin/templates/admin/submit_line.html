@@ -2,6 +2,9 @@
 <div class="submit-row">
 {% block submit-row %}
 {% if show_save %}<input type="submit" value="{% translate 'Save' %}" class="default" name="_save">{% endif %}
+{# SAVEAS-001, SAVEAS-002, SAVEAS-003, SAVEAS-004, SAVEAS-005, SAVEAS-006 #}
+{# Boundary: admin_modify.submit_row owns the visibility decision. #}
+{# This template only consumes show_save_as_new. #}
 {% if show_save_as_new %}<input type="submit" value="{% translate 'Save as new' %}" name="_saveasnew">{% endif %}
 {% if show_save_and_add_another %}<input type="submit" value="{% translate 'Save and add another' %}" name="_addanother">{% endif %}
 {% if show_save_and_continue %}<input type="submit" value="{% if can_change %}{% translate 'Save and continue editing' %}{% else %}{% translate 'Save and view' %}{% endif %}" name="_continue">{% endif %}
