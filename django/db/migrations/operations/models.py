@@ -215,8 +215,10 @@ class CreateModel(ModelOperation):
                     managers=self.managers,
                 ),
             ]
-        # DJANGO-001, DJANGO-002, DJANGO-006: Fold a fully superseded
-        # index_together entry into the final named index during squashing.
+        # DJANGO-001 through DJANGO-006 architecture boundary: CreateModel.reduce()
+        # owns folding the superseded index_together entry into ordinary final
+        # indexes state. Migration writing, loading, and execution must consume
+        # that state through their existing generic operation contracts.
         elif (
             isinstance(operation, RenameIndex)
             and self.name_lower == operation.model_name_lower

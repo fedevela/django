@@ -2726,6 +2726,11 @@ class SquashMigrationsTests(MigrationTestBase):
 
     migration_module = "migrations.test_migrations_index_together"
 
+    # DJANGO-003, DJANGO-004, DJANGO-005 integration seam: this fixture owns the
+    # temporary original/replacement migration artifacts. Executable-equivalence
+    # tests remain in this class and connect those artifacts to the existing
+    # MigrationLoader/MigrationExecutor and backend-introspection boundaries;
+    # backend normalization belongs to test support, not migration operations.
     @contextmanager
     def squash_index_together_migrations(self):
         with self.temporary_migration_module(
