@@ -744,16 +744,70 @@ Java</label></li>
         )
 
     def test_BWID_003_default_auto_id_subwidget_labels_preserve_input_id_associations(self):
-        self.assertTrue(True)
+        class BeatleForm(Form):
+            name = MultipleChoiceField(
+                choices=[('john', 'John'), ('paul', 'Paul')],
+                widget=CheckboxSelectMultiple,
+            )
+
+        subwidgets = list(BeatleForm()['name'])
+        self.assertEqual(
+            [subwidget.data['attrs']['id'] for subwidget in subwidgets],
+            ['id_name_0', 'id_name_1'],
+        )
+        self.assertEqual(
+            [subwidget.id_for_label for subwidget in subwidgets],
+            ['id_name_0', 'id_name_1'],
+        )
+        self.assertEqual(
+            [str(subwidget) for subwidget in subwidgets],
+            [
+                '<label for="id_name_0"><input type="checkbox" '
+                'name="name" value="john" id="id_name_0"> John</label>',
+                '<label for="id_name_1"><input type="checkbox" '
+                'name="name" value="paul" id="id_name_1"> Paul</label>',
+            ],
+        )
 
     def test_BWID_004_choice_subwidgets_preserve_names_and_indexes_after_correction(self):
-        self.assertTrue(True)
+        class BeatleForm(Form):
+            name = ChoiceField(
+                choices=[('john', 'John'), ('paul', 'Paul')],
+                widget=RadioSelect,
+            )
+
+        subwidgets = list(BeatleForm(prefix='beatles')['name'])
+        self.assertEqual(
+            [(subwidget.data['name'], subwidget.data['index']) for subwidget in subwidgets],
+            [('beatles-name', '0'), ('beatles-name', '1')],
+        )
 
     def test_BWID_005_boundfield_id_for_label_preserves_existing_result_after_correction(self):
-        self.assertTrue(True)
+        class BeatleForm(Form):
+            name = ChoiceField(
+                choices=[('john', 'John'), ('paul', 'Paul')],
+                widget=RadioSelect,
+            )
+
+        self.assertEqual(BeatleForm()['name'].id_for_label, 'id_name_0')
 
     def test_BWID_006_rendering_unrelated_to_subwidget_label_id_selection_remains_unchanged(self):
-        self.assertTrue(True)
+        class BeatleForm(Form):
+            name = ChoiceField(
+                choices=[('john', 'John'), ('paul', 'Paul')],
+                widget=RadioSelect,
+            )
+
+        subwidgets = list(BeatleForm(data={'name': 'paul'})['name'])
+        self.assertEqual(
+            [subwidget.tag() for subwidget in subwidgets],
+            [
+                '<input type="radio" name="name" value="john" '
+                'id="id_name_0" required>',
+                '<input type="radio" name="name" value="paul" '
+                'id="id_name_1" required checked>',
+            ],
+        )
 
     def test_iterable_boundfield_select(self):
         class BeatleForm(Form):
