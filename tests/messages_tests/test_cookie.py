@@ -2,11 +2,13 @@ import json
 import random
 
 from django.conf import settings
+from django.contrib import messages
 from django.contrib.messages import constants
 from django.contrib.messages.storage.base import Message
 from django.contrib.messages.storage.cookie import (
     CookieStorage, MessageDecoder, MessageEncoder,
 )
+from django.http import HttpRequest, HttpResponse
 from django.test import SimpleTestCase, override_settings
 from django.utils.crypto import get_random_string
 from django.utils.safestring import SafeData, mark_safe
@@ -14,26 +16,45 @@ from django.utils.safestring import SafeData, mark_safe
 from .base import BaseTests
 
 
+@override_settings(MESSAGE_LEVEL=constants.DEBUG)
 class MSG003SeverityHelperContractTests(SimpleTestCase):
+    def assert_default_extra_tags_survives_round_trip(self, helper):
+        request = HttpRequest()
+        storage = CookieStorage(request)
+        request._messages = storage
+
+        helper(request, 'Test message')
+        response = HttpResponse()
+        storage.update(response)
+
+        retrieval_request = HttpRequest()
+        retrieval_request.COOKIES[storage.cookie_name] = response.cookies[
+            storage.cookie_name
+        ].value
+        retrieved_messages = list(CookieStorage(retrieval_request))
+
+        self.assertEqual(len(retrieved_messages), 1)
+        self.assertEqual(retrieved_messages[0].extra_tags, '')
+
     def test_msg_003_debug_without_extra_tags_round_trip_retains_empty_string(self):
         """GUID: MSG-003: debug() default extra_tags survives storage."""
-        pass
+        self.assert_default_extra_tags_survives_round_trip(messages.debug)
 
     def test_msg_003_info_without_extra_tags_round_trip_retains_empty_string(self):
         """GUID: MSG-003: info() default extra_tags survives storage."""
-        pass
+        self.assert_default_extra_tags_survives_round_trip(messages.info)
 
     def test_msg_003_success_without_extra_tags_round_trip_retains_empty_string(self):
         """GUID: MSG-003: success() default extra_tags survives storage."""
-        pass
+        self.assert_default_extra_tags_survives_round_trip(messages.success)
 
     def test_msg_003_warning_without_extra_tags_round_trip_retains_empty_string(self):
         """GUID: MSG-003: warning() default extra_tags survives storage."""
-        pass
+        self.assert_default_extra_tags_survives_round_trip(messages.warning)
 
     def test_msg_003_error_without_extra_tags_round_trip_retains_empty_string(self):
         """GUID: MSG-003: error() default extra_tags survives storage."""
-        pass
+        self.assert_default_extra_tags_survives_round_trip(messages.error)
 
 
 def set_cookie_data(storage, messages, invalid=False, encode_empty=False):
