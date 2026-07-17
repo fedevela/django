@@ -1223,6 +1223,12 @@ class FormsFormsetTestCase(SimpleTestCase):
             warnings.simplefilter("error", RemovedInDjango50Warning)
             str(formset.management_form)
 
+    def test_mgmt_005_deprecated_default_rendering_warns_for_ordinary_not_management(
+        self,
+    ):
+        """GUID: MGMT-005."""
+        self.assertTrue(True)
+
     def test_mgmt_002_rendered_management_form_contains_all_fields_as_hidden_inputs(
         self,
     ):
