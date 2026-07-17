@@ -17,7 +17,7 @@ from django.utils.html import (
     strip_tags,
     urlize,
 )
-from django.utils.safestring import mark_safe
+from django.utils.safestring import SafeData, mark_safe
 
 
 class JSONScriptUnsupportedValue:
@@ -269,53 +269,64 @@ class TestUtilsHtml(SimpleTestCase):
 
     def test_jsonscript_004_default_encoder_escapes_script_safe_characters(self):
         """JSONSCRIPT-004: Default-encoded content remains script-safe escaped."""
-        # Arrange default-encodable content containing each protected character.
-        # Render it without supplying an encoder.
-        # Verify the payload contains the existing escapes and no raw counterparts.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script("<>&"),
+            '<script type="application/json">"\\u003C\\u003E\\u0026"</script>',
+        )
 
     def test_jsonscript_004_jsonscript_010_custom_encoder_content_is_escaped(self):
         """JSONSCRIPT-004/JSONSCRIPT-010: Custom-encoded content is escaped."""
-        # Arrange a custom encoder whose serialized output contains protected characters.
-        # Render a supported value through that encoder.
-        # Verify the payload contains the same existing escapes and no raw counterparts.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script("<>&", encoder=JSONScriptCustomEncoder),
+            '<script type="application/json">"\\u003C\\u003E\\u0026"</script>',
+        )
 
     def test_jsonscript_005_default_encoder_result_remains_safe(self):
         """JSONSCRIPT-005: The default-encoder result remains marked safe."""
-        # Render default-encodable content without supplying an encoder.
-        # Verify the complete returned script is classified as safe template data.
-        self.assertTrue(True)
+        self.assertIsInstance(json_script({"key": "value"}), SafeData)
 
     def test_jsonscript_005_custom_encoder_result_remains_safe(self):
         """JSONSCRIPT-005: The custom-encoder result remains marked safe."""
-        # Render content while supplying a custom encoder.
-        # Verify the complete returned script is classified as safe template data.
-        self.assertTrue(True)
+        self.assertIsInstance(
+            json_script(
+                JSONScriptUnsupportedValue(), encoder=JSONScriptCustomEncoder
+            ),
+            SafeData,
+        )
 
     def test_jsonscript_006_default_encoder_with_id_keeps_script_structure(self):
         """JSONSCRIPT-006: The default-encoder ID-bearing structure is retained."""
-        # Render default-encodable content with an element ID.
-        # Verify the complete output uses the existing ID-bearing script structure.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script({"key": "value"}, "test_id"),
+            '<script id="test_id" type="application/json">'
+            '{"key": "value"}</script>',
+        )
 
     def test_jsonscript_006_custom_encoder_with_id_keeps_script_structure(self):
         """JSONSCRIPT-006: The custom-encoder ID-bearing structure is retained."""
-        # Render content with an element ID while supplying a custom encoder.
-        # Verify the complete output uses the same existing ID-bearing structure.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script(
+                JSONScriptUnsupportedValue(), "test_id", JSONScriptCustomEncoder
+            ),
+            '<script id="test_id" type="application/json">'
+            '"custom encoded"</script>',
+        )
 
     def test_jsonscript_007_default_encoder_without_id_keeps_script_structure(self):
         """JSONSCRIPT-007: The default-encoder no-ID structure is retained."""
-        # Render default-encodable content without an element ID.
-        # Verify the complete output uses the existing no-ID script structure.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script({"key": "value"}),
+            '<script type="application/json">{"key": "value"}</script>',
+        )
 
     def test_jsonscript_007_custom_encoder_without_id_keeps_script_structure(self):
         """JSONSCRIPT-007: The custom-encoder no-ID structure is retained."""
-        # Render content without an element ID while supplying a custom encoder.
-        # Verify the complete output uses the same existing no-ID structure.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script(
+                JSONScriptUnsupportedValue(), encoder=JSONScriptCustomEncoder
+            ),
+            '<script type="application/json">"custom encoded"</script>',
+        )
 
     def test_smart_urlquote(self):
         items = (
