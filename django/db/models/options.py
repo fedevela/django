@@ -218,12 +218,13 @@ class Options:
             new_objs.append(obj)
         return new_objs
 
-    # AUTOPK-002, AUTOPK-004 architecture: Options owns default-primary-key
-    # resolution and admission, but delegates automatic-field hierarchy
-    # recognition to the AutoField subclass contract. This method is the
-    # boundary adapter between the configured dotted path and _prepare(): only
-    # admitted classes cross that seam, and _prepare() alone owns instantiating
-    # and attaching one to a model without an explicit key.
+    # AUTOPK-002, AUTOPK-004, AUTOPK-006 architecture: Options owns the
+    # default-primary-key resolution pipeline. Dotted-path import is its first
+    # boundary; an import failure terminates there as a configuration error and
+    # cannot reach the subsequent AutoField subclass-admission boundary. This
+    # method adapts the configured path for _prepare(): only imported, admitted
+    # classes cross that seam, and _prepare() alone owns instantiating and
+    # attaching one to a model without an explicit key.
     def _get_default_pk_class(self):
         # AUTOPK-006 pseudocode -- preserve invalid import-path errors:
         # PRECONDITION: model preparation needs an implicit primary key because
