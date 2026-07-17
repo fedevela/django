@@ -1343,6 +1343,14 @@ class Model(metaclass=ModelBase):
         # PRESERVE the model state consumed by migration serialization and
         # autodetection, so equivalent before/after states yield the same
         # migration operations and migration failures remain unchanged.
+
+        # Architecture contract -- GUIDs: PKW-004, PKW-005, PKW-006
+        # Options owns effective-primary-key identity; this check may only read
+        # that metadata and classify W042. Model.check() is the sole integration
+        # seam and aggregates the returned warning without a dependency on, or
+        # mutation of, inheritance and migration machinery. The isolated
+        # ModelDefaultAutoFieldTests boundary owns the explicit-inherited and
+        # genuinely-auto-created witnesses against this same check seam.
         if (
             cls._meta.pk.auto_created and
             # Inherited PKs are checked in parent models. GUIDs: PKW-001,
