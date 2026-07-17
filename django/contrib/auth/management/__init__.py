@@ -42,6 +42,24 @@ def create_permissions(
     apps=global_apps,
     **kwargs,
 ):
+    # Pseudocode [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-006]:
+    #   selected_alias := using supplied by the migration lifecycle
+    #   if the application has no models: return without database access
+    #   ensure its content types exist on selected_alias
+    #   resolve the historical ContentType and Permission models
+    #   if either model is unavailable: return without database access
+    #   if migrations for Permission are disallowed on selected_alias: return
+    #   for each application model:
+    #       bind the ContentType manager to selected_alias before lookup
+    #       resolve the model's content type through that bound manager
+    #       retain that selected-database object for permission association
+    #   query existing permissions through a queryset bound to selected_alias
+    #   derive missing permissions with the retained content-type objects
+    #   bulk-create them through a queryset bound to selected_alias
+    #   bound reads/writes bypass router read/write selection callbacks
+    #   if a bound lookup or write fails: propagate the database failure;
+    #       never consult or fall back to another alias
+    #   output := permissions whose content_type provenance is selected_alias
     if not app_config.models_module:
         return
 

@@ -95,6 +95,14 @@ class Command(BaseCommand):
 
     @no_translations
     def handle(self, *args, **options):
+        # Pseudocode [MIGDB-001]:
+        #   selected_alias := the explicit database option
+        #   selected_connection := connection identified by selected_alias
+        #   run preparation, migration planning, and migration execution through
+        #       selected_connection
+        #   hand selected_connection.alias to every pre/post-migration handler
+        #   if any selected-database operation fails: propagate the failure;
+        #       never retry or fall back to another alias
         database = options["database"]
         if not options["skip_checks"]:
             self.check(databases=[database])
