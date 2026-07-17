@@ -73,6 +73,11 @@ class BaseFormSet:
         self.files = files or {}
         self.initial = initial
         self.form_kwargs = form_kwargs or {}
+        # Architecture [GUID: NONFORM-001, NONFORM-007, NONFORM-008]:
+        # BaseFormSet owns the non-form category assignment but depends only on
+        # this injected ErrorList constructor. The constructor remains the seam
+        # for preserving subclasses and transmitting classification metadata;
+        # FormSet must not depend on ErrorList rendering internals.
         self.error_class = error_class
         self._errors = None
         self._non_form_errors = None
@@ -293,6 +298,11 @@ class BaseFormSet:
         form -- i.e., from formset.clean(). Return an empty ErrorList if there
         are none.
         """
+        # Pseudocode [GUID: NONFORM-004; lazy validation path]:
+        # IF the non-form error cache is absent,
+        #     RUN the complete FormSet validation procedure exactly once;
+        #     EXPECT that procedure to store a list classified as ``nonform``.
+        # RETURN the cached, classified list, whether it is empty or populated.
         if self._non_form_errors is None:
             self.full_clean()
         return self._non_form_errors
@@ -332,8 +342,32 @@ class BaseFormSet:
         Clean all of self.data and populate self._errors and
         self._non_form_errors.
         """
+        # Architecture [GUID: NONFORM-003]: BaseFormSet retains ownership of
+        # validation sequencing and error contents. Classification is confined
+        # to the ErrorList construction seam below and must not become an input
+        # to validation, validity decisions, or ValidationError normalization.
+        # Pseudocode [GUID: NONFORM-003; validation-preservation contract]:
+        # INPUT the bound state, management data, member forms, count limits,
+        # and custom FormSet cleaning procedure without modifying any of them.
+        # RESET the same validation caches, then FOLLOW the existing early-return,
+        # management-form, member-form, deletion, count, and custom-clean branches
+        # in their established order.
+        # DERIVE validity from the same field and non-form errors as before.
+        # TREAT ``nonform`` only as metadata on the non-form ErrorList; do not use
+        # it as a validation decision, alter an error, or replace message text.
         self._errors = []
-        self._non_form_errors = self.error_class()
+        # Architecture [GUID: NONFORM-001, NONFORM-004, NONFORM-007]: this is
+        # the owning construction seam for the non-form error cache. Both the
+        # initial cache and the ValidationError replacement below must cross
+        # the same configured-constructor boundary with the same category.
+        # Pseudocode [GUID: NONFORM-001, NONFORM-004, NONFORM-007]:
+        # INPUT the configured ErrorList constructor for this FormSet.
+        # CREATE the initial non-form error list with classification ``nonform``.
+        # STORE that instance as the cache used by every non-form error path.
+        # PRESERVE the configured subclass by constructing through that constructor.
+        # IF validation stops early or appends an error directly,
+        #     KEEP this same classified instance as the observable result.
+        self._non_form_errors = self.error_class(error_class='nonform')
         empty_forms_count = 0
 
         if not self.is_bound:  # Stop further processing.
@@ -363,6 +397,13 @@ class BaseFormSet:
                 continue
             self._errors.append(form_errors)
         try:
+            # Pseudocode [GUID: NONFORM-004; validation error paths]:
+            # EVALUATE maximum-count validation first.
+            # IF it fails, TRANSITION to the shared ValidationError handler.
+            # OTHERWISE EVALUATE minimum-count validation.
+            # IF it fails, TRANSITION to the shared ValidationError handler.
+            # OTHERWISE RUN custom FormSet cleaning.
+            # IF custom cleaning fails, TRANSITION to the same handler.
             if (self.validate_max and
                     self.total_form_count() - len(self.deleted_forms) > self.max_num) or \
                     self.management_form.cleaned_data[TOTAL_FORM_COUNT] > self.absolute_max:
@@ -380,7 +421,23 @@ class BaseFormSet:
             # Give self.clean() a chance to do cross-form validation.
             self.clean()
         except ValidationError as e:
-            self._non_form_errors = self.error_class(e.error_list)
+            # Pseudocode [GUID: NONFORM-003; error-preservation handoff]:
+            # RECEIVE the ValidationError list produced by the unchanged rule.
+            # COPY its existing errors, parameters, codes, ordering, and messages
+            # into the classified container without transforming their contents.
+            # RETURN control with the same validity outcome; classification is the
+            # only additional observable metadata at this handoff.
+            # Pseudocode [GUID: NONFORM-001, NONFORM-002, NONFORM-007,
+            # GUID: NONFORM-008, NONFORM-011]:
+            # NORMALIZE the captured validation errors into their error list.
+            # RECONSTRUCT through the configured ErrorList subclass while supplying
+            # classification ``nonform``; do not substitute the base ErrorList.
+            # EXPOSE that classification as renderer-visible metadata, distinct from
+            # unclassified field errors and Form ``nonfield`` errors.
+            # HAND OFF the existing messages and ``nonform`` metadata to rendering.
+            # REQUIRE default rendering to add only ``nonform`` to the existing
+            # error-list classes; preserve its element, children, and other markup.
+            self._non_form_errors = self.error_class(e.error_list, error_class='nonform')
 
     def clean(self):
         """

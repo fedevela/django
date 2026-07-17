@@ -3107,6 +3107,9 @@ class AdminViewUnicodeTest(TestCase):
 
 @override_settings(ROOT_URLCONF='admin_views.urls')
 class AdminViewListEditable(TestCase):
+    # NONFORM-010 architecture: admin classification coverage is owned at this
+    # list-editable response boundary. It consumes the FormSet contract through
+    # response.context['cl'].formset and must not substitute its ErrorList type.
 
     @classmethod
     def setUpTestData(cls):
@@ -3349,6 +3352,28 @@ class AdminViewListEditable(TestCase):
         non_form_errors = response.context['cl'].formset.non_form_errors()
         self.assertIsInstance(non_form_errors, ErrorList)
         self.assertEqual(str(non_form_errors), str(ErrorList(["Grace is not a Zombie"])))
+
+    def test_nonform_010_admin_error_is_nonform_and_preserves_errorlist(self):
+        """
+        GUID: NONFORM-010; admin-exposed error -> nonform configured ErrorList.
+        """
+        data = {
+            'form-TOTAL_FORMS': '1',
+            'form-INITIAL_FORMS': '1',
+            'form-MAX_NUM_FORMS': '0',
+            'form-0-id': str(self.per2.pk),
+            'form-0-alive': '1',
+            'form-0-gender': '2',
+            '_save': 'Save',
+        }
+        response = self.client.post(
+            reverse('admin:admin_views_person_changelist'), data,
+        )
+        formset = response.context['cl'].formset
+        non_form_errors = formset.non_form_errors()
+        self.assertEqual(non_form_errors, ['Grace is not a Zombie'])
+        self.assertIs(type(non_form_errors), formset.error_class)
+        self.assertIn('nonform', non_form_errors.error_class.split())
 
     def test_list_editable_ordering(self):
         collector = Collector.objects.create(id=1, name="Frederick Clegg")
