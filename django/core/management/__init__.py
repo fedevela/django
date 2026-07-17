@@ -355,6 +355,10 @@ class ManagementUtility:
         #   ignoring the early option error and continuing command discovery.
         # - OTHERWISE, hand parsed options to handle_default_options.
         # - DJANGO-010: LEAVE process-global sys.argv unchanged on both paths.
+        # Architecture contract (DJANGO-001, DJANGO-002, DJANGO-010):
+        # ManagementUtility owns this early-parser seam. Its instance argv is
+        # the authority for both the parser program name (via self.prog_name)
+        # and the option slice; process-global sys.argv is outside the boundary.
         parser = CommandParser(usage='%(prog)s subcommand [options] [args]', add_help=False, allow_abbrev=False)
         parser.add_argument('--settings')
         parser.add_argument('--pythonpath')
