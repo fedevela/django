@@ -76,6 +76,12 @@ class MigrationRecorder:
         Return a dict mapping (app_name, migration_name) to Migration instances
         for all applied migrations.
         """
+        # MIGREC-005 pseudocode:
+        # permission = router allows this connection alias to migrate Migration
+        # if permission is denied:
+        #     return an empty applied-migration mapping immediately
+        #     do not inspect, create, or query django_migrations
+        # otherwise, continue with the existing table/read flow
         if self.has_table():
             return {(migration.app, migration.name): migration for migration in self.migration_qs}
         else:
@@ -85,11 +91,23 @@ class MigrationRecorder:
 
     def record_applied(self, app, name):
         """Record that a migration was applied."""
+        # MIGREC-003 pseudocode:
+        # permission = router allows this connection alias to migrate Migration
+        # if permission is denied:
+        #     return immediately without inspecting or creating the table
+        #     do not construct or execute an insert for (app, name)
+        # otherwise, ensure the schema and insert the migration record
         self.ensure_schema()
         self.migration_qs.create(app=app, name=name)
 
     def record_unapplied(self, app, name):
         """Record that a migration was unapplied."""
+        # MIGREC-004 pseudocode:
+        # permission = router allows this connection alias to migrate Migration
+        # if permission is denied:
+        #     return immediately without inspecting or creating the table
+        #     do not construct or execute a delete for (app, name)
+        # otherwise, ensure the schema and delete the migration record
         self.ensure_schema()
         self.migration_qs.filter(app=app, name=name).delete()
 
