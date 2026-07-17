@@ -1140,15 +1140,49 @@ class ResolverMatchTests(SimpleTestCase):
 
     def test_rpr_005_created_ordinary_view_resolver_match_repr_remains_identical(self):
         """GUID: RPR-005 - Created ordinary-view repr remains identical."""
-        self.assertTrue(True)
+        match = ResolverMatch(
+            empty_view,
+            ('argument',),
+            {'keyword': 'value'},
+            url_name='ordinary-view',
+            app_names=['ordinary-app'],
+            namespaces=['ordinary-namespace'],
+            route='ordinary/<str:argument>/',
+        )
+        self.assertEqual(
+            repr(match),
+            "ResolverMatch(func=urlpatterns_reverse.views.empty_view, "
+            "args=('argument',), kwargs={'keyword': 'value'}, "
+            "url_name=ordinary-view, app_names=['ordinary-app'], "
+            "namespaces=['ordinary-namespace'], route=ordinary/<str:argument>/)",
+        )
 
     def test_rpr_005_request_resolved_ordinary_view_repr_preserves_callable_identity_and_fields(self):
         """GUID: RPR-005 - Request-attached ordinary-view identity and fields persist."""
-        self.assertTrue(True)
+        response = self.client.get('/resolver_match/')
+        match = response.resolver_match
+        self.assertIs(match.func, views.pass_resolver_match_view)
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {})
+        self.assertEqual(match.url_name, 'test-resolver-match')
+        self.assertEqual(match.app_names, [])
+        self.assertEqual(match.namespaces, [])
+        self.assertEqual(match.route, 'resolver_match/')
+        self.assertEqual(
+            repr(match),
+            "ResolverMatch(func=urlpatterns_reverse.views.pass_resolver_match_view, "
+            "args=(), kwargs={}, url_name=test-resolver-match, app_names=[], "
+            "namespaces=[], route=resolver_match/)",
+        )
 
     def test_rpr_005_partial_aware_repr_keeps_ordinary_view_test_expectations_unchanged(self):
         """GUID: RPR-005 - Ordinary-view regression expectations remain unchanged."""
-        self.assertTrue(True)
+        self.assertEqual(
+            repr(resolve('/no_kwargs/42/37/')),
+            "ResolverMatch(func=urlpatterns_reverse.views.empty_view, "
+            "args=('42', '37'), kwargs={}, url_name=no-kwargs, app_names=[], "
+            "namespaces=[], route=^no_kwargs/([0-9]+)/([0-9]+)/$)",
+        )
 
     @override_settings(ROOT_URLCONF='urlpatterns_reverse.urls')
     def test_rpr_006_partial_aware_initialization_preserves_url_resolution_outcome(self):
