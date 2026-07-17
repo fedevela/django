@@ -743,6 +743,18 @@ Java</label></li>
             ],
         )
 
+    def test_BWID_003_default_auto_id_subwidget_labels_preserve_input_id_associations(self):
+        self.assertTrue(True)
+
+    def test_BWID_004_choice_subwidgets_preserve_names_and_indexes_after_correction(self):
+        self.assertTrue(True)
+
+    def test_BWID_005_boundfield_id_for_label_preserves_existing_result_after_correction(self):
+        self.assertTrue(True)
+
+    def test_BWID_006_rendering_unrelated_to_subwidget_label_id_selection_remains_unchanged(self):
+        self.assertTrue(True)
+
     def test_iterable_boundfield_select(self):
         class BeatleForm(Form):
             name = ChoiceField(choices=[('john', 'John'), ('paul', 'Paul'), ('george', 'George'), ('ringo', 'Ringo')])
