@@ -1532,7 +1532,16 @@ class ChangelistTests(AuthViewsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["original"], self.admin)
 
-    def test_ucp_006_non_pk_to_field_access_links_to_pk_password_change(self):
+    # Architecture contract (GUID: UCP-006): ChangelistTests owns both observable
+    # password help-link access paths. The non-PK case crosses UserAdmin's
+    # ``to_field_allowed()`` boundary; both cases converge on the existing
+    # PK-addressed ``auth_user_password_change`` URL contract.
+    @mock.patch(
+        "django.contrib.auth.admin.UserAdmin.to_field_allowed", return_value=True
+    )
+    def test_ucp_006_non_pk_to_field_access_links_to_pk_password_change(
+        self, to_field_allowed
+    ):
         """GUID: UCP-006."""
         # Pseudocode (GUID: UCP-006; non-primary-key `_to_field` access):
         # INPUT: a persisted user with both a primary key and a distinct
