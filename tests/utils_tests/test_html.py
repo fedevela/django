@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 
 from django.test import SimpleTestCase
 from django.utils.functional import lazystr
@@ -330,15 +331,29 @@ class TestUtilsHtml(SimpleTestCase):
 
     def test_jsonscript_011_public_docs_describe_script_safe_output_purpose(self):
         """JSONSCRIPT-011: Public docs describe the script-safe output purpose."""
-        self.assertTrue(True)
+        documentation = self.get_json_script_documentation()
+        self.assertIn("Safely outputs a Python object as JSON", documentation)
+        self.assertIn("wrapped in a ``<script>`` tag", documentation)
 
     def test_jsonscript_011_docs_state_optional_encoder_djangojsonencoder_default(self):
         """JSONSCRIPT-011: Docs state the encoder and DjangoJSONEncoder default."""
-        self.assertTrue(True)
+        documentation = self.get_json_script_documentation()
+        self.assertIn("optional ``encoder`` argument", documentation)
+        self.assertIn("DjangoJSONEncoder", documentation)
+        self.assertIn("By default", documentation)
 
     def test_jsonscript_011_public_docs_describe_optional_element_id(self):
         """JSONSCRIPT-011: Public docs describe the optional element ID."""
-        self.assertTrue(True)
+        documentation = self.get_json_script_documentation()
+        self.assertIn("element_id=None", documentation)
+        self.assertIn("optional ``element_id`` argument", documentation)
+
+    def get_json_script_documentation(self):
+        docs_path = Path(__file__).parents[2] / "docs" / "ref" / "utils.txt"
+        documentation = docs_path.read_text(encoding="utf-8")
+        start = documentation.index(".. function:: json_script(")
+        end = documentation.index("\n.. function::", start)
+        return documentation[start:end]
 
     def test_smart_urlquote(self):
         items = (
