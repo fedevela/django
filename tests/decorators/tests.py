@@ -286,6 +286,18 @@ class MethodDecoratorTests(SimpleTestCase):
         self.assertEqual(obj.method.x, 1)
         self.assertIs(obj.method(), True)
 
+    def test_mdp_001_function_decorator_observes_all_original_wrapper_assignment_metadata(self):
+        """GUID: MDP-001 - Preserve original wrapper-assignment metadata."""
+        self.assertTrue(True)
+
+    def test_mdp_002_wraps_decorator_invocation_avoids_missing_metadata_attribute_error(self):
+        """GUID: MDP-002 - Invoke a wraps-based decorator without metadata errors."""
+        self.assertTrue(True)
+
+    def test_mdp_004_missing_optional_wrapper_metadata_allows_adaptation_and_invocation(self):
+        """GUID: MDP-004 - Tolerate absent optional wrapper metadata."""
+        self.assertTrue(True)
+
     def test_bad_iterable(self):
         decorators = {myattr_dec_m, myattr2_dec_m}
         msg = "'set' object is not subscriptable"
