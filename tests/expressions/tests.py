@@ -951,7 +951,11 @@ class BasicExpressionsTests(TestCase):
         #   and evaluate the query.
         # - Require exactly the intersection of both matching sets; query
         #   construction/execution failure or any other rows fail this case.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q(salary__gte=20) & Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo],
+        )
 
     def test_qex_010_exists_and_nonempty_q_orm_filter_returns_intersection(self):
         """QEX-010: Exists(...) & Q(...) has query intersection semantics."""
@@ -961,7 +965,11 @@ class BasicExpressionsTests(TestCase):
         #   ORM filtering, and evaluate the query.
         # - Require the same intersection as Q AND Exists; construction,
         #   execution, or logical-result divergence fail this case.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) & Q(salary__gte=20)),
+            [self.foobar_ltd.ceo],
+        )
 
     def test_qex_010_nonempty_q_or_exists_orm_filter_returns_union(self):
         """QEX-010: Q(...) | Exists(...) has query union semantics."""
@@ -972,7 +980,11 @@ class BasicExpressionsTests(TestCase):
         #   and evaluate the query.
         # - Require exactly the union of both matching sets without duplicate
         #   logical results; construction, execution, or mismatch fail.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q(salary__gte=20) | Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo, self.max],
+        )
 
     def test_qex_010_exists_or_nonempty_q_orm_filter_returns_union(self):
         """QEX-010: Exists(...) | Q(...) has query union semantics."""
@@ -982,7 +994,11 @@ class BasicExpressionsTests(TestCase):
         #   ORM filtering, and evaluate the query.
         # - Require the same union as Q OR Exists; construction, execution,
         #   duplicate logical results, or result divergence fail this case.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) | Q(salary__gte=20)),
+            [self.foobar_ltd.ceo, self.max],
+        )
 
     def test_qex_010_empty_q_and_exists_orm_filter_returns_exists_matches(self):
         """QEX-010: Q() & Exists(...) has Exists query semantics."""
@@ -993,7 +1009,11 @@ class BasicExpressionsTests(TestCase):
         #   and evaluate the query.
         # - Require exactly the Exists matches; construction, execution, loss
         #   of Exists matches, or extra rows fail this identity case.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() & Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo],
+        )
 
     def test_qex_010_exists_and_empty_q_orm_filter_returns_exists_matches(self):
         """QEX-010: Exists(...) & Q() has Exists query semantics."""
@@ -1003,7 +1023,11 @@ class BasicExpressionsTests(TestCase):
         #   to ORM filtering, and evaluate the query.
         # - Require the same Exists matches as Q() AND Exists; construction,
         #   execution, or operand-order divergence fail this identity case.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) & Q()),
+            [self.foobar_ltd.ceo],
+        )
 
     def test_qex_010_empty_q_or_exists_orm_filter_returns_exists_matches(self):
         """QEX-010: Q() | Exists(...) has Exists query semantics."""
@@ -1014,7 +1038,11 @@ class BasicExpressionsTests(TestCase):
         #   and evaluate the query.
         # - Require exactly the Exists matches; construction, execution, loss
         #   of Exists matches, or extra rows fail this identity case.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() | Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo],
+        )
 
     def test_qex_010_exists_or_empty_q_orm_filter_returns_exists_matches(self):
         """QEX-010: Exists(...) | Q() has Exists query semantics."""
@@ -1024,7 +1052,11 @@ class BasicExpressionsTests(TestCase):
         #   to ORM filtering, and evaluate the query.
         # - Require the same Exists matches as Q() OR Exists; construction,
         #   execution, or operand-order divergence fail this identity case.
-        self.assertTrue(True)
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) | Q()),
+            [self.foobar_ltd.ceo],
+        )
 
 
 class IterableLookupInnerExpressionsTests(TestCase):
