@@ -42,12 +42,17 @@ def reset_loaders():
 
 @receiver(autoreload_started, dispatch_uid='template_loaders_watch_changes')
 def watch_for_template_changes(sender, **kwargs):
+    # Template-directory registration boundary (ARLD-004): encompassing,
+    # valid directories belong here without narrowing general file watches.
     for directory in get_template_directories():
         sender.watch_dir(directory, '**/*')
 
 
 @receiver(file_changed, dispatch_uid='template_loaders_file_changed')
 def template_changed(sender, file_path, **kwargs):
+    # Integration seam (ARLD-001, ARLD-003): this receiver owns template
+    # cache invalidation only; project reload authority remains with
+    # BaseReloader.notify_file_changed() across overlapping watch paths.
     # Pseudocode contract — ARLD-001, ARLD-003, ARLD-004:
     # INPUT: a changed path, the general autoreloader's monitored-project-file
     # classification, and the configured template directories.
