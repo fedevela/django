@@ -883,6 +883,40 @@ class ModelAdminChecks(BaseModelAdminChecks):
     def _check_list_display(self, obj):
         """Check that list_display only contains fields or usable attributes."""
 
+        # GEV-007 / GEV-009 — independently repeatable complete validation.
+        # Logic obligations and verification loci:
+        # - GEV-007 mixed-entry isolation maps to
+        #   test_gev_007_mixed_valid_and_invalid_entries_report_only_invalid_entry.
+        # - GEV-007 independent failures map to
+        #   test_gev_007_multiple_invalid_entries_each_emit_e108_independently.
+        # - GEV-009 repeatability maps to
+        #   test_gev_009_repeated_checks_of_unchanged_configuration_match.
+        # - GEV-009 context independence maps to
+        #   test_gev_009_check_without_request_or_model_instance_has_same_result.
+        #
+        # INPUT: the registered ModelAdmin configuration and its model class.
+        # COMPLETE-RUN PROCEDURE:
+        # 1. Validate the collection contract once. If list_display is not a list
+        #    or tuple, emit the established collection error and stop this check.
+        # 2. Otherwise, enumerate every configured entry in declaration order.
+        # 3. For each entry, derive its indexed label and invoke the item-validation
+        #    procedure with fresh per-entry state; do not carry acceptance or
+        #    rejection from any preceding entry (GEV-007).
+        # 4. Append that entry's zero-or-one diagnostic result to the complete-run
+        #    result, then continue regardless of whether the entry was accepted or
+        #    rejected. Thus valid entries contribute no error and every invalid
+        #    entry contributes its own admin.E108 without suppressing its siblings.
+        # 5. Return the ordered aggregate only after all entries have transitioned
+        #    independently to ACCEPTED or REJECTED (GEV-007).
+        # 6. Resolve every transition solely from the unchanged configuration,
+        #    ModelAdmin class namespace, model class namespace, and model metadata;
+        #    neither obtain an HTTP request nor construct a model instance.
+        # 7. Retain no result or mutable resolution state between complete runs, so
+        #    identical inputs traverse identical branches and produce the same
+        #    ordered diagnostic values on every invocation (GEV-009).
+        # FAILURE PATH: only a malformed collection stops enumeration; an invalid
+        # entry is isolated to its indexed result and never aborts sibling checks.
+        # OUTPUT: a deterministic ordered list of collection or per-entry errors.
         if not isinstance(obj.list_display, (list, tuple)):
             return must_be(
                 "a list or tuple", option="list_display", obj=obj, id="admin.E107"
@@ -934,6 +968,31 @@ class ModelAdminChecks(BaseModelAdminChecks):
     # - GEV-006: valid callable, model attribute, and ModelAdmin attribute entries
     #   remain accepted without admin.E108 here.
     def _check_list_display_item(self, obj, item, label):
+        # GEV-008 / GEV-009 — preserve the established item-validation contract.
+        # Logic obligations and verification loci:
+        # - GEV-008 valid-outcome preservation maps to
+        #   test_gev_008_established_valid_list_display_outcome_is_retained.
+        # - GEV-008 diagnostic preservation maps to
+        #   test_gev_008_established_invalid_entry_retains_e108_diagnostic_contract.
+        #
+        # INPUT: one entry, its stable indexed label, the registered ModelAdmin,
+        # and its model class; no request or runtime model instance is an input.
+        # ITEM PROCEDURE:
+        # 1. Begin each invocation in CANDIDATE with no inherited sibling or prior-
+        #    run state (GEV-009).
+        # 2. Apply the established resolution order independently: callable entry,
+        #    ModelAdmin attribute, model field metadata, then model attribute.
+        # 3. If an established resolution branch accepts the entry, transition to
+        #    ACCEPTED and return no diagnostic; do not let another entry alter that
+        #    valid outcome (GEV-008).
+        # 4. If all supported namespaces reject the reference, transition to
+        #    UNRESOLVED -> REJECTED_E108 and emit exactly one established admin.E108
+        #    diagnostic using the entry's indexed label, value, ModelAdmin class
+        #    name, model label, and existing error ownership (GEV-008).
+        # 5. If the entry resolves to a prohibited field kind, retain its separate
+        #    established admin.E109 path; do not relabel that outcome as admin.E108.
+        # OUTPUT: the same zero-or-one established diagnostic for the same item on
+        # every run, ready for collection-level aggregation without side effects.
         # GEV-005 / GEV-006 — preserve every supported list_display reference.
         # Logic obligations and verification loci:
         # - GEV-005 maps to
