@@ -145,6 +145,10 @@ class UserCreationForm(forms.ModelForm):
 
 
 class UserChangeForm(forms.ModelForm):
+    # Architecture contract (GUID: UCP-004): ReadOnlyPasswordHashField owns the
+    # password presentation and raw-password secrecy boundary. UserChangeForm
+    # supplies explanatory help with one link placeholder; initialization may
+    # replace that placeholder but must not replace the field or its widget.
     # Pseudocode (GUID: UCP-004):
     # DECLARE the password field as a read-only hash presentation.
     # PRESENT explanatory help text that states raw passwords are unavailable.
@@ -167,11 +171,13 @@ class UserChangeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         password = self.fields.get("password")
-        # Architecture contract (GUID: UCP-001, UCP-002, UCP-003): this form
-        # owns the password help-link target and derives its object identity
-        # from ``self.instance.pk``. The relative link is the integration seam
-        # with UserAdmin's PK-addressed ``<id>/password/`` route; change-page
-        # lookup fields remain outside that boundary.
+        # Architecture contract (GUID: UCP-001, UCP-002, UCP-003, UCP-004,
+        # UCP-005): this optional field lookup is the boundary between form
+        # composition and password help-link integration. This form owns only
+        # the link target and derives its object identity from
+        # ``self.instance.pk``. The relative link is the integration seam with
+        # UserAdmin's PK-addressed ``<id>/password/`` route; change-page lookup
+        # fields and forms that omit password remain outside that boundary.
         # Pseudocode (GUID: UCP-001, UCP-002, UCP-003, UCP-004, UCP-005):
         # INPUT: the password field and this form's persisted user instance.
         # IF the password field exists:
