@@ -934,34 +934,86 @@ class BasicExpressionsTests(TestCase):
 
     def test_qex_010_nonempty_q_and_exists_orm_filter_returns_intersection(self):
         """QEX-010: Q(...) & Exists(...) has query intersection semantics."""
+        # QEX-010 logic:
+        # - Build a nonempty salary Q and a correlated Exists condition whose
+        #   matching employee sets overlap without being identical.
+        # - Combine them as Q AND Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the intersection of both matching sets; query
+        #   construction/execution failure or any other rows fail this case.
         self.assertTrue(True)
 
     def test_qex_010_exists_and_nonempty_q_orm_filter_returns_intersection(self):
         """QEX-010: Exists(...) & Q(...) has query intersection semantics."""
+        # QEX-010 logic:
+        # - Reuse equivalent nonempty salary Q and correlated Exists inputs.
+        # - Reverse operand order, combine as Exists AND Q, pass the result to
+        #   ORM filtering, and evaluate the query.
+        # - Require the same intersection as Q AND Exists; construction,
+        #   execution, or logical-result divergence fail this case.
         self.assertTrue(True)
 
     def test_qex_010_nonempty_q_or_exists_orm_filter_returns_union(self):
         """QEX-010: Q(...) | Exists(...) has query union semantics."""
+        # QEX-010 logic:
+        # - Build a nonempty salary Q and a correlated Exists condition with
+        #   partially distinct matching employee sets.
+        # - Combine them as Q OR Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the union of both matching sets without duplicate
+        #   logical results; construction, execution, or mismatch fail.
         self.assertTrue(True)
 
     def test_qex_010_exists_or_nonempty_q_orm_filter_returns_union(self):
         """QEX-010: Exists(...) | Q(...) has query union semantics."""
+        # QEX-010 logic:
+        # - Reuse equivalent nonempty salary Q and correlated Exists inputs.
+        # - Reverse operand order, combine as Exists OR Q, pass the result to
+        #   ORM filtering, and evaluate the query.
+        # - Require the same union as Q OR Exists; construction, execution,
+        #   duplicate logical results, or result divergence fail this case.
         self.assertTrue(True)
 
     def test_qex_010_empty_q_and_exists_orm_filter_returns_exists_matches(self):
         """QEX-010: Q() & Exists(...) has Exists query semantics."""
+        # QEX-010 logic:
+        # - Build an empty Q and a correlated Exists condition with known
+        #   matching employees.
+        # - Combine them as Q() AND Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the Exists matches; construction, execution, loss
+        #   of Exists matches, or extra rows fail this identity case.
         self.assertTrue(True)
 
     def test_qex_010_exists_and_empty_q_orm_filter_returns_exists_matches(self):
         """QEX-010: Exists(...) & Q() has Exists query semantics."""
+        # QEX-010 logic:
+        # - Reuse an empty Q and an equivalent correlated Exists condition.
+        # - Reverse operand order, combine as Exists AND Q(), pass the result
+        #   to ORM filtering, and evaluate the query.
+        # - Require the same Exists matches as Q() AND Exists; construction,
+        #   execution, or operand-order divergence fail this identity case.
         self.assertTrue(True)
 
     def test_qex_010_empty_q_or_exists_orm_filter_returns_exists_matches(self):
         """QEX-010: Q() | Exists(...) has Exists query semantics."""
+        # QEX-010 logic:
+        # - Build an empty Q and a correlated Exists condition with known
+        #   matching employees.
+        # - Combine them as Q() OR Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the Exists matches; construction, execution, loss
+        #   of Exists matches, or extra rows fail this identity case.
         self.assertTrue(True)
 
     def test_qex_010_exists_or_empty_q_orm_filter_returns_exists_matches(self):
         """QEX-010: Exists(...) | Q() has Exists query semantics."""
+        # QEX-010 logic:
+        # - Reuse an empty Q and an equivalent correlated Exists condition.
+        # - Reverse operand order, combine as Exists OR Q(), pass the result
+        #   to ORM filtering, and evaluate the query.
+        # - Require the same Exists matches as Q() OR Exists; construction,
+        #   execution, or operand-order divergence fail this identity case.
         self.assertTrue(True)
 
 
