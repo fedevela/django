@@ -23,6 +23,29 @@ class OperationWriter:
 
     def serialize(self):
 
+        # Mixed-inheritance migration pseudocode (GUID: MIG-003, MIG-004,
+        # MIG-005, MIG-006, MIG-008, MIG-009):
+        #
+        # INPUT: a CreateModel operation deconstructed into named arguments.
+        # FOR each argument in constructor order:
+        #     IF the argument expands into a mapping or sequence:
+        #         serialize every contained value without replacing or
+        #         normalizing its semantic content;
+        #         preserve bases as the ordered pair
+        #         (app.models.MyMixin, models.Model) (MIG-003);
+        #         preserve app.models.MyField(primary_key=True,
+        #         serialize=False) in fields (MIG-004);
+        #         preserve abstract=False in options (MIG-005);
+        #     ELSE:
+        #         serialize the argument as a single value;
+        #     merge every returned import into the operation import set,
+        #     retaining app.models for both MyMixin and MyField (MIG-006).
+        # OUTPUT: rendered CreateModel text plus the complete import set.
+        # VERIFICATION HANDOFF: exercise this flow with the reproduced mixed
+        # inheritance operation and verify its emitted import/content contract
+        # (MIG-008), then run the unchanged writer and serializer suites so
+        # existing serialization behavior remains intact (MIG-009).
+
         def _write(_arg_name, _arg_value):
             if (_arg_name in self.operation.serialization_expand_args and
                     isinstance(_arg_value, (list, tuple, dict))):

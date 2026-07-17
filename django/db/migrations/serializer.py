@@ -272,6 +272,26 @@ class TupleSerializer(BaseSequenceSerializer):
 
 class TypeSerializer(BaseSerializer):
     def serialize(self):
+        # models.Model reference pseudocode (GUID: MIG-001, MIG-002, MIG-003,
+        # MIG-006, MIG-007, MIG-008):
+        #
+        # INPUT: a Python type encountered while serializing an operation.
+        # IF the type is exactly models.Model:
+        #     emit the symbolic reference "models.Model" (MIG-003);
+        #     return the Django models import required to resolve that symbol
+        #     when MigrationWriter assembles the module (MIG-001);
+        # ELSE:
+        #     follow the existing type serialization path and do not add a
+        #     Django models import merely because another type was seen
+        #     (MIG-007);
+        # preserve imports independently returned for application-defined
+        # types so app.models remains resolvable (MIG-006).
+        # HANDOFF: MigrationWriter unions the returned imports, merges the
+        # Django import with migrations when present, and renders the module.
+        # FAILURE CHECK: execute/load the rendered module; any NameError for
+        # an emitted reference fails the contract (MIG-002).
+        # REGRESSION CHECK: the mixed-inheritance case must observe both the
+        # models import and the unchanged symbolic base (MIG-008).
         special_cases = [
             (models.Model, "models.Model", []),
             (type(None), 'type(None)', []),
