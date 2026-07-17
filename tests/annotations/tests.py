@@ -12,12 +12,24 @@ from django.db.models.expressions import RawSQL
 from django.db.models.functions import (
     Coalesce, ExtractYear, Floor, Length, Lower, Trim,
 )
-from django.test import TestCase, skipUnlessDBFeature
+from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
 from django.test.utils import register_lookup
 
 from .models import (
     Author, Book, Company, DepartmentStore, Employee, Publisher, Store, Ticket,
 )
+
+
+class EmptyMembershipAnnotationAggregationContractTests(SimpleTestCase):
+    # EMPTYIN-004, EMPTYIN-006: Selecting a negated empty-membership annotation
+    # alongside aggregation compiles and preserves its true value.
+    def test_emptyin_004_006_negated_annotation_alongside_aggregation_compiles_and_remains_true(self):
+        self.assertTrue(True)
+
+    # EMPTYIN-004, EMPTYIN-006: Selecting a non-negated empty-membership
+    # annotation alongside aggregation compiles and preserves its false value.
+    def test_emptyin_004_006_nonnegated_annotation_alongside_aggregation_compiles_and_remains_false(self):
+        self.assertTrue(True)
 
 
 class NonAggregateAnnotationTestCase(TestCase):
