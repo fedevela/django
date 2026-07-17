@@ -296,14 +296,47 @@ class PostgreSqlDbshellPGSQL008ContractTestCase(SimpleTestCase):
         self,
     ):
         """GUID: PGSQL-008; ordering and argument-preservation obligation."""
+        # Pseudocode for GUID PGSQL-008 ordering verification:
+        # - INPUT: a configured PostgreSQL database name and multiple distinct
+        #   additional dbshell arguments, including values whose separation is
+        #   significant.
+        # - INVOKE the PostgreSQL command-argument builder with those inputs.
+        # - LOCATE the configured database name in the generated argument list.
+        # - VERIFY every additional argument occurs before the database name.
+        # - VERIFY the arguments before the database name equal the supplied
+        #   arguments element-for-element, preserving content, separation, and
+        #   relative order.
+        # - VERIFY the configured database name follows the complete parameter
+        #   sequence.
+        # - IF any comparison differs, fail with the generated and expected
+        #   argument sequences; OTHERWISE report the ordering check as passing.
         pass
 
     def test_pgsql_008_test_parameters_passes_after_argument_ordering_correction(self):
         """GUID: PGSQL-008; test_parameters regression obligation."""
+        # Pseudocode for GUID PGSQL-008 targeted regression verification:
+        # - INPUT: the argument-ordering correction and the existing
+        #   ``PostgreSqlDbshellCommandTestCase.test_parameters`` test.
+        # - HAND OFF that test unchanged to the established Django test runner.
+        # - IF setup, execution, assertion, or teardown fails, propagate the
+        #   failure as a PGSQL-008 regression.
+        # - OTHERWISE record that ``test_parameters`` remains passing.
         pass
 
     def test_pgsql_008_existing_postgresql_dbshell_tests_pass_after_argument_ordering_correction(
         self,
     ):
         """GUID: PGSQL-008; established PostgreSQL regressions obligation."""
+        # Pseudocode for GUID PGSQL-008 suite regression verification:
+        # - INPUT: the argument-ordering correction and the established tests
+        #   ``test_accent``, ``test_basic``, ``test_column``,
+        #   ``test_crash_password_does_not_leak``, ``test_nopass``,
+        #   ``test_passfile``, ``test_service``, and ``test_ssl_certificate``.
+        # - FOR EACH named test in that order:
+        #     - hand off the unchanged test to the established Django test
+        #       runner with its normal setup and teardown;
+        #     - IF the test errors or fails, report the named regression and
+        #       preserve its failure details.
+        # - AFTER every named test passes, report the established PostgreSQL
+        #   dbshell behavior as preserved.
         pass
