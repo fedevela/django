@@ -1,9 +1,17 @@
+import logging
 import threading
 import warnings
 import weakref
 
 from django.utils.deprecation import RemovedInDjango40Warning
 from django.utils.inspect import func_accepts_kwargs
+
+
+# Receiver-failure diagnostics for Signal.send_robust() belong to the dispatch
+# subsystem logger (SIGROB-001, SIGROB-004, SIGROB-005). The method's existing
+# empty, exception, and success branches remain the emission boundaries
+# (SIGROB-008, SIGROB-007).
+logger = logging.getLogger('django.dispatch')
 
 
 def _make_id(target):
