@@ -55,15 +55,55 @@ class RecorderTests(TestCase):
 
     def test_MIGREC_003_record_applied_is_noop_without_table_when_migration_permission_denied(self):
         """MIGREC-003: Denied record_applied() neither creates nor writes."""
-        self.assertTrue(True)
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+        ) as migration_qs, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema:
+            recorder.record_applied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        ensure_schema.assert_not_called()
+        migration_qs.assert_not_called()
 
     def test_MIGREC_004_record_unapplied_is_noop_when_migration_permission_denied(self):
         """MIGREC-004: Denied record_unapplied() neither creates nor deletes."""
-        self.assertTrue(True)
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+        ) as migration_qs, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema:
+            recorder.record_unapplied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        ensure_schema.assert_not_called()
+        migration_qs.assert_not_called()
 
     def test_MIGREC_005_applied_migrations_returns_empty_without_io_when_migration_permission_denied(self):
         """MIGREC-005: Denied applied_migrations() returns empty without I/O."""
-        self.assertTrue(True)
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+        ) as migration_qs, mock.patch.object(
+            recorder, 'has_table',
+        ) as has_table:
+            applied_migrations = recorder.applied_migrations()
+        self.assertEqual(applied_migrations, {})
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        has_table.assert_not_called()
+        migration_qs.assert_not_called()
 
     def test_apply(self):
         """

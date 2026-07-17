@@ -63,9 +63,12 @@ class MigrationRecorder:
             tables = self.connection.introspection.table_names(cursor)
         return self.Migration._meta.db_table in tables
 
+    def _migration_allowed(self):
+        return router.allow_migrate_model(self.connection.alias, self.Migration)
+
     def ensure_schema(self):
         """Ensure the table exists and has the correct schema."""
-        if not router.allow_migrate_model(self.connection.alias, self.Migration):
+        if not self._migration_allowed():
             return
         # If the table's there, that's fine - we've never changed its schema
         # in the codebase.
@@ -83,12 +86,9 @@ class MigrationRecorder:
         Return a dict mapping (app_name, migration_name) to Migration instances
         for all applied migrations.
         """
-        # MIGREC-005 pseudocode:
-        # permission = router allows this connection alias to migrate Migration
-        # if permission is denied:
-        #     return an empty applied-migration mapping immediately
-        #     do not inspect, create, or query django_migrations
-        # otherwise, continue with the existing table/read flow
+        # MIGREC-005: Denied reads don't inspect or query django_migrations.
+        if not self._migration_allowed():
+            return {}
         if self.has_table():
             return {(migration.app, migration.name): migration for migration in self.migration_qs}
         else:
@@ -98,23 +98,17 @@ class MigrationRecorder:
 
     def record_applied(self, app, name):
         """Record that a migration was applied."""
-        # MIGREC-003 pseudocode:
-        # permission = router allows this connection alias to migrate Migration
-        # if permission is denied:
-        #     return immediately without inspecting or creating the table
-        #     do not construct or execute an insert for (app, name)
-        # otherwise, ensure the schema and insert the migration record
+        # MIGREC-003: Denied writes don't inspect or create django_migrations.
+        if not self._migration_allowed():
+            return
         self.ensure_schema()
         self.migration_qs.create(app=app, name=name)
 
     def record_unapplied(self, app, name):
         """Record that a migration was unapplied."""
-        # MIGREC-004 pseudocode:
-        # permission = router allows this connection alias to migrate Migration
-        # if permission is denied:
-        #     return immediately without inspecting or creating the table
-        #     do not construct or execute a delete for (app, name)
-        # otherwise, ensure the schema and delete the migration record
+        # MIGREC-004: Denied deletes don't inspect or create django_migrations.
+        if not self._migration_allowed():
+            return
         self.ensure_schema()
         self.migration_qs.filter(app=app, name=name).delete()
 
