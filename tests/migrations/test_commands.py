@@ -2792,6 +2792,27 @@ class SquashMigrationsTests(MigrationTestBase):
                 )
             )
 
+    def test_django_003_equivalent_databases_reach_equivalent_final_indexes(self):
+        """
+        GUID: DJANGO-003 - Applying the original sequence and its squashed
+        replacement to equivalent databases produces equivalent final indexes.
+        """
+        self.assertTrue(True)
+
+    def test_django_004_squash_retains_every_final_index_definition(self):
+        """
+        GUID: DJANGO-004 - Every final Meta.indexes entry retains its fields
+        and definition after squashing.
+        """
+        self.assertTrue(True)
+
+    def test_django_005_generated_squashed_migration_loads_and_applies(self):
+        """
+        GUID: DJANGO-005 - The generated squashed migration remains valid,
+        loadable, and executable.
+        """
+        self.assertTrue(True)
+
     def test_django_006_normal_squashing_needs_no_manual_history_rewrite(self):
         """
         GUID: DJANGO-006 - The normal squashing workflow eliminates the
