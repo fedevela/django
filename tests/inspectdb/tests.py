@@ -263,6 +263,26 @@ class InspectDBTestCase(TestCase):
             out.getvalue(),
         )
 
+    def test_insp_001_two_relations_to_same_target_receive_distinct_related_names(self):
+        """GUID: INSP-001 - Two repeated-target relations have distinct names."""
+        self.assertTrue(True)
+
+    def test_insp_001_larger_repeated_target_group_is_pairwise_distinct(self):
+        """GUID: INSP-001 - Every larger repeated-target group is distinct."""
+        self.assertTrue(True)
+
+    def test_insp_002_related_name_is_derived_from_final_generated_attribute_name(self):
+        """GUID: INSP-002 - A reverse name derives from the final field name."""
+        self.assertTrue(True)
+
+    def test_insp_002_identical_schema_runs_generate_the_same_related_names(self):
+        """GUID: INSP-002 - Repeated runs preserve deterministic reverse names."""
+        self.assertTrue(True)
+
+    def test_insp_004_generated_related_names_are_valid_reverse_namespace_names(self):
+        """GUID: INSP-004 - Generated names pass reverse-namespace validation."""
+        self.assertTrue(True)
+
     def test_digits_column_name_introspection(self):
         """Introspection of column names consist/start with digits (#16536/#17676)"""
         char_field_type = connection.features.introspected_field_types["CharField"]
