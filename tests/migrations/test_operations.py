@@ -734,13 +734,33 @@ class OperationTests(OperationTestBase):
 
         self.assertFalse(any("ADD CONSTRAINT" in query for query in queries))
 
+    @unittest.skipUnless(connection.vendor == "sqlite", "SQLite specific test.")
     def test_rmn_004_sqlite_rename_model_same_effective_table_does_not_recreate_table(self):
         """
         GUID: RMN-004 - Applying RenameModel on SQLite when the old and new
         migration states resolve to the same effective database table name
         does not recreate that table.
         """
-        pass
+        app_label = "test_rmn_004"
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(app_label, db_table=db_table)
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        old_model = project_state.apps.get_model(app_label, "Pony")
+        new_model = new_state.apps.get_model(app_label, "Horse")
+
+        self.assertEqual(old_model._meta.db_table, new_model._meta.db_table)
+        self.assertTableExists(db_table)
+
+        with CaptureQueriesContext(connection) as captured_queries:
+            with connection.schema_editor() as editor:
+                operation.database_forwards(
+                    app_label, editor, project_state, new_state,
+                )
+
+        self.assertEqual(captured_queries.captured_queries, [])
+        self.assertTableExists(db_table)
 
     def test_rename_model_state_forwards(self):
         """
