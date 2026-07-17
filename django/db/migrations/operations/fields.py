@@ -131,6 +131,22 @@ class AddField(FieldOperation):
         return "%s_%s" % (self.model_name_lower, self.name_lower)
 
     def reduce(self, operation, app_label):
+        # MIGOPT-008 -- AddField-to-AlterField reduction:
+        # INPUT: this AddField and the later operation selected by the optimizer.
+        # IF the later operation targets a different normalized model or field,
+        # skip this reduction and hand the pair to the existing fallback; do not
+        # transfer a field definition between distinct targets.
+        # ELSE IF the later same-target operation is an AlterField, RETURN one
+        # AddField for that target whose field is the AlterField field object.
+        # This replacement preserves the complete effective field definition
+        # supplied by the later operation rather than merging field attributes.
+        # The optimizer repeats this transition for each applicable same-target
+        # AlterField, so the surviving AddField contains the field definition
+        # from the final AlterField in the sequence.
+        # ELSE continue through the existing same-target RemoveField or
+        # RenameField branches; if no branch applies, use the fallback result.
+        # OUTPUT: either the final-definition AddField replacement or a fallback
+        # that leaves this optimization inapplicable without changing targets.
         if isinstance(operation, FieldOperation) and self.is_same_field_operation(
             operation
         ):
