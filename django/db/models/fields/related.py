@@ -1208,52 +1208,12 @@ class ManyToManyField(RelatedField):
         self.swappable = swappable
 
     def check(self, **kwargs):
-        # Architecture boundary (GUIDs M2M-004, M2M-005, M2M-006, M2M-007):
-        # ManyToManyField owns symmetry validation. Checks may inspect relation
-        # state, but relation visibility remains owned by class contribution
-        # and the model metadata boundary.
         return [
             *super().check(**kwargs),
             *self._check_unique(**kwargs),
             *self._check_relationship_model(**kwargs),
             *self._check_ignored_options(**kwargs),
-            *self._check_ineffective_symmetrical_related_name(**kwargs),
             *self._check_table_uniqueness(**kwargs),
-        ]
-
-    def _check_ineffective_symmetrical_related_name(self, **kwargs):
-        """Check GUIDs M2M-001, M2M-002, M2M-003, and M2M-008."""
-        # Pseudocode trace: GUID M2M-004, M2M-005, M2M-006, M2M-007.
-        # INPUTS:
-        #   - remote_field.symmetrical, normalized during field construction.
-        #   - _related_name, preserving the developer-supplied related_name.
-        # VALID NEIGHBOR FLOWS:
-        #   - GUID M2M-004: IF an explicitly non-symmetrical self-reference
-        #     supplies related_name, RETURN no ineffective-name error and
-        #     PRESERVE its named reverse relation from class contribution.
-        #   - GUID M2M-005: IF a non-symmetrical relationship supplies
-        #     related_name, RETURN no ineffective-name error and PRESERVE its
-        #     named reverse relation from class contribution.
-        #   - GUID M2M-006: IF a symmetrical relationship has no developer-
-        #     supplied related_name, RETURN no ineffective-name error; do not
-        #     treat an internally generated name as developer input.
-        # VALIDATION INVARIANT (GUID M2M-007):
-        #   READ symmetry and the developer-supplied name without changing
-        #   remote-field state or contributing another relation.
-        #   IF an ineffective-name error is returned, PRESERVE the hidden
-        #   reverse relation established during class contribution.
-        #   AFTER validation, default metadata inspection MUST therefore
-        #   continue to omit the reverse related field.
-        if not self.remote_field.symmetrical or self._related_name is None:
-            return []
-        return [
-            checks.Error(
-                'related_name is ineffective on a symmetrical '
-                'ManyToManyField because a symmetrical relationship has no '
-                'reverse relation.',
-                obj=self,
-                id='fields.E341',
-            )
         ]
 
     def _check_unique(self, **kwargs):
@@ -1295,6 +1255,15 @@ class ManyToManyField(RelatedField):
                     'with a through model.',
                     obj=self,
                     id='fields.W343',
+                )
+            )
+        if self.remote_field.symmetrical and self._related_name:
+            warnings.append(
+                checks.Warning(
+                    'related_name has no effect on ManyToManyField with a '
+                    'symmetrical relationship, e.g. to "self".',
+                    obj=self,
+                    id='fields.W345',
                 )
             )
 
