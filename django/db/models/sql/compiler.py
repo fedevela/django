@@ -1268,6 +1268,17 @@ class SQLCompiler:
                 related_field_name = related_field.related_query_name()
                 fields_found.add(related_field_name)
 
+                # DJANGO-007, DJANGO-008 pseudocode (reverse one-to-one join):
+                # INPUT the requested reverse relation, root alias, and only()
+                # selection mask.
+                # resolve the relation through the normal setup_joins() path;
+                # preserve its reusable alias, nullable join type, and
+                # field-derived linking condition;
+                # append the masked related columns to this SELECT, never a
+                # separate retrieval query;
+                # IF the related row exists, expose its values to population;
+                # ELSE preserve the primary row and expose a NULL related-row
+                # identity to population through the same joined result.
                 join_info = self.query.setup_joins(
                     [related_field_name], opts, root_alias
                 )

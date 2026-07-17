@@ -2650,6 +2650,15 @@ class RelatedPopulator:
         # IF a related instance exists:
         #     cache the primary instance on the related side as the matching
         #     object, completing the bidirectional relationship from this row.
+        # DJANGO-008 pseudocode (missing reverse one-to-one row):
+        # INPUT the primary instance and related values from the joined row.
+        # IF the related identity is NULL:
+        #     do not construct or recursively populate a related instance;
+        #     cache None for the reverse relation on the primary instance;
+        #     do not set a remote cache because no related instance exists.
+        # OUTPUT the unchanged primary instance with cached absence, allowing
+        # descriptor access to preserve the established missing-relation path
+        # without issuing a retrieval query.
         if self.reorder_for_init:
             obj_data = self.reorder_for_init(row)
         else:
