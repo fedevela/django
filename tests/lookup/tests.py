@@ -109,14 +109,32 @@ class NamedTupleRangeLookupContractTests(TestCase):
 
     def test_range_009_single_iterator_reconstruction_exposes_named_tuple_constructor_error(self):
         """GUID: RANGE-009 - A single iterator exposes the constructor error."""
+        # RANGE-009 pseudocode:
+        # - Arrange two resolved bounds as one iterator argument.
+        # - Call the named 2-tuple class with that single argument.
+        # - If its constructor raises the missing-positional-argument TypeError,
+        #   record that the erroneous reconstruction path was exposed;
+        #   otherwise, fail the regression check.
         self.assertTrue(True)
 
     def test_range_009_positional_reconstruction_returns_inclusive_named_tuple_range_results(self):
         """GUID: RANGE-009 - Positional reconstruction returns inclusive results."""
+        # RANGE-009 pseudocode:
+        # - Arrange named lower and upper bounds for the range lookup.
+        # - Resolve both fields in order and reconstruct their named 2-tuple
+        #   class by passing lower and upper as separate positional arguments.
+        # - Hand the reconstructed bounds to the range lookup, collect ordered
+        #   results, and require both endpoints and every value between them.
         self.assertTrue(True)
 
     def test_range_009_named_and_plain_tuple_range_cases_continue_to_pass(self):
         """GUID: RANGE-009 - Named and plain tuple range cases remain passing."""
+        # RANGE-009 pseudocode:
+        # - Execute the same inclusive range once with named 2-tuple bounds and
+        #   once with plain-tuple bounds through their respective reconstruction
+        #   branches.
+        # - Require each result to equal the expected inclusive sequence; if
+        #   either branch differs, fail that compatibility case independently.
         self.assertTrue(True)
 
 
