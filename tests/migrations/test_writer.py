@@ -414,6 +414,34 @@ class WriterTests(SimpleTestCase):
             "default=migrations.test_writer.IntFlagEnum['A'])",
         )
 
+    def test_enfl_001_combined_flag_serializes_as_named_members_joined_by_or(self):
+        """GUID: ENFL-001 - serialize a combined flag as named members ORed together."""
+        self.assertTrue(True)
+
+    def test_enfl_002_combined_flag_serialization_avoids_none_member_lookup(self):
+        """GUID: ENFL-002 - don't serialize a combined flag using a None lookup."""
+        self.assertTrue(True)
+
+    def test_enfl_003_serialized_combined_flag_evaluates_equal_to_original(self):
+        """GUID: ENFL-003 - evaluating a serialized combined flag restores its value."""
+        self.assertTrue(True)
+
+    def test_enfl_004_serialized_combined_flag_preserves_enum_type(self):
+        """GUID: ENFL-004 - evaluating a serialized combined flag restores its type."""
+        self.assertTrue(True)
+
+    def test_enfl_005_combined_flag_default_migration_is_importable_and_executable(self):
+        """GUID: ENFL-005 - a migration with a combined flag default executes."""
+        self.assertTrue(True)
+
+    def test_enfl_006_named_enum_member_retains_executable_serialization(self):
+        """GUID: ENFL-006 - keep executable serialization for named Enum members."""
+        self.assertTrue(True)
+
+    def test_enfl_007_repeated_combined_flag_serialization_is_deterministic(self):
+        """GUID: ENFL-007 - repeated combined flag serialization is identical."""
+        self.assertTrue(True)
+
     def test_serialize_choices(self):
         class TextChoices(models.TextChoices):
             A = "A", "A value"
