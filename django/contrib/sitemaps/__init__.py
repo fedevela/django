@@ -163,12 +163,25 @@ class Sitemap:
         return self._urls(page, protocol, domain)
 
     def get_latest_lastmod(self):
+        # Architecture boundary (SITEMAP-001, SITEMAP-003, SITEMAP-004,
+        # SITEMAP-005, SITEMAP-006): Sitemap owns lastmod resolution and exposes
+        # only its resolved value (or None) to index-rendering consumers.
+        # Pseudocode contract for latest-lastmod resolution:
+        # SITEMAP-005: IF lastmod is absent, RETURN None.
+        # SITEMAP-006: OTHERWISE, IF lastmod is not callable, RETURN it directly
+        # without evaluating items.
+        # SITEMAP-001, SITEMAP-003, SITEMAP-004: OTHERWISE, evaluate lastmod for
+        # each item and attempt to resolve the maximum value.
+        #   IF there are no values, RETURN None without propagating ValueError.
+        #   IF the values cannot be compared, RETURN None without propagating
+        #   TypeError.
+        #   OTHERWISE, RETURN the resolved maximum value.
         if not hasattr(self, "lastmod"):
             return None
         if callable(self.lastmod):
             try:
                 return max([self.lastmod(item) for item in self.items()])
-            except TypeError:
+            except (TypeError, ValueError):
                 return None
         else:
             return self.lastmod

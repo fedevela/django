@@ -231,6 +231,39 @@ class HTTPSitemapTests(SitemapTestsBase):
         response = self.client.get("/lastmod/get-latest-lastmod-none-sitemap.xml")
         self.assertNotContains(response, "<lastmod>")
 
+    def test_sitemap_002_index_with_empty_items_and_callable_lastmod_renders_without_internal_server_error(
+        self,
+    ):
+        """SITEMAP-002: The empty callable-lastmod index renders without error."""
+        response = self.client.get("/lastmod/empty-callable-lastmod-index.xml")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Last-Modified", response)
+        expected_content = """<?xml version="1.0" encoding="UTF-8"?>
+        <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+        <sitemap><loc>%s/simple/sitemap-empty-callable-lastmod.xml</loc></sitemap>
+        </sitemapindex>
+        """ % self.base_url
+        self.assertXMLEqual(response.content.decode(), expected_content)
+
+    def test_sitemap_007_latest_lastmod_resolution_preserves_unrelated_sitemap_generation_results(
+        self,
+    ):
+        """SITEMAP-007: Unrelated sitemap generation results remain unchanged."""
+        response = self.client.get("/simple/sitemap.xml")
+
+        self.assertEqual(response.status_code, 200)
+        expected_content = (
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" '
+            'xmlns:xhtml="http://www.w3.org/1999/xhtml">\n'
+            "<url><loc>%s/location/</loc>"
+            "<lastmod>%s</lastmod><changefreq>never</changefreq>"
+            "<priority>0.5</priority></url>\n"
+            "</urlset>"
+        ) % (self.base_url, date.today())
+        self.assertXMLEqual(response.content.decode(), expected_content)
+
     def test_sitemap_get_latest_lastmod(self):
         """
         sitemapindex.lastmod is included when Sitemap.lastmod is

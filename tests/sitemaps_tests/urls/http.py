@@ -54,6 +54,11 @@ class EmptySitemap(Sitemap):
     location = "/location/"
 
 
+class EmptyCallableLastmodSitemap(EmptySitemap):
+    def lastmod(self, obj):
+        return date.today()
+
+
 class FixedLastmodSitemap(SimpleSitemap):
     lastmod = datetime(2013, 3, 13, 10, 0, 0)
 
@@ -168,6 +173,10 @@ simple_sitemaps_paged = {
 
 empty_sitemaps = {
     "empty": EmptySitemap,
+}
+
+empty_callable_lastmod_sitemaps = {
+    "empty-callable-lastmod": EmptyCallableLastmodSitemap,
 }
 
 fixed_lastmod_sitemaps = {
@@ -349,6 +358,11 @@ urlpatterns = [
         views.sitemap,
         {"sitemaps": sitemaps_lastmod_descending},
         name="django.contrib.sitemaps.views.sitemap",
+    ),
+    path(
+        "lastmod/empty-callable-lastmod-index.xml",
+        views.index,
+        {"sitemaps": empty_callable_lastmod_sitemaps},
     ),
     path(
         "lastmod/get-latest-lastmod-none-sitemap.xml",
