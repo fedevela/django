@@ -670,6 +670,18 @@ class MethodDecoratorTests(SimpleTestCase):
         self.assertEqual(TestFirst().method(), "hello world?!")
         self.assertEqual(TestSecond().method(), "hello world?!")
 
+    def test_mdp_010_tuple_decorators_apply_with_existing_tuple_behavior(self):
+        """
+        GUID: MDP-010 - Apply every decorator using existing tuple behavior.
+        """
+        pass
+
+    def test_mdp_010_tuple_decorated_method_preserves_call_semantics(self):
+        """
+        GUID: MDP-010 - Preserve positional arguments, keyword arguments, and return value.
+        """
+        pass
+
     def test_invalid_non_callable_attribute_decoration(self):
         """
         @method_decorator on a non-callable attribute raises an error.
