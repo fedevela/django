@@ -17,6 +17,7 @@ from django.forms import (
 )
 from django.forms.renderers import DjangoTemplates, get_default_renderer
 from django.forms.utils import ErrorList
+from django.forms.widgets import ChoiceWidget
 from django.http import QueryDict
 from django.template import Context, Template
 from django.test import SimpleTestCase
@@ -3009,6 +3010,247 @@ Password: <input type="password" name="password" required>
         form = SomeForm()
         self.assertHTMLEqual(form['custom'].label_tag(), '<label for="custom_id_custom">Custom:</label>')
         self.assertHTMLEqual(form['empty'].label_tag(), '<label>Empty:</label>')
+
+    def test_mwlabel_001_unbound_multiwidget_render_omits_label_for_attribute(self):
+        """GUID: MWLABEL-001 - Unbound MultiWidget labels omit `for`."""
+        class SomeForm(Form):
+            field = CharField(widget=MultiWidget([TextInput, TextInput]))
+
+        self.assertHTMLEqual(SomeForm()['field'].label_tag(), '<label>Field:</label>')
+
+    def test_mwlabel_001_bound_multiwidget_redisplay_omits_all_label_targets(self):
+        """GUID: MWLABEL-001 - Bound labels target no MultiWidget subwidget."""
+        class SomeForm(Form):
+            field = CharField(widget=MultiWidget([TextInput, TextInput]))
+
+        form = SomeForm({'field_0': 'first', 'field_1': 'second'})
+        self.assertHTMLEqual(form['field'].label_tag(), '<label>Field:</label>')
+        self.assertNotIn('for="id_field_0"', form.as_p())
+        self.assertNotIn('for="id_field_1"', form.as_p())
+
+    def test_mwlabel_003_multiwidget_label_target_omission_preserves_visible_text(self):
+        """GUID: MWLABEL-003 - Target omission leaves visible label text unchanged."""
+        class SomeForm(Form):
+            field = CharField(
+                label='Parts & pieces',
+                widget=MultiWidget([TextInput, TextInput]),
+            )
+
+        self.assertHTMLEqual(
+            SomeForm()['field'].label_tag(),
+            '<label>Parts &amp; pieces:</label>',
+        )
+
+    def test_mwlabel_004_multiwidget_label_target_omission_preserves_surrounding_markup(self):
+        """GUID: MWLABEL-004 - Only the label's `for` attribute is omitted."""
+        class SomeForm(Form):
+            field = CharField(
+                initial=[None, None],
+                widget=MultiWidget([TextInput, TextInput]),
+            )
+
+        self.assertHTMLEqual(
+            SomeForm().as_p(),
+            '''
+            <p>
+              <label>Field:</label>
+              <input type="text" name="field_0" required id="id_field_0">
+              <input type="text" name="field_1" required id="id_field_1">
+            </p>
+            ''',
+        )
+
+    def test_mwlabel_002_assigned_base_id_renders_usable_indexed_component_ids(self):
+        """GUID: MWLABEL-002 - Assigned base IDs remain usable and indexed."""
+        widget = MultiWidget([TextInput, TextInput, TextInput])
+
+        self.assertHTMLEqual(
+            widget.render(
+                'field',
+                ['first', 'second', 'third'],
+                attrs={'id': 'custom_id'},
+            ),
+            '''
+            <input type="text" name="field_0" value="first" id="custom_id_0">
+            <input type="text" name="field_1" value="second" id="custom_id_1">
+            <input type="text" name="field_2" value="third" id="custom_id_2">
+            ''',
+        )
+
+    def test_mwlabel_005_composite_render_and_operation_change_only_label_target(self):
+        """GUID: MWLABEL-005 - Composite behavior changes only at the label target."""
+        widget = MultiWidget([
+            TextInput(attrs={'class': 'first'}),
+            TextInput(attrs={'class': 'second'}),
+        ])
+        data = {'field_0': 'submitted first', 'field_1': 'submitted second'}
+
+        self.assertHTMLEqual(
+            widget.render(
+                'field',
+                ['rendered first', 'rendered second'],
+                attrs={'id': 'id_field'},
+            ),
+            '''
+            <input type="text" name="field_0" value="rendered first"
+                   class="first" id="id_field_0">
+            <input type="text" name="field_1" value="rendered second"
+                   class="second" id="id_field_1">
+            ''',
+        )
+        self.assertEqual(
+            widget.value_from_datadict(data, {}, 'field'),
+            ['submitted first', 'submitted second'],
+        )
+        self.assertIs(widget.value_omitted_from_data(data, {}, 'field'), False)
+        self.assertIs(widget.value_omitted_from_data({}, {}, 'field'), True)
+
+    def test_mwlabel_006_valid_and_invalid_values_preserve_validation_and_processed_data(self):
+        """GUID: MWLABEL-006 - Submitted values preserve validation and processing."""
+        class EventForm(Form):
+            occurred = SplitDateTimeField()
+
+        valid_form = EventForm({
+            'occurred_0': '2026-07-16',
+            'occurred_1': '23:45',
+        })
+        self.assertTrue(valid_form.is_valid())
+        self.assertEqual(
+            valid_form.cleaned_data,
+            {'occurred': datetime.datetime(2026, 7, 16, 23, 45)},
+        )
+
+        invalid_form = EventForm({
+            'occurred_0': 'not-a-date',
+            'occurred_1': 'not-a-time',
+        })
+        self.assertFalse(invalid_form.is_valid())
+        self.assertEqual(
+            invalid_form.errors,
+            {'occurred': ['Enter a valid date.', 'Enter a valid time.']},
+        )
+        self.assertEqual(invalid_form.cleaned_data, {})
+
+    def test_mwlabel_006_bound_redisplay_preserves_component_values_and_indexed_ids(self):
+        """GUID: MWLABEL-006 - Bound redisplay preserves values and indexed IDs."""
+        class EventForm(Form):
+            occurred = SplitDateTimeField()
+
+        form = EventForm({
+            'occurred_0': 'not-a-date',
+            'occurred_1': '08:15',
+        })
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form['occurred'].value(), ['not-a-date', '08:15'])
+        self.assertHTMLEqual(
+            str(form['occurred']),
+            '''
+            <input type="text" name="occurred_0" value="not-a-date"
+                   id="id_occurred_0" required>
+            <input type="text" name="occurred_1" value="08:15"
+                   id="id_occurred_1" required>
+            ''',
+        )
+
+    def test_mwlabel_007_multiwidget_subclass_inherits_label_without_for(self):
+        """GUID: MWLABEL-007 - A non-overriding subclass inherits target omission."""
+        class InheritedMultiWidget(MultiWidget):
+            pass
+
+        class SomeForm(Form):
+            field = CharField(widget=InheritedMultiWidget([TextInput, TextInput]))
+
+        self.assertHTMLEqual(SomeForm()['field'].label_tag(), '<label>Field:</label>')
+
+    def test_mwlabel_007_multiwidget_subclass_explicit_label_target_override_is_preserved(self):
+        """GUID: MWLABEL-007 - An explicit subclass target override remains responsible."""
+        class CustomMultiWidget(MultiWidget):
+            def id_for_label(self, id_):
+                return '%s_1' % id_
+
+        class SomeForm(Form):
+            field = CharField(widget=CustomMultiWidget([TextInput, TextInput]))
+
+        self.assertHTMLEqual(
+            SomeForm()['field'].label_tag(),
+            '<label for="id_field_1">Field:</label>',
+        )
+
+    def test_mwlabel_008_non_multiwidget_render_preserves_label_target_and_id(self):
+        """GUID: MWLABEL-008 - Non-MultiWidget label targets and IDs remain unchanged."""
+        class SomeForm(Form):
+            field = CharField()
+
+        bound_field = SomeForm()['field']
+        self.assertHTMLEqual(
+            bound_field.label_tag(),
+            '<label for="id_field">Field:</label>',
+        )
+        self.assertHTMLEqual(
+            str(bound_field),
+            '<input type="text" name="field" id="id_field" required>',
+        )
+
+    def test_mwlabel_008_choicewidget_with_id_index_preserves_indexed_id_and_label_target(self):
+        """GUID: MWLABEL-008 - Enabled ChoiceWidget ID indexes remain unchanged."""
+        class IndexedChoiceWidget(ChoiceWidget):
+            input_type = 'radio'
+            template_name = 'django/forms/widgets/radio.html'
+            option_template_name = 'django/forms/widgets/radio_option.html'
+
+        class SomeForm(Form):
+            field = ChoiceField(
+                choices=[('a', 'A'), ('b', 'B')],
+                widget=IndexedChoiceWidget,
+            )
+
+        bound_field = SomeForm()['field']
+        self.assertHTMLEqual(
+            bound_field.label_tag(),
+            '<label for="id_field_0">Field:</label>',
+        )
+        self.assertHTMLEqual(
+            str(bound_field),
+            '''
+            <div id="id_field">
+              <div><label for="id_field_0"><input type="radio" name="field"
+                    value="a" required id="id_field_0"> A</label></div>
+              <div><label for="id_field_1"><input type="radio" name="field"
+                    value="b" required id="id_field_1"> B</label></div>
+            </div>
+            ''',
+        )
+
+    def test_mwlabel_008_choicewidget_without_id_index_preserves_unindexed_id_and_label_target(self):
+        """GUID: MWLABEL-008 - Disabled ChoiceWidget ID indexes remain unchanged."""
+        class UnindexedChoiceWidget(ChoiceWidget):
+            input_type = 'radio'
+            template_name = 'django/forms/widgets/radio.html'
+            option_template_name = 'django/forms/widgets/radio_option.html'
+            add_id_index = False
+
+        class SomeForm(Form):
+            field = ChoiceField(
+                choices=[('a', 'A'), ('b', 'B')],
+                widget=UnindexedChoiceWidget,
+            )
+
+        bound_field = SomeForm()['field']
+        self.assertHTMLEqual(
+            bound_field.label_tag(),
+            '<label for="id_field">Field:</label>',
+        )
+        self.assertHTMLEqual(
+            str(bound_field),
+            '''
+            <div id="id_field">
+              <div><label for="id_field"><input type="radio" name="field"
+                    value="a" required id="id_field"> A</label></div>
+              <div><label for="id_field"><input type="radio" name="field"
+                    value="b" required id="id_field"> B</label></div>
+            </div>
+            ''',
+        )
 
     def test_boundfield_empty_label(self):
         class SomeForm(Form):

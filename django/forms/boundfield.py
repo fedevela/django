@@ -145,6 +145,10 @@ class BoundField:
             initial_value = self.initial
         return field.has_changed(initial_value, self.data)
 
+    # ARCHITECTURE — GUID: MWLABEL-008:
+    # BoundField owns the field-to-widget label integration seam. It depends
+    # only on Widget.id_for_label()'s polymorphic contract; widget hierarchy
+    # checks and ID-index policy belong to the concrete widget, not here.
     def label_tag(self, contents=None, attrs=None, label_suffix=None):
         """
         Wrap the given contents in a <label>, if the field has an ID attribute.

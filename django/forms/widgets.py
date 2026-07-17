@@ -229,6 +229,17 @@ class Widget(metaclass=MediaDefiningClass):
             return formats.localize_input(value)
         return str(value)
 
+    # PSEUDOCODE — GUID: MWLABEL-008 (non-MultiWidget continuity):
+    # PROCEDURE preserve_single_widget_id_and_label_target(name, value, attrs):
+    #   MERGE the widget's configured attrs with the attrs supplied for render.
+    #   PRESERVE any resulting ID without adding, removing, or indexing it.
+    #   RENDER the widget with that unchanged ID.
+    #   WHEN the field resolves its label target, PASS the same ID to the
+    #   concrete widget's established id_for_label() hook.
+    #   IF this default hook owns the decision and the ID exists, RETURN the
+    #   ID unchanged; IF no ID exists, RETURN no target.
+    #   IF a non-MultiWidget subclass overrides the hook, PRESERVE its result.
+    #   DO NOT enter MultiWidget component-ID or label-target behavior.
     def get_context(self, name, value, attrs):
         return {
             'widget': {
@@ -265,6 +276,10 @@ class Widget(metaclass=MediaDefiningClass):
     def value_omitted_from_data(self, data, files, name):
         return name not in data
 
+    # ARCHITECTURE — GUID: MWLABEL-008:
+    # This hook is the widget-side label-target contract consumed by
+    # BoundField. Widget owns the identity-preserving default; specialized
+    # widget families own any override without changing this dependency seam.
     def id_for_label(self, id_):
         """
         Return the HTML ID attribute of this Widget for use by a <label>,
@@ -549,6 +564,10 @@ class CheckboxInput(Input):
 
 
 class ChoiceWidget(Widget):
+    # ARCHITECTURE — GUID: MWLABEL-008:
+    # ChoiceWidget owns indexed-ID policy through add_id_index and
+    # id_for_label(). Both field-label integration and option construction
+    # delegate to that contract, leaving subclasses responsible for overrides.
     allow_multiple_selected = False
     input_type = None
     template_name = None
@@ -618,6 +637,17 @@ class ChoiceWidget(Widget):
                     subindex += 1
         return groups
 
+    # PSEUDOCODE — GUID: MWLABEL-008 (ChoiceWidget ID-index continuity):
+    # PROCEDURE preserve_choice_id_and_label_target(base_id, option_index):
+    #   WHEN building an option with a base ID, DELEGATE its ID to the
+    #   concrete id_for_label(base_id, option_index) hook.
+    #   IN this ChoiceWidget hook, IF add_id_index is enabled, RETURN
+    #   "<base ID>_<option index>"; OTHERWISE, RETURN the base ID unchanged.
+    #   WHEN resolving the field label, DELEGATE through the same concrete
+    #   hook with its established default index and PRESERVE that result,
+    #   including any subclass-defined target omission.
+    #   IF no base ID exists, RETURN no ID and introduce no label target.
+    #   PRESERVE all unrelated option attributes and rendering behavior.
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         index = str(index) if subindex is None else "%s_%s" % (index, subindex)
         option_attrs = self.build_attrs(self.attrs, attrs) if self.option_inherits_attrs else {}
@@ -817,6 +847,31 @@ class MultiWidget(Widget):
     def is_hidden(self):
         return all(w.is_hidden for w in self.widgets)
 
+    # ARCHITECTURE — MWLABEL-002, MWLABEL-005, MWLABEL-006:
+    # MultiWidget owns component topology and presentation state here. The
+    # assigned base ID and ordered component values enter through Widget's
+    # context contract; child widgets receive only their suffixed name,
+    # indexed ID, and corresponding value. Label-target selection remains the
+    # separate id_for_label() seam and must not alter this component boundary.
+    # Pseudocode trace: MWLABEL-002, MWLABEL-005, MWLABEL-006.
+    # PROCEDURE get_context(name, value, attrs):
+    #   BUILD the composite context with the inherited widget behavior.
+    #   PROPAGATE localization to every component when localization is active.
+    #   IF value is not already a component-value list:
+    #     DECOMPRESS it using the established MultiWidget contract.
+    #   READ the assigned base ID without changing any other composite attrs.
+    #   FOR EACH component, in declared order, paired with its name suffix:
+    #     USE the corresponding value; IF it is missing, USE None.
+    #     IF a base ID exists, COPY the attrs and SET the component ID to
+    #     "<base ID>_<component index>".  [MWLABEL-002]
+    #     BUILD the component context with its established name, value, and
+    #     attrs, and APPEND it without changing component structure or order.
+    #   ATTACH the ordered components to the composite context and RETURN it.
+    #   ON bound redisplay, preserve the supplied component values and repeat
+    #   the same indexed-ID flow.  [MWLABEL-006]
+    #   LET decompression or component-rendering failures propagate through
+    #   their existing paths; only label-target selection may differ.
+    #   [MWLABEL-005]
     def get_context(self, name, value, attrs):
         context = super().get_context(name, value, attrs)
         if self.is_localized:
@@ -849,10 +904,24 @@ class MultiWidget(Widget):
         return context
 
     def id_for_label(self, id_):
-        if id_:
-            id_ += '_0'
-        return id_
+        return ''
 
+    # ARCHITECTURE — MWLABEL-005, MWLABEL-006:
+    # These hooks are the widget-to-field data seam. MultiWidget delegates
+    # extraction and omission decisions downward to its ordered child widgets
+    # and exposes only their ordered results upward; MultiValueField owns all
+    # validation and compression beyond this boundary.
+    # Pseudocode trace: MWLABEL-005, MWLABEL-006.
+    # PROCEDURE value_from_datadict(data, files, name):
+    #   FOR EACH component paired with its declared name suffix, in order:
+    #     EXTRACT its value under "<name><suffix>" using that component's
+    #     established data-processing behavior.
+    #   RETURN the ordered values unchanged for field validation/compression.
+    # PROCEDURE value_omitted_from_data(data, files, name):
+    #   ASK every paired component whether its suffixed value was omitted.
+    #   RETURN true only when all components report omission.
+    # FAILURE PATH: propagate component extraction/omission failures unchanged.
+    # These flows remain independent of label-target selection.
     def value_from_datadict(self, data, files, name):
         return [
             widget.value_from_datadict(data, files, name + widget_name)
