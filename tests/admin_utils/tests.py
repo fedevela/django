@@ -422,6 +422,14 @@ class ReadOnlyPasswordHashWidgetLabelContractTests(SimpleTestCase):
     class PasswordForm(forms.Form):
         password = ReadOnlyPasswordHashField(label='Password digest')
 
+    def _render_password_hash_admin_field(self, initial=None):
+        """RPH-005 architecture seam for the label and widget renderings."""
+        # Own construction of PasswordForm and helpers.AdminField here so all
+        # RPH-005 checks observe one bound field. The implementation phase will
+        # return the rendered label and widget output through this test-only
+        # seam; verification remains owned by the individual test methods.
+        pass
+
     def test_RPH_005_rendered_admin_field_label_has_no_for_attribute(self):
         """RPH-005: The rendered field label has no for attribute."""
         # LOGIC OBLIGATION: reject any association between the rendered label
