@@ -2571,6 +2571,13 @@ class RelatedPopulator:
     """
     RelatedPopulator is used for select_related() object instantiation.
 
+    Architecture contract (DJANGO-009): SQLCompiler owns relation discovery,
+    projection, and the shape of ``klass_info``. This consumer owns translating
+    its selected row indexes into model initialization order and applying its
+    field-provided cache setters. Model inheritance changes index ordering, not
+    that dependency direction, and no schema-specific relation names cross this
+    boundary.
+
     The idea is that each select_related() model will be populated by a
     different RelatedPopulator instance. The RelatedPopulator instances get
     klass_info and select (computed in SQLCompiler) plus the used db as
