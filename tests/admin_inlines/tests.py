@@ -1,4 +1,4 @@
-from django.contrib.admin import ModelAdmin, TabularInline
+from django.contrib.admin import ModelAdmin, StackedInline, TabularInline
 from django.contrib.admin.helpers import InlineAdminForm
 from django.contrib.admin.tests import AdminSeleniumTestCase
 from django.contrib.auth.models import Permission, User
@@ -972,42 +972,86 @@ class TestVerboseNameInlineForms(TestDataMixin, TestCase):
         # GIVEN a TabularInline with only an Inline-specific singular name,
         # WHEN its names are resolved, THEN verify the singular is unchanged
         # and its plural is the established lazy "{}s" construction.
-        self.assertTrue(True)
+        class ProfileInline(TabularInline):
+            model = Profile
+            verbose_name = 'Inline profile'
+
+        inline = ProfileInline(ProfileCollection, admin_site)
+        self.assertEqual(inline.verbose_name, 'Inline profile')
+        self.assertEqual(inline.verbose_name_plural, 'Inline profiles')
 
     def test_INLINE_001_004_005_stacked_singular_only_derives_plural(self):
         """INLINE-001, INLINE-004, INLINE-005: StackedInline singular -> plural."""
         # GIVEN a StackedInline with only an Inline-specific singular name,
         # WHEN its names are resolved, THEN verify the singular is unchanged
         # and its plural is the established lazy "{}s" construction.
-        self.assertTrue(True)
+        class ProfileInline(StackedInline):
+            model = Profile
+            verbose_name = 'Inline profile'
+
+        inline = ProfileInline(ProfileCollection, admin_site)
+        self.assertEqual(inline.verbose_name, 'Inline profile')
+        self.assertEqual(inline.verbose_name_plural, 'Inline profiles')
 
     def test_INLINE_002_004_005_tabular_explicit_plural_is_preserved(self):
         """INLINE-002, INLINE-004, INLINE-005: TabularInline keeps its plural."""
         # GIVEN a TabularInline with an explicit plural, WHEN names are
         # resolved, THEN verify that plural survives without derivation from
         # either the Inline singular or the associated model metadata.
-        self.assertTrue(True)
+        class ProfileInline(TabularInline):
+            model = Profile
+            verbose_name = 'Inline profile'
+            verbose_name_plural = 'Inline profile collection'
+
+        inline = ProfileInline(ProfileCollection, admin_site)
+        self.assertEqual(inline.verbose_name_plural, 'Inline profile collection')
 
     def test_INLINE_002_004_005_stacked_explicit_plural_is_preserved(self):
         """INLINE-002, INLINE-004, INLINE-005: StackedInline keeps its plural."""
         # GIVEN a StackedInline with an explicit plural, WHEN names are
         # resolved, THEN verify that plural survives without derivation from
         # either the Inline singular or the associated model metadata.
-        self.assertTrue(True)
+        class ProfileInline(StackedInline):
+            model = Profile
+            verbose_name = 'Inline profile'
+            verbose_name_plural = 'Inline profile collection'
+
+        inline = ProfileInline(ProfileCollection, admin_site)
+        self.assertEqual(inline.verbose_name_plural, 'Inline profile collection')
 
     def test_INLINE_003_004_005_tabular_omitted_names_use_model_metadata(self):
         """INLINE-003, INLINE-004, INLINE-005: TabularInline uses model names."""
         # GIVEN a TabularInline with neither Inline name, WHEN names are
         # resolved, THEN verify singular and plural both equal their respective
         # associated-model metadata values.
-        self.assertTrue(True)
+        class ProfileInline(TabularInline):
+            model = BothVerboseNameProfile
+
+        inline = ProfileInline(ProfileCollection, admin_site)
+        self.assertEqual(
+            inline.verbose_name, BothVerboseNameProfile._meta.verbose_name,
+        )
+        self.assertEqual(
+            inline.verbose_name_plural,
+            BothVerboseNameProfile._meta.verbose_name_plural,
+        )
 
     def test_INLINE_003_004_005_stacked_omitted_names_use_model_metadata(self):
         """INLINE-003, INLINE-004, INLINE-005: StackedInline uses model names."""
         # GIVEN a StackedInline with neither Inline name, WHEN names are
         # resolved, THEN verify singular and plural both equal their respective
         # associated-model metadata values.
-        self.assertTrue(True)
+        class ProfileInline(StackedInline):
+            model = BothVerboseNameProfile
+
+        inline = ProfileInline(ProfileCollection, admin_site)
+        self.assertEqual(
+            inline.verbose_name, BothVerboseNameProfile._meta.verbose_name,
+        )
+        self.assertEqual(
+            inline.verbose_name_plural,
+            BothVerboseNameProfile._meta.verbose_name_plural,
+        )
 
     def test_verbose_name_plural_inline(self):
         class NonVerboseProfileInline(TabularInline):
