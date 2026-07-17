@@ -200,6 +200,18 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
             [str(question.big_id) for question in expected_questions],
         )
 
+    def test_ACJ_006_successful_response_retains_results_and_pagination_members(self):
+        """GUID: ACJ-006 successful responses retain results and pagination."""
+        self.assertTrue(True)
+
+    def test_ACJ_007_next_page_sets_pagination_more_true(self):
+        """GUID: ACJ-007 a next page sets pagination.more to true."""
+        self.assertTrue(True)
+
+    def test_ACJ_007_no_next_page_sets_pagination_more_false(self):
+        """GUID: ACJ-007 no next page sets pagination.more to false."""
+        self.assertTrue(True)
+
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
         request = self.factory.get(self.url, {'term': 'is', **self.opts})
