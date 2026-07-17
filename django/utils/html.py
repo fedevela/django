@@ -80,6 +80,14 @@ def json_script(value, element_id=None, encoder=None):
     # TRANSITION: once all descriptions are present, mark the entry contract-complete.
     # OUTPUT: a public utility entry covering purpose, optional inputs, and default.
     # FAILURE: if any description is absent, keep JSONSCRIPT-011 incomplete.
+    # JSONSCRIPT-011 architecture:
+    # - Runtime contract owner: this symbol and its signature.
+    # - Public contract owner: the django.utils.html section of docs/ref/utils.txt.
+    # - Documentation dependency: the public entry describes this symbol's
+    #   script-safe purpose, encoder default, and optional element_id; runtime
+    #   code must not depend on the documentation layer.
+    # - Verification seam: the JSONSCRIPT-011 placeholders in
+    #   tests/utils_tests/test_html.py, adjacent to existing json_script tests.
     from django.core.serializers.json import DjangoJSONEncoder
 
     json_str = json.dumps(value, cls=encoder or DjangoJSONEncoder).translate(
