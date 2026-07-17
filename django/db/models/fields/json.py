@@ -364,13 +364,37 @@ class CaseInsensitiveMixin:
 
 
 class KeyTransformIsNull(lookups.IsNull):
+    # Verification continuity:
+    # JSONNULL-001 -> test_jsonnull_001_sqlite_oracle_isnull_true_includes_record_when_key_absent
+    # JSONNULL-002 -> test_jsonnull_002_sqlite_oracle_isnull_true_excludes_existing_json_null
+    # JSONNULL-003 -> test_jsonnull_003_sqlite_oracle_isnull_false_includes_existing_json_null
     # key__isnull=False is the same as has_key='key'
     def as_oracle(self, compiler, connection):
+        # JSONNULL-001, JSONNULL-002, JSONNULL-003 pseudocode:
+        # INPUT the key-transform expression and the requested isnull boolean.
+        # BUILD Oracle SQL that tests whether the requested key is present.
+        # IF isnull is True:
+        #     NEGATE the presence test so an absent key matches (JSONNULL-001)
+        #     and an existing key with JSON null does not match (JSONNULL-002).
+        # ELSE:
+        #     RETURN the presence test so an existing key with JSON null matches
+        #     (JSONNULL-003).
+        # PROPAGATE compiler or backend failures from the presence test.
         if not self.rhs:
             return HasKey(self.lhs.lhs, self.lhs.key_name).as_oracle(compiler, connection)
         return super().as_sql(compiler, connection)
 
     def as_sqlite(self, compiler, connection):
+        # JSONNULL-001, JSONNULL-002, JSONNULL-003 pseudocode:
+        # INPUT the key-transform expression and the requested isnull boolean.
+        # BUILD SQLite SQL that tests whether the requested key is present.
+        # IF isnull is True:
+        #     NEGATE the presence test so an absent key matches (JSONNULL-001)
+        #     and an existing key with JSON null does not match (JSONNULL-002).
+        # ELSE:
+        #     RETURN the presence test so an existing key with JSON null matches
+        #     (JSONNULL-003).
+        # PROPAGATE compiler or backend failures from the presence test.
         if not self.rhs:
             return HasKey(self.lhs.lhs, self.lhs.key_name).as_sqlite(compiler, connection)
         return super().as_sql(compiler, connection)
