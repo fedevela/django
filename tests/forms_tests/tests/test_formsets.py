@@ -1465,37 +1465,46 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
 
     def test_nonform_010_general_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; general error -> nonform classification."""
-        # GIVEN a bound FormSet whose general clean hook raises a non-form error.
-        # WHEN validation produces the FormSet's non-form error list.
-        # THEN assert that the list carries the ``nonform`` classification.
-        # AND fail if the error is absent or classified as a field/form error.
-        pass
+        errors = self.custom_clean_formset().non_form_errors()
+        self.assertEqual(errors, ['Non-form error.'])
+        self.assertIn('nonform', errors.error_class.split())
 
     def test_nonform_010_minimum_count_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; failed minimum count -> nonform classification."""
-        # GIVEN a bound FormSet with minimum-count validation enabled and fewer
-        # submitted forms than its configured minimum.
-        # WHEN validation follows the too-few-forms failure branch.
-        # THEN assert that the resulting non-form error list carries the
-        # ``nonform`` classification.
-        pass
+        FormSet = formset_factory(
+            Choice, extra=0, min_num=1, validate_min=True,
+        )
+        formset = FormSet({
+            'form-TOTAL_FORMS': '0',
+            'form-INITIAL_FORMS': '0',
+        })
+        errors = formset.non_form_errors()
+        self.assertTrue(errors)
+        self.assertIn('nonform', errors.error_class.split())
 
     def test_nonform_010_maximum_count_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; failed maximum count -> nonform classification."""
-        # GIVEN a bound FormSet with maximum-count validation enabled and more
-        # submitted forms than its configured maximum.
-        # WHEN validation follows the too-many-forms failure branch.
-        # THEN assert that the resulting non-form error list carries the
-        # ``nonform`` classification.
-        pass
+        FormSet = formset_factory(
+            Choice, extra=0, max_num=0, validate_max=True,
+        )
+        formset = FormSet({
+            'form-TOTAL_FORMS': '1',
+            'form-INITIAL_FORMS': '0',
+            'form-0-choice': 'Calexico',
+            'form-0-votes': '100',
+        })
+        errors = formset.non_form_errors()
+        self.assertTrue(errors)
+        self.assertIn('nonform', errors.error_class.split())
 
     def test_nonform_010_lazy_validation_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; non_form_errors() access -> nonform classification."""
-        # GIVEN an unvalidated bound FormSet that will produce a non-form error.
-        # WHEN non_form_errors() is the first validation-triggering access.
-        # THEN assert that validation populates the non-form error list and that
-        # the returned list carries the ``nonform`` classification.
-        pass
+        formset = self.custom_clean_formset()
+        self.assertIsNone(formset._non_form_errors)
+        errors = formset.non_form_errors()
+        self.assertEqual(errors, ['Non-form error.'])
+        self.assertIs(errors, formset._non_form_errors)
+        self.assertIn('nonform', errors.error_class.split())
 
     def test_nonform_011_default_markup_only_adds_nonform_class(self):
         """GUID: NONFORM-011"""
