@@ -152,6 +152,18 @@ class StaticTests(SimpleTestCase):
 class IfModifiedSinceContractTests(SimpleTestCase):
     """Traceability placeholders for the If-Modified-Since contracts."""
 
+    # PSEUDOCODE VERIFICATION MATRIX: IMS-006
+    # ARRANGE otherwise-equivalent static-file requests for these header classes:
+    #     absent; empty; valid older; valid newer; malformed nonempty.
+    # ACT by evaluating conditional static-file delivery for every request.
+    # VERIFY IMS-001: empty completes without an exception.
+    # VERIFY IMS-002: empty yields no usable modification timestamp.
+    # VERIFY IMS-003: empty and absent produce the same delivery outcome.
+    # VERIFY IMS-004: valid older remains modified and valid newer not modified.
+    # VERIFY IMS-005: each established malformed value remains unusable, tolerated,
+    #     and modified rather than becoming a valid timestamp.
+    # VERIFY IMS-006: all classes above remain represented in the regression matrix.
+
     def test_ims_001_empty_header_does_not_raise(self):
         """GUID: IMS-001 - Empty-header evaluation completes without raising."""
         self.assertTrue(True)
