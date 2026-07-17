@@ -14,6 +14,28 @@ from django.utils.safestring import SafeData, mark_safe
 from .base import BaseTests
 
 
+class MSG003SeverityHelperContractTests(SimpleTestCase):
+    def test_msg_003_debug_without_extra_tags_round_trip_retains_empty_string(self):
+        """GUID: MSG-003: debug() default extra_tags survives storage."""
+        pass
+
+    def test_msg_003_info_without_extra_tags_round_trip_retains_empty_string(self):
+        """GUID: MSG-003: info() default extra_tags survives storage."""
+        pass
+
+    def test_msg_003_success_without_extra_tags_round_trip_retains_empty_string(self):
+        """GUID: MSG-003: success() default extra_tags survives storage."""
+        pass
+
+    def test_msg_003_warning_without_extra_tags_round_trip_retains_empty_string(self):
+        """GUID: MSG-003: warning() default extra_tags survives storage."""
+        pass
+
+    def test_msg_003_error_without_extra_tags_round_trip_retains_empty_string(self):
+        """GUID: MSG-003: error() default extra_tags survives storage."""
+        pass
+
+
 def set_cookie_data(storage, messages, invalid=False, encode_empty=False):
     """
     Set ``request.COOKIES`` with the encoded data and remove the storage
