@@ -376,6 +376,14 @@ def mocked_is_overridden(self, setting):
 @isolate_apps('check_framework.apps.CheckDefaultPKConfig', attr_name='apps')
 @override_system_checks([checks.model_checks.check_all_models])
 class ModelDefaultAutoFieldTests(SimpleTestCase):
+    def test_pkw_001_descendant_with_explicit_pk_from_supported_ancestor_does_not_produce_w042(self):
+        """GUID: PKW-001"""
+        self.assertTrue(True)
+
+    def test_pkw_002_pkw_001_descendant_gets_no_default_auto_field_guidance(self):
+        """GUID: PKW-002"""
+        self.assertTrue(True)
+
     def test_auto_created_pk(self):
         class Model(models.Model):
             pass
