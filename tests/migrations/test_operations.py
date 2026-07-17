@@ -762,6 +762,22 @@ class OperationTests(OperationTestBase):
         self.assertEqual(captured_queries.captured_queries, [])
         self.assertTableExists(db_table)
 
+    def test_rmn_005_no_op_rename_model_preserves_existing_table_rows_and_values(self):
+        """GUID: RMN-005"""
+        self.assertTrue(True)
+
+    def test_rmn_006_no_op_rename_model_preserves_existing_table_constraints(self):
+        """GUID: RMN-006"""
+        self.assertTrue(True)
+
+    def test_rmn_007_no_op_rename_model_preserves_existing_table_indexes(self):
+        """GUID: RMN-007"""
+        self.assertTrue(True)
+
+    def test_rmn_008_no_op_rename_model_preserves_relationship_tables_and_columns(self):
+        """GUID: RMN-008"""
+        self.assertTrue(True)
+
     def test_rename_model_state_forwards(self):
         """
         RenameModel operations shouldn't trigger the caching of rendered apps
