@@ -839,6 +839,35 @@ class SQLCompiler:
         # INVARIANT: valid select_related()+only() input reaches object
         # construction with the proxy primary key present; field-mask
         # conflicts continue through the existing query validation errors.
+        # PSEUDOCODE [PROXYONLY-008]:
+        # INPUT: a select_related() path to a concrete model and its only()
+        # field mask.
+        # FOR EACH field on the concrete related model:
+        #     IF the field is selected or is its primary key, retain the
+        #     existing column-selection path.
+        #     ELSE omit the column and preserve its deferred state.
+        # HANDOFF the selected columns through the existing related-object
+        # population path so the concrete instance, selected values, and
+        # primary key are available from the evaluated row.
+        # ON access to a populated selected field or primary key, reuse the
+        # row value without another query.
+        # ON access to an omitted field, use the existing deferred-field
+        # loading behavior and query count.
+        # FAILURE: propagate existing invalid-mask, compilation, and database
+        # errors without changing concrete-relation semantics.
+        # PSEUDOCODE [PROXYONLY-009]:
+        # INPUT: the same relation metadata and field mask on any supported
+        # database connection.
+        # BUILD columns from backend-compiled column expressions only; do not
+        # branch on backend vendor or platform.
+        # IF a joined proxy foreign-key value is non-null, retain its selected
+        # values and construction-required key for related-object population.
+        # ELSE represent the absent joined relation as None without a follow-up
+        # query.
+        # OUTPUT: identical specified object, key, deferred-field, and query
+        # outcomes across supported backends; SQL text may differ by compiler.
+        # FAILURE: propagate the active backend's existing compilation or
+        # execution error without adding platform-specific recovery.
         for field in opts.concrete_fields:
             model = field.model._meta.concrete_model
             # A proxy model will have a different model and concrete_model. We
