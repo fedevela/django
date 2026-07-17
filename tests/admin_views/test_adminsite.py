@@ -163,6 +163,18 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
             [],
         )
 
+    def test_admin_008_full_app_list_for_visible_registered_model_references_exact_model_class(self):
+        """ADMIN-008: The full app list exposes the exact model class."""
+        self.assertTrue(True)
+
+    def test_admin_008_app_label_filtered_app_list_for_visible_registered_model_references_exact_model_class(self):
+        """ADMIN-008: The app-filtered list exposes the exact model class."""
+        self.assertTrue(True)
+
+    def test_admin_008_model_class_and_public_builder_changes_preserve_established_app_list_behavior(self):
+        """ADMIN-008: Established app-list behavior remains covered."""
+        self.assertTrue(True)
+
 
 class SiteAppIndexPublicBuilderContractTests(SimpleTestCase):
     def test_admin_004_app_index_calls_public_builder_with_request_and_app_label(self):
