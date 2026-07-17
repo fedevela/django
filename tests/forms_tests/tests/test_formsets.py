@@ -181,19 +181,33 @@ class FormsFormsetTestCase(SimpleTestCase):
 
     def test_eform_001_empty_form_with_true_access_and_render_do_not_raise(self):
         """GUID: EFORM-001; empty_permitted=True permits access and rendering."""
-        self.assertTrue(True)
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": True})
+
+        empty_form = formset.empty_form
+        empty_form.as_p()
 
     def test_eform_001_empty_form_with_false_access_and_render_do_not_raise(self):
         """GUID: EFORM-001; empty_permitted=False permits access and rendering."""
-        self.assertTrue(True)
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": False})
+
+        empty_form = formset.empty_form
+        empty_form.as_p()
 
     def test_eform_002_empty_form_with_true_retains_internal_empty_permitted(self):
         """GUID: EFORM-002; supplied True doesn't replace the internal value."""
-        self.assertTrue(True)
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": True})
+
+        self.assertIs(formset.empty_form.empty_permitted, True)
 
     def test_eform_002_empty_form_with_false_retains_internal_empty_permitted(self):
         """GUID: EFORM-002; supplied False doesn't replace the internal value."""
-        self.assertTrue(True)
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": False})
+
+        self.assertIs(formset.empty_form.empty_permitted, True)
 
     def test_formset_validation(self):
         # FormSet instances can also have an error attribute if validation failed for
