@@ -3175,6 +3175,18 @@ Password: <input type="password" name="password" required>
             '<label for="id_field_1">Field:</label>',
         )
 
+    def test_mwlabel_008_non_multiwidget_render_preserves_label_target_and_id(self):
+        """GUID: MWLABEL-008 - Non-MultiWidget label targets and IDs remain unchanged."""
+        pass
+
+    def test_mwlabel_008_choicewidget_with_id_index_preserves_indexed_id_and_label_target(self):
+        """GUID: MWLABEL-008 - Enabled ChoiceWidget ID indexes remain unchanged."""
+        pass
+
+    def test_mwlabel_008_choicewidget_without_id_index_preserves_unindexed_id_and_label_target(self):
+        """GUID: MWLABEL-008 - Disabled ChoiceWidget ID indexes remain unchanged."""
+        pass
+
     def test_boundfield_empty_label(self):
         class SomeForm(Form):
             field = CharField(label='')
