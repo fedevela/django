@@ -58,6 +58,11 @@ class MigrationRecorder:
 
     def ensure_schema(self):
         """Ensure the table exists and has the correct schema."""
+        # Architecture seam (MIGREC-001, MIGREC-002): This method owns the
+        # recorder-specific migration-permission gate. Its only policy
+        # dependency is django.db.router.allow_migrate_model(), supplied with
+        # self.connection.alias and self.Migration; the existing table and
+        # schema-editor paths remain downstream of that gate.
         # MIGREC-001 pseudocode — bind permission to this recorder's alias:
         # migration_allowed = ROUTER.ALLOW_MIGRATE_MODEL(
         #     database_alias=self.connection.alias,
