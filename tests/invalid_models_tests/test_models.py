@@ -1518,6 +1518,61 @@ class OtherModelTests(SimpleTestCase):
 
         self.assertEqual(C.check(), [])
 
+    def test_M2MR_003_proxy_explicit_through_list_through_fields_checks_do_not_raise(self):
+        """
+        GUID: M2MR-003 - System checks accept list-valued through_fields on a
+        proxy-model relation with an explicit through model.
+        """
+        class Parent(models.Model):
+            pass
+
+        class ProxyParent(Parent):
+            class Meta:
+                proxy = True
+
+        class Child(Parent):
+            parents = models.ManyToManyField(
+                ProxyParent,
+                through='Through',
+                through_fields=['child', 'parent'],
+            )
+
+        class Through(models.Model):
+            child = models.ForeignKey(Child, models.CASCADE)
+            parent = models.ForeignKey(ProxyParent, models.CASCADE)
+
+        self.assertEqual(Child.check(), [])
+
+    def test_M2MR_010_inherited_reverse_relation_list_through_fields_hash_does_not_raise(self):
+        """
+        GUID: M2MR-010 - The inherited reverse-relation hash path accepts
+        list-valued through_fields.
+        """
+        class Parent(models.Model):
+            pass
+
+        class ProxyParent(Parent):
+            class Meta:
+                proxy = True
+
+        class Child(Parent):
+            parents = models.ManyToManyField(
+                ProxyParent,
+                through='Through',
+                through_fields=['child', 'parent'],
+            )
+
+        class Through(models.Model):
+            child = models.ForeignKey(Child, models.CASCADE)
+            parent = models.ForeignKey(ProxyParent, models.CASCADE)
+
+        reverse_relation = next(
+            field for field in Parent._meta.get_fields()
+            if isinstance(field, models.ManyToManyRel)
+        )
+        self.assertEqual(reverse_relation.through_fields, ['child', 'parent'])
+        self.assertIn(reverse_relation, {reverse_relation})
+
     @isolate_apps('django.contrib.auth', kwarg_name='apps')
     def test_lazy_reference_checks(self, apps):
         class DummyModel(models.Model):

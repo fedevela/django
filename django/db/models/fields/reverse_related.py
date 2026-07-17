@@ -306,11 +306,45 @@ class ManyToManyRel(ForeignObjectRel):
         self.symmetrical = symmetrical
         self.db_constraint = db_constraint
 
+    # Identity normalization boundary (M2MR-001, M2MR-002, M2MR-003,
+    # M2MR-004, M2MR-005, M2MR-006, M2MR-007, M2MR-008, M2MR-009,
+    # M2MR-010):
+    # ManyToManyRel.identity owns normalization of the through_fields tuple
+    # slot. The constructor retains the caller's value, and
+    # ForeignObjectRel.__eq__() and __hash__() remain unchanged consumers of
+    # the completed identity. The dependency therefore points from this
+    # subclass identity seam to make_hashable(), not into relation storage or
+    # the inherited comparison protocol. Proxy-model system-check coverage is
+    # owned by OtherModelTests; this boundary supplies its hash-safe reverse
+    # relation identity without coupling checks to normalization details.
     @property
     def identity(self):
+        # Pseudocode contract for GUIDs M2MR-001, M2MR-002, M2MR-004,
+        # M2MR-005, M2MR-006, M2MR-007, M2MR-008, and M2MR-009:
+        #
+        # INPUT: the base ForeignObjectRel identity and this relation's
+        # through, through_fields, and db_constraint values.
+        # 1. Derive normalized_through_fields by applying make_hashable() to
+        #    self.through_fields; do not assign the result back to the relation
+        #    or mutate the caller-provided value. [M2MR-001, M2MR-006]
+        # 2. Append through, normalized_through_fields, and db_constraint, in
+        #    that order, to the unchanged base identity. [M2MR-009]
+        # 3. Preserve ordered sequence semantics during normalization: equal
+        #    list and tuple values converge on one identity component, while
+        #    reversed values remain distinct. [M2MR-004, M2MR-007]
+        # 4. Preserve the existing normalized value for tuple through_fields
+        #    and the existing None value when through_fields is absent.
+        #    [M2MR-008]
+        # 5. RETURN the composed tuple; inherited equality compares that tuple,
+        #    and inherited hashing hashes it, so equal identities yield equal
+        #    hashes and list-valued through_fields cannot cause an unhashable-
+        #    list TypeError. [M2MR-002, M2MR-005, M2MR-009]
+        # FAILURE PATH: propagate failures from existing identity components;
+        # normalization handles only through_fields and must not alter equality
+        # behavior or mask errors unrelated to that component. [M2MR-009]
         return super().identity + (
             self.through,
-            self.through_fields,
+            make_hashable(self.through_fields),
             self.db_constraint,
         )
 

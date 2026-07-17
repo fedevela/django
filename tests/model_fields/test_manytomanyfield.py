@@ -2,6 +2,7 @@ from django.apps import apps
 from django.db import models
 from django.test import SimpleTestCase, TestCase
 from django.test.utils import isolate_apps
+from django.utils.hashable import make_hashable
 
 from .models import ManyToMany
 
@@ -86,6 +87,104 @@ class ManyToManyFieldTests(SimpleTestCase):
                     through='Through',
                     db_table='custom_name',
                 )
+
+
+class ManyToManyRelIdentityContractTests(SimpleTestCase):
+    field = object()
+    model = object()
+    through = object()
+
+    def relation(self, through_fields=None, **kwargs):
+        return models.ManyToManyRel(
+            self.field,
+            self.model,
+            through=self.through,
+            through_fields=through_fields,
+            **kwargs,
+        )
+
+    def test_M2MR_001_list_through_fields_identity_uses_make_hashable(self):
+        """GUID: M2MR-001 - List through_fields are normalized in identity."""
+        through_fields = ['source', 'target']
+
+        self.assertEqual(
+            self.relation(through_fields).identity[-2],
+            make_hashable(through_fields),
+        )
+
+    def test_M2MR_002_list_through_fields_relation_hash_does_not_raise(self):
+        """GUID: M2MR-002 - A relation with list through_fields is hashable."""
+        hash(self.relation(['source', 'target']))
+
+    def test_M2MR_004_equal_ordered_list_and_tuple_through_fields_identities(self):
+        """GUID: M2MR-004 - Equal ordered list and tuple values have equal identities."""
+        list_relation = self.relation(['source', 'target'])
+        tuple_relation = self.relation(('source', 'target'))
+
+        self.assertEqual(list_relation.identity, tuple_relation.identity)
+
+    def test_M2MR_005_equal_many_to_many_rel_identities_have_equal_hashes(self):
+        """GUID: M2MR-005 - Equal relation identities have equal hashes."""
+        list_relation = self.relation(['source', 'target'])
+        tuple_relation = self.relation(('source', 'target'))
+
+        self.assertEqual(list_relation.identity, tuple_relation.identity)
+        self.assertEqual(hash(list_relation), hash(tuple_relation))
+
+    def test_M2MR_006_identity_and_hash_preserve_list_through_fields_input(self):
+        """GUID: M2MR-006 - Identity and hash do not mutate list input."""
+        through_fields = ['source', 'target']
+        relation = self.relation(through_fields)
+
+        relation.identity
+        hash(relation)
+
+        self.assertIs(relation.through_fields, through_fields)
+        self.assertIsInstance(through_fields, list)
+        self.assertEqual(through_fields, ['source', 'target'])
+
+    def test_M2MR_007_reversed_through_fields_have_distinct_identities(self):
+        """GUID: M2MR-007 - Reversing through_fields changes identity."""
+        relation = self.relation(['source', 'target'])
+        reversed_relation = self.relation(['target', 'source'])
+
+        self.assertNotEqual(relation.identity, reversed_relation.identity)
+
+    def test_M2MR_008_tuple_through_fields_identity_and_hash_are_preserved(self):
+        """GUID: M2MR-008 - Tuple identity and hash semantics are preserved."""
+        through_fields = ('source', 'target')
+        relation = self.relation(through_fields)
+
+        self.assertIs(relation.identity[-2], through_fields)
+        self.assertEqual(hash(relation), hash(relation.identity))
+
+    def test_M2MR_008_absent_through_fields_identity_and_hash_are_preserved(self):
+        """GUID: M2MR-008 - Absent identity and hash semantics are preserved."""
+        relation = self.relation()
+
+        self.assertIsNone(relation.identity[-2])
+        self.assertEqual(hash(relation), hash(relation.identity))
+
+    def test_M2MR_009_unrelated_relation_equality_is_unchanged(self):
+        """GUID: M2MR-009 - Equality outside list normalization is unchanged."""
+        foreign_relation = models.ForeignObjectRel(self.field, self.model)
+        equal_foreign_relation = models.ForeignObjectRel(self.field, self.model)
+        different_foreign_relation = models.ForeignObjectRel(
+            self.field,
+            self.model,
+            related_name='different',
+        )
+
+        self.assertEqual(foreign_relation, equal_foreign_relation)
+        self.assertNotEqual(foreign_relation, different_foreign_relation)
+        self.assertEqual(
+            self.relation(('source', 'target')),
+            self.relation(('source', 'target')),
+        )
+        self.assertNotEqual(
+            self.relation(('source', 'target')),
+            self.relation(('source', 'target'), symmetrical=False),
+        )
 
 
 class ManyToManyFieldDBTests(TestCase):
