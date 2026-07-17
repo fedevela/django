@@ -42,6 +42,10 @@ class MigrationOptimizer:
         new_operations = []
         for i, operation in enumerate(operations):
             right = True  # Should we reduce on the right or on the left.
+            # MIGOPT-007 architecture contract: optimize_inner() owns traversal
+            # within one supplied optimization region. Operation.reduce() owns
+            # pair eligibility and traversal permission; a denied permission is
+            # a hard seam that this layer must neither reorder nor cross.
             # MIGOPT-007 -- intervening-operation reduction boundary:
             # INPUT: a candidate operation, each later operation, and the
             # ordered operations between that pair.

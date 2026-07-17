@@ -258,6 +258,10 @@ class AlterField(FieldOperation):
         # application. The replacement contract may retain the later operation
         # instance; field-definition copying or reconstruction does not belong at
         # either side of this boundary.
+        # MIGOPT-006 architecture contract: AlterField also owns the semantic
+        # eligibility of that replacement. It may expose a replacement through
+        # Operation.reduce() only when dropping this operation preserves the
+        # resulting migration state; MigrationOptimizer must remain state-agnostic.
         # MIGOPT-001/MIGOPT-002 -- same-field AlterField reduction:
         # INPUT: this AlterField and the later operation selected by the optimizer.
         # IF the later operation is an AlterField for the same normalized model

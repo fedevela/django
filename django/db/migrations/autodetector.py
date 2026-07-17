@@ -410,6 +410,10 @@ class MigrationAutodetector:
         # Optimize migrations
         for app_label, migrations in self.migrations.items():
             for migration in migrations:
+                # MIGOPT-007 architecture contract: _optimize_migrations() owns
+                # optimization-region topology. Each Migration.operations list
+                # is a distinct region and is the complete input to one optimizer
+                # invocation; MigrationOptimizer has no cross-migration contract.
                 # MIGOPT-007 -- migration-boundary reduction isolation:
                 # INPUT: one migration's operation list after migration
                 # boundaries and dependencies have been established.
