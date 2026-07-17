@@ -1227,7 +1227,19 @@ class FormsFormsetTestCase(SimpleTestCase):
         self,
     ):
         """GUID: MGMT-005."""
-        self.assertTrue(True)
+        from django.forms.utils import DEFAULT_TEMPLATE_DEPRECATION_MSG
+
+        with isolate_lru_cache(get_default_renderer), self.settings(
+            FORM_RENDERER="django.forms.renderers.DjangoTemplates"
+        ):
+            formset = FavoriteDrinksFormSet()
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", RemovedInDjango50Warning)
+                str(formset.management_form)
+            with self.assertWarnsMessage(
+                RemovedInDjango50Warning, DEFAULT_TEMPLATE_DEPRECATION_MSG
+            ):
+                str(FavoriteDrinkForm())
 
     def test_mgmt_002_rendered_management_form_contains_all_fields_as_hidden_inputs(
         self,

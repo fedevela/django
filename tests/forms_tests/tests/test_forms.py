@@ -5073,7 +5073,14 @@ class OverrideTests(SimpleTestCase):
 class DeprecationTests(SimpleTestCase):
     def test_mgmt_005_ordinary_form_default_template_rendering_emits_warning(self):
         """GUID: MGMT-005."""
-        self.assertTrue(True)
+        from django.forms.utils import DEFAULT_TEMPLATE_DEPRECATION_MSG
+
+        with isolate_lru_cache(get_default_renderer), self.settings(
+            FORM_RENDERER="django.forms.renderers.DjangoTemplates"
+        ), self.assertWarnsMessage(
+            RemovedInDjango50Warning, DEFAULT_TEMPLATE_DEPRECATION_MSG
+        ):
+            str(Person())
 
     def test_warning(self):
         from django.forms.utils import DEFAULT_TEMPLATE_DEPRECATION_MSG
