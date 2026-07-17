@@ -23,6 +23,18 @@ class TemplateCheckRegressionContractTests(SimpleTestCase):
         names, running the template check suite preserves their existing
         expected outcomes.
         """
+        # PSEUDOCODE — GUID: TPL-006
+        # LOGIC OBLIGATION: prove that changing duplicate-library-name handling
+        # does not change the established results of unrelated template checks.
+        # INPUT: each existing non-duplicate-name template-check scenario and
+        # its established expected error list.
+        # FOR each scenario:
+        #   arrange the same settings input used by its existing regression;
+        #   run the owning template system check;
+        #   compare the complete observed error list with the established list.
+        # IF any error is added, removed, or changed, fail this regression.
+        # ELSE preserve the scenario's existing passing outcome.
+        # OUTPUT: unchanged outcomes for all unrelated template-check scenarios.
         self.assertTrue(True)
 
     def test_tpl_007_identical_configured_discovered_path_produces_no_e003(
@@ -35,6 +47,18 @@ class TemplateCheckRegressionContractTests(SimpleTestCase):
         path, running template system checks produces no templates.E003 for
         that association.
         """
+        # PSEUDOCODE — GUID: TPL-007
+        # LOGIC OBLIGATION: verify that one identical configured-and-discovered
+        # association remains a single non-conflicting association.
+        # INPUT: a library name, one module path, a configured association of
+        # that pair, and installed-app discovery of that identical pair.
+        # ARRANGE the configured association in TEMPLATES OPTIONS libraries.
+        # ARRANGE discovery to return the same library name and module path.
+        # RUN the template system duplicate-library-name check.
+        # FILTER the observed errors to templates.E003 for the library name.
+        # IF the filtered result is non-empty, fail this regression.
+        # ELSE record the association as the expected non-error transition.
+        # OUTPUT: no templates.E003 for the identical cross-source association.
         self.assertTrue(True)
 
     def test_tpl_008_same_name_distinct_module_paths_transition_to_e003(self):
@@ -44,6 +68,19 @@ class TemplateCheckRegressionContractTests(SimpleTestCase):
         Given one library name associated with distinct module paths, running
         template system checks produces templates.E003 for that name.
         """
+        # PSEUDOCODE — GUID: TPL-008
+        # LOGIC OBLIGATION: preserve genuine-conflict coverage when one library
+        # name resolves to more than one distinct module path.
+        # INPUT: one library name and at least two distinct associated module
+        # paths supplied by configuration, discovery, or both.
+        # ARRANGE the existing genuine-conflict scenario without collapsing its
+        # distinct paths.
+        # RUN the template system duplicate-library-name check.
+        # LOCATE templates.E003 for the shared library name.
+        # IF no matching error exists, fail this regression.
+        # ELSE verify the error represents the distinct-path conflict expected
+        # by the existing regression contract.
+        # OUTPUT: templates.E003 remains present for the genuine conflict.
         self.assertTrue(True)
 
 
