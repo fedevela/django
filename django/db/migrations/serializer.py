@@ -121,6 +121,13 @@ class DictionarySerializer(BaseSerializer):
         return "{%s}" % (", ".join("%s: %s" % (k, v) for k, v in strings)), imports
 
 
+# Architecture contract (ENFL-001, ENFL-002, ENFL-003, ENFL-004, ENFL-005,
+# ENFL-006, ENFL-007): EnumSerializer owns both named-member and decomposable
+# unnamed flag serialization. It must keep the BaseSerializer output boundary of
+# ``(Python expression, required imports)`` so MigrationWriter remains a consumer
+# rather than acquiring Enum-specific behavior. Flag decomposition belongs inside
+# this serializer and depends only on the Enum class/member protocol; model fields
+# and migration writing must not become dependencies of this boundary.
 class EnumSerializer(BaseSerializer):
     def serialize(self):
         # Pseudocode trace: ENFL-001, ENFL-002, ENFL-003, ENFL-004, ENFL-005,
@@ -344,6 +351,8 @@ class Serializer:
         tuple: TupleSerializer,
         dict: DictionarySerializer,
         models.Choices: ChoicesSerializer,
+        # Enum dispatch is the single integration seam for ENFL-001..ENFL-007;
+        # keep callers dependent on the serializer registry, not Enum internals.
         enum.Enum: EnumSerializer,
         datetime.datetime: DatetimeDatetimeSerializer,
         (datetime.date, datetime.timedelta, datetime.time): DateTimeSerializer,
