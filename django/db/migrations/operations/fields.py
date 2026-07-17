@@ -22,10 +22,10 @@ class FieldOperation(Operation):
     def is_same_model_operation(self, operation):
         return self.model_name_lower == operation.model_name_lower
 
-    # MIGOPT-004/MIGOPT-005 architecture contract: FieldOperation owns the
-    # normalized (model, field) target-identity boundary. AlterField.reduce()
-    # consumes this contract at the pair-reduction seam; MigrationOptimizer
-    # must remain unaware of field-operation target structure.
+    # MIGOPT-004/MIGOPT-005/MIGOPT-008 architecture contract: FieldOperation
+    # owns the normalized (model, field) target-identity boundary. Concrete
+    # field-operation reducers consume this contract at the pair-reduction seam;
+    # MigrationOptimizer must remain unaware of field-operation target structure.
     def is_same_field_operation(self, operation):
         return (
             self.is_same_model_operation(operation)
@@ -131,6 +131,10 @@ class AddField(FieldOperation):
         return "%s_%s" % (self.model_name_lower, self.name_lower)
 
     def reduce(self, operation, app_label):
+        # MIGOPT-008 architecture contract: AddField owns the reduction seam for
+        # folding a later same-target AlterField into the added field. The later
+        # operation supplies the complete replacement field definition through
+        # this operation-level contract; no optimizer-level field merging exists.
         # MIGOPT-008 -- AddField-to-AlterField reduction:
         # INPUT: this AddField and the later operation selected by the optimizer.
         # IF the later operation targets a different normalized model or field,

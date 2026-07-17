@@ -30,6 +30,10 @@ class MigrationOptimizer:
         if app_label is None:
             raise TypeError("app_label must be a str.")
         self._iterations = 0
+        # MIGOPT-008 architecture contract: MigrationOptimizer owns repeated
+        # application of operation-level reductions. A replacement AddField is
+        # therefore returned to the same optimization region, where its reducer
+        # may consume each later applicable same-target AlterField in sequence.
         while True:
             result = self.optimize_inner(operations, app_label)
             self._iterations += 1
