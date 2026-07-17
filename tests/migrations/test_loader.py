@@ -20,6 +20,15 @@ class RecorderTests(TestCase):
     """
     databases = {'default', 'other'}
 
+    # MIGREC-008 recorder-verification architecture:
+    # RecorderTests owns the per-alias storage contract because its boundary is
+    # MigrationRecorder rather than migration orchestration. The recorder's
+    # bound connection is the alias-isolation port; router.allow_migrate_model
+    # is the permission seam; and has_table(), schema_editor(), and migration_qs
+    # are the independently observable schema/query seams. Keep denied and
+    # allowed scenarios separate so permitted-path state cannot satisfy a
+    # denied-path observation. Command-level alias coordination belongs in
+    # MigrateTests, not in this unit-level owner.
     def test_MIGREC_008_denied_alias_does_not_create_query_insert_or_delete_migration_history(self):
         """MIGREC-008: Denied aliases remain isolated from recorder I/O."""
         # MIGREC-008 denied-alias verification logic obligation.

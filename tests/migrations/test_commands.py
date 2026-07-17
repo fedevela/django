@@ -31,6 +31,14 @@ class MigrateTests(MigrationTestBase):
     """
     databases = {'default', 'other'}
 
+    # MIGREC-008 command-verification architecture:
+    # MigrateTests owns the multi-database integration contract at the
+    # call_command('migrate', database=...) boundary. Compose one recorder per
+    # connections[alias] and install the recorder-model router through the
+    # settings seam. Observe permitted history through that alias's recorder;
+    # observe denied isolation through connection introspection so verification
+    # never queries a table whose absence is part of the contract. Recorder I/O
+    # details remain owned by RecorderTests.
     def test_MIGREC_008_processing_keeps_migration_history_only_on_permitted_alias(self):
         """MIGREC-008: Mixed-alias processing records only permitted history."""
         # MIGREC-008 mixed-alias verification logic obligation.
