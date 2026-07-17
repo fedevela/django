@@ -66,6 +66,17 @@ def set_level(request, level):
     return True
 
 
+# MSG-003 logic obligation for the standard severity helpers below.
+# FOR EACH helper/level pair in debug/DEBUG, info/INFO, success/SUCCESS,
+# warning/WARNING, and error/ERROR:
+#     INPUT: an invocation that omits extra_tags.
+#     BIND the helper default as the exact empty string "".
+#     HAND OFF request, level, message, "", and fail_silently to add_message.
+#     IF add_message cannot access message storage:
+#         PRESERVE its established MessageFailure/fail_silently path.
+#     ELSE:
+#         PRESERVE "" through the storage queue and serialization round trip.
+#     OUTPUT: the retrieved Message has extra_tags == "".
 def debug(request, message, extra_tags='', fail_silently=False):
     """Add a message with the ``DEBUG`` level."""
     add_message(request, constants.DEBUG, message, extra_tags=extra_tags,

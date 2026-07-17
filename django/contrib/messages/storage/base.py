@@ -137,6 +137,15 @@ class BaseStorage:
         The message is only queued if it contained something and its level is
         not less than the recording level (``self.level``).
         """
+        # MSG-003 storage-state handoff.
+        # INPUT: level, body, and the exact extra_tags value supplied by a
+        # standard severity helper; omission at that helper yields "".
+        # IF the body is empty OR the level is below the recording threshold:
+        #     FOLLOW the established non-queued path without a round trip.
+        # ELSE:
+        #     CREATE a Message with extra_tags unchanged.
+        #     TRANSITION it to queued state for the backend's next update.
+        # HANDOFF: serialization receives "", not None, for helper defaults.
         if not message:
             return
         # Check that the message level is not less than the recording level.

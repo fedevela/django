@@ -8,8 +8,8 @@ from django.http import SimpleCookie
 from django.utils.safestring import SafeData, mark_safe
 
 
-# Serialization architecture boundary (MSG-001, MSG-002, MSG-004, MSG-005,
-# MSG-006): MessageEncoder and MessageDecoder own the compact Message wire
+# Serialization architecture boundary (MSG-001, MSG-002, MSG-003, MSG-004,
+# MSG-005, MSG-006): MessageEncoder and MessageDecoder own the compact Message wire
 # contract. CookieStorage reaches that contract through MessageSerializer;
 # SessionStorage imports the codecs directly; FallbackStorage only composes
 # those two storage backends. Keep extra_tags compatibility decisions here so
@@ -23,7 +23,8 @@ class MessageEncoder(json.JSONEncoder):
 
     def default(self, obj):
         if isinstance(obj, Message):
-            # Pseudocode obligations: MSG-001, MSG-002, MSG-004, MSG-005.
+            # Pseudocode obligations: MSG-001, MSG-002, MSG-003, MSG-004,
+            # MSG-005.
             # INPUT: a Message with level, body, and extra_tags.
             # BUILD the compact payload with the level and body unchanged.
             # IF extra_tags is None:
@@ -49,8 +50,8 @@ class MessageDecoder(json.JSONDecoder):
     def process_messages(self, obj):
         if isinstance(obj, list) and obj:
             if obj[0] == MessageEncoder.message_key:
-                # Pseudocode obligations: MSG-001, MSG-002, MSG-004, MSG-005,
-                # MSG-006.
+                # Pseudocode obligations: MSG-001, MSG-002, MSG-003, MSG-004,
+                # MSG-005, MSG-006.
                 # INPUT: a recognized serialized Message payload.
                 # RESTORE the safe-data marker without changing the body.
                 # READ the level and body from their required slots unchanged.
