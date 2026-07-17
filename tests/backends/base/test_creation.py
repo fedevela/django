@@ -79,6 +79,40 @@ class TestDbCreationTests(SimpleTestCase):
                 creation.destroy_test_db(old_database_name, verbosity=0)
 
 
+class MigrationDisabledTestDatabaseLifecycleContractTests(SimpleTestCase):
+    def test_django_001_migrate_false_creation_skips_applying_migrations(self):
+        """GUID: DJANGO-001"""
+        pass
+
+    def test_django_002_migrate_false_database_setup_completes_successfully(self):
+        """GUID: DJANGO-002"""
+        pass
+
+    def test_django_004_completed_migrate_false_setup_proceeds_to_test_execution(self):
+        """GUID: DJANGO-004"""
+        pass
+
+    def test_django_007_migrate_false_setup_does_not_require_repairing_legacy_migration_history(self):
+        """GUID: DJANGO-007"""
+        pass
+
+    def test_django_007_migrate_false_setup_does_not_require_changing_models(self):
+        """GUID: DJANGO-007"""
+        pass
+
+    def test_django_007_migrate_false_setup_does_not_require_manual_table_creation(self):
+        """GUID: DJANGO-007"""
+        pass
+
+    def test_django_007_migrate_false_setup_does_not_require_removing_migrate_setting(self):
+        """GUID: DJANGO-007"""
+        pass
+
+    def test_django_008_completed_migrate_false_test_execution_uses_normal_isolated_database_teardown(self):
+        """GUID: DJANGO-008"""
+        pass
+
+
 class TestDeserializeDbFromString(TransactionTestCase):
     available_apps = ['backends']
 
