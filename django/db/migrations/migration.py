@@ -98,6 +98,34 @@ class Migration:
         Return the resulting project state for efficient reuse by following
         Migrations.
         """
+        # GUID: MIG-003 - Combined relationship transition application:
+        # INPUT: the project/database state immediately preceding an ordered
+        # AlterUniqueTogether, RemoveField, AddField(ManyToManyField) sequence.
+        # FOR each operation, derive its next state before applying its database
+        # change, and hand both adjacent states to that database operation.
+        # REQUIRE: apply AlterUniqueTogether while the old concrete field still
+        # identifies the obsolete constraint; then remove the concrete field;
+        # then add the many-to-many field and its storage.
+        # SUCCESS: exhaust the sequence without a constraint-count ValueError
+        # and return the final state. FAILURE: propagate any operation error and
+        # do not report the combined migration as successfully applied.
+        #
+        # GUID: MIG-004 - Obsolete uniqueness removal:
+        # WHEN AlterUniqueTogether is current, transition the model option to
+        # its target value, compare the old and target tuples, and request
+        # deletion of every obsolete tuple before the concrete field is removed.
+        # OUTPUT: subsequent states and schema inspection contain no obsolete
+        # uniqueness constraint. FAILURE: if the old constraint cannot be
+        # identified unambiguously, fail on this operation rather than advance.
+        #
+        # GUID: MIG-005 - Many-to-many state and database storage:
+        # WHEN RemoveField is current, remove the old concrete field from state
+        # and database storage. WHEN AddField is current, add the target
+        # ManyToManyField to state and create its implicit through-table storage.
+        # OUTPUT: the returned migration state marks the field many-to-many and
+        # the database persists relationships through that table, not the old
+        # concrete column. FAILURE: if either transition step fails, propagate
+        # the error and do not expose a partially transitioned state as success.
         for operation in self.operations:
             # If this operation cannot be represented as SQL, place a comment
             # there instead
