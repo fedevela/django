@@ -41,6 +41,21 @@ class Q(tree.Node):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
+        # QCOMB-001/QCOMB-002/QCOMB-003/QCOMB-005/QCOMB-006 pseudocode:
+        # INPUT: the left Q (`self`), the proposed right operand, and connector.
+        # IF the right operand is not a Q, follow the existing type-error path
+        # before inspecting, copying, or otherwise processing either operand.
+        # IF connector is OR and either Q is empty:
+        #     SELECT the non-empty Q as the survivor; when both are empty,
+        #     preserve the established operand-order choice.
+        #     CREATE an independent structural result from the survivor's Q
+        #     state and children container, retaining each condition and its
+        #     contained value by reference rather than serializing, pickling,
+        #     or recursively copying those accepted values.  [QCOMB-001/002/006]
+        #     RETURN the result without changing either operand, either
+        #     operand's child container, or any contained value.  [QCOMB-003/005]
+        # OTHERWISE continue through the established non-empty combination
+        # flow; failures from that flow are outside this empty-OR obligation.
         if not isinstance(other, Q):
             raise TypeError(other)
 
