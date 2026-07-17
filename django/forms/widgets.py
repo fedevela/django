@@ -817,6 +817,25 @@ class MultiWidget(Widget):
     def is_hidden(self):
         return all(w.is_hidden for w in self.widgets)
 
+    # Pseudocode trace: MWLABEL-002, MWLABEL-005, MWLABEL-006.
+    # PROCEDURE get_context(name, value, attrs):
+    #   BUILD the composite context with the inherited widget behavior.
+    #   PROPAGATE localization to every component when localization is active.
+    #   IF value is not already a component-value list:
+    #     DECOMPRESS it using the established MultiWidget contract.
+    #   READ the assigned base ID without changing any other composite attrs.
+    #   FOR EACH component, in declared order, paired with its name suffix:
+    #     USE the corresponding value; IF it is missing, USE None.
+    #     IF a base ID exists, COPY the attrs and SET the component ID to
+    #     "<base ID>_<component index>".  [MWLABEL-002]
+    #     BUILD the component context with its established name, value, and
+    #     attrs, and APPEND it without changing component structure or order.
+    #   ATTACH the ordered components to the composite context and RETURN it.
+    #   ON bound redisplay, preserve the supplied component values and repeat
+    #   the same indexed-ID flow.  [MWLABEL-006]
+    #   LET decompression or component-rendering failures propagate through
+    #   their existing paths; only label-target selection may differ.
+    #   [MWLABEL-005]
     def get_context(self, name, value, attrs):
         context = super().get_context(name, value, attrs)
         if self.is_localized:
@@ -851,6 +870,17 @@ class MultiWidget(Widget):
     def id_for_label(self, id_):
         return ''
 
+    # Pseudocode trace: MWLABEL-005, MWLABEL-006.
+    # PROCEDURE value_from_datadict(data, files, name):
+    #   FOR EACH component paired with its declared name suffix, in order:
+    #     EXTRACT its value under "<name><suffix>" using that component's
+    #     established data-processing behavior.
+    #   RETURN the ordered values unchanged for field validation/compression.
+    # PROCEDURE value_omitted_from_data(data, files, name):
+    #   ASK every paired component whether its suffixed value was omitted.
+    #   RETURN true only when all components report omission.
+    # FAILURE PATH: propagate component extraction/omission failures unchanged.
+    # These flows remain independent of label-target selection.
     def value_from_datadict(self, data, files, name):
         return [
             widget.value_from_datadict(data, files, name + widget_name)

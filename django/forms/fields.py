@@ -1008,6 +1008,22 @@ class MultiValueField(Field):
     def validate(self, value):
         pass
 
+    # Pseudocode trace: MWLABEL-006.
+    # PROCEDURE clean(value):
+    #   IF disabled and value is compressed, DECOMPRESS it with the widget.
+    #   IF value is neither empty nor a component sequence, RAISE "invalid".
+    #   IF every component value is empty:
+    #     IF the composite field is required, RAISE "required";
+    #     OTHERWISE RETURN the established compression of an empty list.
+    #   FOR EACH child field, in declared order:
+    #     READ its corresponding value; IF missing, USE None.
+    #     IF empty, APPLY existing require-all/required/incomplete decisions.
+    #     OTHERWISE CLEAN it with the child field and APPEND the result.
+    #     ON child ValidationError, COLLECT each distinct error and CONTINUE.
+    #   IF any errors were collected, RAISE them together unchanged.
+    #   COMPRESS the ordered clean values, then APPLY composite validation and
+    #   validators in their established order, and RETURN the processed value.
+    # FAILURE PATHS and outputs remain independent of label-target selection.
     def clean(self, value):
         """
         Validate every value in the given list. A value is validated against
