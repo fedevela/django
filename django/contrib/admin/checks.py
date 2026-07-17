@@ -890,7 +890,8 @@ class ModelAdminChecks(BaseModelAdminChecks):
                 )
             )
 
-    # GEV-001 / GEV-002 — architecture contract for list_display resolution.
+    # GEV-001 / GEV-002 / GEV-003 / GEV-004 — architecture contract for
+    # list_display resolution.
     # ModelAdminChecks owns pre-request acceptance or rejection of each entry.
     # _check_list_display() is the sole inbound collection seam; admin.E108 and
     # admin.E109 are the existing outbound validation contracts.
@@ -904,6 +905,8 @@ class ModelAdminChecks(BaseModelAdminChecks):
     # Verification ownership remains in ListDisplayTests:
     # - GEV-001: unresolvable model/ModelAdmin entries reach admin.E108 here.
     # - GEV-002: the reverse query name "choice" reaches admin.E108 here.
+    # - GEV-003: a metadata-only reverse relation reaches admin.E108 here.
+    # - GEV-004: a metadata-only many-to-many related name reaches admin.E108 here.
     def _check_list_display_item(self, obj, item, label):
         # GEV-001 / GEV-002 — list_display check-time resolution parity.
         # Logic obligations:
@@ -929,6 +932,26 @@ class ModelAdminChecks(BaseModelAdminChecks):
         #    list_display, continue through the existing field-kind error path;
         #    otherwise accept it.
         # OUTPUT: either no errors or the deterministic check error for this entry.
+        #
+        # GEV-003 / GEV-004 — metadata presence is not displayability.
+        # Logic obligations:
+        # - GEV-003 maps to
+        #   test_gev_003_metadata_only_reverse_relation_unresolved_by_label_emits_e108.
+        # - GEV-004 maps to
+        #   test_gev_004_metadata_only_m2m_related_name_unresolved_by_label_emits_e108.
+        #
+        # PROCEDURE FOR A NAME FOUND ONLY IN MODEL METADATA:
+        # 1. Treat metadata discovery as a provisional resolution, not acceptance.
+        # 2. Determine whether changelist field-label lookup can resolve the same
+        #    name from the registered model and ModelAdmin namespaces.
+        # 3. If label lookup cannot resolve the name, transition
+        #    CANDIDATE -> METADATA_ONLY -> LABEL_UNRESOLVABLE -> REJECTED_E108.
+        # 4. Apply that transition independently when the metadata object represents
+        #    a reverse relation (GEV-003) or a many-to-many relation (GEV-004).
+        # 5. Emit exactly one admin.E108 for the entry and stop; metadata relation
+        #    kind alone must not redirect this failure to admin.E109.
+        # 6. Only when label lookup resolves the name may later field-kind checks
+        #    determine whether another existing validation outcome applies.
         if callable(item):
             return []
         elif hasattr(obj, item):
