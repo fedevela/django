@@ -342,6 +342,10 @@ class BaseFormSet:
         Clean all of self.data and populate self._errors and
         self._non_form_errors.
         """
+        # Architecture [GUID: NONFORM-003]: BaseFormSet retains ownership of
+        # validation sequencing and error contents. Classification is confined
+        # to the ErrorList construction seam below and must not become an input
+        # to validation, validity decisions, or ValidationError normalization.
         # Pseudocode [GUID: NONFORM-003; validation-preservation contract]:
         # INPUT the bound state, management data, member forms, count limits,
         # and custom FormSet cleaning procedure without modifying any of them.

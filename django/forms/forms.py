@@ -314,6 +314,10 @@ class BaseForm:
         field -- i.e., from Form.clean(). Return an empty ErrorList if there
         are none.
         """
+        # Architecture [GUID: NONFORM-005]: BaseForm owns Form-level category
+        # selection at this lookup/fallback boundary. It depends only on the
+        # configured ErrorList constructor and remains separate from the
+        # FormSet-owned ``nonform`` construction seam.
         # Pseudocode [GUID: NONFORM-005]:
         # LOOK UP the Form-level non-field error entry.
         # IF it exists, RETURN that existing ErrorList unchanged.
@@ -361,6 +365,10 @@ class BaseForm:
                 if field != NON_FIELD_ERRORS and field not in self.fields:
                     raise ValueError(
                         "'%s' has no field named '%s'." % (self.__class__.__name__, field))
+                # Architecture [GUID: NONFORM-005, NONFORM-006]: this branch is
+                # BaseForm's sole ErrorList-allocation boundary for newly added
+                # errors. The NON_FIELD_ERRORS key owns ``nonfield``; ordinary
+                # field keys own no category. Neither depends on BaseFormSet.
                 # Pseudocode [GUID: NONFORM-005, NONFORM-006]:
                 # IF the destination is the Form non-field key,
                 #     CREATE its ErrorList with classification ``nonfield`` only.
