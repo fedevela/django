@@ -1219,6 +1219,20 @@ class ManyToManyField(RelatedField):
 
     def _check_ineffective_symmetrical_related_name(self, **kwargs):
         """Check GUIDs M2M-001, M2M-002, M2M-003, and M2M-008."""
+        # Pseudocode trace: GUID M2M-004, M2M-005, M2M-006.
+        # INPUTS:
+        #   - remote_field.symmetrical, normalized during field construction.
+        #   - _related_name, preserving the developer-supplied related_name.
+        # VALID NEIGHBOR FLOWS:
+        #   - GUID M2M-004: IF an explicitly non-symmetrical self-reference
+        #     supplies related_name, RETURN no ineffective-name error and
+        #     PRESERVE its named reverse relation from class contribution.
+        #   - GUID M2M-005: IF a non-symmetrical relationship supplies
+        #     related_name, RETURN no ineffective-name error and PRESERVE its
+        #     named reverse relation from class contribution.
+        #   - GUID M2M-006: IF a symmetrical relationship has no developer-
+        #     supplied related_name, RETURN no ineffective-name error; do not
+        #     treat an internally generated name as developer input.
         if not self.remote_field.symmetrical or self._related_name is None:
             return []
         return [
@@ -1684,6 +1698,14 @@ class ManyToManyField(RelatedField):
         self.m2m_db_table = partial(self._get_m2m_db_table, cls._meta)
 
     def contribute_to_related_class(self, cls, related):
+        # Pseudocode trace: GUID M2M-004, M2M-005.
+        # INPUT: a non-symmetrical relation configured with a reverse name.
+        # IF the reverse relation is visible AND its source model is active:
+        #   DERIVE the reverse accessor name from the related relation.
+        #   CREATE the reverse many-to-many descriptor under that name.
+        # OTHERWISE:
+        #   CREATE no reverse descriptor and preserve established hidden or
+        #   swapped-model behavior without raising a new validation failure.
         # Internal M2Ms (i.e., those with a related name ending with '+')
         # and swapped models don't get a related descriptor.
         if not self.remote_field.is_hidden() and not related.related_model._meta.swapped:
