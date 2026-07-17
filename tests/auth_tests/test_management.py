@@ -14,7 +14,9 @@ from django.contrib.auth.models import Group, Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.db import migrations
+from django.db import DEFAULT_DB_ALIAS, migrations
+from django.db.migrations.executor import MigrationExecutor
+from django.db.models.signals import post_migrate
 from django.test import TestCase, override_settings
 from django.utils.translation import gettext_lazy as _
 
@@ -1681,7 +1683,25 @@ class MigrationDatabaseTraceabilityTests(TestCase):
         #   if migration or post-migration processing raises an error:
         #       propagate the error without selecting a fallback alias
         #   output := one unchanged alias across migration and post_migrate
-        pass
+        post_migrate_aliases = []
+
+        def record_post_migrate_alias(sender, using, **kwargs):
+            post_migrate_aliases.append(using)
+
+        post_migrate.connect(record_post_migrate_alias, weak=False)
+        try:
+            with mock.patch(
+                "django.core.management.commands.migrate.MigrationExecutor",
+                wraps=MigrationExecutor,
+            ) as executor_class:
+                call_command("migrate", interactive=False, verbosity=0)
+        finally:
+            post_migrate.disconnect(record_post_migrate_alias)
+
+        executor_class.assert_called_once()
+        self.assertEqual(executor_class.call_args.args[0].alias, DEFAULT_DB_ALIAS)
+        self.assertTrue(post_migrate_aliases)
+        self.assertEqual(set(post_migrate_aliases), {DEFAULT_DB_ALIAS})
 
     def test_MIGDB_005_implicit_migrate_keeps_permission_results_unchanged(self):
         """GUID: MIGDB-005 — implicit migrate keeps permission results stable."""
@@ -1700,7 +1720,38 @@ class MigrationDatabaseTraceabilityTests(TestCase):
         #   if processing raises an error:
         #       propagate the error without defining a new selection rule
         #   output := unchanged permission results on the implicit alias
-        pass
+        permission_fields = (
+            "codename",
+            "name",
+            "content_type__app_label",
+            "content_type__model",
+        )
+        expected_permissions = list(
+            self._permission_queryset(DEFAULT_DB_ALIAS).values_list(
+                *permission_fields
+            )
+        )
+        self.assertTrue(expected_permissions)
+        other_permissions = list(
+            self._permission_queryset("other").values_list(*permission_fields)
+        )
+        self._permission_queryset(DEFAULT_DB_ALIAS).delete()
+
+        with self.assertNumQueries(0, using="other"):
+            call_command("migrate", interactive=False, verbosity=0)
+
+        actual_permissions = list(
+            self._permission_queryset(DEFAULT_DB_ALIAS).values_list(
+                *permission_fields
+            )
+        )
+        self.assertEqual(actual_permissions, expected_permissions)
+        self.assertEqual(
+            list(
+                self._permission_queryset("other").values_list(*permission_fields)
+            ),
+            other_permissions,
+        )
 
     def test_MIGDB_006_prior_behavior_detects_wrong_content_type_database(self):
         """GUID: MIGDB-006 — prior behavior -> wrong database is detected."""
