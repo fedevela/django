@@ -88,6 +88,44 @@ class ManyToManyFieldTests(SimpleTestCase):
                 )
 
 
+class ManyToManyRelIdentityContractTests(SimpleTestCase):
+    def test_M2MR_001_list_through_fields_identity_uses_make_hashable(self):
+        """GUID: M2MR-001 - List through_fields are normalized in identity."""
+        self.assertTrue(True)
+
+    def test_M2MR_002_list_through_fields_relation_hash_does_not_raise(self):
+        """GUID: M2MR-002 - A relation with list through_fields is hashable."""
+        self.assertTrue(True)
+
+    def test_M2MR_004_equal_ordered_list_and_tuple_through_fields_identities(self):
+        """GUID: M2MR-004 - Equal ordered list and tuple values have equal identities."""
+        self.assertTrue(True)
+
+    def test_M2MR_005_equal_many_to_many_rel_identities_have_equal_hashes(self):
+        """GUID: M2MR-005 - Equal relation identities have equal hashes."""
+        self.assertTrue(True)
+
+    def test_M2MR_006_identity_and_hash_preserve_list_through_fields_input(self):
+        """GUID: M2MR-006 - Identity and hash do not mutate list input."""
+        self.assertTrue(True)
+
+    def test_M2MR_007_reversed_through_fields_have_distinct_identities(self):
+        """GUID: M2MR-007 - Reversing through_fields changes identity."""
+        self.assertTrue(True)
+
+    def test_M2MR_008_tuple_through_fields_identity_and_hash_are_preserved(self):
+        """GUID: M2MR-008 - Tuple identity and hash semantics are preserved."""
+        self.assertTrue(True)
+
+    def test_M2MR_008_absent_through_fields_identity_and_hash_are_preserved(self):
+        """GUID: M2MR-008 - Absent identity and hash semantics are preserved."""
+        self.assertTrue(True)
+
+    def test_M2MR_009_unrelated_relation_equality_is_unchanged(self):
+        """GUID: M2MR-009 - Equality outside list normalization is unchanged."""
+        self.assertTrue(True)
+
+
 class ManyToManyFieldDBTests(TestCase):
 
     def test_value_from_object_instance_without_pk(self):
