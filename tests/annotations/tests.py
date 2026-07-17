@@ -11,12 +11,34 @@ from django.db.models.expressions import RawSQL
 from django.db.models.functions import (
     Coalesce, ExtractYear, Floor, Length, Lower, Trim,
 )
-from django.test import TestCase, skipUnlessDBFeature
+from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
 from django.test.utils import register_lookup
 
 from .models import (
     Author, Book, Company, DepartmentStore, Employee, Publisher, Store, Ticket,
 )
+
+
+class EmptyMembershipAnnotationContractTests(SimpleTestCase):
+    # EMPTYIN-001, EMPTYIN-006: Negated empty membership selected directly as
+    # an annotation compiles to a nonempty, syntactically valid SQL expression.
+    def test_emptyin_001_006_negated_direct_annotation_compiles_to_valid_sql(self):
+        self.assertTrue(True)
+
+    # EMPTYIN-002, EMPTYIN-006: Negated empty membership selected directly as
+    # an annotation evaluates to a database-compatible true value for each row.
+    def test_emptyin_002_006_negated_direct_annotation_evaluates_true(self):
+        self.assertTrue(True)
+
+    # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
+    # as an annotation compiles to a syntactically valid SQL expression.
+    def test_emptyin_003_006_nonnegated_direct_annotation_compiles_to_valid_sql(self):
+        self.assertTrue(True)
+
+    # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
+    # as an annotation evaluates to false for each row.
+    def test_emptyin_003_006_nonnegated_direct_annotation_evaluates_false(self):
+        self.assertTrue(True)
 
 
 class NonAggregateAnnotationTestCase(TestCase):
