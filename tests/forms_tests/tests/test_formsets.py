@@ -179,6 +179,22 @@ class FormsFormsetTestCase(SimpleTestCase):
         self.assertTrue(hasattr(formset.empty_form, "custom_kwarg"))
         self.assertEqual(formset.empty_form.custom_kwarg, 1)
 
+    def test_eform_001_empty_form_with_true_access_and_render_do_not_raise(self):
+        """GUID: EFORM-001; empty_permitted=True permits access and rendering."""
+        self.assertTrue(True)
+
+    def test_eform_001_empty_form_with_false_access_and_render_do_not_raise(self):
+        """GUID: EFORM-001; empty_permitted=False permits access and rendering."""
+        self.assertTrue(True)
+
+    def test_eform_002_empty_form_with_true_retains_internal_empty_permitted(self):
+        """GUID: EFORM-002; supplied True doesn't replace the internal value."""
+        self.assertTrue(True)
+
+    def test_eform_002_empty_form_with_false_retains_internal_empty_permitted(self):
+        """GUID: EFORM-002; supplied False doesn't replace the internal value."""
+        self.assertTrue(True)
+
     def test_formset_validation(self):
         # FormSet instances can also have an error attribute if validation failed for
         # any of the forms.

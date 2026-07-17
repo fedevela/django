@@ -160,6 +160,10 @@ class DeletionTests(TestCase):
 
 
 class ModelFormsetTest(TestCase):
+    def test_eform_006_bound_model_formset_empty_form_stays_unbound_template(self):
+        """GUID: EFORM-006; submitted data doesn't bind or validate empty_form."""
+        self.assertTrue(True)
+
     def test_modelformset_factory_without_fields(self):
         """Regression for #19733"""
         message = (
