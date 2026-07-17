@@ -363,6 +363,10 @@ class CaseInsensitiveMixin:
         return rhs, rhs_params
 
 
+# JSONNULL-001, JSONNULL-002, JSONNULL-003 architecture boundary:
+# KeyTransformIsNull owns key-presence semantics for the key-transform lookup.
+# Its Oracle and SQLite compiler hooks depend on HasKey as the backend presence
+# adapter; KeyTransform registration below remains the lookup integration seam.
 class KeyTransformIsNull(lookups.IsNull):
     # Verification continuity:
     # JSONNULL-001 -> test_jsonnull_001_sqlite_oracle_isnull_true_includes_record_when_key_absent
