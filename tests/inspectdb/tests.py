@@ -270,6 +270,11 @@ class InspectDBTestCase(TestCase):
         call_command("inspectdb", table_name, stdout=out)
         return re.findall(r"related_name='([^']+)'", out.getvalue())
 
+    def get_inspection_output(self, *table_names):
+        out = StringIO()
+        call_command("inspectdb", *table_names, stdout=out)
+        return out.getvalue()
+
     def load_inspected_models(self, *table_names):
         out = StringIO()
         call_command("inspectdb", *table_names, stdout=out)
@@ -354,21 +359,82 @@ class InspectDBTestCase(TestCase):
             },
         )
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
+    @isolate_apps("inspectdb")
     def test_insp_006_repeated_target_relations_preserve_field_names_and_targets(self):
         """GUID: INSP-006 - Disambiguation preserves relation names and targets."""
-        self.assertTrue(True)
+        namespace = self.load_inspected_models(
+            "inspectdb_people", "inspectdb_relationsthree"
+        )
+        people = namespace["InspectdbPeople"]
+        relations = namespace["InspectdbRelationsThree"]
+        relation_fields = {
+            field.name: field
+            for field in relations._meta.fields
+            if field.is_relation
+        }
+        self.assertEqual(
+            {"class_field", "editor", "reviewer"}, set(relation_fields)
+        )
+        for field in relation_fields.values():
+            self.assertIsInstance(field, models.ForeignKey)
+            self.assertIs(field.remote_field.model, people)
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_007_singleton_target_relation_has_no_disambiguating_related_name(self):
         """GUID: INSP-007 - A singleton target gains no disambiguating name."""
-        self.assertTrue(True)
+        output = self.get_inspection_output("inspectdb_foreignkeytofield")
+        self.assertIn("to_field_fk = models.ForeignKey(", output)
+        self.assertNotIn("related_name=", output)
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_007_only_repeated_target_group_gains_related_names(self):
         """GUID: INSP-007 - Mixed targets disambiguate only the repeated group."""
-        self.assertTrue(True)
+        get_relations = connection.introspection.get_relations
 
+        def get_mixed_relations(cursor, table_name):
+            relations = get_relations(cursor, table_name)
+            if table_name == "inspectdb_relationsthree":
+                relations = relations.copy()
+                reviewer_column = next(
+                    column
+                    for column in relations
+                    if column.lower().startswith("reviewer")
+                )
+                ref_column, _ = relations[reviewer_column]
+                relations[reviewer_column] = (ref_column, "inspectdb_message")
+            return relations
+
+        with mock.patch.object(
+            connection.introspection,
+            "get_relations",
+            side_effect=get_mixed_relations,
+        ):
+            output = self.get_inspection_output("inspectdb_relationsthree")
+
+        self.assertIn("related_name='class_field_set'", output)
+        self.assertIn("related_name='editor_set'", output)
+        reviewer_definition = re.search(
+            r"^\s*reviewer = (models\..*)$", output, re.MULTILINE
+        )[1]
+        self.assertIn("ForeignKey('InspectdbMessage'", reviewer_definition)
+        self.assertNotIn("related_name=", reviewer_definition)
+
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_007_shared_target_across_models_does_not_gain_related_names(self):
         """GUID: INSP-007 - Target grouping is local to each generated model."""
-        self.assertTrue(True)
+        output = self.get_inspection_output(
+            "inspectdb_message", "inspectdb_peoplemoredata"
+        )
+        self.assertIn("class InspectdbMessage(models.Model):", output)
+        self.assertIn("class InspectdbPeoplemoredata(models.Model):", output)
+        self.assertIn(
+            "from_field = models.ForeignKey('InspectdbPeople',", output
+        )
+        self.assertIn(
+            "people_unique = models.OneToOneField('InspectdbPeople',", output
+        )
+        self.assertNotIn("related_name=", output)
 
     def test_digits_column_name_introspection(self):
         """Introspection of column names consist/start with digits (#16536/#17676)"""
