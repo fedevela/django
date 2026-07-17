@@ -47,6 +47,13 @@ def _multi_decorate(decorators, method):
     #     arguments, and RETURN its result without transformation.
     # IF binding, decoration, or invocation raises:
     #     PROPAGATE the exception through the existing call path unchanged.
+    # Architecture contract (GUID: MDP-010): `_multi_decorate()` owns the
+    # supported-tuple normalization boundary. `method_decorator()` passes the
+    # decorator input through unchanged, and this private helper alone selects
+    # the application sequence consumed by both the decoration-time metadata
+    # probe and the invocation-local decorator chain. The bound-method adapter
+    # remains downstream of normalization; positional and keyword arguments
+    # cross only its existing call seam, whose result is returned directly.
     if hasattr(decorators, '__iter__'):
         # Apply a list/tuple of decorators if 'decorators' is one. Decorator
         # functions are applied so that the call order is the same as the
@@ -106,6 +113,9 @@ def method_decorator(decorator, name=''):
     # of the method that will be decorated.
     def _dec(obj):
         if not isinstance(obj, type):
+            # Integration seam (GUID: MDP-010): tuple handling belongs to
+            # `_multi_decorate()`; this public adapter only routes the supplied
+            # decorator contract and method into that owning boundary.
             return _multi_decorate(decorator, obj)
         if not (name and hasattr(obj, name)):
             raise ValueError(
@@ -118,6 +128,8 @@ def method_decorator(decorator, name=''):
                 "Cannot decorate '%s' as it isn't a callable attribute of "
                 "%s (%s)." % (name, obj, method)
             )
+        # Integration seam (GUID: MDP-010): class-target decoration converges
+        # on the same private tuple boundary as direct method decoration.
         _wrapper = _multi_decorate(decorator, method)
         setattr(obj, name, _wrapper)
         return obj
