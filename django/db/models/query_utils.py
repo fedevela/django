@@ -39,18 +39,60 @@ class Q(tree.Node):
     def __init__(self, *args, _connector=None, _negated=False, **kwargs):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
+    # QEX-005 / QEX-006 ownership contract: _combine() is the single owner of
+    # conditional-operand normalization and empty-Q identity for both AND and
+    # OR. Expression-side adapters depend on this boundary; ORM query
+    # compilation continues to consume the resulting Q through the existing
+    # resolve_expression()/_add_q() seam.
+    # QEX-007 / QEX-008 / QEX-009 counterpart contract: this boundary accepts
+    # Q nodes and the generic conditional-expression protocol, without an
+    # Exists dependency or a concrete-expression registry. It owns Q-led
+    # rejection, preserving the existing dependency direction from expression
+    # adapters into Q and then into query resolution.
     def _combine(self, other, conn):
+        # QEX-008 / QEX-009 compatibility-boundary logic:
+        # - Receive a Q left operand, a candidate logical counterpart, and the
+        #   requested connector from __and__() or __or__().
+        # - If the counterpart is already a Q, bypass expression adaptation;
+        #   preserve the established empty-Q clone branches and, when both
+        #   sides are nonempty, preserve connector and left-to-right order in
+        #   the composed Q tree.
+        # - Otherwise, continue only through the separately supported
+        #   conditional-expression path for AND or OR; normalize that operand
+        #   to Q and hand it to the same empty/composition branches.
+        # - If either the connector or counterpart is outside that supported
+        #   path, stop before tree construction and raise TypeError with the
+        #   rejected operand; do not coerce or add a new counterpart type.
+        # QEX-005 / QEX-006 logic (Q() first, plus the Q handoff for
+        # Exists(...) first):
+        # - Accept only AND or OR when adapting a non-Q operand, and require
+        #   that operand to advertise conditional semantics; otherwise fail
+        #   with TypeError.
+        # - Normalize the accepted conditional operand into a Q node before
+        #   testing either side for emptiness, including when `self` is Q().
+        # - If the normalized right side is empty, return an independent clone
+        #   of the left side; if the left side is empty, return an independent
+        #   clone of the normalized right side. Thus Q() is the identity for
+        #   both required connectors and the surviving Exists condition stays
+        #   usable by ORM query construction.
+        # - Otherwise create a Q node with the requested connector, add left
+        #   then right in operand order, and return the composed condition.
         if not isinstance(other, Q):
-            raise TypeError(other)
+            if conn in (self.AND, self.OR) and getattr(other, 'conditional', False):
+                other = Q(other)
+            else:
+                raise TypeError(other)
 
         # If the other Q() is empty, ignore it and just use `self`.
         if not other:
-            _, args, kwargs = self.deconstruct()
-            return type(self)(*args, **kwargs)
+            return type(self)._new_instance(
+                self.children, self.connector, self.negated,
+            )
         # Or if this Q is empty, ignore it and just use `other`.
         elif not self:
-            _, args, kwargs = other.deconstruct()
-            return type(other)(*args, **kwargs)
+            return type(other)._new_instance(
+                other.children, other.connector, other.negated,
+            )
 
         obj = type(self)()
         obj.connector = conn

@@ -89,9 +89,38 @@ class Combinable:
     def __pow__(self, other):
         return self._combine(other, self.POW, False)
 
+    # QEX-005 / QEX-006 architecture boundary: Combinable owns only the
+    # conditional-expression adapter for an expression-led operation. It
+    # must preserve an existing Q operand as the Q-layer contract boundary;
+    # Q owns empty-node identity, logical-tree composition, and cloning.
+    # QEX-007 / QEX-008 / QEX-009 compatibility seam: __and__() and __or__()
+    # remain the shared entry points for every conditional Expression,
+    # including Exists. This module may depend on Q for logical composition,
+    # but Q must not depend on concrete expression types. Expression-led
+    # rejection remains owned here; Q-led rejection remains owned by Q.
     def __and__(self, other):
+        # QEX-001 / QEX-002 integration seam: conditional expression pairs
+        # depend on Q for logical-tree composition and query handoff.
+        # QEX-007 / QEX-008 / QEX-009 AND compatibility logic:
+        # - Receive the expression-led left operand and candidate counterpart.
+        # - If both operands already advertise conditional semantics, preserve
+        #   the established expression-led handoff: place the left expression
+        #   in Q, preserve an existing Q counterpart for the Q boundary (or
+        #   let that boundary classify another conditional), and request AND.
+        #   This keeps Exists-first operand order and query semantics while the
+        #   same branch remains available to supported non-Exists operands.
+        # - Return the resulting Q tree to the unchanged ORM resolution path.
+        # - Otherwise stop at this operator boundary and raise the established
+        #   NotImplementedError; do not construct a logical tree.
+        # QEX-005 logic (Exists(...) & Q()):
+        # - Require both operands to advertise conditional semantics.
+        # - Wrap the Exists-side conditional as a Q node, preserve the empty
+        #   Q operand without nesting it, and hand off with the AND connector.
+        # - Let Q._combine() discard the empty side and return an independent,
+        #   query-usable clone of the Exists condition; otherwise follow the
+        #   existing unsupported-operation failure path.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
-            return Q(self) & Q(other)
+            return Q(self) & other
         raise NotImplementedError(
             "Use .bitand() and .bitor() for bitwise logical operations."
         )
@@ -109,8 +138,28 @@ class Combinable:
         return self._combine(other, self.BITXOR, False)
 
     def __or__(self, other):
+        # QEX-003 / QEX-004 integration seam: conditional expression pairs
+        # depend on Q for logical-tree composition and query handoff.
+        # QEX-007 / QEX-008 / QEX-009 OR compatibility logic:
+        # - Receive the expression-led left operand and candidate counterpart.
+        # - If both operands already advertise conditional semantics, preserve
+        #   the established expression-led handoff: place the left expression
+        #   in Q, preserve an existing Q counterpart for the Q boundary (or
+        #   let that boundary classify another conditional), and request OR.
+        #   This keeps Exists-first operand order and query semantics while the
+        #   same branch remains available to supported non-Exists operands.
+        # - Return the resulting Q tree to the unchanged ORM resolution path.
+        # - Otherwise stop at this operator boundary and raise the established
+        #   NotImplementedError; do not construct a logical tree.
+        # QEX-006 logic (Exists(...) | Q()):
+        # - Require both operands to advertise conditional semantics.
+        # - Wrap the Exists-side conditional as a Q node, preserve the empty
+        #   Q operand without nesting it, and hand off with the OR connector.
+        # - Let Q._combine() discard the empty side and return an independent,
+        #   query-usable clone of the Exists condition; otherwise follow the
+        #   existing unsupported-operation failure path.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
-            return Q(self) | Q(other)
+            return Q(self) | other
         raise NotImplementedError(
             "Use .bitand() and .bitor() for bitwise logical operations."
         )
@@ -1148,6 +1197,9 @@ class Subquery(Expression):
 
 
 class Exists(Subquery):
+    # QEX-007 placement contract: Exists participates through the inherited
+    # Expression/Combinable seam and the BooleanField conditional contract;
+    # it does not own a Q-specific operator, adapter, or dependency.
     template = 'EXISTS(%(subquery)s)'
     output_field = fields.BooleanField()
 

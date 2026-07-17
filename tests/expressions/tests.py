@@ -816,6 +816,248 @@ class BasicExpressionsTests(TestCase):
             [self.example_inc.ceo, self.max],
         )
 
+    def test_qex_007_exists_first_and_q_retains_construction_and_query_semantics(self):
+        """QEX-007: Exists(...) & Q(...) retains its established behavior."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        exists = Exists(is_ceo)
+        condition = Q(salary__gte=20)
+        combined = exists & condition
+
+        self.assertEqual(combined, Q(exists) & condition)
+        self.assertCountEqual(
+            Employee.objects.filter(combined),
+            [self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_007_exists_first_or_q_retains_construction_and_query_semantics(self):
+        """QEX-007: Exists(...) | Q(...) retains its established behavior."""
+        is_poc = Company.objects.filter(point_of_contact=OuterRef('pk'))
+        self.gmbh.point_of_contact = self.max
+        self.gmbh.save()
+        exists = Exists(is_poc)
+        condition = Q(salary__lt=15)
+        combined = exists | condition
+
+        self.assertEqual(combined, Q(exists) | condition)
+        self.assertCountEqual(
+            Employee.objects.filter(combined),
+            [self.example_inc.ceo, self.max],
+        )
+
+    def test_qex_001_nonempty_q_and_exists_is_usable_in_orm_query(self):
+        """QEX-001: Q(...) & Exists(...) is usable in an ORM query."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q(salary__gte=20) & Exists(is_ceo)),
+            [self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_001_exists_and_nonempty_q_is_usable_in_orm_query(self):
+        """QEX-001: Exists(...) & Q(...) is usable in an ORM query."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_ceo) & Q(salary__gte=20)),
+            [self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_002_reversed_q_exists_conjunctions_return_equivalent_results(self):
+        """QEX-002: Reversing Q/Exists operands preserves query results."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        q = Q(salary__gte=20)
+        self.assertCountEqual(
+            Employee.objects.filter(q & Exists(is_ceo)),
+            Employee.objects.filter(Exists(is_ceo) & q),
+        )
+
+    def test_qex_003_nonempty_q_or_exists_constructs_usable_orm_query(self):
+        """QEX-003: Q(...) | Exists(...) constructs a usable ORM query."""
+        is_poc = Company.objects.filter(point_of_contact=OuterRef('pk'))
+        self.gmbh.point_of_contact = self.max
+        self.gmbh.save()
+        self.assertCountEqual(
+            Employee.objects.filter(Q(salary__lt=15) | Exists(is_poc)),
+            [self.example_inc.ceo, self.max],
+        )
+
+    def test_qex_003_exists_or_nonempty_q_constructs_usable_orm_query(self):
+        """QEX-003: Exists(...) | Q(...) constructs a usable ORM query."""
+        is_poc = Company.objects.filter(point_of_contact=OuterRef('pk'))
+        self.gmbh.point_of_contact = self.max
+        self.gmbh.save()
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_poc) | Q(salary__lt=15)),
+            [self.example_inc.ceo, self.max],
+        )
+
+    def test_qex_004_reversed_q_exists_disjunctions_return_equivalent_results(self):
+        """QEX-004: Reversing Q/Exists disjunction operands preserves results."""
+        is_poc = Company.objects.filter(point_of_contact=OuterRef('pk'))
+        self.gmbh.point_of_contact = self.max
+        self.gmbh.save()
+        q = Q(salary__lt=15)
+        self.assertCountEqual(
+            Employee.objects.filter(q | Exists(is_poc)),
+            Employee.objects.filter(Exists(is_poc) | q),
+        )
+
+    def test_qex_005_empty_q_and_exists_conjunction_is_usable_and_returns_expected_results(self):
+        """QEX-005: Q() & Exists(...) is usable and has conjunction semantics."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() & Exists(is_ceo)),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_005_exists_and_empty_q_conjunction_is_usable_and_returns_expected_results(self):
+        """QEX-005: Exists(...) & Q() is usable and has conjunction semantics."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_ceo) & Q()),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_006_empty_q_or_exists_disjunction_is_usable_and_returns_expected_results(self):
+        """QEX-006: Q() | Exists(...) is usable and has disjunction semantics."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() | Exists(is_ceo)),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_006_exists_or_empty_q_disjunction_is_usable_and_returns_expected_results(self):
+        """QEX-006: Exists(...) | Q() is usable and has disjunction semantics."""
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_ceo) | Q()),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
+
+    # QEX-010 architecture:
+    # - BasicExpressionsTests owns this regression seam because it already owns
+    #   Employee/Company fixtures and ORM filtering of correlated Exists and Q.
+    # - Each case composes public Q and Exists operands directly at the
+    #   Employee.objects.filter() boundary; test code depends on ORM expression
+    #   contracts, while production expression modules remain unchanged.
+    # - The eight methods below are the implementation loci for the nonempty or
+    #   empty Q, AND or OR, and Q-first or Exists-first coverage matrix. Their
+    #   bodies remain independent so every operand order reaches the query seam.
+
+    def test_qex_010_nonempty_q_and_exists_orm_filter_returns_intersection(self):
+        """QEX-010: Q(...) & Exists(...) has query intersection semantics."""
+        # QEX-010 logic:
+        # - Build a nonempty salary Q and a correlated Exists condition whose
+        #   matching employee sets overlap without being identical.
+        # - Combine them as Q AND Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the intersection of both matching sets; query
+        #   construction/execution failure or any other rows fail this case.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q(salary__gte=20) & Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo],
+        )
+
+    def test_qex_010_exists_and_nonempty_q_orm_filter_returns_intersection(self):
+        """QEX-010: Exists(...) & Q(...) has query intersection semantics."""
+        # QEX-010 logic:
+        # - Reuse equivalent nonempty salary Q and correlated Exists inputs.
+        # - Reverse operand order, combine as Exists AND Q, pass the result to
+        #   ORM filtering, and evaluate the query.
+        # - Require the same intersection as Q AND Exists; construction,
+        #   execution, or logical-result divergence fail this case.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) & Q(salary__gte=20)),
+            [self.foobar_ltd.ceo],
+        )
+
+    def test_qex_010_nonempty_q_or_exists_orm_filter_returns_union(self):
+        """QEX-010: Q(...) | Exists(...) has query union semantics."""
+        # QEX-010 logic:
+        # - Build a nonempty salary Q and a correlated Exists condition with
+        #   partially distinct matching employee sets.
+        # - Combine them as Q OR Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the union of both matching sets without duplicate
+        #   logical results; construction, execution, or mismatch fail.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q(salary__gte=20) | Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_010_exists_or_nonempty_q_orm_filter_returns_union(self):
+        """QEX-010: Exists(...) | Q(...) has query union semantics."""
+        # QEX-010 logic:
+        # - Reuse equivalent nonempty salary Q and correlated Exists inputs.
+        # - Reverse operand order, combine as Exists OR Q, pass the result to
+        #   ORM filtering, and evaluate the query.
+        # - Require the same union as Q OR Exists; construction, execution,
+        #   duplicate logical results, or result divergence fail this case.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) | Q(salary__gte=20)),
+            [self.foobar_ltd.ceo, self.max],
+        )
+
+    def test_qex_010_empty_q_and_exists_orm_filter_returns_exists_matches(self):
+        """QEX-010: Q() & Exists(...) has Exists query semantics."""
+        # QEX-010 logic:
+        # - Build an empty Q and a correlated Exists condition with known
+        #   matching employees.
+        # - Combine them as Q() AND Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the Exists matches; construction, execution, loss
+        #   of Exists matches, or extra rows fail this identity case.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() & Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo],
+        )
+
+    def test_qex_010_exists_and_empty_q_orm_filter_returns_exists_matches(self):
+        """QEX-010: Exists(...) & Q() has Exists query semantics."""
+        # QEX-010 logic:
+        # - Reuse an empty Q and an equivalent correlated Exists condition.
+        # - Reverse operand order, combine as Exists AND Q(), pass the result
+        #   to ORM filtering, and evaluate the query.
+        # - Require the same Exists matches as Q() AND Exists; construction,
+        #   execution, or operand-order divergence fail this identity case.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) & Q()),
+            [self.foobar_ltd.ceo],
+        )
+
+    def test_qex_010_empty_q_or_exists_orm_filter_returns_exists_matches(self):
+        """QEX-010: Q() | Exists(...) has Exists query semantics."""
+        # QEX-010 logic:
+        # - Build an empty Q and a correlated Exists condition with known
+        #   matching employees.
+        # - Combine them as Q() OR Exists, pass the result to ORM filtering,
+        #   and evaluate the query.
+        # - Require exactly the Exists matches; construction, execution, loss
+        #   of Exists matches, or extra rows fail this identity case.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() | Exists(is_eu_ceo)),
+            [self.foobar_ltd.ceo],
+        )
+
+    def test_qex_010_exists_or_empty_q_orm_filter_returns_exists_matches(self):
+        """QEX-010: Exists(...) | Q() has Exists query semantics."""
+        # QEX-010 logic:
+        # - Reuse an empty Q and an equivalent correlated Exists condition.
+        # - Reverse operand order, combine as Exists OR Q(), pass the result
+        #   to ORM filtering, and evaluate the query.
+        # - Require the same Exists matches as Q() OR Exists; construction,
+        #   execution, or operand-order divergence fail this identity case.
+        is_eu_ceo = Company.objects.filter(based_in_eu=True, ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_eu_ceo) | Q()),
+            [self.foobar_ltd.ceo],
+        )
+
 
 class IterableLookupInnerExpressionsTests(TestCase):
     @classmethod

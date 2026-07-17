@@ -35,6 +35,39 @@ class QTests(SimpleTestCase):
         with self.assertRaisesMessage(TypeError, str(obj)):
             q & obj
 
+    def test_qex_008_q_and_supported_non_exists_operand_retains_logical_behavior(self):
+        """QEX-008: Q & a supported non-Exists operand retains its behavior."""
+        lhs = Q(x=1)
+        rhs = Q(y=2)
+
+        self.assertEqual(lhs & rhs, Q(x=1, y=2))
+        self.assertEqual(lhs, Q(x=1))
+        self.assertEqual(rhs, Q(y=2))
+
+    def test_qex_008_q_or_supported_non_exists_operand_retains_logical_behavior(self):
+        """QEX-008: Q | a supported non-Exists operand retains its behavior."""
+        lhs = Q(x=1)
+        rhs = Q(y=2)
+
+        self.assertEqual(
+            lhs | rhs,
+            Q(Q(x=1), Q(y=2), _connector=Q.OR),
+        )
+        self.assertEqual(lhs, Q(x=1))
+        self.assertEqual(rhs, Q(y=2))
+
+    def test_qex_009_q_and_unsupported_logical_counterpart_remains_rejected(self):
+        """QEX-009: Q & an unsupported logical counterpart remains rejected."""
+        operand = F('x')
+        with self.assertRaisesMessage(TypeError, str(operand)):
+            Q(x=1) & operand
+
+    def test_qex_009_q_or_unsupported_logical_counterpart_remains_rejected(self):
+        """QEX-009: Q | an unsupported logical counterpart remains rejected."""
+        operand = F('x')
+        with self.assertRaisesMessage(TypeError, str(operand)):
+            Q(x=1) | operand
+
     def test_deconstruct(self):
         q = Q(price__gt=F('discounted_price'))
         path, args, kwargs = q.deconstruct()
