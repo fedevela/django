@@ -87,6 +87,10 @@ class BoundField:
         attributes passed as attrs. If a widget isn't specified, use the
         field's default widget.
         """
+        # Architecture seam (DJANGO-001, DJANGO-002, DJANGO-008): this method
+        # owns both outputs of callable-default ModelForm rendering. The
+        # only_initial branch is a baseline-transport boundary; it must not
+        # share the visible widget's bound-data source.
         # Pseudocode (DJANGO-001, DJANGO-002) -- preserve the two bound values:
         # INPUT: the visible submitted value, the original initial comparison
         # baseline, and whether the requested widget is the hidden initial.
