@@ -617,20 +617,40 @@ class ListDisplayTests(CheckTestCase):
         mocked_label_lookup.assert_called_once()
 
     def test_gev_005_valid_model_field_passes_list_display_check_without_e108(self):
-        self.assertTrue(True)
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["name"]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
 
     def test_gev_006_valid_callable_passes_list_display_check_without_e108(self):
-        self.assertTrue(True)
+        @admin.display(description="Uppercase name")
+        def uppercase_name(obj):
+            return obj.name.upper()
+
+        class TestModelAdmin(ModelAdmin):
+            list_display = [uppercase_name]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
 
     def test_gev_006_valid_model_attribute_passes_list_display_check_without_e108(
         self,
     ):
-        self.assertTrue(True)
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["decade_published_in"]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
 
     def test_gev_006_valid_modeladmin_attribute_passes_list_display_check_without_e108(
         self,
     ):
-        self.assertTrue(True)
+        class TestModelAdmin(ModelAdmin):
+            @admin.display(description="Uppercase name")
+            def uppercase_name(self, obj):
+                return obj.name.upper()
+
+            list_display = ["uppercase_name"]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
 
     def test_not_iterable(self):
         class TestModelAdmin(ModelAdmin):
