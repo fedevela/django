@@ -98,6 +98,19 @@ class Migration:
         Return the resulting project state for efficient reuse by following
         Migrations.
         """
+        # Architecture integration boundary (GUID: MIG-003): Migration.apply()
+        # owns ordered execution and the adjacent-state handoff. It depends on
+        # the operation contract only; operation classes remain unaware of the
+        # combined relationship transition and of one another.
+        #
+        # Operation ownership boundary (GUID: MIG-004): AlterUniqueTogether
+        # owns the obsolete model-option and schema-constraint transition. Its
+        # database boundary is the schema editor receiving old and new states.
+        #
+        # Operation ownership boundary (GUID: MIG-005): RemoveField owns the
+        # old concrete field boundary and AddField owns the ManyToManyField
+        # state/storage boundary. Migration.apply() composes these operations
+        # but does not absorb their field or backend-specific responsibilities.
         # GUID: MIG-003 - Combined relationship transition application:
         # INPUT: the project/database state immediately preceding an ordered
         # AlterUniqueTogether, RemoveField, AddField(ManyToManyField) sequence.
