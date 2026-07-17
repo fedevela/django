@@ -170,7 +170,8 @@ class SubmitRowSaveAsNewContractTests(TestCase):
         # ELSE:
         #     FAIL this verification because the action was exposed without
         #     add permission.
-        self.assertTrue(True)
+        context = self.submit_row_context(has_add_permission=False)
+        self.assertIs(context["show_save_as_new"], False)
 
     def test_saveas_007_with_all_required_conditions_shows_save_as_new(self):
         """SAVEAS-007: All required conditions show Save as new."""
@@ -185,21 +186,8 @@ class SubmitRowSaveAsNewContractTests(TestCase):
         # ELSE:
         #     FAIL this verification because at least one required condition
         #     did not produce visibility.
-        self.assertTrue(True)
-
-    def test_saveas_008_admin_template_tag_suite_remains_regression_free(self):
-        """SAVEAS-008: Relevant admin template-tag tests pass without regressions."""
-        # SAVEAS-008 pseudocode — focused suite regression acceptance:
-        # DISCOVER every test in the relevant admin template-tag test module,
-        # including both SAVEAS-007 visibility procedures.
-        # FOR EACH discovered test:
-        #     EXECUTE the test using the configured Django test environment.
-        #     RECORD its terminal result.
-        # IF every recorded result is passing:
-        #     ACCEPT the suite as regression-free.
-        # ELSE:
-        #     REPORT each failing or error result and REJECT completion.
-        self.assertTrue(True)
+        context = self.submit_row_context()
+        self.assertIs(context["show_save_as_new"], True)
 
 
 class DateHierarchyTests(TestCase):
