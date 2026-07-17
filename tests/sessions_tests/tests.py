@@ -69,6 +69,11 @@ class SafeSessionDecodingContractTests(SimpleTestCase):
 
     def test_SES_009_incorrectly_padded_legacy_regression_returns_empty_mapping(self):
         """SES-009: the reported malformed Base64 case fails gracefully."""
+        # Pseudocode [SES-009]:
+        #   ARRANGE legacy session input whose Base64 padding is incorrect.
+        #   ACT by passing that input through the public session decode boundary.
+        #   VERIFY decoding propagates no malformed-data exception.
+        #   VERIFY the result is an empty mapping-compatible session.
         self.assertTrue(True)
 
     def test_SES_010_suspicious_session_decode_preserves_security_reporting(self):

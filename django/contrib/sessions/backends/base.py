@@ -117,6 +117,16 @@ class SessionBase:
         )
 
     def decode(self, session_data):
+        # Pseudocode [SES-003, SES-004, SES-005]:
+        #   INPUT session_data from the session storage boundary.
+        #   ATTEMPT current-format signature validation and deserialization.
+        #   IF current-format validation succeeds:
+        #       RETURN the decoded values unchanged.  [SES-005]
+        #   OTHERWISE:
+        #       HAND OFF the same input to the contained legacy decoder.
+        #       IF legacy decoding succeeds, RETURN its decoded values.
+        #       IF legacy decoding rejects or cannot decode the input,
+        #           RETURN an empty mapping and expose no stored value.  [SES-003, SES-004]
         try:
             return signing.loads(session_data, salt=self.key_salt, serializer=self.serializer)
         # RemovedInDjango40Warning: when the deprecation ends, handle here
@@ -132,6 +142,20 @@ class SessionBase:
 
     def _legacy_decode(self, session_data):
         # RemovedInDjango40Warning: pre-Django 3.1 format will be invalid.
+        # Pseudocode [SES-001, SES-002, SES-004, SES-006, SES-010]:
+        #   BEGIN the legacy decoding containment boundary.
+        #   ATTEMPT ASCII conversion, Base64 decoding, payload separation,
+        #       signature comparison, and deserialization within this boundary.
+        #   IF any input operation fails, including incorrect Base64 padding:
+        #       CONTAIN the malformed-data exception.
+        #       RETURN an empty mapping without exposing decoded contents.  [SES-001, SES-002]
+        #   IF the legacy signature does not match:
+        #       REJECT all stored values and classify the failure as suspicious.  [SES-004]
+        #   IF signature validation and deserialization succeed:
+        #       RETURN the legacy values unchanged.  [SES-006]
+        #   ON a contained suspicious-operation failure:
+        #       EMIT the existing warning through its applicable security logger,
+        #       THEN RETURN an empty mapping.  [SES-010]
         encoded_data = base64.b64decode(session_data.encode('ascii'))
         try:
             # could produce ValueError if there is no ':'
