@@ -11,6 +11,19 @@ class Message(models.Model):
     from_field = models.ForeignKey(People, models.CASCADE, db_column="from_id")
 
 
+class RelationsTwo(models.Model):
+    first = models.ForeignKey(People, models.CASCADE, related_name="+")
+    second = models.ForeignKey(People, models.CASCADE, related_name="+")
+
+
+class RelationsThree(models.Model):
+    class_field = models.ForeignKey(
+        People, models.CASCADE, db_column="class", related_name="+"
+    )
+    editor = models.ForeignKey(People, models.CASCADE, related_name="+")
+    reviewer = models.ForeignKey(People, models.CASCADE, related_name="+")
+
+
 class PeopleData(models.Model):
     people_pk = models.ForeignKey(People, models.CASCADE, primary_key=True)
     ssn = models.CharField(max_length=11)
