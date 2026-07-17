@@ -1,4 +1,5 @@
 import operator
+import unittest
 import uuid
 from unittest import mock
 
@@ -170,20 +171,6 @@ class TestSerialization(SimpleTestCase):
                 self.assertEqual(new_instance.value, instance.value)
 
 
-class JSONNullRegressionContractTests(SimpleTestCase):
-    def test_jsonnull_005_mariadb_mysql_postgresql_key_transform_isnull_preserves_result_membership(self):
-        """JSONNULL-005: Unaffected backends preserve result membership."""
-        self.assertTrue(True)
-
-    def test_jsonnull_006_unrelated_jsonfield_operation_preserves_observable_result(self):
-        """JSONNULL-006: Unrelated JSONField operations remain unchanged."""
-        self.assertTrue(True)
-
-    def test_jsonnull_007_isnull_outside_json_key_transform_preserves_semantics(self):
-        """JSONNULL-007: isnull outside JSON key transforms remains unchanged."""
-        self.assertTrue(True)
-
-
 @skipUnlessDBFeature('supports_json_field')
 class TestSaveLoad(TestCase):
     def test_null(self):
@@ -332,6 +319,43 @@ class TestQuerying(TestCase):
             NullableJSONModel.objects.filter(value__isnull=True),
             [self.objs[0]],
         )
+
+    @unittest.skipUnless(
+        connection.vendor in ('mysql', 'postgresql'),
+        'MariaDB, MySQL, and PostgreSQL specific regression test.',
+    )
+    def test_jsonnull_005_mariadb_mysql_postgresql_key_transform_isnull_preserves_result_membership(self):
+        """JSONNULL-005: Unaffected backends preserve result membership."""
+        tests = (
+            (True, self.objs[:4] + self.objs[5:]),
+            (False, [self.objs[4]]),
+        )
+        for isnull, expected in tests:
+            with self.subTest(isnull=isnull):
+                self.assertCountEqual(
+                    NullableJSONModel.objects.filter(value__j__isnull=isnull),
+                    expected,
+                )
+
+    def test_jsonnull_006_unrelated_jsonfield_operation_preserves_observable_result(self):
+        """JSONNULL-006: Unrelated JSONField operations remain unchanged."""
+        self.assertSequenceEqual(
+            NullableJSONModel.objects.filter(value__exact={}),
+            [self.objs[2]],
+        )
+
+    def test_jsonnull_007_isnull_outside_json_key_transform_preserves_semantics(self):
+        """JSONNULL-007: isnull outside JSON key transforms remains unchanged."""
+        tests = (
+            (True, [self.objs[0]]),
+            (False, self.objs[1:]),
+        )
+        for isnull, expected in tests:
+            with self.subTest(isnull=isnull):
+                self.assertSequenceEqual(
+                    NullableJSONModel.objects.filter(value__isnull=isnull),
+                    expected,
+                )
 
     def test_ordering_by_transform(self):
         mariadb = connection.vendor == 'mysql' and connection.mysql_is_mariadb
