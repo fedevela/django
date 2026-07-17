@@ -18,14 +18,6 @@ def _update_method_wrapper(_wrapper, decorator):
     # a function-shaped probe; `_multi_decorate()` depends on this helper to
     # transfer the probe's update mappings and custom attributes onto its
     # resulting wrapper. No decorator-specific contract crosses this seam.
-    # Pseudocode obligation: GUID: MDP-009.
-    #
-    # decorated_probe := apply decorator to a mutable dummy callable
-    # IF decoration fails:
-    #     propagate the decorator failure; no resulting method is produced
-    # merge decorated_probe's wrapper-update mappings into resulting_wrapper
-    # copy custom attributes exposed by decorated_probe, preserving their values
-    # hand resulting_wrapper back to _multi_decorate() for the next decorator
     @decorator
     def dummy(*args, **kwargs):
         pass
@@ -73,15 +65,6 @@ def _multi_decorate(decorators, method):
     # the owner of decorator state imported above. The final wrapper merge is
     # therefore downstream of every decorator-state import and is the single
     # boundary from which both kinds of observable state leave this module.
-    # Pseudocode obligations: GUID: MDP-003, GUID: MDP-009.
-    #
-    # FOR each standard wrapper-assignment attribute exposed by method:
-    #     copy the original value to resulting_wrapper  # MDP-003
-    # merge method's wrapper-update mappings without removing decorator-produced
-    # custom attributes already accumulated on resulting_wrapper  # MDP-009
-    # set resulting_wrapper's original-callable link to method
-    # return resulting_wrapper with original identity metadata and preserved
-    # decorator-produced observable state
     update_wrapper(_wrapper, method)
     return _wrapper
 

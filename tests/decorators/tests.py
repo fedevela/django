@@ -348,7 +348,49 @@ class MethodDecoratorTests(SimpleTestCase):
 
     def test_mdp_003_original_wrapper_assignment_metadata_remains_on_resulting_method(self):
         """GUID: MDP-003 - Retain original standard wrapper-assignment metadata."""
-        pass
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+
+            for attr in WRAPPER_ASSIGNMENTS:
+                setattr(wrapper, attr, decorator_metadata[attr])
+            return wrapper
+
+        def method(self):
+            return "result"
+
+        metadata_values = {
+            "__module__": "original module",
+            "__name__": "original_name",
+            "__qualname__": "original_qualname",
+            "__doc__": "original doc",
+            "__annotations__": {"return": "original annotation"},
+            "__type_params__": ("original type parameter",),
+        }
+        decorator_metadata_values = {
+            "__module__": "decorator module",
+            "__name__": "decorator_name",
+            "__qualname__": "decorator_qualname",
+            "__doc__": "decorator doc",
+            "__annotations__": {"return": "decorator annotation"},
+            "__type_params__": ("decorator type parameter",),
+        }
+        metadata = {
+            attr: metadata_values[attr] for attr in WRAPPER_ASSIGNMENTS
+        }
+        decorator_metadata = {
+            attr: decorator_metadata_values[attr] for attr in WRAPPER_ASSIGNMENTS
+        }
+        for attr, value in metadata.items():
+            setattr(method, attr, value)
+
+        decorated_method = method_decorator(decorator)(method)
+
+        self.assertEqual(
+            {attr: getattr(decorated_method, attr) for attr in WRAPPER_ASSIGNMENTS},
+            metadata,
+        )
+        self.assertIs(decorated_method.__wrapped__, method)
 
     def test_mdp_004_missing_optional_wrapper_metadata_allows_adaptation_and_invocation(self):
         """GUID: MDP-004 - Tolerate absent optional wrapper metadata."""
@@ -385,11 +427,44 @@ class MethodDecoratorTests(SimpleTestCase):
 
     def test_mdp_009_decorator_custom_attribute_and_value_remain_on_resulting_method(self):
         """GUID: MDP-009 - Preserve a decorator-produced custom attribute and value."""
-        pass
+        custom_value = object()
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            wrapper.decorator_attribute = custom_value
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                return "result"
+
+        self.assertIs(Test.method.decorator_attribute, custom_value)
+        self.assertIs(Test().method.decorator_attribute, custom_value)
+        self.assertEqual(Test().method(), "result")
 
     def test_mdp_009_decorator_wrapper_updates_remain_on_resulting_method(self):
         """GUID: MDP-009 - Preserve decorator-produced wrapper updates."""
-        pass
+        update_value = object()
+
+        def decorator(func):
+            func.decorator_update = update_value
+
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+
+            return update_wrapper(wrapper, func, assigned=())
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                return "result"
+
+        self.assertIs(Test.method.decorator_update, update_value)
+        self.assertIs(Test().method.decorator_update, update_value)
+        self.assertEqual(Test().method(), "result")
 
     def test_bad_iterable(self):
         decorators = {myattr_dec_m, myattr2_dec_m}
