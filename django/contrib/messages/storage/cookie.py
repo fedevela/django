@@ -14,7 +14,9 @@ from django.utils.safestring import SafeData, mark_safe
 # SessionStorage imports the codecs directly; FallbackStorage only composes
 # those two storage backends. Keep extra_tags compatibility decisions here so
 # every serializing backend depends on one representation rather than defining
-# a backend-specific variant.
+# a backend-specific variant. For MSG-003, this boundary receives the helper
+# default only as Message state; it owns preserving the distinct empty-string
+# representation through encoding and decoding.
 class MessageEncoder(json.JSONEncoder):
     """
     Compactly serialize instances of the ``Message`` class as JSON.
