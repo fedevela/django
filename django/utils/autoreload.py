@@ -358,6 +358,13 @@ class BaseReloader:
         raise NotImplementedError('subclasses must implement check_availability().')
 
     def notify_file_changed(self, path):
+        # Integration contract (ARLD-005, ARLD-006): independently registered
+        # watch sources hand paths to one receiver fanout. Specialized
+        # receivers may consume an event, while this reloader retains the
+        # unconsumed project-file reload fallback.
+        # Autoreload ownership boundary (ARLD-001, ARLD-002, ARLD-003): signal
+        # receivers may consume specialized file changes; otherwise this
+        # method retains responsibility for the project-wide reload fallback.
         results = file_changed.send(sender=self, file_path=path)
         logger.debug('%s notified as changed. Signal results: %s.', path, results)
         if not any(res[1] for res in results):
