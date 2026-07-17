@@ -16,18 +16,73 @@ class TestNumberFormat(SimpleTestCase):
 
     def test_nfmt_004_valid_negative_is_recognized_and_preserves_formatted_output(self):
         """GUID: NFMT-004 - Valid negative formatting remains unchanged."""
-        self.assertTrue(True)
+        tests = [
+            (-1234, {}, "-1234"),
+            (
+                -1234.5,
+                {
+                    "decimal_pos": 2,
+                    "grouping": 3,
+                    "thousand_sep": ",",
+                    "force_grouping": True,
+                },
+                "-1,234.50",
+            ),
+            ("-1234.5", {"decimal_pos": 1}, "-1234.5"),
+        ]
+        for value, kwargs, expected in tests:
+            with self.subTest(value=value, kwargs=kwargs):
+                self.assertEqual(nformat(value, ".", **kwargs), expected)
 
     def test_nfmt_005_zero_or_positive_preserves_formatted_output(self):
         """GUID: NFMT-005 - Valid zero and positive formatting remains unchanged."""
-        self.assertTrue(True)
+        tests = [
+            (0, {}, "0"),
+            (1234, {}, "1234"),
+            (
+                1234.5,
+                {
+                    "decimal_pos": 2,
+                    "grouping": 3,
+                    "thousand_sep": ",",
+                    "force_grouping": True,
+                },
+                "1,234.50",
+            ),
+        ]
+        for value, kwargs, expected in tests:
+            with self.subTest(value=value, kwargs=kwargs):
+                self.assertEqual(nformat(value, ".", **kwargs), expected)
 
     def test_nfmt_006_existing_non_null_input_types_preserve_formatted_output(self):
         """
         GUID: NFMT-006 - Decimal, decimal-subclass, float, large-number,
         string, and general non-null formatting remains unchanged.
         """
-        self.assertTrue(True)
+        class FormattedDecimal(Decimal):
+            def __format__(self, specifier, **kwargs):
+                return "value={}".format(super().__format__(specifier, **kwargs))
+
+        class NumberLike:
+            def __str__(self):
+                return "9876.5"
+
+        tests = [
+            ("decimal", Decimal("1234.50"), {"decimal_pos": 2}, "1234,50"),
+            (
+                "decimal subclass",
+                FormattedDecimal("12.30"),
+                {"decimal_pos": 2},
+                "value=12,30",
+            ),
+            ("float", 9e-10, {"decimal_pos": 10}, "0,0000000009"),
+            ("large number", Decimal("9e201"), {}, "9e+201"),
+            ("string", "1234.50", {"decimal_pos": 2}, "1234,50"),
+            ("general non-null", NumberLike(), {"decimal_pos": 1}, "9876,5"),
+        ]
+        for input_type, value, kwargs, expected in tests:
+            with self.subTest(input_type=input_type):
+                self.assertEqual(nformat(value, ",", **kwargs), expected)
 
     def test_nfmt_007_empty_sign_boundary_completes_with_empty_output(self):
         """GUID: NFMT-007 - The empty sign boundary completes with empty output."""
