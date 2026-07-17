@@ -39,7 +39,7 @@ class PasswordResetTokenGenerator:
         """
         Check that a password reset token is correct for a given user.
         """
-        # Pseudocode contract (GUID: PRT-004, PRT-005):
+        # Pseudocode contract (GUID: PRT-004, PRT-005, PRT-006):
         # INPUT user, presented_token, current_time, permitted_lifetime
         # IF user or presented_token is absent:
         #     REJECT presented_token
@@ -51,6 +51,7 @@ class PasswordResetTokenGenerator:
         # effective email), using each supported hashing mode in turn
         # IF presented_token matches no expected_token:
         #     REJECT presented_token  # PRT-005: established state changes
+        #                              # PRT-006: validation user differs
         # COMPUTE token_age from current_time and issued_at
         # IF token_age exceeds permitted_lifetime:
         #     REJECT presented_token  # PRT-005: expiration remains effective
@@ -124,6 +125,17 @@ class PasswordResetTokenGenerator:
         Running this data through salted_hmac() prevents password cracking
         attempts using the reset token, provided the secret isn't compromised.
         """
+        # Pseudocode contract (GUID: PRT-006):
+        # INPUT token_user, issued_at
+        # READ immutable identity discriminator from token_user.primary_key
+        # READ remaining token-relevant state, including effective_email
+        # COMPOSE signed_state with identity discriminator as a required input
+        # OUTPUT signed_state to the shared generation/validation signer
+        # ON validation for a different user:
+        #     COMPOSE candidate_state with that user's identity discriminator
+        #     EVEN IF effective_email equals the token user's effective_email:
+        #         candidate_state remains distinct by identity discriminator
+        #     HAND OFF signature mismatch to check_token() for rejection
         # Truncate microseconds so that tokens are consistent even if the
         # database doesn't support microseconds.
         login_timestamp = '' if user.last_login is None else user.last_login.replace(microsecond=0, tzinfo=None)
