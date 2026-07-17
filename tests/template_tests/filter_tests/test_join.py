@@ -159,11 +159,25 @@ class JoinContractTraceabilityTests(SimpleTestCase):
 
     def test_join_006_autoescape_on_escapes_html_values_and_br_separator(self):
         """JOIN-006: Escape the same HTML-sensitive values and <br/> separator."""
-        self.assertTrue(True)
+        # GIVEN values = ["<a>", "<img>", "</a>"] and separator = "<br/>".
+        # AND a join expression receives those values and that separator.
+        # WHEN the expression is rendered while autoescaping is enabled.
+        # THEN compare the rendered output with
+        # "&lt;a&gt;&lt;br/&gt;&lt;img&gt;&lt;br/&gt;&lt;/a&gt;".
+        # AND fail this JOIN-006 regression check if either an HTML-sensitive
+        # value or the separator remains unescaped, or their order changes.
 
     def test_join_006_autoescape_off_joins_html_values_and_br_separator_directly(self):
         """JOIN-006: Directly join the same values with a literal <br/> separator."""
-        self.assertTrue(True)
+        # GIVEN the same values = ["<a>", "<img>", "</a>"] and separator =
+        # "<br/>" used by the enabled-autoescape JOIN-006 regression check.
+        # AND a join expression receives those values and that separator.
+        # WHEN the expression is rendered while autoescaping is disabled.
+        # THEN derive the expected output by directly joining the original
+        # values with separator.
+        # AND compare the rendered output with "<a><br/><img><br/></a>".
+        # AND fail this JOIN-006 regression check if the output differs,
+        # especially if the literal separator becomes "&lt;br/&gt;".
 
 
 class FunctionTests(SimpleTestCase):
