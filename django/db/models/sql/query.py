@@ -1069,6 +1069,9 @@ class Query(BaseExpression):
             sql = '(%s)' % sql
         return sql, params
 
+    # GUID: RANGE-009 architecture boundary: Query owns reconstruction after
+    # recursive RHS resolution. Named-tuple and plain-tuple values diverge only
+    # at this container-construction seam; lookup classes consume the result.
     def resolve_lookup_value(self, value, can_reuse, allow_joins):
         if hasattr(value, 'resolve_expression'):
             value = value.resolve_expression(

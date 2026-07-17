@@ -17,9 +17,10 @@ from .models import (
 )
 
 
-# RANGE-001..RANGE-007 integration fixture: this test-only type is the named
-# two-bound contract passed from Query.resolve_lookup_value() to the Range
-# lookup. RANGE-008 remains represented by built-in tuple values in this locus.
+# RANGE-001..RANGE-007 and RANGE-009 integration fixture: this test-only type
+# is the named two-bound contract passed from Query.resolve_lookup_value() to
+# the Range lookup. RANGE-008 and RANGE-009 plain compatibility remain
+# represented by built-in tuple values in this locus.
 NamedTupleRangeBounds = namedtuple('NamedTupleRangeBounds', ('lower', 'upper'))
 
 
