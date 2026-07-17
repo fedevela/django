@@ -1897,6 +1897,20 @@ class QuerySet(AltersData):
         batch_size = min(batch_size, max_batch_size) if batch_size else max_batch_size
         inserted_rows = []
         bulk_return = connection.features.can_return_rows_from_bulk_insert
+        # BULKUPSERT-007 pseudocode conflict-semantics preservation:
+        # INPUT: the validated conflict mode, selected unique_fields used for
+        # conflict matching, selected update_fields, and returned-field capability.
+        # FOR EACH batch:
+        #   RETAIN unique_fields and update_fields as independent conflict inputs.
+        #   IF returned fields are enabled for UPDATE conflict mode:
+        #     REQUEST the model-governed returned fields without adding, removing,
+        #     replacing, or reordering either conflict-field selection.
+        #   HAND OFF the retained unique_fields as the conflict target and the
+        #   retained update_fields as the complete update assignment selection.
+        #   IF either selection was invalid, propagate the validation failure from
+        #   bulk_create() before executing a batch; do not reinterpret the fields.
+        # OUTPUT: enabling returned fields changes only the result-row handoff;
+        # conflict matching and the set of updated columns remain unchanged.
         # BULKUPSERT-004, BULKUPSERT-013 pseudocode return-set contract:
         # INPUT: conflict mode, backend bulk-row-return capability, and the
         # model's existing db_returning_fields sequence.
