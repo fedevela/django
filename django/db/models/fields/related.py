@@ -1208,6 +1208,10 @@ class ManyToManyField(RelatedField):
         self.swappable = swappable
 
     def check(self, **kwargs):
+        # Architecture boundary (GUIDs M2M-004, M2M-005, M2M-006):
+        # ManyToManyField owns symmetry validation. Keep its check isolated
+        # from reverse-relation contribution, which remains the responsibility
+        # of contribute_to_related_class().
         return [
             *super().check(**kwargs),
             *self._check_unique(**kwargs),
@@ -1698,6 +1702,9 @@ class ManyToManyField(RelatedField):
         self.m2m_db_table = partial(self._get_m2m_db_table, cls._meta)
 
     def contribute_to_related_class(self, cls, related):
+        # Integration seam (GUIDs M2M-004, M2M-005): valid named reverse
+        # relations enter the related model only through this existing field
+        # contribution hook; the validation check must not own or bypass it.
         # Pseudocode trace: GUID M2M-004, M2M-005.
         # INPUT: a non-symmetrical relation configured with a reverse name.
         # IF the reverse relation is visible AND its source model is active:
