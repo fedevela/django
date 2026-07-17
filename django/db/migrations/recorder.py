@@ -64,10 +64,25 @@ class MigrationRecorder:
         return self.Migration._meta.db_table in tables
 
     def _migration_allowed(self):
+        # MIGREC-007 logic obligation: keep migration-history state isolated
+        # to each recorder connection while allowing processing to continue.
+        # INPUT: the alias bound to this recorder and the recorder model.
+        # DECIDE: ask the routers whether that model may migrate on this alias.
+        # HANDOFF: each recorder operation uses this result independently;
+        # permitted aliases follow their normal history path, while denied
+        # aliases return without requiring recorder storage. A decision for
+        # one alias never changes the state or decision for another alias.
         return router.allow_migrate_model(self.connection.alias, self.Migration)
 
     def ensure_schema(self):
         """Ensure the table exists and has the correct schema."""
+        # MIGREC-006 logic obligation: preserve permitted schema creation.
+        # INPUT: a recorder bound to its connection.
+        # IF permission is denied: finish without schema inspection or change.
+        # ELSE IF the recorder table exists: finish with the schema unchanged.
+        # ELSE: create the recorder model through the connection schema editor.
+        # FAILURE: translate a database creation error to
+        # MigrationSchemaMissing; otherwise return with the table available.
         if not self._migration_allowed():
             return
         # If the table's there, that's fine - we've never changed its schema
@@ -86,6 +101,12 @@ class MigrationRecorder:
         Return a dict mapping (app_name, migration_name) to Migration instances
         for all applied migrations.
         """
+        # MIGREC-006 logic obligation: preserve permitted history reads.
+        # INPUT: a recorder bound to its connection.
+        # IF permission is denied: return an empty history without storage I/O.
+        # ELSE IF the recorder table is absent: return an empty history.
+        # ELSE: read this alias's rows and map each (app, name) to its row.
+        # FAILURE: propagate permitted introspection or query errors unchanged.
         # MIGREC-005: Denied reads don't inspect or query django_migrations.
         if not self._migration_allowed():
             return {}
@@ -98,6 +119,12 @@ class MigrationRecorder:
 
     def record_applied(self, app, name):
         """Record that a migration was applied."""
+        # MIGREC-006 logic obligation: preserve permitted history inserts.
+        # INPUT: this alias's recorder plus an application and migration name.
+        # IF permission is denied: finish without schema or history storage.
+        # ELSE: ensure the recorder schema, then insert the row on this alias.
+        # OUTPUT: finish after the existing create operation succeeds.
+        # FAILURE: preserve ensure_schema translation and query error behavior.
         # MIGREC-003: Denied writes don't inspect or create django_migrations.
         if not self._migration_allowed():
             return
@@ -106,6 +133,13 @@ class MigrationRecorder:
 
     def record_unapplied(self, app, name):
         """Record that a migration was unapplied."""
+        # MIGREC-006 logic obligation: preserve permitted history deletions.
+        # INPUT: this alias's recorder plus an application and migration name.
+        # IF permission is denied: finish without schema or history storage.
+        # ELSE: ensure the recorder schema, select the matching row on this
+        # alias, and delete it using the existing queryset semantics.
+        # OUTPUT: finish after deletion, including when no row matched.
+        # FAILURE: preserve ensure_schema translation and query error behavior.
         # MIGREC-004: Denied deletes don't inspect or create django_migrations.
         if not self._migration_allowed():
             return
