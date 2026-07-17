@@ -107,6 +107,29 @@ def method_decorator(decorator, name=''):
     """
     Convert a function decorator into a method decorator
     """
+    # Pseudocode contract (GUID: MDP-011, GUID: MDP-012):
+    # VERIFIES: test_mdp_011_class_level_named_callable_decoration_succeeds_and_preserves_invocation
+    # VERIFIES: test_mdp_012_missing_named_method_error_remains_observable
+    # VERIFIES: test_mdp_012_non_callable_named_attribute_error_remains_observable
+    # INPUT: a decorator, a requested attribute name, and an object to decorate.
+    # IF the object is not a class:
+    #     HAND OFF the object to the existing method-decoration flow and RETURN
+    #     its result.
+    # ELSE IF the name is empty or the class has no attribute with that name:
+    #     RAISE the established nonexistent-method error and STOP before any
+    #     metadata-preservation work can run.
+    # RESOLVE the named class attribute.
+    # IF the resolved attribute is not callable:
+    #     RAISE the established non-callable-attribute error and STOP before
+    #     any metadata-preservation work can run.
+    # OTHERWISE:
+    #     HAND OFF the callable attribute to the existing method-decoration
+    #     flow, including its metadata preservation.
+    #     REPLACE the named class attribute with the returned wrapper.
+    #     RETURN the same class so normal instance lookup and invocation use
+    #     the decorated method with existing call semantics.
+    # IF callable decoration fails:
+    #     PROPAGATE the exception without replacing the named class attribute.
     # 'obj' can be a class or a function. If 'obj' is a function at the time it
     # is passed to _dec,  it will eventually be a method of the class it is
     # defined on. If 'obj' is a class, the 'name' is required to be the name
