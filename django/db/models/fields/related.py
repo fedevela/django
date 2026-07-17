@@ -1208,6 +1208,28 @@ class ManyToManyField(RelatedField):
         self.swappable = swappable
 
     def check(self, **kwargs):
+        # Pseudocode trace: GUID M2M-001, M2M-002, M2M-003, M2M-008.
+        #
+        # During this system-check phase, append the result of a dedicated
+        # ineffective-symmetrical-related-name check to the errors below.
+        # Do not perform this validation in __init__ or contribute_to_class.
+        #
+        # CHECK ineffective symmetrical related_name:
+        #   INPUTS:
+        #     - remote_field.symmetrical, already normalized by __init__ so
+        #       explicit and inferred self-referential symmetry share one path.
+        #     - _related_name, which preserves the developer-supplied value
+        #       before contribute_to_class replaces the remote related name.
+        #   IF remote_field.symmetrical IS false OR _related_name IS None:
+        #     RETURN an empty error list.
+        #   OTHERWISE:
+        #     CREATE one established model system-check Error whose message
+        #     states that related_name is ineffective because a symmetrical
+        #     relationship has no reverse relation.
+        #     SET the Error object to this field so the diagnostic identifies
+        #     the offending model field.
+        #     SET a dedicated fields.E*** identifier allocated for this check.
+        #     RETURN the single Error.
         return [
             *super().check(**kwargs),
             *self._check_unique(**kwargs),
