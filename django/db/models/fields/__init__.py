@@ -1013,10 +1013,6 @@ class Field(RegisterLookupMixin):
         }
         if self.has_default():
             if callable(self.default):
-                # Architecture contract (DJANGO-001, DJANGO-002): model field
-                # generation owns opting callable defaults into hidden-initial
-                # transport. BoundField owns keeping that transport value as
-                # the comparison baseline, separate from visible bound data.
                 defaults["initial"] = self.default
                 defaults["show_hidden_initial"] = True
             else:

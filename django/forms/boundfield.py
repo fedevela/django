@@ -87,22 +87,6 @@ class BoundField:
         attributes passed as attrs. If a widget isn't specified, use the
         field's default widget.
         """
-        # Architecture seam (DJANGO-001, DJANGO-002, DJANGO-008): this method
-        # owns both outputs of callable-default ModelForm rendering. The
-        # only_initial branch is a baseline-transport boundary; it must not
-        # share the visible widget's bound-data source.
-        # Pseudocode (DJANGO-001, DJANGO-002) -- preserve the two bound values:
-        # INPUT: the visible submitted value, the original initial comparison
-        # baseline, and whether the requested widget is the hidden initial.
-        # IF rendering the visible widget:
-        #     for a bound form, hand the submitted value to the widget,
-        #     including after failure; otherwise hand it the resolved initial.
-        # ELSE IF rendering its hidden initial companion:
-        #     IF bound data contains the prior hidden initial, carry it forward;
-        #     ELSE use the resolved initial as the original baseline;
-        #     never source this value from the visible submitted value.
-        # OUTPUT: visible data remains redisplay data, while hidden data remains
-        # the stable baseline consumed by changed-data detection on rebinding.
         widget = widget or self.field.widget
         if self.field.localize:
             widget.is_localized = True
@@ -112,9 +96,16 @@ class BoundField:
             attrs.setdefault(
                 "id", self.html_initial_id if only_initial else self.auto_id
             )
+        if only_initial and self.form.is_bound:
+            value = self.form._widget_data_value(
+                self.field.hidden_widget(),
+                self.html_initial_name,
+            )
+        else:
+            value = self.value()
         return widget.render(
             name=self.html_initial_name if only_initial else self.html_name,
-            value=self.value(),
+            value=value,
             attrs=attrs,
             renderer=self.form.renderer,
         )
@@ -153,12 +144,6 @@ class BoundField:
         return self.field.prepare_value(data)
 
     def _has_changed(self):
-        # Pseudocode (DJANGO-002) -- compare across the rendering handoff:
-        # IF a hidden initial is enabled, decode the carried original baseline.
-        #     IF decoding fails, report changed rather than neutralizing data.
-        # ELSE use the field's initial value as the baseline.
-        # Compare submitted visible data with that baseline exactly once and
-        # return the field-specific changed result.
         field = self.field
         if field.show_hidden_initial:
             hidden_widget = field.hidden_widget()

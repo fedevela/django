@@ -22,6 +22,7 @@ from django.forms.models import (
 )
 from django.template import Context, Template
 from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+from django.test.html import parse_html
 from django.test.utils import isolate_apps
 
 from .models import (
@@ -3101,26 +3102,63 @@ class OtherModelFormTests(TestCase):
         DJANGO-001: A bound generated ModelForm that fails validation redisplays
         the submitted callable-default field value.
         """
-        # Pseudocode (DJANGO-001):
-        # GIVEN a generated ModelForm field whose model default is callable,
-        # bind a value distinct from that default while another input is invalid.
-        # WHEN validation fails and the bound form is rendered,
-        # THEN inspect the visible field and require the submitted value,
-        # failing if either the callable default or hidden initial replaced it.
-        self.assertTrue(True)
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        initial_date = str(datetime.date.today())
+        submitted_date = "2000-01-01"
+        form = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": submitted_date,
+                "initial-date_published": initial_date,
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form["date_published"].value(), submitted_date)
+        self.assertHTMLEqual(
+            form["date_published"].as_widget(),
+            '<input type="text" name="date_published" value="2000-01-01" '
+            'required id="id_date_published">',
+        )
 
     def test_django_002_rebound_hidden_initial_preserves_change_baseline(self):
         """
         DJANGO-002: Rendering and rebinding a callable-default field keeps the
         original changed-data comparison baseline despite its hidden initial.
         """
-        # Pseudocode (DJANGO-002):
-        # GIVEN an invalid bound form with distinct submitted and initial values,
-        # render both the visible field and its hidden initial field.
-        # WHEN their rendered values are rebound without modification,
-        # THEN require changed-data detection to compare the visible submission
-        # with the original baseline, not with a baseline rewritten from it.
-        self.assertTrue(True)
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        initial_date = str(datetime.date.today())
+        submitted_date = "2000-01-01"
+        form = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": submitted_date,
+                "initial-date_published": initial_date,
+            }
+        )
+        self.assertFalse(form.is_valid())
+        hidden = parse_html(
+            form["date_published"].as_hidden(only_initial=True)
+        )
+        hidden_value = dict(hidden.attributes)["value"]
+        self.assertEqual(hidden_value, initial_date)
+
+        rebound = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": form["date_published"].value(),
+                "initial-date_published": hidden_value,
+            }
+        )
+        self.assertIn("date_published", rebound.changed_data)
 
     def test_django_008_hidden_initial_does_not_neutralize_submitted_value(self):
         """
@@ -3128,14 +3166,35 @@ class OtherModelFormTests(TestCase):
         callable-default ModelForm without its hidden initial replacing or
         neutralizing the submitted value.
         """
-        # Pseudocode (DJANGO-008):
-        # ARRANGE a callable-default ModelForm and an invalid companion input.
-        # ACT 1: bind a non-default value, validate unsuccessfully, and render.
-        # ACT 2: capture visible and hidden values and rebind the rendered data.
-        # ASSERT: the visible value remains the submission after each transition.
-        # ASSERT: the hidden value remains the original comparison baseline.
-        # ASSERT: changed-data detection still reports the submitted difference.
-        self.assertTrue(True)
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        initial_date = str(datetime.date.today())
+        submitted_date = "2000-01-01"
+        form = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": submitted_date,
+                "initial-date_published": initial_date,
+            }
+        )
+        self.assertFalse(form.is_valid())
+
+        rendered = parse_html(str(form["date_published"]))
+        rendered_data = {
+            dict(element.attributes)["name"]: dict(element.attributes).get("value", "")
+            for element in rendered.children
+        }
+        self.assertEqual(rendered_data["date_published"], submitted_date)
+        self.assertEqual(rendered_data["initial-date_published"], initial_date)
+
+        rendered_data["title"] = ""
+        rebound = PublicationDefaultsForm(rendered_data)
+        self.assertFalse(rebound.is_valid())
+        self.assertEqual(rebound["date_published"].value(), submitted_date)
+        self.assertIn("date_published", rebound.changed_data)
 
 
 class ModelFormCustomErrorTests(SimpleTestCase):
