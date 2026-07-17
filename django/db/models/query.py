@@ -801,6 +801,19 @@ class QuerySet(AltersData):
                     obj_with_pk._state.db = self.db
             if objs_without_pk:
                 fields = [f for f in fields if not isinstance(f, AutoField)]
+                # BULKUPSERT-001, BULKUPSERT-002, BULKUPSERT-003 pseudocode:
+                # INPUT: objects without assigned primary keys, conflict mode, and
+                # backend row-return capability.
+                # IF conflict mode is UPDATE and the backend can return bulk rows:
+                #   RECEIVE one database row per input object, in input order.
+                #   REQUIRE returned-row count == input-object count; otherwise
+                #   fail the correspondence invariant before partial assignment.
+                #   FOR EACH positional (object, returned row) pair:
+                #     ASSIGN every database-returning field to the object.
+                #     Thus an inserted object receives its generated primary key,
+                #     while an updated object receives the matched row's primary key.
+                # ELSE preserve the existing behavior for non-returning backends and
+                # non-UPDATE conflict modes, including IGNORE.
                 returned_columns = self._batched_insert(
                     objs_without_pk,
                     fields,
@@ -1836,6 +1849,15 @@ class QuerySet(AltersData):
         batch_size = min(batch_size, max_batch_size) if batch_size else max_batch_size
         inserted_rows = []
         bulk_return = connection.features.can_return_rows_from_bulk_insert
+        # BULKUPSERT-001, BULKUPSERT-002, BULKUPSERT-003 pseudocode handoff:
+        # FOR EACH batch, preserving the original object order:
+        #   IF bulk row return is supported AND conflict mode is either absent or
+        #   UPDATE, execute the insert with database-returning fields and all
+        #   requested conflict-update options.
+        #   APPEND returned rows in database/input order so bulk_create() can pair
+        #   each row with its corresponding object across all batches.
+        #   OTHERWISE execute without requesting returned rows.
+        # OUTPUT: the ordered concatenation of all rows returned by all batches.
         for item in [objs[i : i + batch_size] for i in range(0, len(objs), batch_size)]:
             if bulk_return and on_conflict is None:
                 inserted_rows.extend(
