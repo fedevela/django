@@ -13,6 +13,11 @@ class classonlymethod(classmethod):
 def _update_method_wrapper(_wrapper, decorator):
     # _multi_decorate()'s bound_method isn't available in this scope. Cheat by
     # using it on a dummy function.
+    # Architecture contract (GUID: MDP-009): this helper owns the
+    # decorator-state import boundary. The supplied decorator depends only on
+    # a function-shaped probe; `_multi_decorate()` depends on this helper to
+    # transfer the probe's update mappings and custom attributes onto its
+    # resulting wrapper. No decorator-specific contract crosses this seam.
     # Pseudocode obligation: GUID: MDP-009.
     #
     # decorated_probe := apply decorator to a mutable dummy callable
@@ -62,6 +67,12 @@ def _multi_decorate(decorators, method):
     for dec in decorators:
         _update_method_wrapper(_wrapper, dec)
     # Preserve any existing attributes of 'method', including the name.
+    # Architecture contract (GUID: MDP-003, GUID: MDP-009): `_multi_decorate()`
+    # owns the final metadata integration seam. The original `method` is the
+    # authority for standard wrapper-assignment metadata; `_wrapper` remains
+    # the owner of decorator state imported above. The final wrapper merge is
+    # therefore downstream of every decorator-state import and is the single
+    # boundary from which both kinds of observable state leave this module.
     # Pseudocode obligations: GUID: MDP-003, GUID: MDP-009.
     #
     # FOR each standard wrapper-assignment attribute exposed by method:
