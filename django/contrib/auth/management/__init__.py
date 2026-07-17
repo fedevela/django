@@ -42,9 +42,12 @@ def create_permissions(
     apps=global_apps,
     **kwargs,
 ):
-    # Architecture boundary [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-006]:
-    # This post-migrate receiver owns permission database confinement. ``using``
-    # is its database dependency and must be preserved by downstream managers.
+    # Architecture boundary
+    # [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-005, MIGDB-006]: This
+    # post-migrate receiver owns permission database confinement. ``using`` is
+    # its sole database dependency, whether explicitly or implicitly selected,
+    # and must be preserved by downstream managers. Permission-result stability
+    # therefore depends on the migration lifecycle supplying this contract.
     # Pseudocode [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-006]:
     #   selected_alias := using supplied by the migration lifecycle
     #   if the application has no models: return without database access

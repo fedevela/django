@@ -52,6 +52,9 @@ class Command(BaseCommand):
                 "database."
             ),
         )
+        # Selection boundary [MIGDB-005]: this existing option default owns
+        # implicit database selection. Downstream migration code receives the
+        # resolved option and must not introduce a second implicit default.
         parser.add_argument(
             "--fake",
             action="store_true",
@@ -386,9 +389,10 @@ class Command(BaseCommand):
             [ModelState.from_model(apps.get_model(*model)) for model in model_keys]
         )
 
-        # Architecture seam [MIGDB-001]: The selected connection owns the
-        # migration lifecycle. Its alias is the database contract passed to
-        # every post-migrate receiver through the ``using`` signal argument.
+        # Architecture seam [MIGDB-001, MIGDB-005]: The selected connection
+        # owns the migration lifecycle. Its alias is the database contract
+        # passed to every post-migrate receiver through the ``using`` signal
+        # argument, including when selection came from the option default.
         emit_post_migrate_signal(
             self.verbosity,
             self.interactive,
