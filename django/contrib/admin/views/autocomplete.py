@@ -68,6 +68,13 @@ class AutocompleteJsonView(BaseListView):
         """Use the ModelAdmin's paginator."""
         return self.model_admin.get_paginator(self.request, *args, **kwargs)
 
+    # Queryset-selection boundary (GUID: ACJ-010): get_queryset() owns the
+    # composition of the related ModelAdmin's base queryset, the source
+    # field's relation constraint, search, and duplicate elimination. The
+    # ModelAdmin and source field remain the authorities for those inputs;
+    # pagination and serialize_result() are downstream consumers and must not
+    # broaden, narrow, or otherwise reconstruct the selected membership.
+
     def get_queryset(self):
         """Return queryset based on ModelAdmin.get_search_results()."""
         # Queryset-membership preservation pseudocode (GUID: ACJ-010):
