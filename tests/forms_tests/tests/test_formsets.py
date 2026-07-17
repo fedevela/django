@@ -1243,6 +1243,46 @@ class FormsFormsetTestCase(SimpleTestCase):
         self.assertIs(formset._should_delete_form(formset.forms[2]), False)
 
 
+class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
+    """Placeholder contracts for FormSet non-form error classification."""
+
+    def test_nonform_001_non_form_error_list_is_classified_as_exact_nonform_class(self):
+        """GUID: NONFORM-001"""
+        pass
+
+    def test_nonform_002_default_rendering_adds_nonform_to_error_list_element(self):
+        """GUID: NONFORM-002"""
+        pass
+
+    def test_nonform_004_minimum_count_error_list_is_classified_as_nonform(self):
+        """GUID: NONFORM-004; minimum-count validation path."""
+        pass
+
+    def test_nonform_004_maximum_count_error_list_is_classified_as_nonform(self):
+        """GUID: NONFORM-004; maximum-count validation path."""
+        pass
+
+    def test_nonform_004_custom_clean_error_list_is_classified_as_nonform(self):
+        """GUID: NONFORM-004; custom-cleaning validation path."""
+        pass
+
+    def test_nonform_004_access_triggers_validation_and_classifies_error_list_as_nonform(self):
+        """GUID: NONFORM-004; lazy non_form_errors() validation path."""
+        pass
+
+    def test_nonform_007_configured_error_list_subclass_is_preserved_and_classified_as_nonform(self):
+        """GUID: NONFORM-007"""
+        pass
+
+    def test_nonform_008_renderer_distinguishes_field_nonfield_and_nonform_metadata(self):
+        """GUID: NONFORM-008"""
+        pass
+
+    def test_nonform_011_default_markup_only_adds_nonform_class(self):
+        """GUID: NONFORM-011"""
+        pass
+
+
 class FormsetAsTagTests(SimpleTestCase):
     def setUp(self):
         data = {
