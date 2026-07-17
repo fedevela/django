@@ -1020,10 +1020,12 @@ class MigrationAutodetector:
         ):
             self._generate_added_field(app_label, model_name, field_name)
 
-    def _generate_added_field(self, app_label, model_name, field_name):
+    def _generate_added_field(
+        self, app_label, model_name, field_name, dependencies=None
+    ):
         field = self.to_state.models[app_label, model_name].get_field(field_name)
         # Fields that are foreignkeys/m2ms depend on stuff
-        dependencies = []
+        dependencies = list(dependencies or [])
         if field.remote_field and field.remote_field.model:
             dependencies.extend(
                 self._get_dependencies_for_foreign_key(
@@ -1210,7 +1212,12 @@ class MigrationAutodetector:
                 else:
                     # We cannot alter between m2m and concrete fields
                     self._generate_removed_field(app_label, model_name, field_name)
-                    self._generate_added_field(app_label, model_name, field_name)
+                    self._generate_added_field(
+                        app_label,
+                        model_name,
+                        field_name,
+                        dependencies=[(app_label, model_name, field_name, False)],
+                    )
 
     def create_altered_indexes(self):
         option_name = operations.AddIndex.option_name

@@ -98,6 +98,100 @@ class Migration:
         Return the resulting project state for efficient reuse by following
         Migrations.
         """
+        # Architecture integration boundary (GUID: MIG-003): Migration.apply()
+        # owns ordered execution and the adjacent-state handoff. It depends on
+        # the operation contract only; operation classes remain unaware of the
+        # combined relationship transition and of one another.
+        #
+        # Operation ownership boundary (GUID: MIG-004): AlterUniqueTogether
+        # owns the obsolete model-option and schema-constraint transition. Its
+        # database boundary is the schema editor receiving old and new states.
+        #
+        # Operation ownership boundary (GUID: MIG-005): RemoveField owns the
+        # old concrete field boundary and AddField owns the ManyToManyField
+        # state/storage boundary. Migration.apply() composes these operations
+        # but does not absorb their field or backend-specific responsibilities.
+        #
+        # Compatibility boundary (GUID: MIG-006, MIG-010): this method accepts
+        # one migration plus the preceding ProjectState and returns the state
+        # consumed by the executor. It neither reads nor rewrites historical
+        # migration definitions, and it has no adjacency contract with the
+        # migration that produced its input state.
+        #
+        # Isolation boundary (GUID: MIG-007): Migration.apply() owns only
+        # orchestration. Each operation owns its declared state/schema target,
+        # so unrelated schema and data remain outside this composition seam.
+        #
+        # Backend port (GUID: MIG-008): operation database contracts depend on
+        # the supplied schema-editor interface and its atomicity capability;
+        # this migration layer has no dependency on concrete backend repair
+        # paths.
+        # GUID: MIG-003 - Combined relationship transition application:
+        # INPUT: the project/database state immediately preceding an ordered
+        # AlterUniqueTogether, RemoveField, AddField(ManyToManyField) sequence.
+        # FOR each operation, derive its next state before applying its database
+        # change, and hand both adjacent states to that database operation.
+        # REQUIRE: apply AlterUniqueTogether while the old concrete field still
+        # identifies the obsolete constraint; then remove the concrete field;
+        # then add the many-to-many field and its storage.
+        # SUCCESS: exhaust the sequence without a constraint-count ValueError
+        # and return the final state. FAILURE: propagate any operation error and
+        # do not report the combined migration as successfully applied.
+        #
+        # GUID: MIG-004 - Obsolete uniqueness removal:
+        # WHEN AlterUniqueTogether is current, transition the model option to
+        # its target value, compare the old and target tuples, and request
+        # deletion of every obsolete tuple before the concrete field is removed.
+        # OUTPUT: subsequent states and schema inspection contain no obsolete
+        # uniqueness constraint. FAILURE: if the old constraint cannot be
+        # identified unambiguously, fail on this operation rather than advance.
+        #
+        # GUID: MIG-005 - Many-to-many state and database storage:
+        # WHEN RemoveField is current, remove the old concrete field from state
+        # and database storage. WHEN AddField is current, add the target
+        # ManyToManyField to state and create its implicit through-table storage.
+        # OUTPUT: the returned migration state marks the field many-to-many and
+        # the database persists relationships through that table, not the old
+        # concrete column. FAILURE: if either transition step fails, propagate
+        # the error and do not expose a partially transitioned state as success.
+        #
+        # GUID: MIG-006 - Existing history remains usable:
+        # INPUT: the state produced by all preceding historical migrations and
+        # the next migration's stored operation sequence.
+        # FOR each operation, use the standard adjacent-state handoff without
+        # rewriting, replacing, or reinterpreting preceding migration files.
+        # OUTPUT: prior migrations apply as before and their resulting state is
+        # accepted as the starting state of the newly combined migration.
+        # FAILURE PATH: propagate the first historical or combined-operation
+        # error; never compensate by mutating an earlier migration definition.
+        #
+        # GUID: MIG-007 - Preserve unrelated schema and application data:
+        # FOR each operation, derive old and next project states, then limit the
+        # database handoff to that operation's declared model option or field.
+        # REQUIRE: the constraint removal and field transition identify only
+        # the obsolete tuple and converted relationship; unrelated fields,
+        # relationships, constraints, tables, rows, and values receive no
+        # transition. OUTPUT: all unrelated state and data pass through intact.
+        # FAILURE PATH: if an operation cannot isolate its declared target,
+        # propagate its error instead of issuing collateral schema or data work.
+        #
+        # GUID: MIG-008 - Supported-backend execution:
+        # INPUT: the backend-provided schema editor and its transaction feature
+        # flags. SELECT the existing atomic wrapper when the editor cannot make
+        # DDL atomic; otherwise use its normal operation path. Delegate every
+        # schema change through the editor's portable operation contract.
+        # OUTPUT: the ordered transition completes without an out-of-band or
+        # backend-specific repair handoff. FAILURE PATH: surface the backend
+        # operation error and do not request a manual repair continuation.
+        #
+        # GUID: MIG-010 - Preserve the established two-migration sequence:
+        # GIVEN migration A removes the obsolete constraint and migration B
+        # later converts the relationship, apply A to completion and return its
+        # state; then accept that state as B's input and apply B independently.
+        # IF the operations are combined instead, preserve their stored order
+        # within the single loop. OUTPUT: both representations remain applicable
+        # in dependency order. FAILURE PATH: do not require adjacency within one
+        # migration or recreate the removed constraint between migrations.
         for operation in self.operations:
             # If this operation cannot be represented as SQL, place a comment
             # there instead

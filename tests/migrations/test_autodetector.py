@@ -3050,6 +3050,66 @@ class AutodetectorTests(TestCase):
             index_together={("age",)},
         )
 
+    def _get_fk_in_unique_together_changed_to_m2m_changes(self):
+        target = ModelState(
+            "testapp",
+            "Target",
+            [("id", models.AutoField(primary_key=True))],
+        )
+        source = ModelState(
+            "testapp",
+            "Source",
+            [
+                ("id", models.AutoField(primary_key=True)),
+                ("target", models.ForeignKey("testapp.Target", models.CASCADE)),
+                ("name", models.CharField(max_length=20)),
+            ],
+            {"unique_together": {("target", "name")}},
+        )
+        source_with_m2m = ModelState(
+            "testapp",
+            "Source",
+            [
+                ("id", models.AutoField(primary_key=True)),
+                ("target", models.ManyToManyField("testapp.Target")),
+                ("name", models.CharField(max_length=20)),
+            ],
+        )
+        return self.get_changes([target, source], [target, source_with_m2m])
+
+    def test_mig_001_fk_in_unique_together_changed_to_m2m_generates_one_migration(
+        self,
+    ):
+        """GUID: MIG-001 - The combined change generates exactly one migration."""
+        changes = self._get_fk_in_unique_together_changed_to_m2m_changes()
+
+        self.assertNumberMigrations(changes, "testapp", 1)
+        self.assertOperationTypes(
+            changes,
+            "testapp",
+            0,
+            ["AlterUniqueTogether", "RemoveField", "AddField"],
+        )
+
+    def test_mig_002_remove_unique_together_precedes_fk_to_m2m_transition(self):
+        """GUID: MIG-002 - Constraint removal precedes the field transition."""
+        changes = self._get_fk_in_unique_together_changed_to_m2m_changes()
+
+        self.assertOperationAttributes(
+            changes,
+            "testapp",
+            0,
+            0,
+            name="source",
+            unique_together=set(),
+        )
+        self.assertOperationAttributes(
+            changes, "testapp", 0, 1, model_name="source", name="target"
+        )
+        self.assertOperationAttributes(
+            changes, "testapp", 0, 2, model_name="source", name="target"
+        )
+
     def test_partly_alter_foo_together(self):
         initial_author = ModelState(
             "testapp",

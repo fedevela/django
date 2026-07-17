@@ -149,6 +149,11 @@ class MigrationExecutor:
         Take a list of 2-tuples of the form (migration instance, False) and
         apply them in the order they occur in the full_plan.
         """
+        # Historical-state integration seam (GUID: MIG-006, MIG-010): the
+        # executor owns dependency-ordered traversal and passes each returned
+        # ProjectState to the next migration. Individual migrations therefore
+        # remain applicable whether related operations share one migration or
+        # occupy two consecutive migration nodes.
         migrations_to_run = {m[0] for m in plan}
         for migration, _ in full_plan:
             if not migrations_to_run:
