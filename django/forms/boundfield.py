@@ -96,6 +96,15 @@ class BoundField:
             attrs.setdefault(
                 "id", self.html_initial_id if only_initial else self.auto_id
             )
+        # Pseudocode (DJANGO-004) -- preserve validation state across submits:
+        # INPUT: the requested visible-or-hidden widget, form binding state,
+        # submitted visible value, and submitted hidden initial baseline.
+        # IF rendering a hidden initial for a bound form:
+        #     carry forward the submitted hidden baseline unchanged.
+        # ELSE:
+        #     render the field's visible submitted value or resolved initial.
+        # OUTPUT: redisplay retains both the invalid submitted value and the
+        # baseline needed to make every unchanged resubmission validate again.
         if only_initial and self.form.is_bound:
             value = self.form._widget_data_value(
                 self.field.hidden_widget(),
@@ -144,6 +153,20 @@ class BoundField:
         return self.field.prepare_value(data)
 
     def _has_changed(self):
+        # Pseudocode (DJANGO-003, DJANGO-004) -- classify the extra inline:
+        # INPUT: visible submitted data and the callable-default field's hidden
+        # initial data when hidden-initial comparison is enabled.
+        # IF hidden-initial comparison is enabled:
+        #     decode the submitted hidden value as the comparison baseline.
+        #     IF decoding fails, report changed so validation cannot be skipped.
+        # ELSE:
+        #     use the resolved field initial as the comparison baseline.
+        # Compare visible submitted data with the selected baseline using the
+        # field's change rule.
+        # IF changed, keep the extra form active and allow its normal validation
+        # path to report the error; ELSE permit normal empty-form handling.
+        # On each unchanged resubmission, repeat this comparison against the
+        # carried baseline so the same invalid inline remains active.
         field = self.field
         if field.show_hidden_initial:
             hidden_widget = field.hidden_widget()
