@@ -1471,17 +1471,66 @@ class ChangelistTests(AuthViewsTestCase):
         self.logout()
         self.login(password="password1")
 
-    def test_ucp_001_non_pk_to_field_help_link_identifies_user_by_pk(self):
+    @mock.patch(
+        "django.contrib.auth.admin.UserAdmin.to_field_allowed", return_value=True
+    )
+    def test_ucp_001_non_pk_to_field_help_link_identifies_user_by_pk(
+        self, to_field_allowed
+    ):
         """GUID: UCP-001."""
-        self.assertTrue(True)
+        user_change_url = reverse(
+            "auth_test_admin:auth_user_change", args=(self.admin.username,)
+        )
+        password_change_url = reverse(
+            "auth_test_admin:auth_user_password_change", args=(self.admin.pk,)
+        )
 
-    def test_ucp_002_follow_non_pk_to_field_help_link_resolves_same_user(self):
+        response = self.client.get(user_change_url, {"_to_field": "username"})
+        rel_link = re.search(
+            r'you can change the password using <a href="([^"]*)">this form</a>',
+            response.content.decode(),
+        )[1]
+
+        self.assertEqual(urljoin(user_change_url, rel_link), password_change_url)
+        to_field_allowed.assert_called_once()
+
+    @mock.patch(
+        "django.contrib.auth.admin.UserAdmin.to_field_allowed", return_value=True
+    )
+    def test_ucp_002_follow_non_pk_to_field_help_link_resolves_same_user(
+        self, to_field_allowed
+    ):
         """GUID: UCP-002."""
-        self.assertTrue(True)
+        user_change_url = reverse(
+            "auth_test_admin:auth_user_change", args=(self.admin.username,)
+        )
+        response = self.client.get(user_change_url, {"_to_field": "username"})
+        rel_link = re.search(
+            r'you can change the password using <a href="([^"]*)">this form</a>',
+            response.content.decode(),
+        )[1]
+
+        response = self.client.get(urljoin(user_change_url, rel_link))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["original"], self.admin)
+        to_field_allowed.assert_called_once()
 
     def test_ucp_003_follow_pk_change_page_help_link_resolves_same_user(self):
         """GUID: UCP-003."""
-        self.assertTrue(True)
+        user_change_url = reverse(
+            "auth_test_admin:auth_user_change", args=(self.admin.pk,)
+        )
+        response = self.client.get(user_change_url)
+        rel_link = re.search(
+            r'you can change the password using <a href="([^"]*)">this form</a>',
+            response.content.decode(),
+        )[1]
+
+        response = self.client.get(urljoin(user_change_url, rel_link))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["original"], self.admin)
 
     def test_user_change_different_user_password(self):
         u = User.objects.get(email="staffmember@example.com")

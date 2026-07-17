@@ -185,7 +185,9 @@ class UserChangeForm(forms.ModelForm):
         # FAILURE PATH: never substitute the incoming change-page identifier for
         # the persisted primary key, because the password endpoint resolves by PK.
         if password:
-            password.help_text = password.help_text.format("../password/")
+            password.help_text = password.help_text.format(
+                f"../../{self.instance.pk}/password/"
+            )
         user_permissions = self.fields.get("user_permissions")
         if user_permissions:
             user_permissions.queryset = user_permissions.queryset.select_related(
