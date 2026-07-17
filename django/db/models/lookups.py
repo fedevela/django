@@ -501,6 +501,8 @@ class Range(FieldGetDbPrepValueIterableMixin, BuiltinLookup):
         return "BETWEEN %s AND %s" % (rhs[0], rhs[1])
 
 
+# JSONNULL-007 ownership boundary: general field-level isnull compilation stays
+# in this registered lookup; JSON key transforms may specialize it downstream.
 @Field.register_lookup
 class IsNull(BuiltinLookup):
     lookup_name = 'isnull'

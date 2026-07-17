@@ -365,6 +365,8 @@ class CaseInsensitiveMixin:
 
 # JSONNULL-001, JSONNULL-002, JSONNULL-003: Use key-presence semantics on
 # SQLite and Oracle.
+# JSONNULL-005 architecture boundary: backend-specific key-presence SQL is
+# owned here; backends without an override retain the inherited IsNull path.
 class KeyTransformIsNull(lookups.IsNull):
     # JSONNULL-005 logic obligation: preserve unaffected-backend membership.
     # INPUT: a resolved key-transform ``isnull`` lookup and its connection.
@@ -525,6 +527,8 @@ class KeyTransformGte(KeyTransformNumericLookupMixin, lookups.GreaterThanOrEqual
 KeyTransform.register_lookup(KeyTransformIn)
 KeyTransform.register_lookup(KeyTransformExact)
 KeyTransform.register_lookup(KeyTransformIExact)
+# JSONNULL-006 integration seam: scope the specialized lookup to KeyTransform
+# so other JSONField operations retain their existing lookup ownership.
 KeyTransform.register_lookup(KeyTransformIsNull)
 KeyTransform.register_lookup(KeyTransformIContains)
 KeyTransform.register_lookup(KeyTransformStartsWith)
