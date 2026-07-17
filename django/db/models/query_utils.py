@@ -56,6 +56,16 @@ class Q(tree.Node):
         # stay opaque to this boundary. Thus dependency points from Q's public
         # operator seam through _combine() to Node's tree contract, without a
         # serialization, lookup-resolution, or evaluation dependency here.
+        # QCOMB-008 architecture:
+        # This existing empty-operand branch is the production ownership and
+        # integration seam for both supported OR operand orders. It selects the
+        # non-empty Q and delegates allocation of the identity-like result to
+        # Node._new_instance(), whose children-list copy is the structural
+        # boundary. The x__in leaf and its dict_keys value remain opaque,
+        # reference-preserved children of that copied container. Regression
+        # ownership remains in QTests beside the established Q combination
+        # coverage; no lookup, pickle, or query-compiler dependency belongs on
+        # this seam.
         # QCOMB-001/QCOMB-002/QCOMB-003/QCOMB-005/QCOMB-006 pseudocode:
         # INPUT: the left Q (`self`), the proposed right operand, and connector.
         # IF the right operand is not a Q, follow the existing type-error path
