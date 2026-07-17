@@ -287,6 +287,13 @@ class ModelBase(type):
                 # OUTPUT descendant._meta.pk as that registered inherited field;
                 # propagate existing copy, binding, and registration failures.
 
+                # Architecture contract -- GUID: PKW-003
+                # ModelBase owns inheritance eligibility and the descendant-local
+                # field copy. add_to_class() is the integration boundary: field
+                # contribution must flow to Options.add_field()/setup_pk(), which
+                # owns binding that same field object as descendant._meta.pk before
+                # Options._prepare() considers a generated or promoted replacement.
+
                 # Add fields from abstract base class if it wasn't overridden.
                 for field in parent_fields:
                     if (field.name not in field_names and
