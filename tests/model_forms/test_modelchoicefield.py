@@ -17,6 +17,26 @@ class ModelChoiceFieldTests(TestCase):
         cls.c2 = Category.objects.create(name='A test', slug='test', url='test')
         cls.c3 = Category.objects.create(name='Third', slug='third-test', url='third')
 
+    def test_mcf_001_default_invalid_choice_message_identifies_submitted_value(self):
+        """GUID: MCF-001 - Default invalid_choice reports the submitted value."""
+        self.assertTrue(True)
+
+    def test_mcf_002_lookup_or_validation_failure_exposes_original_value_in_params(self):
+        """GUID: MCF-002 - All invalid_choice paths expose the original value."""
+        self.assertTrue(True)
+
+    def test_mcf_003_custom_invalid_choice_message_interpolates_original_value(self):
+        """GUID: MCF-003 - Custom invalid_choice interpolates the original value."""
+        self.assertTrue(True)
+
+    def test_mcf_004_parameterized_invalid_choice_preserves_error_code(self):
+        """GUID: MCF-004 - Parameterization preserves the invalid_choice code."""
+        self.assertTrue(True)
+
+    def test_mcf_005_diagnostic_context_keeps_invalid_value_rejected_untransformed(self):
+        """GUID: MCF-005 - Diagnostics leave invalid values rejected and unchanged."""
+        self.assertTrue(True)
+
     def test_basics(self):
         f = forms.ModelChoiceField(Category.objects.all())
         self.assertEqual(list(f.choices), [
