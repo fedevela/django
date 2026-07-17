@@ -13,9 +13,6 @@ from django.utils import formats
 from django.utils.dateformat import format, time_format
 from django.utils.encoding import iri_to_uri
 from django.utils.html import avoid_wrapping, conditional_escape, escape, escapejs
-# JSONSCRIPT-008 architecture: Template filters depend on the Python utility;
-# encoder configuration remains owned by django.utils.html and must not flow back
-# across this import seam into the template-filter contract.
 from django.utils.html import json_script as _json_script
 from django.utils.html import linebreaks, strip_tags
 from django.utils.html import urlize as _urlize
@@ -90,20 +87,6 @@ def json_script(value, element_id=None):
     Output value JSON-encoded, wrapped in a <script type="application/json">
     tag (with an optional id).
     """
-    # JSONSCRIPT-008 ownership boundary: this fixed-signature adapter is the sole
-    # template-facing contract; _json_script owns JSON encoding and script markup.
-    # JSONSCRIPT-008
-    # Logic obligation: preserve the existing template-filter interface and output.
-    # VERIFICATION:
-    # test_jsonscript_008_existing_filter_interface_render_preserves_output
-    # VERIFICATION:
-    # test_jsonscript_008_python_encoder_selection_does_not_extend_filter_interface
-    # INPUT: receive only the template value and the optional element identifier.
-    # DECISION: if an identifier was supplied, forward it; otherwise forward None.
-    # HANDOFF: call the Python utility with exactly value and element_id, without
-    # exposing, accepting, selecting, or forwarding an encoder from the filter.
-    # OUTPUT: return the utility's rendered script unchanged.
-    # FAILURE: allow serialization and rendering failures to propagate unchanged.
     return _json_script(value, element_id)
 
 
