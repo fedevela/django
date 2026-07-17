@@ -201,6 +201,16 @@ class BaseFormSet(RenderableFormMixin):
     @cached_property
     def forms(self):
         """Instantiate forms at first property access."""
+        # Pseudocode obligation: GUID EFORM-003.
+        # FOR each ordinary-form index:
+        #   obtain a distinct copy of the caller-provided form arguments;
+        #   hand all arguments, including empty_permitted when supplied, to the
+        #   ordinary-form construction path.
+        # IN _construct_form, compute the ordinary defaults, then merge the
+        # caller arguments last so supplied empty_permitted=True or False wins.
+        # Construct and return the form with that resulting value unchanged.
+        # Failure path: do not filter or special-case empty_permitted here;
+        # constructor failures follow the ordinary form-construction path.
         # DoS protection is included in total_form_count()
         return [
             self._construct_form(i, **self.get_form_kwargs(i))
@@ -257,6 +267,17 @@ class BaseFormSet(RenderableFormMixin):
 
     @property
     def empty_form(self):
+        # Pseudocode obligations: GUID EFORM-004, EFORM-007.
+        # 1. Obtain a distinct copy of the template-form arguments.
+        # 2. IF empty_permitted is present, remove only that entry; preserve every
+        #    other supported caller argument for the empty-form constructor.
+        # 3. ELSE leave the copied arguments unchanged, preserving the existing
+        #    empty-form state and rendering path.
+        # 4. Construct the __prefix__ template with the invariant
+        #    empty_permitted=True plus all preserved arguments, add its fields,
+        #    and return it for rendering.
+        # Failure path: only the conflicting empty_permitted entry is absorbed;
+        # failures from any remaining argument follow normal form construction.
         form_kwargs = self.get_form_kwargs(None)
         # empty_permitted is an empty form invariant. (EFORM-001, EFORM-002)
         form_kwargs.pop("empty_permitted", None)
