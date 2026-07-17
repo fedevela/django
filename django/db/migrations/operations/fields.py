@@ -247,6 +247,13 @@ class AlterField(FieldOperation):
         return "alter_%s_%s" % (self.model_name_lower, self.name_lower)
 
     def reduce(self, operation, app_label):
+        # MIGOPT-001/MIGOPT-002/MIGOPT-003 architecture contract:
+        # AlterField owns same-target pair reduction at the Operation.reduce()
+        # seam. FieldOperation owns normalized target identity, while
+        # MigrationOptimizer remains responsible only for traversal and repeated
+        # application. The replacement contract may retain the later operation
+        # instance; field-definition copying or reconstruction does not belong at
+        # either side of this boundary.
         # MIGOPT-001/MIGOPT-002 -- same-field AlterField reduction:
         # INPUT: this AlterField and the later operation selected by the optimizer.
         # IF the later operation is an AlterField for the same normalized model
