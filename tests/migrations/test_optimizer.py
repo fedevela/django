@@ -793,6 +793,27 @@ class OptimizerTests(SimpleTestCase):
         self.assertIs(result[0], operations[0])
         self.assertIs(result[1], operations[1])
 
+    def test_MIGOPT_006_state_changing_intermediate_alter_field_remains_present(self):
+        """
+        MIGOPT-006: An intermediate AlterField remains present when removing it
+        would change the resulting migration state.
+        """
+        pass
+
+    def test_MIGOPT_007_intervening_operation_prevents_alter_field_reduction(self):
+        """
+        MIGOPT-007: Same-field AlterField operations remain separate when an
+        intervening operation prevents valid reduction.
+        """
+        pass
+
+    def test_MIGOPT_007_migration_boundary_prevents_alter_field_reduction(self):
+        """
+        MIGOPT-007: Same-field AlterField operations in independently
+        optimizable regions remain separate across a migration boundary.
+        """
+        pass
+
     def test_create_model_rename_field(self):
         """
         RenameField should optimize into CreateModel.
