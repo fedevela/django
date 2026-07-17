@@ -7,6 +7,9 @@ from django.test import TestCase
 from django.test.utils import ignore_warnings
 from django.utils.deprecation import RemovedInDjango40Warning
 
+from .models import UserWithDisabledLastLoginField
+from .models.with_custom_email_field import CustomEmailField
+
 
 class MockedPasswordResetTokenGenerator(PasswordResetTokenGenerator):
     def __init__(self, now):
@@ -15,6 +18,148 @@ class MockedPasswordResetTokenGenerator(PasswordResetTokenGenerator):
 
     def _now(self):
         return self._now_val
+
+
+class PasswordResetTokenEmailBindingContractTests(TestCase):
+
+    def test_PRT_006_token_generated_for_one_user_checked_against_another_is_rejected(self):
+        """GUID: PRT-006 - A token cannot be transferred between users."""
+        token_user = User.objects.create_user(
+            'tokenuser', 'token@example.com', 'testpw',
+        )
+        validation_user = User.objects.create_user(
+            'validationuser', 'validation@example.com', 'testpw',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(token_user)
+
+        self.assertIs(generator.check_token(token_user, token), True)
+        self.assertIs(generator.check_token(validation_user, token), False)
+
+    def test_PRT_006_same_effective_email_token_checked_against_another_user_is_rejected(self):
+        """GUID: PRT-006 - A shared effective email doesn't make a token transferable."""
+        token_user = User.objects.create_user(
+            'tokenuser', 'shared@example.com', 'testpw',
+        )
+        validation_user = User.objects.create_user(
+            'validationuser', 'shared@example.com', 'testpw',
+        )
+        # Make every token-relevant value except the primary key identical so
+        # this assertion specifically verifies the user identity binding.
+        validation_user.password = token_user.password
+        validation_user.last_login = token_user.last_login
+        validation_user.save(update_fields=['password', 'last_login'])
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(token_user)
+
+        self.assertIs(generator.check_token(token_user, token), True)
+        self.assertIs(generator.check_token(validation_user, token), False)
+
+    def test_PRT_004_unchanged_token_relevant_state_within_lifetime_accepts_token(self):
+        """GUID: PRT-004 - Unchanged token state remains valid within its lifetime."""
+        user = User.objects.create_user(
+            'unchangedstate', 'unchanged@example.com', 'testpw',
+        )
+        now = datetime(2021, 1, 1)
+        generator = MockedPasswordResetTokenGenerator(now)
+        token = generator.make_token(user)
+
+        within_lifetime = MockedPasswordResetTokenGenerator(
+            now + timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT),
+        )
+
+        self.assertIs(within_lifetime.check_token(user, token), True)
+
+    def test_PRT_005_elapsed_lifetime_after_email_binding_rejects_token(self):
+        """GUID: PRT-005 - Expiration remains a token invalidation input."""
+        user = User.objects.create_user(
+            'expiredtoken', 'unchanged@example.com', 'testpw',
+        )
+        now = datetime(2021, 1, 1)
+        generator = MockedPasswordResetTokenGenerator(now)
+        token = generator.make_token(user)
+
+        after_lifetime = MockedPasswordResetTokenGenerator(
+            now + timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT + 1),
+        )
+
+        self.assertIs(after_lifetime.check_token(user, token), False)
+
+    def test_PRT_005_password_change_after_email_binding_rejects_prior_token(self):
+        """GUID: PRT-005 - A password change remains a token invalidation input."""
+        user = User.objects.create_user(
+            'passwordchange', 'unchanged@example.com', 'testpw',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.set_password('new-testpw')
+        user.save(update_fields=['password'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
+
+    def test_PRT_005_last_login_change_after_email_binding_rejects_prior_token(self):
+        """GUID: PRT-005 - A last-login change remains a token invalidation input."""
+        user = User.objects.create_user(
+            'lastloginchange', 'unchanged@example.com', 'testpw',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.last_login = datetime(2021, 1, 1)
+        user.save(update_fields=['last_login'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
+
+    def test_PRT_001_token_before_persisted_effective_email_change_is_rejected(self):
+        """GUID: PRT-001 - A persisted effective email change rejects the prior token."""
+        user = User.objects.create_user('emailuser', 'before@example.com', 'testpw')
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.email = 'after@example.com'
+        user.save(update_fields=['email'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
+
+    def test_PRT_002_configured_nonstandard_email_change_rejects_prior_token(self):
+        """GUID: PRT-002 - Token binding follows the configured user email field."""
+        user = CustomEmailField.objects.create_user(
+            'emailuser', 'testpw', 'before@example.com',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.email_address = 'after@example.com'
+        user.save(update_fields=['email_address'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
+
+    def test_PRT_003_absent_configured_email_repeats_generation_and_validation_successfully(self):
+        """GUID: PRT-003 - An absent configured email permits deterministic token use."""
+        user = UserWithDisabledLastLoginField(pk=1, password='testpw')
+        generator = MockedPasswordResetTokenGenerator(datetime(2021, 1, 1))
+        tokens = [generator.make_token(user) for _ in range(2)]
+
+        self.assertEqual(tokens[0], tokens[1])
+        self.assertTrue(all(generator.check_token(user, token) for token in tokens))
+
+    def test_PRT_003_empty_or_unpopulated_email_repeats_generation_and_validation_successfully(self):
+        """GUID: PRT-003 - Empty or unpopulated email permits deterministic token use."""
+        generator = MockedPasswordResetTokenGenerator(datetime(2021, 1, 1))
+        tokens = []
+        for email in ('', None):
+            with self.subTest(email=email):
+                user = User(pk=1, password='testpw', email=email)
+                token = generator.make_token(user)
+                tokens.append(token)
+                self.assertEqual(generator.make_token(user), token)
+                self.assertIs(generator.check_token(user, token), True)
+        self.assertEqual(tokens[0], tokens[1])
 
 
 class TokenGeneratorTest(TestCase):
