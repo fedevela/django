@@ -3061,19 +3061,95 @@ Password: <input type="password" name="password" required>
 
     def test_mwlabel_002_assigned_base_id_renders_usable_indexed_component_ids(self):
         """GUID: MWLABEL-002 - Assigned base IDs remain usable and indexed."""
-        self.assertTrue(True)
+        widget = MultiWidget([TextInput, TextInput, TextInput])
+
+        self.assertHTMLEqual(
+            widget.render(
+                'field',
+                ['first', 'second', 'third'],
+                attrs={'id': 'custom_id'},
+            ),
+            '''
+            <input type="text" name="field_0" value="first" id="custom_id_0">
+            <input type="text" name="field_1" value="second" id="custom_id_1">
+            <input type="text" name="field_2" value="third" id="custom_id_2">
+            ''',
+        )
 
     def test_mwlabel_005_composite_render_and_operation_change_only_label_target(self):
         """GUID: MWLABEL-005 - Composite behavior changes only at the label target."""
-        self.assertTrue(True)
+        widget = MultiWidget([
+            TextInput(attrs={'class': 'first'}),
+            TextInput(attrs={'class': 'second'}),
+        ])
+        data = {'field_0': 'submitted first', 'field_1': 'submitted second'}
+
+        self.assertHTMLEqual(
+            widget.render(
+                'field',
+                ['rendered first', 'rendered second'],
+                attrs={'id': 'id_field'},
+            ),
+            '''
+            <input type="text" name="field_0" value="rendered first"
+                   class="first" id="id_field_0">
+            <input type="text" name="field_1" value="rendered second"
+                   class="second" id="id_field_1">
+            ''',
+        )
+        self.assertEqual(
+            widget.value_from_datadict(data, {}, 'field'),
+            ['submitted first', 'submitted second'],
+        )
+        self.assertIs(widget.value_omitted_from_data(data, {}, 'field'), False)
+        self.assertIs(widget.value_omitted_from_data({}, {}, 'field'), True)
 
     def test_mwlabel_006_valid_and_invalid_values_preserve_validation_and_processed_data(self):
         """GUID: MWLABEL-006 - Submitted values preserve validation and processing."""
-        self.assertTrue(True)
+        class EventForm(Form):
+            occurred = SplitDateTimeField()
+
+        valid_form = EventForm({
+            'occurred_0': '2026-07-16',
+            'occurred_1': '23:45',
+        })
+        self.assertTrue(valid_form.is_valid())
+        self.assertEqual(
+            valid_form.cleaned_data,
+            {'occurred': datetime.datetime(2026, 7, 16, 23, 45)},
+        )
+
+        invalid_form = EventForm({
+            'occurred_0': 'not-a-date',
+            'occurred_1': 'not-a-time',
+        })
+        self.assertFalse(invalid_form.is_valid())
+        self.assertEqual(
+            invalid_form.errors,
+            {'occurred': ['Enter a valid date.', 'Enter a valid time.']},
+        )
+        self.assertEqual(invalid_form.cleaned_data, {})
 
     def test_mwlabel_006_bound_redisplay_preserves_component_values_and_indexed_ids(self):
         """GUID: MWLABEL-006 - Bound redisplay preserves values and indexed IDs."""
-        self.assertTrue(True)
+        class EventForm(Form):
+            occurred = SplitDateTimeField()
+
+        form = EventForm({
+            'occurred_0': 'not-a-date',
+            'occurred_1': '08:15',
+        })
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form['occurred'].value(), ['not-a-date', '08:15'])
+        self.assertHTMLEqual(
+            str(form['occurred']),
+            '''
+            <input type="text" name="occurred_0" value="not-a-date"
+                   id="id_occurred_0" required>
+            <input type="text" name="occurred_1" value="08:15"
+                   id="id_occurred_1" required>
+            ''',
+        )
 
     def test_mwlabel_007_multiwidget_subclass_inherits_label_without_for(self):
         """GUID: MWLABEL-007 - A non-overriding subclass inherits target omission."""
