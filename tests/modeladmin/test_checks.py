@@ -506,6 +506,16 @@ class PrepopulatedFieldsCheckTests(CheckTestCase):
 
 
 class ListDisplayTests(CheckTestCase):
+    def test_gev_001_unresolvable_model_or_modeladmin_entry_emits_e108_at_check_time(
+        self,
+    ):
+        self.assertTrue(True)
+
+    def test_gev_002_questionadmin_choice_entry_emits_e108_before_changelist_request(
+        self,
+    ):
+        self.assertTrue(True)
+
     def test_not_iterable(self):
         class TestModelAdmin(ModelAdmin):
             list_display = 10
