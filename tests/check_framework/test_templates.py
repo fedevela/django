@@ -1,4 +1,5 @@
 from copy import copy, deepcopy
+from unittest.mock import patch
 
 from django.core.checks import Error
 from django.core.checks.templates import (
@@ -138,7 +139,21 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
         configuration, installed-app discovery, or both are treated as one
         distinct module.
         """
-        self.assertTrue(True)
+        module_path = (
+            "check_framework.template_test_apps.same_tags_app_1."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", module_path), ("same_tags", module_path)],
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
 
     def test_tpl_002_one_distinct_module_path_does_not_produce_e003(self):
         """
@@ -147,8 +162,21 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
         A library name associated with only one distinct module path does not
         produce templates.E003, regardless of repeated occurrences.
         """
-        self.assertTrue(True)
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
 
+    @override_settings(
+        INSTALLED_APPS=["check_framework.template_test_apps.same_tags_app_1"]
+    )
     def test_tpl_003_identical_configured_and_discovered_library_does_not_produce_e003(
         self,
     ):
@@ -158,7 +186,14 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
         A configured library and an installed-app-discovered library with the
         same name and identical module path do not produce templates.E003.
         """
-        self.assertTrue(True)
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
 
     @override_settings(
         INSTALLED_APPS=[
