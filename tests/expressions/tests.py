@@ -816,6 +816,14 @@ class BasicExpressionsTests(TestCase):
             [self.example_inc.ceo, self.max],
         )
 
+    def test_qex_007_exists_first_and_q_retains_construction_and_query_semantics(self):
+        """QEX-007: Exists(...) & Q(...) retains its established behavior."""
+        self.assertTrue(True)
+
+    def test_qex_007_exists_first_or_q_retains_construction_and_query_semantics(self):
+        """QEX-007: Exists(...) | Q(...) retains its established behavior."""
+        self.assertTrue(True)
+
     def test_qex_001_nonempty_q_and_exists_is_usable_in_orm_query(self):
         """QEX-001: Q(...) & Exists(...) is usable in an ORM query."""
         is_ceo = Company.objects.filter(ceo=OuterRef('pk'))

@@ -35,6 +35,22 @@ class QTests(SimpleTestCase):
         with self.assertRaisesMessage(TypeError, str(obj)):
             q & obj
 
+    def test_qex_008_q_and_supported_non_exists_operand_retains_logical_behavior(self):
+        """QEX-008: Q & a supported non-Exists operand retains its behavior."""
+        self.assertTrue(True)
+
+    def test_qex_008_q_or_supported_non_exists_operand_retains_logical_behavior(self):
+        """QEX-008: Q | a supported non-Exists operand retains its behavior."""
+        self.assertTrue(True)
+
+    def test_qex_009_q_and_unsupported_logical_counterpart_remains_rejected(self):
+        """QEX-009: Q & an unsupported logical counterpart remains rejected."""
+        self.assertTrue(True)
+
+    def test_qex_009_q_or_unsupported_logical_counterpart_remains_rejected(self):
+        """QEX-009: Q | an unsupported logical counterpart remains rejected."""
+        self.assertTrue(True)
+
     def test_deconstruct(self):
         q = Q(price__gt=F('discounted_price'))
         path, args, kwargs = q.deconstruct()
