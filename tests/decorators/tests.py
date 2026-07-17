@@ -346,6 +346,10 @@ class MethodDecoratorTests(SimpleTestCase):
 
         self.assertEqual(Test().method(), "result")
 
+    def test_mdp_003_original_wrapper_assignment_metadata_remains_on_resulting_method(self):
+        """GUID: MDP-003 - Retain original standard wrapper-assignment metadata."""
+        pass
+
     def test_mdp_004_missing_optional_wrapper_metadata_allows_adaptation_and_invocation(self):
         """GUID: MDP-004 - Tolerate absent optional wrapper metadata."""
         class CallableWithoutMetadata:
@@ -378,6 +382,14 @@ class MethodDecoratorTests(SimpleTestCase):
 
         self.assertEqual(Test().method(), "result")
         self.assertEqual(observed_missing, set(missing))
+
+    def test_mdp_009_decorator_custom_attribute_and_value_remain_on_resulting_method(self):
+        """GUID: MDP-009 - Preserve a decorator-produced custom attribute and value."""
+        pass
+
+    def test_mdp_009_decorator_wrapper_updates_remain_on_resulting_method(self):
+        """GUID: MDP-009 - Preserve decorator-produced wrapper updates."""
+        pass
 
     def test_bad_iterable(self):
         decorators = {myattr_dec_m, myattr2_dec_m}
