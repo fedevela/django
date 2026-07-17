@@ -1818,6 +1818,17 @@ class FileBasedCacheTests(BaseCacheTests, TestCase):
         self,
     ):
         """FBC-008: Deletion before open makes has_key() false without an error."""
+        # FBC-008 architecture contract:
+        # - FileBasedCacheTests owns the shared regression scenario; its existing
+        #   FileBasedCachePathLibTests subclass is the location-type coverage
+        #   boundary, so the scenario must not be duplicated or overridden.
+        # - cache._key_to_file() supplies the target identity without changing
+        #   the backend's key-to-path ownership.
+        # - builtins.open is the test-only integration seam. A method-local
+        #   interceptor owns delete-then-delegate sequencing and must restore
+        #   the real opener through the existing mock.patch() boundary.
+        # - Dependencies point from this test to the public has_key() operation
+        #   and existing private path mapper; production code gains no test port.
         # FBC-008 logic obligation and deterministic regression flow:
         # 1. Store a file-based cache entry and resolve its target file path.
         # 2. Confirm the target exists before has_key() begins its read attempt.
