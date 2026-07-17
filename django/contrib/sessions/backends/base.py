@@ -117,21 +117,6 @@ class SessionBase:
         )
 
     def decode(self, session_data):
-        # Architecture contract [SES-003, SES-004, SES-005]: this public method
-        # owns format selection only. Current-format decoding depends directly
-        # on django.core.signing; every rejected input crosses the single
-        # private legacy boundary below, whose mapping-compatible result is the
-        # only legacy outcome exposed to callers.
-        # Pseudocode [SES-003, SES-004, SES-005]:
-        #   INPUT session_data from the session storage boundary.
-        #   ATTEMPT current-format signature validation and deserialization.
-        #   IF current-format validation succeeds:
-        #       RETURN the decoded values unchanged.  [SES-005]
-        #   OTHERWISE:
-        #       HAND OFF the same input to the contained legacy decoder.
-        #       IF legacy decoding succeeds, RETURN its decoded values.
-        #       IF legacy decoding rejects or cannot decode the input,
-        #           RETURN an empty mapping and expose no stored value.  [SES-003, SES-004]
         try:
             return signing.loads(session_data, salt=self.key_salt, serializer=self.serializer)
         # RemovedInDjango40Warning: when the deprecation ends, handle here
@@ -147,27 +132,6 @@ class SessionBase:
 
     def _legacy_decode(self, session_data):
         # RemovedInDjango40Warning: pre-Django 3.1 format will be invalid.
-        # Architecture contract [SES-001, SES-002, SES-004, SES-006, SES-010]:
-        # this private method is the sole owner of legacy input processing.
-        # ASCII conversion, Base64 decoding, payload separation, signature
-        # comparison, and deserialization belong inside one malformed-input
-        # containment seam. SuspiciousOperation reporting remains an internal
-        # dependency of that seam; no parsed value crosses it before signature
-        # validation succeeds.
-        # Pseudocode [SES-001, SES-002, SES-004, SES-006, SES-010]:
-        #   BEGIN the legacy decoding containment boundary.
-        #   ATTEMPT ASCII conversion, Base64 decoding, payload separation,
-        #       signature comparison, and deserialization within this boundary.
-        #   IF any input operation fails, including incorrect Base64 padding:
-        #       CONTAIN the malformed-data exception.
-        #       RETURN an empty mapping without exposing decoded contents.  [SES-001, SES-002]
-        #   IF the legacy signature does not match:
-        #       REJECT all stored values and classify the failure as suspicious.  [SES-004]
-        #   IF signature validation and deserialization succeed:
-        #       RETURN the legacy values unchanged.  [SES-006]
-        #   ON a contained suspicious-operation failure:
-        #       EMIT the existing warning through its applicable security logger,
-        #       THEN RETURN an empty mapping.  [SES-010]
         try:
             encoded_data = base64.b64decode(session_data.encode('ascii'))
             # could produce ValueError if there is no ':'
@@ -180,9 +144,10 @@ class SessionBase:
         except Exception as e:
             # ValueError, SuspiciousOperation, unpickling exceptions. If any of
             # these happen, just return an empty dictionary (an empty session).
-            if isinstance(e, SuspiciousOperation):
-                logger = logging.getLogger('django.security.%s' % e.__class__.__name__)
-                logger.warning(str(e))
+            if not isinstance(e, SuspiciousOperation):
+                e = SuspiciousSession('Session data corrupted')
+            logger = logging.getLogger('django.security.%s' % e.__class__.__name__)
+            logger.warning(str(e))
             return {}
 
     def update(self, dict_):
