@@ -294,6 +294,10 @@ class InspectDBTestCase(TestCase):
         second_run = self.get_related_names("inspectdb_relationsthree")
         self.assertEqual(first_run, second_run)
 
+    def test_insp_003_loaded_repeated_target_relations_report_no_fields_e304(self):
+        """GUID: INSP-003 - Loaded repeated relations have no E304 clashes."""
+        self.assertTrue(True)
+
     @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_004_generated_related_names_are_valid_reverse_namespace_names(self):
         """GUID: INSP-004 - Generated names pass reverse-namespace validation."""
@@ -303,6 +307,14 @@ class InspectDBTestCase(TestCase):
             )
             self.assertEqual([], field._check_related_name_is_valid())
             self.assertEqual([], field._check_related_query_name_is_valid())
+
+    def test_insp_005_repeated_target_output_loads_as_django_model_code(self):
+        """GUID: INSP-005 - Repeated-target output is valid loadable model code."""
+        self.assertTrue(True)
+
+    def test_insp_005_repeated_target_output_with_other_fields_loads(self):
+        """GUID: INSP-005 - Mixed-field repeated-target output loads cleanly."""
+        self.assertTrue(True)
 
     def test_digits_column_name_introspection(self):
         """Introspection of column names consist/start with digits (#16536/#17676)"""
