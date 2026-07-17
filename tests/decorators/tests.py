@@ -641,7 +641,31 @@ class MethodDecoratorTests(SimpleTestCase):
         decoration succeeds and an instance can invoke the decorated method with
         existing call semantics.
         """
-        self.assertTrue(True)
+        calls = []
+        result = object()
+
+        def decorator(func):
+            @wraps(func)
+            def _wrapper(*args, **kwargs):
+                calls.append((args, kwargs))
+                return func(*args, **kwargs)
+            return _wrapper
+
+        @method_decorator(decorator, name="method")
+        class Test:
+            def method(self, arg, *, option):
+                calls.append((arg, option))
+                return result
+
+        instance = Test()
+        positional = object()
+        keyword = object()
+
+        self.assertIs(instance.method(positional, option=keyword), result)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][0], (positional,))
+        self.assertEqual(calls[0][1], {"option": keyword})
+        self.assertEqual(calls[1], (positional, keyword))
 
     def test_tuple_of_decorators(self):
         """
@@ -767,7 +791,21 @@ class MethodDecoratorTests(SimpleTestCase):
         GUID: MDP-012 - Given a class whose requested named attribute is not
         callable, class-level decoration leaves the established error observable.
         """
-        self.assertTrue(True)
+        def decorator(func):
+            self.fail("The decorator must not run for a non-callable attribute.")
+
+        msg = (
+            "Cannot decorate 'prop' as it isn't a callable attribute of "
+            "<class 'Test'> (1)"
+        )
+        with self.assertRaisesMessage(TypeError, msg):
+            @method_decorator(decorator, name="prop")
+            class Test:
+                prop = 1
+
+                @classmethod
+                def __module__(cls):
+                    return "tests"
 
     def test_invalid_method_name_to_decorate(self):
         """
@@ -789,7 +827,19 @@ class MethodDecoratorTests(SimpleTestCase):
         GUID: MDP-012 - Given a class without the requested method name,
         class-level decoration leaves the established error observable.
         """
-        self.assertTrue(True)
+        def decorator(func):
+            self.fail("The decorator must not run for a missing method.")
+
+        msg = (
+            "The keyword argument `name` must be the name of a method of the "
+            "decorated class: <class 'Test'>. Got 'missing' instead"
+        )
+        with self.assertRaisesMessage(ValueError, msg):
+            @method_decorator(decorator, name="missing")
+            class Test:
+                @classmethod
+                def __module__(cls):
+                    return "tests"
 
 
 class XFrameOptionsDecoratorsTests(TestCase):
