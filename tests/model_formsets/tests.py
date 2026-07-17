@@ -15,6 +15,7 @@ from django.forms.models import (
 )
 from django.http import QueryDict
 from django.test import TestCase, skipUnlessDBFeature
+from django.test.html import parse_html
 
 from .models import (
     AlternateBook,
@@ -160,6 +161,63 @@ class DeletionTests(TestCase):
 
 
 class ModelFormsetTest(TestCase):
+    def make_invalid_callable_default_inline_formset(self, data=None):
+        class SimpleArrayField(forms.CharField):
+            def prepare_value(self, value):
+                if isinstance(value, list):
+                    return ",".join(value)
+                return value
+
+            def to_python(self, value):
+                value = super().to_python(value)
+                return value.split(",") if value else []
+
+        class BookForm(forms.ModelForm):
+            title = SimpleArrayField(
+                initial=list,
+                required=False,
+                show_hidden_initial=True,
+            )
+
+            class Meta:
+                model = Book
+                fields = ("title",)
+
+            def clean_title(self):
+                raise forms.ValidationError("Invalid title.")
+
+        FormSet = inlineformset_factory(
+            Author,
+            Book,
+            form=BookForm,
+            can_delete=False,
+            extra=1,
+            fields=("title",),
+        )
+        author = Author(name="Charles Dickens")
+        if data is None:
+            data = {
+                "book_set-TOTAL_FORMS": "1",
+                "book_set-INITIAL_FORMS": "0",
+                "book_set-MAX_NUM_FORMS": "",
+                "book_set-0-title": "invalid",
+                "initial-book_set-0-title": "",
+            }
+        return FormSet(data, instance=author)
+
+    def resubmit_invalid_callable_default_inline(self, formset):
+        form = formset.forms[0]
+        hidden = parse_html(form["title"].as_hidden(only_initial=True))
+        hidden_value = dict(hidden.attributes).get("value", "")
+        data = {
+            "book_set-TOTAL_FORMS": "1",
+            "book_set-INITIAL_FORMS": "0",
+            "book_set-MAX_NUM_FORMS": "",
+            "book_set-0-title": form["title"].value(),
+            "initial-book_set-0-title": hidden_value,
+        }
+        return self.make_invalid_callable_default_inline_formset(data)
+
     def test_modelformset_factory_without_fields(self):
         """Regression for #19733"""
         message = (
@@ -1658,7 +1716,11 @@ class ModelFormsetTest(TestCase):
         containing a callable-default field keeps the inline classified as
         active rather than empty or unused.
         """
-        self.assertTrue(True)
+        formset = self.make_invalid_callable_default_inline_formset()
+
+        self.assertTrue(formset.forms[0].has_changed())
+        self.assertIn("title", formset.forms[0].changed_data)
+        self.assertFalse(formset.is_valid())
 
     def test_django_004_first_invalid_array_default_inline_submission(self):
         """
@@ -1666,7 +1728,11 @@ class ModelFormsetTest(TestCase):
         ArrayField(default=list) reports its validation error and retains the
         inline with its submitted value.
         """
-        self.assertTrue(True)
+        formset = self.make_invalid_callable_default_inline_formset()
+
+        self.assertFalse(formset.is_valid())
+        self.assertEqual(formset.forms[0].errors["title"], ["Invalid title."])
+        self.assertEqual(formset.forms[0]["title"].value(), "invalid")
 
     def test_django_004_second_unchanged_submission_repeats_error(self):
         """
@@ -1674,7 +1740,15 @@ class ModelFormsetTest(TestCase):
         unchanged reports the same validation error and does not dismiss the
         inline.
         """
-        self.assertTrue(True)
+        first_formset = self.make_invalid_callable_default_inline_formset()
+        self.assertFalse(first_formset.is_valid())
+
+        second_formset = self.resubmit_invalid_callable_default_inline(first_formset)
+
+        self.assertFalse(second_formset.is_valid())
+        self.assertTrue(second_formset.forms[0].has_changed())
+        self.assertEqual(second_formset.forms[0].errors["title"], ["Invalid title."])
+        self.assertEqual(second_formset.forms[0]["title"].value(), "invalid")
 
     def test_django_004_later_unchanged_submissions_retain_nonempty_inline(self):
         """
@@ -1682,7 +1756,14 @@ class ModelFormsetTest(TestCase):
         twice reports the same validation error on every submission and retains
         the inline as nonempty.
         """
-        self.assertTrue(True)
+        formset = self.make_invalid_callable_default_inline_formset()
+
+        for _ in range(4):
+            self.assertFalse(formset.is_valid())
+            self.assertTrue(formset.forms[0].has_changed())
+            self.assertEqual(formset.forms[0].errors["title"], ["Invalid title."])
+            self.assertEqual(formset.forms[0]["title"].value(), "invalid")
+            formset = self.resubmit_invalid_callable_default_inline(formset)
 
     def test_inlineformset_factory_with_null_fk(self):
         # inlineformset_factory tests with fk having null=True. see #9462.
