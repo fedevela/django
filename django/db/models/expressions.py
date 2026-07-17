@@ -89,6 +89,10 @@ class Combinable:
     def __pow__(self, other):
         return self._combine(other, self.POW, False)
 
+    # QEX-005 / QEX-006 architecture boundary: Combinable owns only the
+    # conditional-expression adapter for an expression-led operation. It
+    # must preserve an existing Q operand as the Q-layer contract boundary;
+    # Q owns empty-node identity, logical-tree composition, and cloning.
     def __and__(self, other):
         # QEX-001 / QEX-002 integration seam: conditional expression pairs
         # depend on Q for logical-tree composition and query handoff.

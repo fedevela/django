@@ -39,6 +39,11 @@ class Q(tree.Node):
     def __init__(self, *args, _connector=None, _negated=False, **kwargs):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
+    # QEX-005 / QEX-006 ownership contract: _combine() is the single owner of
+    # conditional-operand normalization and empty-Q identity for both AND and
+    # OR. Expression-side adapters depend on this boundary; ORM query
+    # compilation continues to consume the resulting Q through the existing
+    # resolve_expression()/_add_q() seam.
     def _combine(self, other, conn):
         # QEX-005 / QEX-006 logic (Q() first, plus the Q handoff for
         # Exists(...) first):
