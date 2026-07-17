@@ -111,6 +111,14 @@ class ErrorList(UserList, list):
         return json.dumps(self.get_json_data(escape_html))
 
     def as_ul(self):
+        # Pseudocode [GUID: NONFORM-002, NONFORM-008, NONFORM-011]:
+        # INPUT producer-supplied classification metadata on this ErrorList.
+        # IF no errors exist, RETURN the existing empty rendering.
+        # OTHERWISE EMIT the existing ``ul`` and ``li`` structure and place the
+        # classification metadata in the existing class attribute verbatim.
+        # FOR FormSet non-form errors, OBSERVE ``nonform`` as distinct from field
+        # error metadata and Form ``nonfield`` metadata.
+        # ADD no class, style, wrapper, child, or markup beyond that metadata.
         if not self.data:
             return ''
 
