@@ -73,6 +73,11 @@ class BaseFormSet:
         self.files = files or {}
         self.initial = initial
         self.form_kwargs = form_kwargs or {}
+        # Architecture [GUID: NONFORM-001, NONFORM-007, NONFORM-008]:
+        # BaseFormSet owns the non-form category assignment but depends only on
+        # this injected ErrorList constructor. The constructor remains the seam
+        # for preserving subclasses and transmitting classification metadata;
+        # FormSet must not depend on ErrorList rendering internals.
         self.error_class = error_class
         self._errors = None
         self._non_form_errors = None
@@ -338,6 +343,10 @@ class BaseFormSet:
         self._non_form_errors.
         """
         self._errors = []
+        # Architecture [GUID: NONFORM-001, NONFORM-004, NONFORM-007]: this is
+        # the owning construction seam for the non-form error cache. Both the
+        # initial cache and the ValidationError replacement below must cross
+        # the same configured-constructor boundary with the same category.
         # Pseudocode [GUID: NONFORM-001, NONFORM-004, NONFORM-007]:
         # INPUT the configured ErrorList constructor for this FormSet.
         # CREATE the initial non-form error list with classification ``nonform``.

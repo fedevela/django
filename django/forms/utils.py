@@ -82,6 +82,11 @@ class ErrorList(UserList, list):
     A collection of errors that knows how to display itself in various formats.
     """
     def __init__(self, initlist=None, error_class=None):
+        # Architecture [GUID: NONFORM-001, NONFORM-002, NONFORM-007,
+        # NONFORM-008, NONFORM-011]: producers own the optional category token;
+        # ErrorList owns its storage as renderer-visible metadata. Rendering
+        # depends on this metadata contract, while producers remain independent
+        # of markup and configured subclasses retain the same constructor seam.
         super().__init__(initlist)
 
         if error_class is None:
