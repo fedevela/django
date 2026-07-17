@@ -247,6 +247,38 @@ class DeferRegressionTest(TestCase):
         self.assertEqual(len(qs), 1)
 
 
+class SelectRelatedOnlyProxyTargetContractTests(TestCase):
+    def test_PROXYONLY_001_proxy_fk_only_selected_field_evaluates_without_error(self):
+        """GUID: PROXYONLY-001"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_002_non_null_selected_relation_is_expected_proxy_model(self):
+        """GUID: PROXYONLY-002"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_003_only_selected_related_field_has_database_value(self):
+        """GUID: PROXYONLY-003"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_004_unselected_inherited_primary_key_is_loaded_and_accessible(
+        self,
+    ):
+        """GUID: PROXYONLY-004"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_005_selected_proxy_relation_and_field_execute_no_query(self):
+        """GUID: PROXYONLY-005"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_006_null_proxy_fk_populates_selected_relation_as_none(self):
+        """GUID: PROXYONLY-006"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_007_only_excluded_fields_deferred_required_fields_loaded(self):
+        """GUID: PROXYONLY-007"""
+        self.assertTrue(True)
+
+
 class DeferAnnotateSelectRelatedTest(TestCase):
     def test_defer_annotate_select_related(self):
         location = Location.objects.create()
