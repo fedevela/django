@@ -13,8 +13,9 @@ class Command(TemplateCommand):
         target = options.pop('directory')
 
         # Target-path integration boundary (DJANGO-001, DJANGO-002,
-        # DJANGO-004, DJANGO-005, DJANGO-006, DJANGO-007): this command owns
-        # CLI option extraction and passes the supplied path unchanged.
+        # DJANGO-003, DJANGO-004, DJANGO-005, DJANGO-006, DJANGO-007): this
+        # command owns CLI option extraction and passes the supplied path
+        # unchanged.
         # TemplateCommand owns native-component validation, destination-root
         # resolution, and the rendering boundary.
         super().handle('app', app_name, target, **options)
