@@ -30,37 +30,7 @@ from .utils import get_callable
 
 
 class ResolverMatch:
-    # Partial representation architecture (GUID: RPR-001, RPR-002, RPR-003,
-    # RPR-004, RPR-006): ResolverMatch owns all descriptive state derived from
-    # its callback. URLPattern and URLResolver construct this boundary, while
-    # request handlers only transport the resulting match; neither caller
-    # needs partial-specific knowledge.
-    #
-    # Keep the invocation contract (func, args, and kwargs) independent from
-    # private presentation metadata. The latter belongs beside _func_path as
-    # _func_args (an ordered positional sequence) and _func_kwargs (a keyword
-    # mapping), and is consumed only by __repr__(). This dependency direction
-    # preserves the original partial in func and prevents representation needs
-    # from leaking into resolution or request attachment.
-    # Partial-backed match initialization pseudocode:
-    # - GUID: RPR-006 (resolution outcome): accept the callable and the
-    #   URL-derived args/kwargs without changing match success or failure.
-    # - IF the callable is a functools.partial:
-    #     - GUID: RPR-001: select its underlying callable for display identity.
-    #     - GUID: RPR-002: read its bound positional arguments as an ordered
-    #       sequence, preserving every value at its original index.
-    #     - GUID: RPR-003: read its bound keyword arguments as name/value pairs,
-    #       preserving every name and its associated value.
-    #     - GUID: RPR-006 (invocation meaning): retain the original partial as
-    #       the callable used by the match; unwrapping is for descriptive
-    #       metadata only and must neither call the view nor merge, reorder, or
-    #       mutate its bound arguments or the URL-derived args/kwargs.
-    # - ELSE retain the existing callable identity and argument handling.
-    # - Propagate existing resolver failures unchanged; partial inspection must
-    #   not introduce a new resolution branch or failure state.
     def __init__(self, func, args, kwargs, url_name=None, app_names=None, namespaces=None, route=None, tried=None):
-        # Invocation boundary: these public attributes retain resolver-owned
-        # values unchanged (GUID: RPR-004, RPR-006).
         self.func = func
         self.args = args
         self.kwargs = kwargs
@@ -89,26 +59,12 @@ class ResolverMatch:
         return (self.func, self.args, self.kwargs)[index]
 
     def __repr__(self):
-        # Presentation boundary: partial identity and bound arguments are read
-        # from ResolverMatch's private descriptive metadata, never recovered by
-        # changing or invoking the public invocation contract (GUID: RPR-001,
-        # RPR-002, RPR-003, RPR-004, RPR-006).
-        # Partial-backed representation pseudocode:
-        # - IF the retained callable is a functools.partial:
-        #     - GUID: RPR-001: emit the underlying callable identity instead of
-        #       the generic functools.partial type.
-        #     - GUID: RPR-002: emit each pre-bound positional value by iterating
-        #       the saved positional sequence from first element to last.
-        #     - GUID: RPR-003: emit each pre-bound keyword name with its saved
-        #       value; an absent keyword mapping contributes no keyword entries.
-        # - ELSE emit the existing non-partial callable path.
-        # - GUID: RPR-004: combine that callable description with the match's
-        #   URL args/kwargs and metadata so the same complete representation is
-        #   produced after resolution is attached to a request or response.
-        # - GUID: RPR-006: representation is observational only; do not invoke
-        #   the callable, alter either argument source, or change the match.
+        if isinstance(self.func, functools.partial):
+            func = repr(self.func)
+        else:
+            func = self._func_path
         return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name=%s, app_names=%s, namespaces=%s, route=%s)" % (
-            self._func_path, self.args, self.kwargs, self.url_name,
+            func, self.args, self.kwargs, self.url_name,
             self.app_names, self.namespaces, self.route,
         )
 
