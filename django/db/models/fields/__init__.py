@@ -2516,6 +2516,11 @@ class AutoFieldMeta(type):
     for detecting automatically-generated fields.
     """
 
+    # AUTOPK-001 architecture: AutoFieldMeta owns the virtual-inheritance
+    # compatibility boundary. _subclasses defines its closed set of supported
+    # automatic-field roots, and __subclasscheck__ is the integration seam for
+    # recognizing their descendants without coupling the concrete field classes
+    # back to AutoField.
     @property
     def _subclasses(self):
         return (BigAutoField, SmallAutoField)
