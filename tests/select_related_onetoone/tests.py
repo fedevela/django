@@ -1,5 +1,6 @@
 from django.core.exceptions import FieldError
 from django.db.models import FilteredRelation
+from django.db.models.sql.constants import LOUTER
 from django.test import SimpleTestCase, TestCase
 
 from .models import (
@@ -160,28 +161,65 @@ class ReverseSelectRelatedTestCase(TestCase):
         DJANGO-007: select_related() with only() for an existing reverse
         one-to-one preserves the join type and linking condition.
         """
-        self.assertTrue(True)
+        queryset = User.objects.select_related("userprofile").only(
+            "username", "userprofile__user", "userprofile__state"
+        )
+        # Populate join metadata through the same compiler path used to execute
+        # the queryset.
+        str(queryset.query)
+        profile_join = queryset.query.alias_map[UserProfile._meta.db_table]
+
+        self.assertEqual(profile_join.join_type, LOUTER)
+        self.assertEqual(profile_join.parent_alias, User._meta.db_table)
+        self.assertEqual(
+            profile_join.join_cols,
+            ((User._meta.pk.column, UserProfile._meta.get_field("user").column),),
+        )
 
     def test_django_007_existing_reverse_o2o_only_uses_single_joined_query(self):
         """
         DJANGO-007: select_related() with only() retrieves an existing reverse
         one-to-one through the original single joined query.
         """
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            self.assertEqual(user.userprofile.state, "KS")
+            self.assertEqual(user.userprofile.user_id, user.pk)
 
     def test_django_008_missing_reverse_o2o_only_returns_primary_in_one_query(self):
         """
         DJANGO-008: select_related() with only() across a missing reverse
         one-to-one returns the primary instance in the initial joined query.
         """
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="bob")
+            )
+        self.assertEqual(user.username, "bob")
 
     def test_django_008_missing_reverse_o2o_access_preserves_absence_semantics(self):
         """
         DJANGO-008: Accessing a reverse one-to-one missing after restricted
         joined retrieval preserves the existing absence semantics.
         """
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="bob")
+            )
+        msg = "User has no userprofile."
+        with self.assertNumQueries(0), self.assertRaisesMessage(
+            User.userprofile.RelatedObjectDoesNotExist, msg
+        ):
+            user.userprofile
 
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
