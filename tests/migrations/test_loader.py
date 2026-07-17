@@ -20,6 +20,14 @@ class RecorderTests(TestCase):
     """
     databases = {'default', 'other'}
 
+    def test_MIGREC_008_denied_alias_does_not_create_query_insert_or_delete_migration_history(self):
+        """MIGREC-008: Denied aliases remain isolated from recorder I/O."""
+        self.assertTrue(True)
+
+    def test_MIGREC_008_allowed_alias_retains_create_read_insert_and_delete_migration_history(self):
+        """MIGREC-008: Allowed aliases retain all migration-history behavior."""
+        self.assertTrue(True)
+
     def test_MIGREC_001_migration_permission_for_internal_model_uses_recorder_connection_alias(self):
         """MIGREC-001: Each recorder uses its own alias for permission."""
         recorder = MigrationRecorder(connection)

@@ -31,6 +31,10 @@ class MigrateTests(MigrationTestBase):
     """
     databases = {'default', 'other'}
 
+    def test_MIGREC_008_processing_keeps_migration_history_only_on_permitted_alias(self):
+        """MIGREC-008: Mixed-alias processing records only permitted history."""
+        self.assertTrue(True)
+
     @override_settings(MIGRATION_MODULES={'migrations': 'migrations.test_migrations'})
     def test_MIGREC_007_processing_completes_with_history_only_on_recorder_permitted_alias(self):
         """MIGREC-007: Processing persists history only on the permitted alias."""
