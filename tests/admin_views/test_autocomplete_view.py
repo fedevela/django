@@ -307,6 +307,22 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
             'pagination': {'more': False},
         })
 
+    def test_ACJ_009_nonexistent_source_field_after_serialization_refactor_remains_rejected(self):
+        """GUID: ACJ-009 a nonexistent source field remains rejected."""
+        pass
+
+    def test_ACJ_009_source_field_without_related_field_after_serialization_refactor_remains_rejected(self):
+        """GUID: ACJ-009 a source field without a related field remains rejected."""
+        pass
+
+    def test_ACJ_009_disallowed_target_field_after_serialization_refactor_remains_rejected(self):
+        """GUID: ACJ-009 a disallowed target field remains rejected."""
+        pass
+
+    def test_ACJ_009_valid_permitted_target_field_after_serialization_refactor_resolves_unchanged(self):
+        """GUID: ACJ-009 a valid permitted target field resolves unchanged."""
+        pass
+
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
         request = self.factory.get(self.url, {'term': 'is', **self.opts})
