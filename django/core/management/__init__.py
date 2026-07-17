@@ -344,6 +344,24 @@ class ManagementUtility:
         # Preprocess options to extract --settings and --pythonpath.
         # These options could affect the commands that are available, so they
         # must be processed early.
+        # DJANGO-004 / DJANGO-005 / DJANGO-006 / DJANGO-007 / DJANGO-009
+        # pseudocode:
+        # INPUT: the supplied invocation tail, beginning after the subcommand.
+        # CONFIGURE (DJANGO-006 / DJANGO-007): create the early parser without
+        # automatic help or abbreviated-option matching; recognize only
+        # --settings, --pythonpath, and the catch-all positional arguments.
+        # PARSE: separate recognized early options from all other arguments.
+        # TRANSITION (DJANGO-004): when --pythonpath has a value, prepend that
+        # value to the import search path before command discovery.
+        # TRANSITION (DJANGO-005): when --settings has a value, assign it to the
+        # settings-module environment variable before command discovery.
+        # BRANCH (DJANGO-007): treat an abbreviated early option as
+        # unrecognized, never as the complete option, and never apply its effect.
+        # HANDOFF (DJANGO-009): when the computed and process-global program
+        # names agree, preserve the parsed options, remaining arguments, side
+        # effects, and later command-selection flow of an ordinary invocation.
+        # ERROR FLOW: if early parsing raises CommandError, apply no early
+        # option effects and continue through the existing deferred-error path.
         parser = CommandParser(
             prog=self.prog_name,
             usage='%(prog)s subcommand [options] [args]',
