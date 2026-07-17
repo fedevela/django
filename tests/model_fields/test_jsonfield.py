@@ -606,14 +606,6 @@ class TestQuerying(TestCase):
 
     def test_isnull_key(self):
         # key__isnull=False works the same as has_key='key'.
-        # JSONNULL-004 logic obligation:
-        # GIVEN the established ordered objects in self.objs,
-        # WHEN value__j__isnull=True is evaluated,
-        # THEN build the expected sequence as self.objs[:4] + self.objs[5:],
-        # preserving that established order and excluding self.objs[4], whose
-        # j key exists with a JSON null value.
-        # ASSERT the evaluated queryset is sequence-equal to that expectation;
-        # FAIL if membership or order differs, including if self.objs[4] occurs.
         self.assertSequenceEqual(
             NullableJSONModel.objects.filter(value__a__isnull=True),
             self.objs[:3] + self.objs[5:],
@@ -623,17 +615,13 @@ class TestQuerying(TestCase):
             [self.objs[3], self.objs[4]],
         )
         self.assertSequenceEqual(
+            NullableJSONModel.objects.filter(value__j__isnull=True),
+            self.objs[:4] + self.objs[5:],
+        )
+        self.assertSequenceEqual(
             NullableJSONModel.objects.filter(value__j__isnull=False),
             [self.objs[4]],
         )
-
-    # JSONNULL-004 architecture seam: TestQuerying.test_isnull_key owns the
-    # regression assertion. Its implementation consumes this class's ordered
-    # self.objs fixture and the existing assertSequenceEqual/queryset boundary;
-    # no JSONField production module, fixture, or separate test API is needed.
-    def test_jsonnull_004_test_isnull_key_returns_all_objects_except_existing_json_null_in_order(self):
-        """JSONNULL-004: value__j__isnull=True returns self.objs[:4] + self.objs[5:]."""
-        self.assertTrue(True)
 
     def test_isnull_key_or_none(self):
         obj = NullableJSONModel.objects.create(value={'a': None})
