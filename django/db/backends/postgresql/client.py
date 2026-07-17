@@ -6,6 +6,16 @@ from django.db.backends.base.client import BaseDatabaseClient
 class DatabaseClient(BaseDatabaseClient):
     executable_name = "psql"
 
+    # Architecture contract for GUIDs PGSQL-005, PGSQL-006, and PGSQL-007:
+    # This backend-owned translation seam is solely responsible for preserving
+    # PostgreSQL connection-setting semantics while composing the ordered argv
+    # and environment consumed by BaseDatabaseClient.runshell(). User-supplied
+    # parameters form an indivisible ordered segment, followed only by a
+    # configured database name; absence of that name crosses this boundary as
+    # absence, not as an empty or synthesized positional argument. The inherited
+    # runner remains the process-launch boundary; dependency stays directed from
+    # this backend translator into that inherited runner, with no new adapter or
+    # public API.
     @classmethod
     def settings_to_cmd_args_env(cls, settings_dict, parameters):
         args = [cls.executable_name]
