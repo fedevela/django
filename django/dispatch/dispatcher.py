@@ -201,6 +201,20 @@ class Signal:
 
         If any receiver raises an error (specifically any subclass of
         Exception), return the error instance as the result for that receiver.
+
+        Architecture contract:
+            This method owns robust outcome isolation and ordered result
+            assembly. ``_live_receivers()`` owns receiver selection and order;
+            receiver callables own their opaque return values and exception
+            instances; logging is an observational dependency and doesn't own
+            or transform either outcome. Each selected receiver retains one
+            ``(receiver, response_or_exception)`` result entry.
+
+            GUID: SIGROB-002 places exception identity and non-propagation at
+            this outcome boundary. GUID: SIGROB-003 requires the boundary to
+            remain per receiver so one failure cannot terminate dispatch.
+            GUID: SIGROB-006 keeps successful values opaque while the existing
+            robust result-pair contract integrates successes and failures.
         """
         # Robust-dispatch result continuity pseudocode:
         # - Initialize an ordered result sequence for the live receivers.
