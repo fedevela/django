@@ -270,7 +270,7 @@ class SQLCompiler:
 
         ret = []
         for col, alias in select:
-            # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-006
+            # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-004, EMPTYIN-006
             # Architecture contract: predicate reduction remains owned by the
             # expression tree and ExpressionWrapper remains transparent. This
             # selected-column boundary owns materializing reduction outcomes as
@@ -293,6 +293,32 @@ class SQLCompiler:
             #   REQUIRE rendered SQL to be nonempty before appending its alias.
             #   HAND OFF the rendered Boolean expression and parameters so
             #   evaluation yields false or true for every selected row.
+            #
+            # EMPTYIN-004, EMPTYIN-006
+            # Logic obligation when the Boolean annotation is selected beside
+            # an aggregate:
+            #
+            # PSEUDOCODE:
+            #   RETAIN the annotation and aggregate as separate selected
+            #   expressions, with an output position for each alias.
+            #   FOR EACH selected expression:
+            #       COMPILE it independently of the other selected expressions.
+            #       IF it is the non-negated empty-membership annotation and
+            #       compilation reports an empty result set:
+            #           MATERIALIZE false instead of aborting the aggregate
+            #           query.
+            #       ELSE IF it is the negated empty-membership annotation and
+            #       compilation produces a universal, empty SQL fragment:
+            #           MATERIALIZE true instead of emitting an empty SELECT
+            #           item.
+            #       ELSE:
+            #           PRESERVE the normally compiled expression, including
+            #           the aggregate and its parameters.
+            #       APPLY the expression's SELECT formatting and retain its
+            #       alias.
+            #   HAND OFF both selected values in their recorded positions so
+            #   row conversion preserves false or true for the annotation and
+            #   preserves the aggregate result.
             try:
                 sql, params = self.compile(col)
             except EmptyResultSet:
