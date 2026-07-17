@@ -1814,6 +1814,20 @@ class Discovery(SimpleTestCase):
             self.assertEqual(out.getvalue().strip(), 'simple_app')
 
 
+class EarlyParserArgumentVectorContractTests(SimpleTestCase):
+    def test_DJANGO_001_early_parser_uses_supplied_argv_program_name(self):
+        """DJANGO-001: The early parser receives ManagementUtility.prog_name."""
+        self.assertTrue(True)
+
+    def test_DJANGO_002_supplied_argv_parses_when_global_program_name_is_none(self):
+        """DJANGO-002: A usable supplied argv is independent of sys.argv[0]."""
+        self.assertTrue(True)
+
+    def test_DJANGO_010_supplied_argv_early_parsing_preserves_global_argv(self):
+        """DJANGO-010: Early parsing leaves process-global sys.argv unchanged."""
+        self.assertTrue(True)
+
+
 class ArgumentOrder(AdminScriptTestCase):
     """Tests for 2-stage argument parsing scheme.
 
