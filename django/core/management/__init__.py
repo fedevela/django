@@ -344,6 +344,17 @@ class ManagementUtility:
         # Preprocess options to extract --settings and --pythonpath.
         # These options could affect the commands that are available, so they
         # must be processed early.
+        # Pseudocode (DJANGO-001, DJANGO-002, DJANGO-010):
+        # - INPUT self.prog_name, previously derived from the valid supplied
+        #   self.argv program element without changing process-global sys.argv.
+        # - DJANGO-001: INITIALIZE the early CommandParser with
+        #   prog=self.prog_name and the existing early-parser configuration.
+        # - DJANGO-002: PARSE early options from self.argv[2:] using that parser;
+        #   do not consult process-global sys.argv[0], even when it is None.
+        # - IF parsing raises CommandError, preserve the existing handoff by
+        #   ignoring the early option error and continuing command discovery.
+        # - OTHERWISE, hand parsed options to handle_default_options.
+        # - DJANGO-010: LEAVE process-global sys.argv unchanged on both paths.
         parser = CommandParser(usage='%(prog)s subcommand [options] [args]', add_help=False, allow_abbrev=False)
         parser.add_argument('--settings')
         parser.add_argument('--pythonpath')
