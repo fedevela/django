@@ -6,6 +6,10 @@ from django.utils.numberformat import format as nformat
 
 
 class TestNumberFormat(SimpleTestCase):
+    # Architecture verification seam — GUID: NFMT-001, GUID: NFMT-003,
+    # GUID: NFMT-007. This existing owner-level test case receives the boundary
+    # regression; it depends only on the public numberformat entry point and does
+    # not expose sign detection as a new production API.
     def test_nfmt_001_empty_representation_sign_detection_avoids_index_error(self):
         """GUID: NFMT-001 - Empty sign detection avoids a missing first character."""
         # GIVEN an empty number representation.
