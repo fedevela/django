@@ -271,6 +271,22 @@ class AlterField(FieldOperation):
         #   -> AlterField(book.title, final_definition)
         # becomes [the final AlterField], whose field has max_length=128,
         # null=True, help_text="help", and default=None.
+        #
+        # MIGOPT-004/MIGOPT-005 -- distinct-target non-reduction:
+        # INPUT: this AlterField and the later operation selected by the optimizer.
+        # IF the later operation is not an AlterField, leave target-identity
+        # handling to the existing operation-specific branches below.
+        # OTHERWISE, compare normalized model names before normalized field names:
+        #   IF the model names differ (MIGOPT-005), do not emit a replacement;
+        #   hand off to the existing fallback so the optimizer retains both
+        #   AlterField operations and treats the pair as a reduction boundary.
+        #   ELSE IF the field names differ (MIGOPT-004), do not emit a
+        #   replacement; perform the same fallback handoff, retaining both
+        #   AlterField operations as separate operations.
+        #   ELSE the targets are identical and the same-target reduction above
+        #   may return the later AlterField.
+        # OUTPUT for either distinct-target branch: no collapsed AlterField and
+        # no target data transferred between operations.
         if isinstance(operation, AlterField) and self.is_same_field_operation(
             operation
         ):
