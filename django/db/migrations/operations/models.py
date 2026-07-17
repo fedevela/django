@@ -289,14 +289,15 @@ class DeleteModel(ModelOperation):
 class RenameModel(ModelOperation):
     """Rename a model."""
 
-    # ARCHITECTURE (GUID: RMN-001, RMN-002, RMN-003): Migration-state identity
-    # remains owned by state_forwards(). The database boundary remains owned by
-    # database_forwards(), where effective table identity is the gate in front
-    # of every schema_editor integration seam. PostgreSQL foreign-key lifecycle
-    # remains behind that seam and is reached only for a database-visible
-    # transition; no backend-specific RenameModel contract is required. This
-    # keeps the dependency directed from the migration operation to the schema
-    # editor, without coupling migration state to constraint implementation.
+    # ARCHITECTURE (GUID: RMN-001, RMN-002, RMN-003, RMN-004): Migration-state
+    # identity remains owned by state_forwards(). The database boundary remains
+    # owned by database_forwards(), where effective table identity is the gate
+    # in front of every schema_editor integration seam. PostgreSQL foreign-key
+    # lifecycle and SQLite table-recreation mechanics remain behind that seam
+    # and are reached only for a database-visible transition; no
+    # backend-specific RenameModel contract is required. This keeps the
+    # dependency directed from the migration operation to the schema editor,
+    # without coupling migration state to backend schema implementation.
 
     def __init__(self, old_name, new_name):
         self.old_name = old_name
