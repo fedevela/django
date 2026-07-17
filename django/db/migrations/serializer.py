@@ -121,14 +121,44 @@ class DictionarySerializer(BaseSerializer):
         return "{%s}" % (", ".join("%s: %s" % (k, v) for k, v in strings)), imports
 
 
+# Architecture contract (ENFL-001, ENFL-002, ENFL-003, ENFL-004, ENFL-005,
+# ENFL-006, ENFL-007, ENFL-008): EnumSerializer owns both named-member and
+# decomposable unnamed flag serialization. It must keep the BaseSerializer output
+# boundary of ``(Python expression, required imports)`` so MigrationWriter remains
+# a consumer rather than acquiring Enum-specific behavior. Flag decomposition
+# belongs inside this serializer and depends only on the Enum class/member protocol;
+# model fields and migration writing must not become dependencies of this boundary.
+# Concrete RegexFlag regression coverage belongs at MigrationWriter's public test
+# boundary.
 class EnumSerializer(BaseSerializer):
     def serialize(self):
         enum_class = self.value.__class__
         module = enum_class.__module__
-        return (
-            "%s.%s[%r]" % (module, enum_class.__qualname__, self.value.name),
-            {"import %s" % module},
-        )
+        if self.value.name in enum_class.__members__:
+            return (
+                "%s.%s[%r]" % (module, enum_class.__qualname__, self.value.name),
+                {"import %s" % module},
+            )
+        if isinstance(self.value, enum.Flag):
+            members = [
+                member
+                for member in enum_class
+                if member.value and member & self.value == member
+            ]
+            if members:
+                combined = members[0]
+                for member in members[1:]:
+                    combined |= member
+                if combined == self.value:
+                    return (
+                        " | ".join(
+                            "%s.%s[%r]"
+                            % (module, enum_class.__qualname__, member.name)
+                            for member in members
+                        ),
+                        {"import %s" % module},
+                    )
+        raise ValueError("Cannot serialize enum value %r" % self.value)
 
 
 class FloatSerializer(BaseSimpleSerializer):
@@ -320,6 +350,8 @@ class Serializer:
         tuple: TupleSerializer,
         dict: DictionarySerializer,
         models.Choices: ChoicesSerializer,
+        # Enum dispatch is the single integration seam for ENFL-001..ENFL-007;
+        # keep callers dependent on the serializer registry, not Enum internals.
         enum.Enum: EnumSerializer,
         datetime.datetime: DatetimeDatetimeSerializer,
         (datetime.date, datetime.timedelta, datetime.time): DateTimeSerializer,

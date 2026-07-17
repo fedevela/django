@@ -414,6 +414,121 @@ class WriterTests(SimpleTestCase):
             "default=migrations.test_writer.IntFlagEnum['A'])",
         )
 
+    def test_enfl_001_combined_flag_serializes_as_named_members_joined_by_or(self):
+        """GUID: ENFL-001 - serialize a combined flag as named members ORed together."""
+        self.assertSerializedResultEqual(
+            IntFlagEnum.A | IntFlagEnum.B,
+            (
+                "migrations.test_writer.IntFlagEnum['A'] | "
+                "migrations.test_writer.IntFlagEnum['B']",
+                {"import migrations.test_writer"},
+            ),
+        )
+
+    def test_enfl_002_combined_flag_serialization_avoids_none_member_lookup(self):
+        """GUID: ENFL-002 - don't serialize a combined flag using a None lookup."""
+        string = MigrationWriter.serialize(IntFlagEnum.A | IntFlagEnum.B)[0]
+        self.assertNotIn("[None]", string)
+        self.assertNotIn("['A|B']", string)
+
+    def test_enfl_003_serialized_combined_flag_evaluates_equal_to_original(self):
+        """GUID: ENFL-003 - evaluating a serialized combined flag restores its value."""
+        combined = IntFlagEnum.A | IntFlagEnum.B
+        self.assertEqual(self.serialize_round_trip(combined), combined)
+
+    def test_enfl_004_serialized_combined_flag_preserves_enum_type(self):
+        """GUID: ENFL-004 - evaluating a serialized combined flag restores its type."""
+        combined = IntFlagEnum.A | IntFlagEnum.B
+        self.assertIs(type(self.serialize_round_trip(combined)), IntFlagEnum)
+
+    def test_enfl_005_combined_flag_default_migration_is_importable_and_executable(self):
+        """GUID: ENFL-005 - a migration with a combined flag default executes."""
+        enum_module = type(sys)("enfl_test_enums")
+        migration_flag = enum.IntFlag(
+            "MigrationFlag",
+            {"A": 1, "B": 2},
+            module=enum_module.__name__,
+        )
+        enum_module.MigrationFlag = migration_flag
+        combined = migration_flag.A | migration_flag.B
+        migration = type(
+            "Migration",
+            (migrations.Migration,),
+            {
+                "operations": [
+                    migrations.AddField(
+                        "mymodel",
+                        "flags",
+                        models.IntegerField(default=combined),
+                    ),
+                ]
+            },
+        )
+        with mock.patch.dict(sys.modules, {enum_module.__name__: enum_module}):
+            result = {}
+            exec(MigrationWriter(migration).as_string(), result)
+        field = result["Migration"].operations[0].field
+        self.assertEqual(field.default, combined)
+        self.assertIs(type(field.default), migration_flag)
+
+    def test_enfl_006_named_enum_member_retains_executable_serialization(self):
+        """GUID: ENFL-006 - keep executable serialization for named Enum members."""
+        self.assertSerializedResultEqual(
+            IntFlagEnum.A,
+            (
+                "migrations.test_writer.IntFlagEnum['A']",
+                {"import migrations.test_writer"},
+            ),
+        )
+
+    def test_enfl_007_repeated_combined_flag_serialization_is_deterministic(self):
+        """GUID: ENFL-007 - repeated combined flag serialization is identical."""
+        combined = IntFlagEnum.A | IntFlagEnum.B
+        serializations = [MigrationWriter.serialize(combined) for _ in range(3)]
+        self.assertEqual(serializations, [serializations[0]] * 3)
+
+    # Architecture contract (GUID: ENFL-008): WriterTests owns the concrete
+    # RegexFlag regression at MigrationWriter.serialize(), preserving the public
+    # ``(expression, imports)`` boundary. Expression/import coverage enters that
+    # boundary directly; reconstruction and type coverage use serialize_round_trip()
+    # as the shared evaluation seam. Named-member protection remains in this group
+    # so combined-value coverage cannot bypass the established Enum branch.
+    def test_enfl_008_unicode_or_ignorecase_serializes_as_named_flags_joined_by_or(
+        self,
+    ):
+        """GUID: ENFL-008 - represent combined RegexFlag members with bitwise OR."""
+        self.assertSerializedResultEqual(
+            re.UNICODE | re.IGNORECASE,
+            (
+                "re.RegexFlag['IGNORECASE'] | re.RegexFlag['UNICODE']",
+                {"import re"},
+            ),
+        )
+
+    def test_enfl_008_serialized_unicode_or_ignorecase_reconstructs_equal_value(self):
+        """GUID: ENFL-008 - reconstruct the original combined RegexFlag value."""
+        combined = re.UNICODE | re.IGNORECASE
+        self.assertEqual(self.serialize_round_trip(combined), combined)
+
+    def test_enfl_008_serialized_unicode_or_ignorecase_retains_regexflag_type(self):
+        """GUID: ENFL-008 - preserve the RegexFlag type after reconstruction."""
+        combined = re.UNICODE | re.IGNORECASE
+        reconstructed = self.serialize_round_trip(combined)
+        self.assertIs(type(reconstructed), type(combined))
+        self.assertIs(type(reconstructed), re.RegexFlag)
+
+    def test_enfl_008_unicode_or_ignorecase_preserves_named_enum_member_checks(self):
+        """GUID: ENFL-008 - retain existing named Enum-member coverage."""
+        for member, name in [
+            (re.UNICODE, "UNICODE"),
+            (re.IGNORECASE, "IGNORECASE"),
+        ]:
+            with self.subTest(member=member):
+                self.assertSerializedResultEqual(
+                    member,
+                    ("re.RegexFlag[%r]" % name, {"import re"}),
+                )
+
     def test_serialize_choices(self):
         class TextChoices(models.TextChoices):
             A = "A", "A value"
