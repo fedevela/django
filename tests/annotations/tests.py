@@ -2,6 +2,7 @@ import datetime
 from decimal import Decimal
 
 from django.core.exceptions import FieldDoesNotExist, FieldError
+from django.db import connection
 from django.db.models import (
     BooleanField, Case, CharField, Count, DateTimeField, DecimalField, Exists,
     ExpressionWrapper, F, FloatField, Func, IntegerField, Max, OuterRef, Q,
@@ -17,6 +18,48 @@ from django.test.utils import register_lookup
 from .models import (
     Author, Book, Company, DepartmentStore, Employee, Publisher, Store, Ticket,
 )
+
+
+class EmptyMembershipAnnotationAggregationContractTests(TestCase):
+    # EMPTYIN-005, EMPTYIN-006: Aggregating a negated empty-membership
+    # annotation completes successfully using its true value.
+    def test_emptyin_005_006_aggregate_over_negated_empty_membership_annotation_completes_using_true_value(self):
+        Company.objects.create(name='Django')
+        companies = Company.objects.annotate(
+            foo=ExpressionWrapper(~Q(pk__in=[]), output_field=BooleanField()),
+        )
+        self.assertIs(companies.aggregate(max_foo=Max('foo'))['max_foo'], True)
+
+    # EMPTYIN-005, EMPTYIN-006: Aggregating a non-negated empty-membership
+    # annotation completes successfully using its false value.
+    def test_emptyin_005_006_aggregate_over_nonnegated_empty_membership_annotation_completes_using_false_value(self):
+        Company.objects.create(name='Django')
+        companies = Company.objects.annotate(
+            foo=ExpressionWrapper(Q(pk__in=[]), output_field=BooleanField()),
+        )
+        self.assertIs(companies.aggregate(max_foo=Max('foo'))['max_foo'], False)
+
+    # EMPTYIN-004, EMPTYIN-006: Selecting a negated empty-membership annotation
+    # alongside aggregation compiles and preserves its true value.
+    def test_emptyin_004_006_negated_annotation_alongside_aggregation_compiles_and_remains_true(self):
+        company = Company.objects.create(name='Django')
+        companies = Company.objects.annotate(
+            foo=ExpressionWrapper(~Q(pk__in=[]), output_field=BooleanField()),
+            count=Count('pk'),
+        ).values('foo', 'count')
+        companies.query.sql_with_params()
+        self.assertEqual(companies.get(pk=company.pk), {'foo': True, 'count': 1})
+
+    # EMPTYIN-004, EMPTYIN-006: Selecting a non-negated empty-membership
+    # annotation alongside aggregation compiles and preserves its false value.
+    def test_emptyin_004_006_nonnegated_annotation_alongside_aggregation_compiles_and_remains_false(self):
+        company = Company.objects.create(name='Django')
+        companies = Company.objects.annotate(
+            foo=ExpressionWrapper(Q(pk__in=[]), output_field=BooleanField()),
+            count=Count('pk'),
+        ).values('foo', 'count')
+        companies.query.sql_with_params()
+        self.assertEqual(companies.get(pk=company.pk), {'foo': False, 'count': 1})
 
 
 class NonAggregateAnnotationTestCase(TestCase):
@@ -196,6 +239,53 @@ class NonAggregateAnnotationTestCase(TestCase):
         ).get(isbn=test.isbn)
         combined = int(test.pages + test.rating)
         self.assertEqual(b.combined, combined)
+
+    # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-006
+    # Architecture seam: direct empty-membership selection belongs beside the
+    # existing database-backed empty-expression annotation coverage. These
+    # tests share this case's Book fixtures and exercise the public ORM boundary;
+    # compiler internals remain covered through generated SQL rather than a
+    # test-only dependency on SQLCompiler.
+    #
+    # EMPTYIN-001, EMPTYIN-006: Negated empty membership selected directly as
+    # an annotation compiles to a nonempty, syntactically valid SQL expression.
+    def test_emptyin_001_006_negated_direct_annotation_compiles_to_valid_sql(self):
+        books = Book.objects.annotate(
+            foo=ExpressionWrapper(~Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        sql, _ = books.query.sql_with_params()
+        alias = ' AS %s' % connection.ops.quote_name('foo')
+        self.assertIn(alias, sql)
+        self.assertTrue(sql[len('SELECT '):sql.index(alias)].strip())
+
+    # EMPTYIN-002, EMPTYIN-006: Negated empty membership selected directly as
+    # an annotation evaluates to a database-compatible true value for each row.
+    def test_emptyin_002_006_negated_direct_annotation_evaluates_true(self):
+        values = Book.objects.annotate(
+            foo=ExpressionWrapper(~Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        self.assertEqual(len(values), Book.objects.count())
+        self.assertTrue(all(value['foo'] for value in values))
+
+    # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
+    # as an annotation compiles to a syntactically valid SQL expression.
+    def test_emptyin_003_006_nonnegated_direct_annotation_compiles_to_valid_sql(self):
+        books = Book.objects.annotate(
+            foo=ExpressionWrapper(Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        sql, _ = books.query.sql_with_params()
+        alias = ' AS %s' % connection.ops.quote_name('foo')
+        self.assertIn(alias, sql)
+        self.assertTrue(sql[len('SELECT '):sql.index(alias)].strip())
+
+    # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
+    # as an annotation evaluates to false for each row.
+    def test_emptyin_003_006_nonnegated_direct_annotation_evaluates_false(self):
+        values = Book.objects.annotate(
+            foo=ExpressionWrapper(Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        self.assertEqual(len(values), Book.objects.count())
+        self.assertFalse(any(value['foo'] for value in values))
 
     def test_empty_expression_annotation(self):
         books = Book.objects.annotate(

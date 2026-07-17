@@ -150,7 +150,14 @@ class SQLCompiler:
         expressions = self.collapse_group_by(expressions, having_group_by)
 
         for expr in expressions:
-            sql, params = self.compile(expr)
+            try:
+                sql, params = self.compile(expr)
+            except EmptyResultSet:
+                # An expression that matches no rows doesn't affect grouping.
+                continue
+            if not sql:
+                # An expression that matches all rows doesn't affect grouping.
+                continue
             sql, params = expr.select_format(self, sql, params)
             params_hash = make_hashable(params)
             if (sql, params_hash) not in seen:
@@ -251,6 +258,15 @@ class SQLCompiler:
                 'model': self.query.model,
                 'select_fields': select_list,
             }
+        # EMPTYIN-004, EMPTYIN-006 architecture seam: annotation_select is the
+        # query-owned registry entering the selected-column boundary. Wrapped
+        # Boolean predicates and aggregates remain peer expressions here; each
+        # alias receives an independent position and is compiled by the common
+        # per-expression boundary below. The annotations position map is the
+        # only handoff this layer exposes to queryset result materialization.
+        # Keep dependencies directed from the query expression registry,
+        # through SQLCompiler selection, to result mapping; neither aggregate
+        # nor predicate expressions may take ownership of their peer's slot.
         for alias, annotation in self.query.annotation_select.items():
             annotations[alias] = select_idx
             select.append((annotation, alias))
@@ -270,6 +286,59 @@ class SQLCompiler:
 
         ret = []
         for col, alias in select:
+            # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-004, EMPTYIN-005,
+            # EMPTYIN-006
+            # Architecture contract: predicate reduction remains owned by the
+            # expression tree and ExpressionWrapper remains transparent. This
+            # selected-column boundary owns materializing reduction outcomes as
+            # nonempty SQL and then delegates backend-specific Boolean SELECT
+            # formatting to the selected expression. Keep the dependency
+            # direction expression tree -> selected-column compiler -> backend
+            # formatting; lookup-specific handling doesn't belong here.
+            # When this compiler supplies an AggregateQuery's inner projection,
+            # the same boundary owns that materialization; the outer aggregate
+            # compiler depends only on the projected value and its alias.
+            #
+            # Logic obligation for a directly selected Boolean annotation:
+            #
+            # PSEUDOCODE:
+            #   COMPILE the selected annotation while preserving whether its
+            #   predicate reduces to an empty or universal result set.
+            #   IF empty membership reduces the predicate to always false:
+            #       RENDER a backend-compatible false expression.
+            #   ELSE IF negation reduces the predicate to always true:
+            #       RENDER a backend-compatible true expression.
+            #   ELSE:
+            #       RENDER the compiled predicate normally.
+            #   REQUIRE rendered SQL to be nonempty before appending its alias.
+            #   HAND OFF the rendered Boolean expression and parameters so
+            #   evaluation yields false or true for every selected row.
+            #
+            # EMPTYIN-004, EMPTYIN-006
+            # Logic obligation when the Boolean annotation is selected beside
+            # an aggregate:
+            #
+            # PSEUDOCODE:
+            #   RETAIN the annotation and aggregate as separate selected
+            #   expressions, with an output position for each alias.
+            #   FOR EACH selected expression:
+            #       COMPILE it independently of the other selected expressions.
+            #       IF it is the non-negated empty-membership annotation and
+            #       compilation reports an empty result set:
+            #           MATERIALIZE false instead of aborting the aggregate
+            #           query.
+            #       ELSE IF it is the negated empty-membership annotation and
+            #       compilation produces a universal, empty SQL fragment:
+            #           MATERIALIZE true instead of emitting an empty SELECT
+            #           item.
+            #       ELSE:
+            #           PRESERVE the normally compiled expression, including
+            #           the aggregate and its parameters.
+            #       APPLY the expression's SELECT formatting and retain its
+            #       alias.
+            #   HAND OFF both selected values in their recorded positions so
+            #   row conversion preserves false or true for the annotation and
+            #   preserves the aggregate result.
             try:
                 sql, params = self.compile(col)
             except EmptyResultSet:
@@ -279,8 +348,10 @@ class SQLCompiler:
                     sql, params = '0', ()
                 else:
                     sql, params = self.compile(Value(empty_result_set_value))
-            else:
-                sql, params = col.select_format(self, sql, params)
+            if not sql:
+                # Select a predicate that's always True.
+                sql, params = '1', ()
+            sql, params = col.select_format(self, sql, params)
             ret.append((col, (sql, params), alias))
         return ret, klass_info, annotations
 
@@ -1661,6 +1732,36 @@ class SQLAggregateCompiler(SQLCompiler):
         parameters.
         """
         sql, params = [], []
+        # EMPTYIN-005, EMPTYIN-006 architecture seam: this compiler owns only
+        # the outer aggregate projection and the composition of its already
+        # prepared inner query. Boolean empty-membership materialization stays
+        # behind the inner SQLCompiler selected-column boundary. Dependency
+        # therefore runs Query.get_aggregation() -> inner SQLCompiler -> this
+        # outer compiler; no lookup- or predicate-specific branch belongs here.
+        # EMPTYIN-005, EMPTYIN-006
+        # Logic obligation for an aggregate whose input is an empty-membership
+        # Boolean annotation:
+        #
+        # PSEUDOCODE:
+        #   FOR EACH requested aggregate annotation:
+        #       RESOLVE its annotation reference to the corresponding value
+        #       produced by the inner query.
+        #       COMPILE the aggregate expression and preserve its parameters.
+        #       APPLY backend-specific SELECT formatting to the aggregate.
+        #   COMPILE the inner query through the ordinary selected-expression
+        #   boundary.
+        #   WHEN the inner selected expression is NOT (pk IN []):
+        #       MATERIALIZE a backend-compatible true value instead of an
+        #       empty SQL fragment.
+        #   WHEN the inner selected expression is (pk IN []):
+        #       MATERIALIZE a backend-compatible false value instead of
+        #       propagating EmptyResultSet.
+        #   OTHERWISE:
+        #       PRESERVE normal annotation compilation.
+        #   COMPOSE the formatted outer aggregates over the compiled inner
+        #   query, preserving outer parameters before inner parameters.
+        #   HAND OFF one aggregate result per requested alias; compilation or
+        #   execution failure propagates through the normal query error path.
         for annotation in self.query.annotation_select.values():
             ann_sql, ann_params = self.compile(annotation)
             ann_sql, ann_params = annotation.select_format(self, ann_sql, ann_params)

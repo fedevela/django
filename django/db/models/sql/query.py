@@ -428,6 +428,13 @@ class Query(BaseExpression):
             in self.annotations.items()
             if alias not in added_aggregate_names
         ]
+        # EMPTYIN-005, EMPTYIN-006 architecture boundary: aggregation query
+        # shaping is owned here. Existing value-producing annotations belong to
+        # the inner query; summary expressions that consume them belong to the
+        # outer AggregateQuery and cross the boundary by Ref/selected alias.
+        # Predicate reduction remains an expression concern and Boolean value
+        # materialization remains an inner SQLCompiler concern, so this layer
+        # must not depend on empty-membership lookup details.
         # Decide if we need to use a subquery.
         #
         # Existing annotations would cause incorrect results as get_aggregation()
