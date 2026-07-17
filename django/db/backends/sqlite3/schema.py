@@ -304,6 +304,33 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         body_copy['__module__'] = model.__module__
         new_model = type('New%s' % model._meta.object_name, model.__bases__, body_copy)
 
+        # Regression logic — SQLITE-009:
+        # GIVEN a state sequence CreateModel -> AddConstraint(expressions over
+        # name and value) -> AlterField(value):
+        #   seed each valid source (name, value) row before AlterField;
+        #   invoke the remake and treat any OperationalError as failure;
+        #   require the state transition INITIAL -> TEMPORARY -> COPIED ->
+        #   REPLACED -> CONSTRAINED to complete in that order;
+        #   read the remade field metadata and require the requested altered
+        #   definition, then read all seeded rows and require unchanged name
+        #   and value data;
+        #   attempt an INSERT whose expression key duplicates a seeded row and
+        #   require uniqueness rejection without adding a row;
+        #   attempt an INSERT with a distinct expression key and require it to
+        #   succeed and remain readable.
+        # HANDOFF: expression-index SQL validity is decided by Expressions when
+        # alter_db_table() retargets the deferred constraint statement.
+        # FAILURE: any missing transition, altered definition, lost/changed
+        # row, accepted duplicate, or rejected distinct row fails the
+        # regression obligation; do not reinterpret it as a successful remake.
+        # Compatibility logic — SQLITE-010:
+        # FOR each previously valid schema-editor and constraint-operation path:
+        #   preserve its existing branch selection and operation ordering;
+        #   IF it produces deferred functional-index or expression-constraint
+        #   SQL, pass it through the same Statement reference handoff;
+        #   ELSE retain the existing non-expression table-remake behavior;
+        #   preserve existing outputs and propagate existing failure modes.
+
         # Pseudocode obligations — SQLITE-004, SQLITE-006, SQLITE-007:
         # INPUT: valid existing rows, each with original name and value data,
         # and the named unique constraint carried into new_model.

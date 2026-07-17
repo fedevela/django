@@ -217,6 +217,22 @@ class Expressions(TableColumns):
         super().__init__(table, columns)
 
     def rename_table_references(self, old_table, new_table):
+        # Expression SQL verification logic — SQLITE-009:
+        # GIVEN a deferred unique expression index recreated by a SQLite table
+        # remake, first retarget its table identity, then compile its expression
+        # columns; require the CREATE INDEX table target to name new_table while
+        # every column reference inside the expression remains unqualified.
+        # IF compiled expression SQL contains old_table.column or
+        # new_table.column, reject it as invalid for SQLite and fail the remake;
+        # ELSE hand the valid statement back for deferred execution.
+        # Continuity logic — SQLITE-010:
+        # FOR schema-editor reference checks, functional indexes, expression
+        # constraints, and their rename operations, preserve expression order,
+        # functions, parameters, tracked target columns, and reference answers.
+        # IF the referenced table does not match old_table, perform no mutation;
+        # IF it matches, clone before mutation and change only explicit table
+        # aliases plus the tracked table identity; propagate compile/rename
+        # failures through the pre-existing caller path.
         # Pseudocode contract — SQLITE-001, SQLITE-002, SQLITE-005, SQLITE-008:
         # INPUT: deferred expression-index columns and a completed temporary
         # table rename from old_table to new_table.
