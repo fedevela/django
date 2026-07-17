@@ -102,6 +102,23 @@ class AutocompleteJsonView(BaseListView):
         except LookupError as e:
             raise PermissionDenied from e
 
+        # Target-field validation preservation pseudocode (GUID: ACJ-009):
+        # Resolve field_name from the source model before any result is
+        # serialized; if no such field exists, propagate the existing
+        # PermissionDenied rejection and stop processing.
+        # From the resolved source field, resolve its related model; if the
+        # field has no usable relation, propagate the existing PermissionDenied
+        # rejection and stop processing.
+        # Resolve the relation's configured target field, falling back to the
+        # related model primary-key field exactly as before, and normalize that
+        # resolved field to its attribute name.
+        # Ask the related ModelAdmin whether that normalized target attribute is
+        # allowed. If it is not allowed, propagate the existing PermissionDenied
+        # rejection; do not query or serialize results.
+        # Otherwise, return the unchanged resolved source field and normalized
+        # target attribute to the caller so later serialization uses the same
+        # identifier. Propagate resolution failures without introducing a new
+        # permitted field, fallback, or error translation.
         try:
             source_field = source_model._meta.get_field(field_name)
         except FieldDoesNotExist as e:
