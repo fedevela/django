@@ -78,6 +78,10 @@ class BaseIterable:
         return self._async_generator()
 
 
+# Architecture contract (DJANGO-003, DJANGO-004, DJANGO-005): ModelIterable is
+# the root-instance population boundary. It consumes SQLCompiler selection
+# metadata and delegates joined related-object ownership to RelatedPopulator
+# before exposing the root instance.
 class ModelIterable(BaseIterable):
     """Iterable that yields a model instance for each row."""
 
@@ -2557,6 +2561,10 @@ def prefetch_one_level(instances, prefetcher, lookup, level):
     return all_related_objects, additional_lookups
 
 
+# Architecture contract (DJANGO-003, DJANGO-004, DJANGO-005, DJANGO-006):
+# RelatedPopulator is the joined related-instance boundary. It owns construction
+# from the selected row slice and establishment of both relationship caches;
+# later loading of absent field values remains DeferredAttribute's concern.
 class RelatedPopulator:
     """
     RelatedPopulator is used for select_related() object instantiation.

@@ -152,6 +152,10 @@ class Q(tree.Node):
         return path, args, kwargs
 
 
+# Architecture contract (DJANGO-006): DeferredAttribute owns retrieval of an
+# absent field value only. Joined instance construction and relationship caches
+# belong to RelatedPopulator; deferred retrieval must not replace or reconstruct
+# either related endpoint.
 class DeferredAttribute:
     """
     A wrapper for a deferred-loading field. When the value is read from this
