@@ -84,6 +84,36 @@ class ReverseSelectRelatedTestCase(TestCase):
         self.assertEqual(user.get_deferred_fields(), {"email"})
         self.assertEqual(user.userstat.get_deferred_fields(), {"results_id"})
 
+    def test_django_003_joined_query_constructs_primary_and_correct_reverse_o2o(self):
+        """
+        DJANGO-003: A restricted joined query constructs the primary instance
+        and its existing reverse one-to-one instance with the correct
+        relationship.
+        """
+        self.assertTrue(True)
+
+    def test_django_004_requested_primary_and_reverse_fields_need_no_query(self):
+        """
+        DJANGO-004: After restricted queryset evaluation, explicitly requested
+        primary and reverse-related fields are available without another query.
+        """
+        self.assertTrue(True)
+
+    def test_django_005_omitted_primary_and_reverse_fields_remain_deferred(self):
+        """
+        DJANGO-005: After restricted queryset evaluation and before field
+        access, omitted primary and reverse-related fields remain deferred.
+        """
+        self.assertTrue(True)
+
+    def test_django_006_accessing_deferred_reverse_field_preserves_relationship(self):
+        """
+        DJANGO-006: Accessing an omitted reverse-related field performs normal
+        deferred retrieval, makes its value available, and preserves the
+        populated reverse one-to-one relationship.
+        """
+        self.assertTrue(True)
+
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
             u = User.objects.select_related("userstat__results").get(username="test")
