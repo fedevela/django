@@ -6,6 +6,7 @@ from django.forms.models import ModelChoiceIterator
 from django.forms.widgets import CheckboxSelectMultiple
 from django.template import Context, Template
 from django.test import TestCase
+from django.utils import translation
 
 from .models import Article, Author, Book, Category, Writer
 
@@ -91,11 +92,39 @@ class ModelChoiceFieldTests(TestCase):
 
     def test_mcf_010_non_invalid_choice_failure_preserves_message_code_and_params(self):
         """GUID: MCF-010 - Unrelated validation diagnostics remain unchanged."""
-        pass
+        message = 'An unrelated failure occurred for %(value)s.'
+        code = 'unrelated_failure'
+        params = {'value': self.c1}
+
+        def unrelated_validator(value):
+            raise ValidationError(message, code=code, params=params)
+
+        field = forms.ModelChoiceField(
+            Category.objects.all(),
+            validators=[unrelated_validator],
+        )
+        with self.assertRaises(ValidationError) as cm:
+            field.clean(self.c1.pk)
+        error = cm.exception.error_list[0]
+        self.assertEqual(error.message, message)
+        self.assertEqual(error.code, code)
+        self.assertIs(error.params, params)
 
     def test_mcf_011_default_invalid_choice_uses_existing_localization_and_value_interpolation(self):
         """GUID: MCF-011 - The localized default interpolates the submitted value."""
-        pass
+        field = forms.ModelChoiceField(Category.objects.all())
+
+        with translation.override('fr'):
+            with self.assertRaises(ValidationError) as cm:
+                field.clean('invalide')
+            self.assertEqual(
+                cm.exception.messages,
+                ['Sélectionnez un choix valide. invalide n’en fait pas partie.'],
+            )
+        self.assertEqual(
+            cm.exception.error_list[0].params,
+            {'value': 'invalide'},
+        )
 
     def test_basics(self):
         f = forms.ModelChoiceField(Category.objects.all())
