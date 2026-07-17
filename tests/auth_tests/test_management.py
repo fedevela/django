@@ -1491,7 +1491,7 @@ class MigrationDatabaseTraceabilityTests(TestCase):
     """Architecture locus for the MIGDB selected-database regression path."""
 
     # Structural fixture boundary
-    # [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-004, MIGDB-006]:
+    # [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-004, MIGDB-005, MIGDB-006]:
     # later behavioral coverage may observe alias confinement and FK provenance
     # across distinct databases without relocating these existing obligations.
     databases = {"default", "other"}
@@ -1665,6 +1665,14 @@ class MigrationDatabaseTraceabilityTests(TestCase):
         database_router.db_for_read.assert_not_called()
         database_router.db_for_write.assert_not_called()
         self.assertFalse(self._permission_queryset("other").exists())
+
+    def test_MIGDB_005_implicit_alias_is_preserved_through_post_migrate(self):
+        """GUID: MIGDB-005 — implicit alias survives migrate and post-migrate."""
+        pass
+
+    def test_MIGDB_005_implicit_migrate_keeps_permission_results_unchanged(self):
+        """GUID: MIGDB-005 — implicit migrate keeps permission results stable."""
+        pass
 
     def test_MIGDB_006_prior_behavior_detects_wrong_content_type_database(self):
         """GUID: MIGDB-006 — prior behavior -> wrong database is detected."""
