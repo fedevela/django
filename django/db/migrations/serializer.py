@@ -130,36 +130,33 @@ class DictionarySerializer(BaseSerializer):
 # and migration writing must not become dependencies of this boundary.
 class EnumSerializer(BaseSerializer):
     def serialize(self):
-        # Pseudocode trace: ENFL-001, ENFL-002, ENFL-003, ENFL-004, ENFL-005,
-        # ENFL-006, ENFL-007.
-        #
-        # INPUT: an Enum value and the value's Enum class, module, and qualified
-        # class name.
-        # IF the value has a member name:
-        #     RETURN the existing executable ``module.EnumClass['name']``
-        #     expression and the module import.  [ENFL-006]
-        # ELSE (the value is an unnamed combination):
-        #     REQUIRE a flag-style value that can be decomposed completely into
-        #     usable named members; never format a lookup with ``None``.
-        #     [ENFL-001, ENFL-002]
-        #     WALK the class's usable named members in declaration order.
-        #     SELECT each member that is a constituent of the combined value,
-        #     retaining that order for every serialization.  [ENFL-007]
-        #     COMBINE the selected members and verify that the result equals the
-        #     input; if no members were selected or residual bits remain, FAIL as
-        #     an unsupported, non-decomposable value.
-        #     FORMAT every selected member as an executable qualified named-member
-        #     lookup, JOIN the lookups with bitwise OR, and RETURN that expression
-        #     with the module import.  [ENFL-001, ENFL-005]
-        #     EVALUATION uses Enum members as every OR operand, so the result must
-        #     equal the input and retain the input's Enum class.  [ENFL-003,
-        #     ENFL-004]
         enum_class = self.value.__class__
         module = enum_class.__module__
-        return (
-            "%s.%s[%r]" % (module, enum_class.__qualname__, self.value.name),
-            {"import %s" % module},
-        )
+        if self.value.name in enum_class.__members__:
+            return (
+                "%s.%s[%r]" % (module, enum_class.__qualname__, self.value.name),
+                {"import %s" % module},
+            )
+        if isinstance(self.value, enum.Flag):
+            members = [
+                member
+                for member in enum_class
+                if member.value and member & self.value == member
+            ]
+            if members:
+                combined = members[0]
+                for member in members[1:]:
+                    combined |= member
+                if combined == self.value:
+                    return (
+                        " | ".join(
+                            "%s.%s[%r]"
+                            % (module, enum_class.__qualname__, member.name)
+                            for member in members
+                        ),
+                        {"import %s" % module},
+                    )
+        raise ValueError("Cannot serialize enum value %r" % self.value)
 
 
 class FloatSerializer(BaseSimpleSerializer):
