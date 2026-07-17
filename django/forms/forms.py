@@ -318,6 +318,8 @@ class BaseForm(RenderableFormMixin):
 
     @property
     def template_name(self):
+        # MGMT-005 ordinary-form boundary: preserve the renderer-selected
+        # template identity for RenderableMixin's shared warning contract.
         return self.renderer.form_template_name
 
     def get_context(self):

@@ -35,6 +35,9 @@ class ManagementForm(Form):
     as well.
     """
 
+    # MGMT-005 management-form boundary: this explicit non-default template
+    # keeps warning selection in RenderableMixin without suppressing warnings
+    # for ordinary forms that inherit BaseForm.template_name.
     template_name = "django/forms/div.html"
 
     TOTAL_FORMS = IntegerField(widget=HiddenInput)
