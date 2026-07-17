@@ -224,6 +224,12 @@ class BaseFormSet(RenderableFormMixin):
         index will be None if the form being constructed is a new empty
         form.
         """
+        # Architecture boundary (GUID EFORM-003, EFORM-004, EFORM-007):
+        # This copied mapping is the shared form-argument ingress. Ordinary-form
+        # construction owns its unfiltered merge, while empty_form owns the sole
+        # template-specific exclusion of empty_permitted. All other arguments,
+        # including the unchanged mapping when that key is absent, cross the
+        # corresponding construction seam without normalization here.
         return self.form_kwargs.copy()
 
     def _construct_form(self, i, **kwargs):
