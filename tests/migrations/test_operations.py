@@ -3940,74 +3940,88 @@ class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
         GUID: SQLITE-009. The SQLite CreateModel, AddConstraint, and subsequent
         AlterField regression sequence completes without OperationalError.
         """
-        self.assertTrue(True)
+        self._apply_migration_sequence()
+        self.assertTableExists(self.table_name)
+        self.assertIndexNameExists(self.table_name, self.constraint_name)
 
     def test_sqlite_009_recreated_expression_index_sql_omits_table_qualified_column_references(self):
         """
         GUID: SQLITE-009. The recreated unique expression index contains valid
         SQLite SQL without prohibited table-qualified column references.
         """
-        self.assertTrue(True)
+        _, queries = self._apply_migration_sequence()
+        index_sql = next(
+            sql for sql in queries
+            if 'CREATE UNIQUE INDEX' in sql and self.constraint_name in sql
+        )
+        for column in ('name', 'value'):
+            qualified_column = '%s.%s' % (
+                connection.ops.quote_name(self.table_name),
+                connection.ops.quote_name(column),
+            )
+            self.assertNotIn(qualified_column, index_sql)
+        self.assertIn('("name", "value")', index_sql)
 
     def test_sqlite_009_table_remake_preserves_altered_field_definition(self):
         """
         GUID: SQLITE-009. The completed SQLite table remake retains the altered
         field definition.
         """
-        self.assertTrue(True)
+        project_state, _ = self._apply_migration_sequence()
+        value_field = project_state.apps.get_model(
+            self.app_label,
+            'Tag',
+        )._meta.get_field('value')
+        self.assertEqual(value_field.max_length, 150)
+        table_sql = self._schema_sql('table', self.table_name)
+        self.assertIn('"value" varchar(150)', table_sql)
 
     def test_sqlite_009_table_remake_preserves_existing_name_and_value_data(self):
         """
         GUID: SQLITE-009. Existing valid name and value data survives the
         SQLite table-remaking operation unchanged.
         """
-        self.assertTrue(True)
+        rows = [
+            ('color', 'blue'),
+            ('color', 'green'),
+            ('shape', 'round'),
+        ]
+        project_state, _ = self._apply_migration_sequence(rows)
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        self.assertCountEqual(
+            Tag.objects.values_list('name', 'value'),
+            rows,
+        )
 
     def test_sqlite_009_post_migration_duplicate_name_and_value_combination_is_rejected(self):
         """
         GUID: SQLITE-009. After the SQLite migration, the unique expression
         constraint rejects a duplicate name and value combination.
         """
-        self.assertTrue(True)
+        row = ('color', 'blue')
+        project_state, _ = self._apply_migration_sequence([row])
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        with self.assertRaises(IntegrityError):
+            Tag.objects.create(name=row[0], value=row[1])
+        self.assertEqual(
+            Tag.objects.filter(name=row[0], value=row[1]).count(),
+            1,
+        )
 
     def test_sqlite_009_post_migration_distinct_name_and_value_combination_is_inserted(self):
         """
         GUID: SQLITE-009. After the SQLite migration, a distinct name and value
         combination is inserted successfully.
         """
-        self.assertTrue(True)
-
-    # Compatibility verification boundary — SQLITE-010: these anchors route
-    # continuity evidence to the established owners in backends/test_ddl_references.py
-    # for reference behavior and schema/tests.py for schema-editor, functional-index,
-    # and constraint operations; this class retains only remake integration.
-    def test_sqlite_010_existing_schema_editor_operations_retain_previously_valid_behavior(self):
-        """
-        GUID: SQLITE-010. Relevant existing schema-editor operation coverage
-        retains its previously valid behavior.
-        """
-        self.assertTrue(True)
-
-    def test_sqlite_010_existing_expression_reference_operations_retain_previously_valid_behavior(self):
-        """
-        GUID: SQLITE-010. Relevant existing expression-reference coverage
-        retains its previously valid behavior.
-        """
-        self.assertTrue(True)
-
-    def test_sqlite_010_existing_functional_index_operations_retain_previously_valid_behavior(self):
-        """
-        GUID: SQLITE-010. Relevant existing functional-index operation coverage
-        retains its previously valid behavior.
-        """
-        self.assertTrue(True)
-
-    def test_sqlite_010_existing_constraint_operations_retain_previously_valid_behavior(self):
-        """
-        GUID: SQLITE-010. Relevant existing constraint-operation coverage
-        retains its previously valid behavior.
-        """
-        self.assertTrue(True)
+        existing_row = ('color', 'blue')
+        distinct_row = ('color', 'green')
+        project_state, _ = self._apply_migration_sequence([existing_row])
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        Tag.objects.create(name=distinct_row[0], value=distinct_row[1])
+        self.assertCountEqual(
+            Tag.objects.values_list('name', 'value'),
+            [existing_row, distinct_row],
+        )
 
 
 class FieldOperationTests(SimpleTestCase):
