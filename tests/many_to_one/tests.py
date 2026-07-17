@@ -18,15 +18,46 @@ class ForeignKeyCharPrimaryKeyContractTests(TransactionTestCase):
 
     def test_fkpk_005_prepopulated_char_primary_key_persists_as_foreign_key(self):
         """GUID: FKPK-005 - A prepopulated related key persists as the FK."""
-        self.assertTrue(True)
+        parent, child = self.save_prepopulated_related_then_referencing()
+
+        child.refresh_from_db()
+        self.assertEqual(child.parent_id, parent.pk)
+        self.assertEqual(child.parent_id, 'foo')
 
     def test_fkpk_005_query_by_saved_prepopulated_related_object_returns_reference(self):
         """GUID: FKPK-005 - The saved related object finds its reference."""
-        self.assertTrue(True)
+        parent, child = self.save_prepopulated_related_then_referencing()
+
+        self.assertSequenceEqual(
+            ChildStringPrimaryKeyParent.objects.filter(parent=parent),
+            [child],
+        )
 
     def test_fkpk_005_related_then_referencing_save_avoids_constraint_violation(self):
         """GUID: FKPK-005 - Ordered saves preserve a valid prepopulated key."""
-        self.assertTrue(True)
+        parent = ParentStringPrimaryKey(name='foo')
+        child = ChildStringPrimaryKeyParent(parent=parent)
+
+        self.assertEqual(child.parent_id, 'foo')
+        with transaction.atomic():
+            parent.save()
+            child.save()
+
+        self.assertTrue(ParentStringPrimaryKey.objects.filter(pk='foo').exists())
+        self.assertTrue(
+            ChildStringPrimaryKeyParent.objects.filter(
+                pk=child.pk,
+                parent_id='foo',
+            ).exists()
+        )
+
+    def save_prepopulated_related_then_referencing(self):
+        parent = ParentStringPrimaryKey(name='foo')
+        child = ChildStringPrimaryKeyParent(parent=parent)
+        with transaction.atomic():
+            parent.save()
+            child.save()
+        return parent, child
 
     def save_related_then_referencing(self):
         with transaction.atomic():

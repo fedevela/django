@@ -200,11 +200,6 @@ class ForwardManyToOneDescriptor:
         else:
             return rel_obj
 
-    # GUID: FKPK-005 architecture boundary. ForeignObject.related_fields owns
-    # the local-to-target field mapping; this descriptor owns relation
-    # assignment across that mapping. The local field attname is the handoff
-    # to persistence and query layers, keeping those layers independent of
-    # the related object's in-memory lifecycle after assignment.
     def __set__(self, instance, value):
         """
         Set the related instance through the forward relation.
@@ -256,23 +251,9 @@ class ForwardManyToOneDescriptor:
             for lh_field, rh_field in self.field.related_fields:
                 setattr(instance, lh_field.attname, None)
 
-        # FKPK-005 pseudocode:
-        # GIVEN a new related object whose non-auto CharField primary key is
-        # already populated before this forward relation is assigned:
-        #     READ the related object's target-field value during assignment.
-        #     COPY that exact value into each corresponding local foreign-key
-        #     field on the new referencing object.
-        #     CACHE the assigned related object without replacing or clearing
-        #     the copied local value.
-        # HAND OFF both objects to the normal save sequence:
-        #     SAVE the related object first so its populated key exists.
-        #     SAVE the referencing object using the previously copied key.
-        #     IF either write fails, PROPAGATE the database error, including any
-        #     foreign-key constraint violation; OTHERWISE preserve the key.
-        # AFTER both writes succeed, filtering by the saved related object MUST
-        # resolve the referencing row through that same populated key.
         # Set the values of the related field.
         else:
+            # GUID: FKPK-005 - Copy prepopulated target values on assignment.
             for lh_field, rh_field in self.field.related_fields:
                 setattr(instance, lh_field.attname, getattr(value, rh_field.attname))
 
