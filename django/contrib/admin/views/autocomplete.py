@@ -28,6 +28,16 @@ class AutocompleteJsonView(BaseListView):
 
         self.object_list = self.get_queryset()
         context = self.get_context_data()
+        # Successful response envelope pseudocode (GUID: ACJ-006, ACJ-007):
+        # Receive the serialized current-page results and current page object.
+        # Construct one top-level mapping containing both `results` and
+        # `pagination`; routing entries through serialize_result must not
+        # remove, rename, or replace either member.
+        # If the current page has a next page, set pagination.more to true.
+        # Otherwise, set pagination.more to false.
+        # Return the mapping as the successful JSON response. If page-state
+        # inspection or result serialization fails, propagate that failure;
+        # do not emit a partial or altered successful-response envelope.
         return JsonResponse({
             'results': [
                 self.serialize_result(obj, to_field_name)
