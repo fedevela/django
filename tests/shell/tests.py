@@ -12,15 +12,39 @@ class ShellCommandTestCase(SimpleTestCase):
 
     def test_shell_001_command_function_resolves_imported_global_name(self):
         """GUID: SHELL-001 - A function resolves an imported global name."""
-        self.assertTrue(True)
+        with captured_stdout() as stdout:
+            call_command(
+                'shell',
+                command=(
+                    'import django\n'
+                    'def get_version():\n'
+                    '    return django.__version__\n'
+                    'print(get_version())'
+                ),
+            )
+        self.assertEqual(stdout.getvalue().strip(), __version__)
 
     def test_shell_001_command_function_resolves_earlier_top_level_name(self):
         """GUID: SHELL-001 - A function resolves an earlier top-level name."""
-        self.assertTrue(True)
+        with captured_stdout() as stdout:
+            call_command(
+                'shell',
+                command=(
+                    'value = "available"\n'
+                    'def get_value():\n'
+                    '    return value\n'
+                    'print(get_value())'
+                ),
+            )
+        self.assertEqual(stdout.getvalue().strip(), 'available')
 
-    def test_shell_003_successful_command_produces_effect_and_exits(self):
+    @mock.patch('django.core.management.commands.shell.Command.python')
+    def test_shell_003_successful_command_produces_effect_and_exits(self, python):
         """GUID: SHELL-003 - A successful command takes effect and exits."""
-        self.assertTrue(True)
+        with captured_stdout() as stdout:
+            call_command('shell', command='print("effect")', interface='python')
+        self.assertEqual(stdout.getvalue().strip(), 'effect')
+        python.assert_not_called()
 
     def test_command_option(self):
         with self.assertLogs('test', 'INFO') as cm:
