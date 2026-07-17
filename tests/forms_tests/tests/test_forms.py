@@ -715,10 +715,33 @@ Java</label></li>
         )
 
     def test_BWID_001_boundwidget_id_for_label_returns_subwidget_attrs_id_unchanged(self):
-        pass
+        class BeatleForm(Form):
+            name = ChoiceField(
+                choices=[('john', 'John')],
+                widget=RadioSelect,
+            )
+
+        subwidget = list(BeatleForm(auto_id='%s_custom')['name'])[0]
+        self.assertEqual(subwidget.data['attrs']['id'], 'name_custom_0')
+        self.assertEqual(subwidget.id_for_label, 'name_custom_0')
 
     def test_BWID_002_checkbox_subwidget_labels_with_custom_auto_id_target_rendered_input_ids(self):
-        pass
+        class BeatleForm(Form):
+            name = MultipleChoiceField(
+                choices=[('john', 'John'), ('paul', 'Paul')],
+                widget=CheckboxSelectMultiple,
+            )
+
+        subwidgets = list(BeatleForm(auto_id='%s_custom')['name'])
+        self.assertEqual(
+            [str(subwidget) for subwidget in subwidgets],
+            [
+                '<label for="name_custom_0"><input type="checkbox" '
+                'name="name" value="john" id="name_custom_0"> John</label>',
+                '<label for="name_custom_1"><input type="checkbox" '
+                'name="name" value="paul" id="name_custom_1"> Paul</label>',
+            ],
+        )
 
     def test_iterable_boundfield_select(self):
         class BeatleForm(Form):
@@ -726,7 +749,8 @@ Java</label></li>
         fields = list(BeatleForm(auto_id=False)['name'])
         self.assertEqual(len(fields), 4)
 
-        self.assertEqual(fields[0].id_for_label, 'id_name_0')
+        with self.assertRaises(KeyError):
+            fields[0].id_for_label
         self.assertEqual(fields[0].choice_label, 'John')
         self.assertHTMLEqual(fields[0].tag(), '<option value="john">John</option>')
         self.assertHTMLEqual(str(fields[0]), '<option value="john">John</option>')

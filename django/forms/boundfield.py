@@ -294,7 +294,7 @@ class BoundWidget:
         #     USE this authoritative assigned_id as the rendered label target.
         #     The associated input renders the same data['attrs']['id'].
         #     THEREFORE label.for MUST EQUAL input.id for custom auto_id formats.
-        return 'id_%s_%s' % (self.data['name'], self.data['index'])
+        return self.data['attrs']['id']
 
     @property
     def choice_label(self):
