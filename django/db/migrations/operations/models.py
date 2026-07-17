@@ -381,6 +381,57 @@ class RenameModel(ModelOperation):
         #   mutation while the migration-state rename remains preserved.
         # - FAILURE: propagate model-resolution failure before the equality
         #   decision; do not initiate or compensate for a partial table remake.
+        # GUID: RMN-005
+        # LOGIC OBLIGATION (stored-row preservation):
+        # - INPUT: the resolved models, their effective table names, and the
+        #   rows and stored values already present in the old model's table.
+        # - DECISION: compare effective table identity before requesting any
+        #   table, field, or relationship alteration from the schema editor.
+        # - IF equal: terminate the database transition without copying,
+        #   rewriting, deleting, or recreating the table or its rows.
+        # - ELSE: continue the existing database-visible rename flow; content
+        #   handling for a changed effective table is outside RMN-005.
+        # - OUTPUT: the same physical table retains every row and stored value.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not start a data mutation or a compensating transition.
+        # GUID: RMN-006
+        # LOGIC OBLIGATION (constraint preservation):
+        # - INPUT: the resolved models, their effective table names, and all
+        #   constraints attached to or referencing the existing table.
+        # - DECISION: compare effective table identity before any schema-editor
+        #   handoff can drop, create, rename, or rebuild a constraint.
+        # - IF equal: terminate with no constraint transition.
+        # - ELSE: continue the existing database-visible rename flow;
+        #   constraint changes for a changed table are outside RMN-006.
+        # - OUTPUT: the existing constraint set remains unchanged.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not begin or compensate for a partial constraint transition.
+        # GUID: RMN-007
+        # LOGIC OBLIGATION (index preservation):
+        # - INPUT: the resolved models, their effective table names, and all
+        #   indexes belonging to the existing table.
+        # - DECISION: compare effective table identity before any schema-editor
+        #   handoff can drop, create, rename, or rebuild an index.
+        # - IF equal: terminate with no index transition.
+        # - ELSE: continue the existing database-visible rename flow; index
+        #   changes for a changed table are outside RMN-007.
+        # - OUTPUT: the existing index set remains unchanged.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not begin or compensate for a partial index transition.
+        # GUID: RMN-008
+        # LOGIC OBLIGATION (relationship preservation):
+        # - INPUT: the resolved models, their effective table names, related
+        #   fields, and M2M tables and columns participating in relationships.
+        # - DECISION: compare effective table identity before iterating related
+        #   objects or paired local M2M fields.
+        # - IF equal: terminate before altering a related field, M2M table, or
+        #   M2M column; retain every physical table-and-column reference.
+        # - ELSE: continue the existing database-visible rename flow;
+        #   relationship changes for a changed table are outside RMN-008.
+        # - OUTPUT: relationships remain present and reference the same
+        #   physical tables and columns.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not begin or compensate for a partial relationship transition.
         if old_model._meta.db_table == new_model._meta.db_table:
             return
         if self.allow_migrate_model(schema_editor.connection.alias, new_model):
