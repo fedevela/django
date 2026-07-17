@@ -59,6 +59,21 @@ class ResolverMatch:
         return (self.func, self.args, self.kwargs)[index]
 
     def __repr__(self):
+        # Ordinary-view compatibility pseudocode (GUID: RPR-005):
+        # - INPUT: the callable and representation fields retained by this
+        #   ResolverMatch, whether created directly or attached by resolution.
+        # - IF the retained callable is an ordinary non-partial view:
+        #     - Keep self.func as the callable identity; do not unwrap, replace,
+        #       invoke, or otherwise transition the match to a different state.
+        #     - Select the existing self._func_path as its display value.
+        # - ELSE delegate callable display selection to the partial-specific
+        #   path without extending that handling to another callable wrapper.
+        # - FORMAT the selected display value with the existing args, kwargs,
+        #   url_name, app_names, namespaces, and route fields, in their existing
+        #   order and representation format.
+        # - OUTPUT the formatted representation without mutating any field.
+        # - PROPAGATE existing field-formatting failures unchanged; introduce
+        #   no ordinary-view-specific fallback or error state.
         if isinstance(self.func, functools.partial):
             func = repr(self.func)
         else:
