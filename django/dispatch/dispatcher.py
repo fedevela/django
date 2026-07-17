@@ -202,6 +202,19 @@ class Signal:
         If any receiver raises an error (specifically any subclass of
         Exception), return the error instance as the result for that receiver.
         """
+        # Robust-dispatch result continuity pseudocode:
+        # - Initialize an ordered result sequence for the live receivers.
+        # - For each receiver, invoke it once with this signal, sender, and the
+        #   supplied named arguments.
+        # - GUID: SIGROB-002 — If invocation raises an Exception, report the
+        #   failure, append (receiver, the identical caught exception object),
+        #   and do not propagate that exception to the caller.
+        # - GUID: SIGROB-003 — After recording a failure, continue iteration so
+        #   every subsequent live receiver is still invoked.
+        # - GUID: SIGROB-006 — If invocation succeeds, append (receiver,
+        #   response) without transforming the response; preserve both success
+        #   and failure entries in receiver iteration order.
+        # - Return the completed result sequence after all receivers are handled.
         if not self.receivers or self.sender_receivers_cache.get(sender) is NO_RECEIVERS:
             return []
 
