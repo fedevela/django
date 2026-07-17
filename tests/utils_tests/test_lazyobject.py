@@ -312,6 +312,14 @@ class SimpleLazyObjectTestCase(LazyObjectTestCase):
 
         self.assertEqual(("left",) + lazy, ("left",) + wrapped)
 
+    def test_radd_007_support_does_not_resolve_before_addition(self):
+        """GUID: RADD-007 - Support leaves an unused lazy operand unresolved."""
+        pass
+
+    def test_radd_002_unresolved_right_operand_resolves_before_use(self):
+        """GUID: RADD-002 - Addition resolves its lazy right operand before use."""
+        pass
+
     def test_radd_003_addition_without_wrapped_radd_uses_direct_operation(self):
         """GUID: RADD-003 - Addition doesn't require wrapped __radd__."""
         class RightOperand:
@@ -327,6 +335,14 @@ class SimpleLazyObjectTestCase(LazyObjectTestCase):
         self.assertFalse(hasattr(wrapped, "__radd__"))
 
         self.assertEqual(LeftOperand() + SimpleLazyObject(lambda: wrapped), "added")
+
+    def test_radd_004_resolved_right_operand_reuses_value_without_setup(self):
+        """GUID: RADD-004 - Addition reuses a resolved value without setup."""
+        pass
+
+    def test_radd_002_radd_004_repeated_addition_resolves_once_then_reuses_value(self):
+        """GUID: RADD-002, RADD-004 - Repeated addition reuses first resolution."""
+        pass
 
     def test_radd_005_unresolved_right_operand_preserves_direct_return_value(self):
         """GUID: RADD-005 - Addition preserves the direct return value."""
