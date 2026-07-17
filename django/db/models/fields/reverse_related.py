@@ -341,7 +341,7 @@ class ManyToManyRel(ForeignObjectRel):
         # behavior or mask errors unrelated to that component. [M2MR-009]
         return super().identity + (
             self.through,
-            self.through_fields,
+            make_hashable(self.through_fields),
             self.db_constraint,
         )
 
