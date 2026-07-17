@@ -355,11 +355,58 @@ class NonRobustDispatchContinuityContractTests(SimpleTestCase):
 
     def test_sigrob_009_non_robust_successful_receivers_preserve_invocation_and_results(self):
         """GUID: SIGROB-009 - Successful non-robust dispatch is unchanged."""
-        pass
+        signal = Signal()
+        receiver_calls = []
+        first_response = object()
+        second_response = object()
+
+        def first_receiver(**kwargs):
+            receiver_calls.append(('first', kwargs))
+            return first_response
+
+        def second_receiver(**kwargs):
+            receiver_calls.append(('second', kwargs))
+            return second_response
+
+        signal.connect(first_receiver)
+        signal.connect(second_receiver)
+        sender = object()
+
+        responses = signal.send(sender=sender, payload='value')
+
+        self.assertEqual(
+            responses,
+            [(first_receiver, first_response), (second_receiver, second_response)],
+        )
+        self.assertEqual([name for name, kwargs in receiver_calls], ['first', 'second'])
+        for name, kwargs in receiver_calls:
+            self.assertIs(kwargs['signal'], signal)
+            self.assertIs(kwargs['sender'], sender)
+            self.assertEqual(kwargs['payload'], 'value')
 
     def test_sigrob_009_non_robust_raising_receiver_preserves_exception_propagation_without_robust_behavior(self):
         """GUID: SIGROB-009 - Non-robust exception behavior is unchanged."""
-        pass
+        signal = Signal()
+        receiver_calls = []
+        receiver_exception = ValueError('receiver failure')
+
+        def fails(**kwargs):
+            receiver_calls.append('fails')
+            raise receiver_exception
+
+        def should_not_run(**kwargs):
+            receiver_calls.append('should_not_run')
+
+        signal.connect(fails)
+        signal.connect(should_not_run)
+
+        with mock.patch('django.dispatch.dispatcher.logger.error') as mocked_log:
+            with self.assertRaises(ValueError) as cm:
+                signal.send(sender=self)
+
+        self.assertIs(cm.exception, receiver_exception)
+        self.assertEqual(receiver_calls, ['fails'])
+        mocked_log.assert_not_called()
 
 
 class ReceiverTestCase(SimpleTestCase):
