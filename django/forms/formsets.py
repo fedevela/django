@@ -406,6 +406,18 @@ class BaseFormSet(RenderableFormMixin):
         if not self.is_bound:  # Stop further processing.
             return
 
+        # Pseudocode — management-data validation contract:
+        # MGMT-004: Validate the bound management form before validating its
+        # member forms, preserving the management field definitions and rules.
+        # If all required management values are valid, accept their cleaned
+        # counts and continue through the existing formset validation flow.
+        # If a provided required value is invalid, retain its conversion error;
+        # if a required value is missing, retain its required-field error.
+        # For either failure, identify each prefixed field name and append the
+        # existing missing-management-form non-form error with its existing code.
+        # In either invalid case, use the management form's fallback counts so
+        # member-form processing remains bounded; preserve all later validation
+        # transitions and propagate unrelated validation failures unchanged.
         if not self.management_form.is_valid():
             error = ValidationError(
                 self.error_messages["missing_management_form"],
