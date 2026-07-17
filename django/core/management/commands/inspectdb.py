@@ -176,6 +176,12 @@ class Command(BaseCommand):
                     if is_relation:
                         ref_db_column, ref_db_table = relations[column_name]
                         if column_name in repeated_relation_columns:
+                            # GUID: INSP-003 - Logic obligation for a repeated target:
+                            # FOR EACH relation, derive its reverse accessor from the
+                            # already-unique normalized field name; reject an invalid
+                            # name before emission; hand the accepted name to the field
+                            # parameters so loaded relations expose distinct accessors
+                            # and system checks produce no fields.E304 for the group.
                             # GUID: INSP-002 - Derive the reverse name from the final,
                             # normalized attribute name, without traversal counters.
                             related_name = "%s_set" % att_name
@@ -249,6 +255,13 @@ class Command(BaseCommand):
                         "" if "." in field_type else "models.",
                         field_type,
                     )
+                    # GUID: INSP-005 - Logic obligation for loadable output:
+                    # BEGIN with the normalized attribute and field constructor;
+                    # IF relational, append the required deletion argument;
+                    # serialize every parameter as a Python literal, including the
+                    # validated repeated-target related_name; CLOSE the constructor;
+                    # THEN emit the complete assignment. Invalid reverse names have
+                    # already followed the CommandError path instead of reaching here.
                     if field_type.startswith(("ForeignKey(", "OneToOneField(")):
                         field_desc += ", models.DO_NOTHING"
 
