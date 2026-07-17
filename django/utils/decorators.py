@@ -38,6 +38,24 @@ def _multi_decorate(decorators, method):
         decorators = [decorators]
 
     def _wrapper(self, *args, **kwargs):
+        # Runtime invocation pseudocode:
+        # - GUID: MDP-005 /
+        #   test_mdp_005_bound_instance_and_supplied_arguments_are_delivered_unchanged
+        #   Bind `method` to the current `self`; retain `args` and `kwargs`
+        #   without transformation for the eventual call.
+        # - GUID: MDP-008 /
+        #   test_mdp_008_decorator_executes_once_for_every_method_invocation
+        #   For this invocation, pass the bound callable through each supplied
+        #   decorator exactly once, preserving the declared decorator order.
+        # - Invoke the resulting callable with the retained positional and
+        #   keyword arguments.
+        # - GUID: MDP-006 /
+        #   test_mdp_006_original_return_value_is_delivered_unchanged
+        #   If invocation returns, return that exact value to the caller.
+        # - GUID: MDP-007 /
+        #   test_mdp_007_unhandled_exception_remains_observable_unchanged
+        #   If invocation raises and the decorator chain does not handle the
+        #   exception, allow the same exception to propagate to the caller.
         # bound_method has the signature that 'decorator' expects i.e. no
         # 'self' argument, but it's a closure over self so it can call
         # 'func'. Also, wrap method.__get__() in a function because new
