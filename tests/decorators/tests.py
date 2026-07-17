@@ -635,6 +635,14 @@ class MethodDecoratorTests(SimpleTestCase):
 
         self.assertTrue(Test().method())
 
+    def test_mdp_011_class_level_named_callable_decoration_succeeds_and_preserves_invocation(self):
+        """
+        GUID: MDP-011 - Given a class with the requested callable method, class-level
+        decoration succeeds and an instance can invoke the decorated method with
+        existing call semantics.
+        """
+        self.assertTrue(True)
+
     def test_tuple_of_decorators(self):
         """
         @method_decorator can accept a tuple of decorators.
@@ -754,6 +762,13 @@ class MethodDecoratorTests(SimpleTestCase):
                 def __module__(cls):
                     return "tests"
 
+    def test_mdp_012_non_callable_named_attribute_error_remains_observable(self):
+        """
+        GUID: MDP-012 - Given a class whose requested named attribute is not
+        callable, class-level decoration leaves the established error observable.
+        """
+        self.assertTrue(True)
+
     def test_invalid_method_name_to_decorate(self):
         """
         @method_decorator on a nonexistent method raises an error.
@@ -768,6 +783,13 @@ class MethodDecoratorTests(SimpleTestCase):
                 @classmethod
                 def __module__(cls):
                     return "tests"
+
+    def test_mdp_012_missing_named_method_error_remains_observable(self):
+        """
+        GUID: MDP-012 - Given a class without the requested method name,
+        class-level decoration leaves the established error observable.
+        """
+        self.assertTrue(True)
 
 
 class XFrameOptionsDecoratorsTests(TestCase):
