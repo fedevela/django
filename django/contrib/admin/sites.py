@@ -571,21 +571,6 @@ class AdminSite:
         return TemplateResponse(request, self.index_template or 'admin/index.html', context)
 
     def app_index(self, request, app_label, extra_context=None):
-        # Pseudocode contract — ADMIN-004:
-        # INPUT the request and resolved app label.
-        # CALL the public build_app_dict(request, app_label) handoff and
-        # RECEIVE its established app-label-filtered dictionary result.
-        # IF the result is absent, FOLLOW the established missing-app failure
-        # path; OTHERWISE preserve the established model ordering.
-        # PLACE that same filtered result in the app-list context flow, then
-        # CONTINUE the established context, template, and response handoffs
-        # without changing filtering, presentation, or override semantics.
-        # Architecture contract — ADMIN-004: app_index() owns the
-        # app-specific response flow, but filtered registry access remains
-        # behind the public build_app_dict() boundary. The request and app
-        # label are its only lookup dependencies, and the returned dictionary
-        # is the shared handoff to the existing missing-app, ordering, and
-        # context seams; filtering behavior remains owned by the builder.
         app_dict = self.build_app_dict(request, app_label)
         if not app_dict:
             raise Http404('The requested admin page does not exist.')

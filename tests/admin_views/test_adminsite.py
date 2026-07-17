@@ -167,11 +167,37 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
 class SiteAppIndexPublicBuilderContractTests(SimpleTestCase):
     def test_admin_004_app_index_calls_public_builder_with_request_and_app_label(self):
         """ADMIN-004: The app index delegates filtered lookup publicly."""
-        self.assertTrue(True)
+        admin_site = admin.AdminSite(name='app_index_builder')
+        request = RequestFactory().get('/app/')
+        admin_site.each_context = Mock(return_value={})
+        app_dict = {'name': 'Admin views', 'models': []}
+        admin_site.build_app_dict = Mock(return_value=app_dict)
+
+        admin_site.app_index(request, 'admin_views')
+
+        admin_site.build_app_dict.assert_called_once_with(
+            request, 'admin_views',
+        )
 
     def test_admin_004_app_index_context_uses_filtered_public_builder_result_without_behavior_change(self):
         """ADMIN-004: The app index context preserves the filtered result."""
-        self.assertTrue(True)
+        admin_site = admin.AdminSite(name='app_index_builder_result')
+        request = RequestFactory().get('/app/')
+        admin_site.each_context = Mock(return_value={})
+        article = {'name': 'Articles'}
+        author = {'name': 'Authors'}
+        app_dict = {
+            'name': 'Admin views',
+            'models': [author, article],
+        }
+        admin_site.build_app_dict = Mock(return_value=app_dict)
+
+        response = admin_site.app_index(request, 'admin_views')
+
+        self.assertEqual(response.context_data['app_list'], [app_dict])
+        self.assertIs(response.context_data['app_list'][0], app_dict)
+        self.assertEqual(app_dict['models'], [article, author])
+        self.assertEqual(response.context_data['app_label'], 'admin_views')
 
 
 @override_settings(ROOT_URLCONF='admin_views.test_adminsite')
