@@ -73,6 +73,8 @@ def handle_default_options(options):
     so that ManagementUtility can handle them before searching for
     user commands.
     """
+    # Effect boundary (DJANGO-004 / DJANGO-005): early parsing owns option
+    # recognition; this shared adapter continues to own their process effects.
     if options.settings:
         os.environ['DJANGO_SETTINGS_MODULE'] = options.settings
     if options.pythonpath:

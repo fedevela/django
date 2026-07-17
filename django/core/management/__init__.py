@@ -344,6 +344,13 @@ class ManagementUtility:
         # Preprocess options to extract --settings and --pythonpath.
         # These options could affect the commands that are available, so they
         # must be processed early.
+        # Architecture boundary (DJANGO-004 / DJANGO-005 / DJANGO-006 /
+        # DJANGO-007 / DJANGO-009): ManagementUtility owns the invocation
+        # identity, argument slice, and early-parser configuration. CommandParser
+        # is the parsing boundary; handle_default_options() remains the effect
+        # adapter. Dependencies flow from this orchestration seam to those
+        # existing management primitives, and the program-name seam enters only
+        # through prog=self.prog_name.
         # DJANGO-004 / DJANGO-005 / DJANGO-006 / DJANGO-007 / DJANGO-009
         # pseudocode:
         # INPUT: the supplied invocation tail, beginning after the subcommand.
