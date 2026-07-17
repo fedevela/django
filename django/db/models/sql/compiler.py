@@ -226,6 +226,13 @@ class SQLCompiler:
             ]
         return expressions
 
+    # Architecture contract (DJANGO-010): Query owns the established
+    # deferred-loading request and selection mask, while Query.setup_joins()
+    # owns relation join topology. This compiler boundary consumes both and
+    # owns the ordered projection plus the ``klass_info`` indexes handed to
+    # RelatedPopulator. Reverse one-to-one corrections must remain inside that
+    # metadata pipeline; unaffected only()/select_related() paths retain their
+    # existing masks, joins, selected-column order, and population contract.
     def get_select(self, with_col_aliases=False):
         """
         Return three values:
@@ -248,6 +255,32 @@ class SQLCompiler:
         klass_info = None
         annotations = {}
         select_idx = 0
+        # DJANGO-010 pseudocode (supported only()/select_related()
+        # non-regression):
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_preserve_selected_columns:
+        #     INPUT the query's established deferred-loading and related-field
+        #     requests;
+        #     derive the selected-field mask through the existing mask rules;
+        #     append the same base, annotation, and mask-admitted related
+        #     columns in their established order;
+        #     OUTPUT unchanged column positions for every supported combination
+        #     outside the corrected reverse one-to-one case.
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_preserve_join_behavior:
+        #     IF related selection is requested, traverse only relations
+        #     admitted by the established request and selection masks;
+        #     reuse the normal relation join resolution and its alias, join
+        #     type, and linking conditions;
+        #     do not add, remove, or replace joins for unaffected combinations.
+        # LOGIC OBLIGATION
+        # test_django_010_relevant_existing_regression_suite_remains_passing:
+        #     FOR EACH previously supported deferral/related-selection path,
+        #     preserve its projection and relation metadata invariants;
+        #     IF a combination remains invalid, propagate its established
+        #     validation failure instead of producing a changed query;
+        #     otherwise hand the unchanged selected indexes and cache setters
+        #     to related-object population.
         for alias, (sql, params) in self.query.extra_select.items():
             annotations[alias] = select_idx
             select.append((RawSQL(sql, params), alias))
@@ -1140,6 +1173,14 @@ class SQLCompiler:
                 result.append(", %s" % self.quote_name_unless_alias(alias))
         return result, params
 
+    # Architecture contract (DJANGO-007, DJANGO-008, DJANGO-009): This is the reverse
+    # one-to-one joined-selection boundary. Query.setup_joins() owns join
+    # topology and linking predicates; this compiler consumes its alias and
+    # places the masked related columns in the root query's selection metadata.
+    # Reverse-relation identity comes exclusively from model metadata. For each
+    # traversal, this producer owns the relation field, selected row indexes,
+    # inheritance direction, and field-provided cache setters carried by
+    # klass_info; RelatedPopulator is the sole consumer of that contract.
     def get_related_selections(
         self,
         select,
@@ -1244,12 +1285,43 @@ class SQLCompiler:
             get_related_klass_infos(klass_info, next_klass_infos)
 
         if restricted:
+            # DJANGO-009 pseudocode (equivalent and inherited reverse O2O
+            # column restriction):
+            # LOGIC OBLIGATION
+            # test_django_009_equivalent_reverse_o2o_only_restricts_requested_columns:
+            #     derive candidate reverse relations from model metadata;
+            #     never compare model, field, or related-query names with
+            #     sample-specific literals.
+            # LOGIC OBLIGATION
+            # test_django_009_inherited_reverse_o2o_only_selects_and_defers_fields:
+            #     preserve the selection mask while traversing parent links so
+            #     requested inherited fields are selected and omitted fields
+            #     remain absent from the result-row projection.
+            # INPUT opts, requested select_related tree, select_mask, root_alias.
+            # FOR EACH metadata-derived unique, non-many-to-many reverse field:
+            #     derive its traversal name through related_query_name();
+            #     IF it isn't requested under the applicable selection mask:
+            #         skip it without changing unrelated relation handling;
+            #     resolve its join through the field-derived traversal name;
+            #     determine from_parent from the related and current models;
+            #     project only columns admitted by the reverse field's mask,
+            #     retaining their result-row indexes for later population;
+            #     recurse with the nested request and mask for deeper relations.
+            # IF a requested name matches no metadata-derived relation:
+            #     preserve the existing invalid-field failure path.
+            # OUTPUT relation class information whose selected indexes encode
+            # only requested columns, independent of schema-specific strings.
             related_fields = [
                 (o.field, o.related_model)
                 for o in opts.related_objects
                 if o.field.unique and not o.many_to_many
             ]
             for related_field, model in related_fields:
+                # DJANGO-001, DJANGO-002 architecture contract: Query owns
+                # normalization of a reverse relation's only() mask to this
+                # concrete forward field key. This compiler seam consumes that
+                # nested mask unchanged when selecting the related model's
+                # columns, including when related_field is also its primary key.
                 related_select_mask = select_mask.get(related_field) or {}
                 if not select_related_descend(
                     related_field,
@@ -1263,6 +1335,17 @@ class SQLCompiler:
                 related_field_name = related_field.related_query_name()
                 fields_found.add(related_field_name)
 
+                # DJANGO-007, DJANGO-008 pseudocode (reverse one-to-one join):
+                # INPUT the requested reverse relation, root alias, and only()
+                # selection mask.
+                # resolve the relation through the normal setup_joins() path;
+                # preserve its reusable alias, nullable join type, and
+                # field-derived linking condition;
+                # append the masked related columns to this SELECT, never a
+                # separate retrieval query;
+                # IF the related row exists, expose its values to population;
+                # ELSE preserve the primary row and expose a NULL related-row
+                # identity to population through the same joined result.
                 join_info = self.query.setup_joins(
                     [related_field_name], opts, root_alias
                 )

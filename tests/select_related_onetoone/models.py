@@ -37,6 +37,7 @@ class Image(models.Model):
 
 class Product(models.Model):
     name = models.CharField(max_length=100)
+    description = models.CharField(max_length=100, default="")
     image = models.OneToOneField(Image, models.SET_NULL, null=True)
 
 

@@ -78,6 +78,10 @@ class BaseIterable:
         return self._async_generator()
 
 
+# Architecture contract (DJANGO-003, DJANGO-004, DJANGO-005): ModelIterable is
+# the root-instance population boundary. It consumes SQLCompiler selection
+# metadata and delegates joined related-object ownership to RelatedPopulator
+# before exposing the root instance.
 class ModelIterable(BaseIterable):
     """Iterable that yields a model instance for each row."""
 
@@ -117,6 +121,16 @@ class ModelIterable(BaseIterable):
             )
             for field, related_objs in queryset._known_related_objects.items()
         ]
+        # DJANGO-003, DJANGO-004, DJANGO-005 pseudocode (primary instance):
+        # FOR each row returned by the single joined query:
+        #     construct the primary instance from its selected field names and
+        #     matching row values.
+        #     FOR each requested primary field:
+        #         retain its row value on the instance for query-free access.
+        #     FOR each omitted primary field:
+        #         leave its attribute absent so it retains deferred status.
+        #     hand the same row and primary instance to every related populator.
+        #     yield only after related instances and relationship caches are set.
         for row in compiler.results_iter(results):
             obj = model_cls.from_db(
                 db, init_list, row[model_fields_start:model_fields_end]
@@ -2547,9 +2561,30 @@ def prefetch_one_level(instances, prefetcher, lookup, level):
     return all_related_objects, additional_lookups
 
 
+# Architecture contract (DJANGO-003, DJANGO-004, DJANGO-005, DJANGO-006,
+# DJANGO-008):
+# RelatedPopulator is the joined related-instance boundary. It owns construction
+# from the selected row slice and establishment of relationship cache state,
+# including cached absence for a null related identity. Later loading of absent
+# field values remains DeferredAttribute's concern.
 class RelatedPopulator:
     """
     RelatedPopulator is used for select_related() object instantiation.
+
+    Architecture contract (DJANGO-009): SQLCompiler owns relation discovery,
+    projection, and the shape of ``klass_info``. This consumer owns translating
+    its selected row indexes into model initialization order and applying its
+    field-provided cache setters. Model inheritance changes index ordering, not
+    that dependency direction, and no schema-specific relation names cross this
+    boundary.
+
+    Architecture contract (DJANGO-010): This remains the sole population
+    consumer for supported only()/select_related() combinations. It depends on
+    SQLCompiler's selected indexes and relation metadata, never on query-planning
+    internals; omitted names remain deferred, nested populators retain the same
+    ownership, and field-provided setters remain the relationship-cache seam.
+    Corrections in the compiler must preserve this input contract for every
+    unaffected relation path.
 
     The idea is that each select_related() model will be populated by a
     different RelatedPopulator instance. The RelatedPopulator instances get
@@ -2588,6 +2623,21 @@ class RelatedPopulator:
         #  - local_setter, remote_setter: Methods to set cached values on
         #    the object being populated and on the remote object. Usually
         #    these are Field.set_cached_value() methods.
+        # DJANGO-009 pseudocode (inheritance-aware selected-field ordering):
+        # LOGIC OBLIGATION
+        # test_django_009_inherited_reverse_o2o_only_selects_and_defers_fields:
+        # INPUT relation class information and the compiler's selected columns.
+        # IF the related model isn't reached through a parent relationship:
+        #     retain the contiguous selected slice and its field attnames.
+        # ELSE:
+        #     map each selected field attname to its result-row index;
+        #     walk concrete fields in model initialization order;
+        #     include only attnames present in the selected-column map;
+        #     build a row reordering operation from those retained indexes.
+        # REQUIRE the identity field among the retained attnames so existence
+        # can be decided without loading any omitted field.
+        # OUTPUT ordered initialization names and values; omitted names remain
+        # absent so model construction preserves their deferred state.
         select_fields = klass_info["select_fields"]
         from_parent = klass_info["from_parent"]
         if not from_parent:
@@ -2618,6 +2668,73 @@ class RelatedPopulator:
         self.remote_setter = klass_info["remote_setter"]
 
     def populate(self, row, from_obj):
+        # DJANGO-010 pseudocode (supported only()/select_related()
+        # non-regression):
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_preserve_deferred_fields:
+        #     INPUT the compiler-designated selected indexes and field names;
+        #     extract only those values from the joined row, reordering solely
+        #     when the established inheritance path requires it;
+        #     construct the related model with only the selected field names so
+        #     every omitted field remains absent and therefore deferred.
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_populate_relationships_as_before:
+        #     IF the selected related identity is NULL, retain the established
+        #     absent-relation result;
+        #     ELSE construct the metadata-designated related instance and
+        #     recursively populate any nested joined relations from the row;
+        #     apply the existing local cache setter in all cases and the remote
+        #     cache setter only when a related instance exists;
+        #     OUTPUT the same related instance type, identity, field values,
+        #     bidirectional cache state, and query-free relationship access as
+        #     before for every unaffected supported combination.
+        # DJANGO-009 pseudocode (equivalent and inherited reverse O2O
+        # population):
+        # LOGIC OBLIGATION
+        # test_django_009_equivalent_reverse_o2o_only_populates_relation:
+        #     populate through field-provided cache setters, without inspecting
+        #     any sample model, field, or related-name string.
+        # LOGIC OBLIGATION
+        # test_django_009_inherited_reverse_o2o_only_populates_correct_instances:
+        #     construct the metadata-designated related model with reordered
+        #     inherited values and attach the matching instances on both sides.
+        # INPUT joined row, primary instance, ordered selected-field metadata,
+        # and metadata-derived local and remote cache setters.
+        # reorder values when parent traversal requires model initialization
+        # order; otherwise read the compiler-designated contiguous slice.
+        # IF the selected related identity is NULL:
+        #     represent absence as None and skip nested and remote population.
+        # ELSE:
+        #     construct the designated model from only selected names and values;
+        #     recursively populate deeper related instances from the same row.
+        # set the local relation cache to the related instance or None.
+        # IF the related instance exists:
+        #     set its remote cache to the exact primary/inherited source instance.
+        # OUTPUT correctly typed, mutually linked instances while every omitted
+        # field remains deferred and every requested field retains its row value.
+        # DJANGO-003, DJANGO-004, DJANGO-005 pseudocode (reverse instance):
+        # derive reverse-related values from the original joined row, reordering
+        # them first when inheritance requires model field order.
+        # IF the related identity is NULL:
+        #     represent the missing relationship as None.
+        # ELSE:
+        #     construct the related instance using only selected field names;
+        #     requested fields retain their joined-row values for query-free use;
+        #     omitted fields remain absent and therefore deferred;
+        #     recursively populate any deeper joined relationships.
+        # cache the related result on the primary instance.
+        # IF a related instance exists:
+        #     cache the primary instance on the related side as the matching
+        #     object, completing the bidirectional relationship from this row.
+        # DJANGO-008 pseudocode (missing reverse one-to-one row):
+        # INPUT the primary instance and related values from the joined row.
+        # IF the related identity is NULL:
+        #     do not construct or recursively populate a related instance;
+        #     cache None for the reverse relation on the primary instance;
+        #     do not set a remote cache because no related instance exists.
+        # OUTPUT the unchanged primary instance with cached absence, allowing
+        # descriptor access to preserve the established missing-relation path
+        # without issuing a retrieval query.
         if self.reorder_for_init:
             obj_data = self.reorder_for_init(row)
         else:

@@ -1,4 +1,5 @@
 from django.core.exceptions import FieldDoesNotExist, FieldError
+from django.db.models.sql.constants import INNER
 from django.test import SimpleTestCase, TestCase
 
 from .models import (
@@ -288,6 +289,120 @@ class TestDefer2(AssertionMixin, TestCase):
             # access of any of them.
             self.assertEqual(rf2.name, "new foo")
             self.assertEqual(rf2.value, "new bar")
+
+
+class OnlySelectRelatedNonRegressionTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.secondary = Secondary.objects.create(first="x1", second="y1")
+        cls.primary = Primary.objects.create(
+            name="p1", value="xx", related=cls.secondary
+        )
+
+    def get_queryset(self):
+        return Primary.objects.select_related("related").only(
+            "name", "related__first"
+        )
+
+    def test_django_010_supported_combinations_preserve_selected_columns(self):
+        """
+        DJANGO-010: Existing supported only() and select_related()
+        combinations outside the reverse one-to-one regression preserve their
+        selected columns after the correction.
+        """
+        compiler = self.get_queryset().query.get_compiler(using="default")
+        select = compiler.get_select()[0]
+
+        self.assertEqual(
+            [
+                (column.target.model, column.target.attname)
+                for column, _, _ in select
+            ],
+            [
+                (Primary, "id"),
+                (Primary, "name"),
+                (Primary, "related_id"),
+                (Secondary, "id"),
+                (Secondary, "first"),
+            ],
+        )
+
+    def test_django_010_supported_combinations_preserve_deferred_fields(self):
+        """
+        DJANGO-010: Existing supported only() and select_related()
+        combinations outside the reverse one-to-one regression preserve the
+        deferred-field behavior of omitted fields after the correction.
+        """
+        obj = self.get_queryset().get(pk=self.primary.pk)
+
+        self.assertEqual(obj.get_deferred_fields(), {"value"})
+        self.assertEqual(obj.related.get_deferred_fields(), {"second"})
+        with self.assertNumQueries(1):
+            self.assertEqual(obj.value, "xx")
+        with self.assertNumQueries(1):
+            self.assertEqual(obj.related.second, "y1")
+
+    def test_django_010_supported_combinations_preserve_join_behavior(self):
+        """
+        DJANGO-010: Existing supported only() and select_related()
+        combinations outside the reverse one-to-one regression preserve their
+        join behavior after the correction.
+        """
+        queryset = self.get_queryset()
+        # Populate join metadata through the compiler path used for execution.
+        str(queryset.query)
+        related_join = queryset.query.alias_map[Secondary._meta.db_table]
+
+        self.assertEqual(len(queryset.query.alias_map), 2)
+        self.assertEqual(related_join.join_type, INNER)
+        self.assertEqual(related_join.parent_alias, Primary._meta.db_table)
+        self.assertEqual(
+            related_join.join_cols,
+            (
+                (
+                    Primary._meta.get_field("related").column,
+                    Secondary._meta.pk.column,
+                ),
+            ),
+        )
+
+    def test_django_010_supported_combinations_populate_relationships_as_before(self):
+        """
+        DJANGO-010: Existing supported only() and select_related()
+        combinations outside the reverse one-to-one regression populate model
+        relationships as before after the correction.
+        """
+        with self.assertNumQueries(1):
+            obj = self.get_queryset().get(pk=self.primary.pk)
+
+        self.assertTrue(Primary._meta.get_field("related").is_cached(obj))
+        with self.assertNumQueries(0):
+            related = obj.related
+            self.assertEqual(related.pk, self.secondary.pk)
+            self.assertEqual(related.first, "x1")
+            self.assertIs(obj.related, related)
+
+    def test_django_010_relevant_existing_regression_suite_remains_passing(self):
+        """
+        DJANGO-010: The relevant existing queryset deferral and
+        select_related() regression suite continues to pass after the
+        correction.
+        """
+        supported_querysets = (
+            Primary.objects.select_related().only("related__first"),
+            Primary.objects.select_related("related").only(
+                "name", "related__second"
+            ),
+        )
+
+        with self.assertNumQueries(2):
+            first, second = [
+                queryset.get(pk=self.primary.pk) for queryset in supported_querysets
+            ]
+
+        self.assertEqual(first.related.first, "x1")
+        self.assertEqual(second.name, "p1")
+        self.assertEqual(second.related.second, "y1")
 
 
 class InvalidDeferTests(SimpleTestCase):

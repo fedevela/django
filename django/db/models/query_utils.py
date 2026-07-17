@@ -152,6 +152,10 @@ class Q(tree.Node):
         return path, args, kwargs
 
 
+# Architecture contract (DJANGO-006): DeferredAttribute owns retrieval of an
+# absent field value only. Joined instance construction and relationship caches
+# belong to RelatedPopulator; deferred retrieval must not replace or reconstruct
+# either related endpoint.
 class DeferredAttribute:
     """
     A wrapper for a deferred-loading field. When the value is read from this
@@ -166,6 +170,18 @@ class DeferredAttribute:
         Retrieve and caches the value from the datastore on the first lookup.
         Return the cached value.
         """
+        # DJANGO-006 pseudocode:
+        # IF accessed on the model class, return this descriptor unchanged.
+        # IF the field value is absent from the reverse-related instance:
+        #     attempt to reuse an already loaded parent-chain identity value.
+        #     IF no reusable value exists:
+        #         retrieve only this deferred field through the instance's
+        #         normal database refresh path and cache the returned value.
+        #     ELSE:
+        #         cache the reusable value without a query.
+        # preserve the previously populated reverse one-to-one object and its
+        # primary/related relationship caches throughout field retrieval.
+        # RETURN the now-available field value.
         if instance is None:
             return self
         data = instance.__dict__

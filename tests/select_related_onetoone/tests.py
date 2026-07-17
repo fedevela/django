@@ -1,5 +1,6 @@
 from django.core.exceptions import FieldError
 from django.db.models import FilteredRelation
+from django.db.models.sql.constants import LOUTER
 from django.test import SimpleTestCase, TestCase
 
 from .models import (
@@ -49,6 +50,265 @@ class ReverseSelectRelatedTestCase(TestCase):
         with self.assertNumQueries(1):
             u = User.objects.select_related("userprofile").get(username="test")
             self.assertEqual(u.userprofile.state, "KS")
+
+    def test_django_001_reverse_o2o_only_restricts_related_columns(self):
+        """
+        DJANGO-001: select_related() with only() on a reverse one-to-one keeps
+        requested primary and related fields plus required identity/linking
+        columns while leaving all other related fields unselected.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+            self.assertEqual(user.username, "test")
+            self.assertEqual(user.userprofile.state, "KS")
+        self.assertEqual(user.get_deferred_fields(), {"email"})
+        self.assertEqual(user.userprofile.get_deferred_fields(), {"city"})
+
+    def test_django_002_reverse_primary_key_o2o_only_restricts_columns(self):
+        """
+        DJANGO-002: select_related() with only() on a reverse one-to-one whose
+        link is its primary key keeps the shared identity/linking column while
+        leaving unrequested related fields unselected.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userstat")
+                .only("username", "userstat__posts")
+                .get(username="test")
+            )
+            self.assertEqual(user.username, "test")
+            self.assertEqual(user.userstat.posts, 150)
+        self.assertEqual(user.get_deferred_fields(), {"email"})
+        self.assertEqual(user.userstat.get_deferred_fields(), {"results_id"})
+
+    def test_django_003_joined_query_constructs_primary_and_correct_reverse_o2o(self):
+        """
+        DJANGO-003: A restricted joined query constructs the primary instance
+        and its existing reverse one-to-one instance with the correct
+        relationship.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            profile = user.userprofile
+            self.assertIsInstance(user, User)
+            self.assertIsInstance(profile, UserProfile)
+            self.assertEqual(profile.user_id, user.pk)
+            self.assertIs(profile.user, user)
+
+    def test_django_004_requested_primary_and_reverse_fields_need_no_query(self):
+        """
+        DJANGO-004: After restricted queryset evaluation, explicitly requested
+        primary and reverse-related fields are available without another query.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            self.assertEqual(user.username, "test")
+            self.assertEqual(user.userprofile.state, "KS")
+
+    def test_django_005_omitted_primary_and_reverse_fields_remain_deferred(self):
+        """
+        DJANGO-005: After restricted queryset evaluation and before field
+        access, omitted primary and reverse-related fields remain deferred.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        self.assertEqual(user.get_deferred_fields(), {"email"})
+        with self.assertNumQueries(0):
+            self.assertEqual(user.userprofile.get_deferred_fields(), {"city"})
+
+    def test_django_006_accessing_deferred_reverse_field_preserves_relationship(self):
+        """
+        DJANGO-006: Accessing an omitted reverse-related field performs normal
+        deferred retrieval, makes its value available, and preserves the
+        populated reverse one-to-one relationship.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            profile = user.userprofile
+        self.assertIn("city", profile.get_deferred_fields())
+        with self.assertNumQueries(1):
+            self.assertEqual(profile.city, "Lawrence")
+        self.assertNotIn("city", profile.get_deferred_fields())
+        with self.assertNumQueries(0):
+            self.assertIs(user.userprofile, profile)
+            self.assertIs(profile.user, user)
+
+    def test_django_007_existing_reverse_o2o_only_preserves_join_and_linking(self):
+        """
+        DJANGO-007: select_related() with only() for an existing reverse
+        one-to-one preserves the join type and linking condition.
+        """
+        queryset = User.objects.select_related("userprofile").only(
+            "username", "userprofile__user", "userprofile__state"
+        )
+        # Populate join metadata through the same compiler path used to execute
+        # the queryset.
+        str(queryset.query)
+        profile_join = queryset.query.alias_map[UserProfile._meta.db_table]
+
+        self.assertEqual(profile_join.join_type, LOUTER)
+        self.assertEqual(profile_join.parent_alias, User._meta.db_table)
+        self.assertEqual(
+            profile_join.join_cols,
+            ((User._meta.pk.column, UserProfile._meta.get_field("user").column),),
+        )
+
+    def test_django_007_existing_reverse_o2o_only_uses_single_joined_query(self):
+        """
+        DJANGO-007: select_related() with only() retrieves an existing reverse
+        one-to-one through the original single joined query.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            self.assertEqual(user.userprofile.state, "KS")
+            self.assertEqual(user.userprofile.user_id, user.pk)
+
+    def test_django_008_missing_reverse_o2o_only_returns_primary_in_one_query(self):
+        """
+        DJANGO-008: select_related() with only() across a missing reverse
+        one-to-one returns the primary instance in the initial joined query.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="bob")
+            )
+        self.assertEqual(user.username, "bob")
+
+    def test_django_008_missing_reverse_o2o_access_preserves_absence_semantics(self):
+        """
+        DJANGO-008: Accessing a reverse one-to-one missing after restricted
+        joined retrieval preserves the existing absence semantics.
+        """
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="bob")
+            )
+        msg = "User has no userprofile."
+        with self.assertNumQueries(0), self.assertRaisesMessage(
+            User.userprofile.RelatedObjectDoesNotExist, msg
+        ):
+            user.userprofile
+
+    def test_django_009_equivalent_reverse_o2o_only_restricts_requested_columns(self):
+        """
+        DJANGO-009: For an equivalent reverse one-to-one schema with different
+        model, field, and related names, select_related() with only() selects
+        requested columns and leaves unrequested columns deferred.
+        """
+        image = Image.objects.create(name="cover")
+        Product.objects.create(
+            name="book", description="internal description", image=image
+        )
+
+        with self.assertNumQueries(1):
+            image = (
+                Image.objects.select_related("product")
+                .only("name", "product__name")
+                .get(pk=image.pk)
+            )
+            self.assertEqual(image.name, "cover")
+            self.assertEqual(image.product.name, "book")
+        self.assertEqual(
+            image.product.get_deferred_fields(), {"description", "image_id"}
+        )
+
+    def test_django_009_equivalent_reverse_o2o_only_populates_relation(self):
+        """
+        DJANGO-009: For an equivalent reverse one-to-one schema with different
+        model, field, and related names, select_related() with only() populates
+        the reverse-related instance.
+        """
+        image = Image.objects.create(name="cover")
+        product = Product.objects.create(name="book", image=image)
+
+        with self.assertNumQueries(1):
+            image = (
+                Image.objects.select_related("product")
+                .only("name", "product__name")
+                .get(pk=image.pk)
+            )
+        with self.assertNumQueries(0):
+            self.assertIsInstance(image.product, Product)
+            self.assertEqual(image.product.pk, product.pk)
+            self.assertIs(image.product.image, image)
+
+    def test_django_009_inherited_reverse_o2o_only_selects_and_defers_fields(self):
+        """
+        DJANGO-009: For an inheritance-based reverse one-to-one schema,
+        deferred-field behavior with select_related() selects requested fields
+        and leaves unrequested fields deferred.
+        """
+        child = Child4.objects.create(name1="n1", name2="n2", value=1, value4=4)
+
+        with self.assertNumQueries(1):
+            parent = (
+                Parent2.objects.select_related("child1", "child1__child4")
+                .only("id2", "child1__value", "child1__child4__value4")
+                .get(id2=child.id2)
+            )
+            self.assertEqual(parent.id2, child.id2)
+            self.assertEqual(parent.child1.value, 1)
+            self.assertEqual(parent.child1.child4.value4, 4)
+        self.assertIn("name2", parent.get_deferred_fields())
+        self.assertIn("name1", parent.child1.get_deferred_fields())
+        self.assertIn("name1", parent.child1.child4.get_deferred_fields())
+
+    def test_django_009_inherited_reverse_o2o_only_populates_correct_instances(self):
+        """
+        DJANGO-009: For an inheritance-based reverse one-to-one schema,
+        deferred-field behavior with select_related() populates the correct
+        inherited and related instances.
+        """
+        child = Child4.objects.create(name1="n1", name2="n2", value=1, value4=4)
+
+        with self.assertNumQueries(1):
+            parent = (
+                Parent2.objects.select_related("child1", "child1__child4")
+                .only("id2", "child1__value", "child1__child4__value4")
+                .get(id2=child.id2)
+            )
+        with self.assertNumQueries(0):
+            child1 = parent.child1
+            child4 = child1.child4
+            self.assertIsInstance(parent, Parent2)
+            self.assertIsInstance(child1, Child1)
+            self.assertIsInstance(child4, Child4)
+            self.assertEqual(child1.pk, child.pk)
+            self.assertEqual(child4.pk, child.pk)
+            self.assertIs(child1.parent2_ptr, parent)
+            self.assertIs(child4.child1_ptr, child1)
 
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
@@ -249,6 +509,9 @@ class ReverseSelectRelatedTestCase(TestCase):
             self.assertEqual(p.child1.name2, "n2")
         p = qs.get(name2="n2")
         with self.assertNumQueries(0):
+            self.assertEqual(p.child1.value, 1)
+            self.assertEqual(p.child1.child4.value4, 4)
+        with self.assertNumQueries(2):
             self.assertEqual(p.child1.name1, "n1")
             self.assertEqual(p.child1.child4.name1, "n1")
 
