@@ -53,6 +53,13 @@ def _multi_decorate(decorators, method):
         #         decoration and later invocation raise no metadata-only
         #         AttributeError  # MDP-002
         # invoke adapted_method with the caller's arguments and return result
+        # Architecture contract (GUID: MDP-001, GUID: MDP-002, GUID: MDP-004):
+        # `method` owns the original metadata; this local, mutable callable is
+        # the metadata transport boundary. Metadata preparation belongs after
+        # adapter construction and before the existing decorator loop, which
+        # remains the sole handoff seam to supplied decorators. The boundary
+        # mirrors only available standard wrapper-assignment attributes, so it
+        # neither depends on decorator internals nor invents absent metadata.
         bound_method = partial(method.__get__(self, type(self)))
         for dec in decorators:
             bound_method = dec(bound_method)
