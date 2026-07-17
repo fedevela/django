@@ -117,6 +117,11 @@ class SessionBase:
         )
 
     def decode(self, session_data):
+        # Architecture contract [SES-003, SES-004, SES-005]: this public method
+        # owns format selection only. Current-format decoding depends directly
+        # on django.core.signing; every rejected input crosses the single
+        # private legacy boundary below, whose mapping-compatible result is the
+        # only legacy outcome exposed to callers.
         # Pseudocode [SES-003, SES-004, SES-005]:
         #   INPUT session_data from the session storage boundary.
         #   ATTEMPT current-format signature validation and deserialization.
@@ -142,6 +147,13 @@ class SessionBase:
 
     def _legacy_decode(self, session_data):
         # RemovedInDjango40Warning: pre-Django 3.1 format will be invalid.
+        # Architecture contract [SES-001, SES-002, SES-004, SES-006, SES-010]:
+        # this private method is the sole owner of legacy input processing.
+        # ASCII conversion, Base64 decoding, payload separation, signature
+        # comparison, and deserialization belong inside one malformed-input
+        # containment seam. SuspiciousOperation reporting remains an internal
+        # dependency of that seam; no parsed value crosses it before signature
+        # validation succeeds.
         # Pseudocode [SES-001, SES-002, SES-004, SES-006, SES-010]:
         #   BEGIN the legacy decoding containment boundary.
         #   ATTEMPT ASCII conversion, Base64 decoding, payload separation,
