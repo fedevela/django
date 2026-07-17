@@ -42,6 +42,15 @@ class BoundField:
         This property is cached so that only one database query occurs when
         rendering ModelChoiceFields.
         """
+        # BWID-003 — default auto_id association preservation:
+        #   INPUT: a bound choice field using the form's default auto_id.
+        #   SELECT base_id := explicit widget ID, otherwise BoundField.auto_id.
+        #   PASS base_id through widget attrs into choice-subwidget generation.
+        #   FOR EACH generated subwidget:
+        #     RETAIN its existing indexed input ID as the sole label target.
+        #     REQUIRE rendered label.for == rendered input.id.
+        #   FAILURE: do not synthesize an alternate ID at the BoundWidget
+        #   boundary; preserve the existing missing-ID behavior.
         id_ = self.field.widget.attrs.get('id') or self.auto_id
         attrs = {'id': id_} if id_ else {}
         attrs = self.build_widget_attrs(attrs)
@@ -221,6 +230,12 @@ class BoundField:
         Useful, for example, for focusing on this field regardless of whether
         it has a single widget or a MultiWidget.
         """
+        # BWID-005 — BoundField label-target non-interference:
+        #   INPUT: the field widget, its optional explicit ID, and auto_id.
+        #   SELECT base_id := explicit widget ID, otherwise BoundField.auto_id.
+        #   DELEGATE base_id to the field widget's existing id_for_label rule.
+        #   RETURN that result unchanged; do not consult BoundWidget data.
+        #   FAILURE/EMPTY RESULT: preserve the widget's existing outcome.
         widget = self.field.widget
         id_ = widget.attrs.get('id') or self.auto_id
         return widget.id_for_label(id_)
@@ -266,6 +281,13 @@ class BoundWidget:
         return self.tag(wrap_label=True)
 
     def tag(self, wrap_label=False):
+        # BWID-006 — unrelated rendering non-interference:
+        #   INPUT: existing subwidget data and the requested wrap_label state.
+        #   COPY all render data unchanged; override only wrap_label in context.
+        #   RENDER through the existing parent widget template and renderer.
+        #   RETURN template output unchanged for paths that do not read the
+        #   BoundWidget.id_for_label property.
+        #   FAILURE: propagate the existing renderer/template failure unchanged.
         context = {'widget': {**self.data, 'wrap_label': wrap_label}}
         return self.parent_widget._render(self.template_name, context, self.renderer)
 
