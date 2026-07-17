@@ -1,17 +1,19 @@
 import copy
+import json
 from unittest import mock
 
 from django.apps import apps
 from django.conf import settings
-from django.db import DEFAULT_DB_ALIAS, connection, connections
+from django.db import DEFAULT_DB_ALIAS, connection, connections, models
 from django.db.backends.base.creation import (
     TEST_DATABASE_PREFIX, BaseDatabaseCreation,
 )
 from django.test import SimpleTestCase, TransactionTestCase
 from django.test.runner import DiscoverRunner
+from django.test.utils import CaptureQueriesContext, isolate_apps
 
 from ..models import (
-    CircularA, CircularB, Object, ObjectReference, ObjectSelfReference,
+    CircularA, CircularB, Object, ObjectReference, ObjectSelfReference, Square,
 )
 
 
@@ -157,52 +159,65 @@ class MigrationDisabledTestDatabaseLifecycleTests(SimpleTestCase):
         runner.teardown_test_environment.assert_called_once()
 
 
-class MigrationDisabledSerializationContractTests(SimpleTestCase):
-    # Integration boundary -- GUID: DJANGO-003, DJANGO-005, DJANGO-009.
-    # Regression fixtures belong at the base creation contract and enter through
-    # create_test_db(); backend-specific creation suites inherit the behavior.
-    def test_django_003_migrate_false_serialization_skips_models_with_absent_tables(self):
-        """GUID: DJANGO-003."""
-        # Pseudocode -- logic obligation: absent tables are never queried.
-        # ARRANGE MIGRATE=False, one serializable model with an existing table,
-        # and one otherwise-eligible serializable model with no table.
-        # ACT by running the test-database serialization path.
-        # VERIFY objects from the existing table are enumerated and the absent
-        # model's manager/queryset is never constructed or evaluated.
-        self.assertTrue(True)
+class MigrationDisabledSerializationTests(TransactionTestCase):
+    available_apps = ['backends']
 
-    def test_django_003_migrate_false_serialization_completes_using_existing_tables(self):
-        """GUID: DJANGO-003."""
-        # Pseudocode -- logic obligation: filtering preserves the success path.
-        # ARRANGE MIGRATE=False and serializable models whose tables all exist.
-        # ACT by serializing the test database.
-        # VERIFY serialization completes and contains the eligible objects in
-        # deterministic primary-key order.
-        self.assertTrue(True)
+    @isolate_apps('backends')
+    def test_migrate_false_creation_skips_models_with_absent_tables(self):
+        """GUID: DJANGO-003, DJANGO-005, DJANGO-009."""
+        class MissingTable(models.Model):
+            class Meta:
+                app_label = 'backends'
 
-    def test_django_005_creation_serialization_is_backend_independent(self):
-        """GUID: DJANGO-005."""
-        # Pseudocode -- logic obligation: correction uses common backend APIs.
-        # ARRANGE a base database creation object whose introspection API reports
-        # the existing table names and excludes one eligible model's table.
-        # ACT through create_test_db(..., serialize=True), allowing its normal
-        # handoff to serialize_db_to_string().
-        # VERIFY eligibility is decided from introspection before querying and
-        # no vendor exception type or exception-recovery branch participates.
-        self.assertTrue(True)
+        square = Square.objects.create(root=2, square=4)
+        test_connection = get_connection_copy()
+        test_connection.settings_dict['TEST']['MIGRATE'] = False
+        creation = test_connection.creation_class(test_connection)
+        app_config = mock.Mock(
+            label='backends',
+            name='backends',
+            models_module=mock.sentinel.models_module,
+        )
+        app_config.get_models.return_value = [Square, MissingTable]
+        apps_registry = mock.Mock()
+        apps_registry.get_app_configs.return_value = [app_config]
 
-    def test_django_009_migrate_false_creation_serializes_without_querying_absent_table(self):
-        """GUID: DJANGO-009."""
-        # Pseudocode -- regression flow and state transitions.
-        # GIVEN TEST['MIGRATE'] transitions to False and schema creation leaves a
-        # serializable model table absent, observe queries issued by the backend.
-        # WHEN create_test_db(..., serialize=True) creates the schema, restores
-        # migration settings, and hands off to serialize_db_to_string().
-        # THEN creation reaches the serialized-contents state successfully AND
-        # no observed query targets the absent model table.
-        # FAILURE: any absent-table query or interrupted serialization fails the
-        # regression; cleanup follows the ordinary test-database teardown path.
-        self.assertTrue(True)
+        with mock.patch(
+            'django.db.backends.base.creation.apps', apps_registry,
+        ), mock.patch(
+            'django.db.migrations.loader.MigrationLoader',
+        ) as migration_loader, mock.patch(
+            'django.core.management.call_command',
+        ), mock.patch.object(
+            creation, '_create_test_db',
+        ), mock.patch.object(
+            creation, '_get_test_db_name',
+            return_value=test_connection.settings_dict['NAME'],
+        ), mock.patch.object(
+            test_connection, 'ensure_connection',
+        ), mock.patch.object(
+            test_connection.introspection, 'table_names',
+            wraps=test_connection.introspection.table_names,
+        ) as table_names, CaptureQueriesContext(test_connection) as queries:
+            migration_loader.return_value.migrated_apps = {'backends'}
+            creation.create_test_db(verbosity=0, serialize=True)
+
+        table_names.assert_called_once_with()
+        serialized_objects = json.loads(
+            test_connection._test_serialized_contents,
+        )
+        self.assertEqual(
+            serialized_objects,
+            [{
+                'model': 'backends.square',
+                'pk': square.pk,
+                'fields': {'root': 2, 'square': 4},
+            }],
+        )
+        self.assertFalse(any(
+            MissingTable._meta.db_table.lower() in query['sql'].lower()
+            for query in queries
+        ))
 
 
 class TestDeserializeDbFromString(TransactionTestCase):

@@ -110,21 +110,9 @@ class BaseDatabaseCreation:
         Designed only for test runner usage; will not handle large
         amounts of data.
         """
-        # Ownership contract -- GUID: DJANGO-003, DJANGO-005. Existing-table
-        # filtering belongs here, before model managers form querysets; backend
-        # creation subclasses supply introspection through their connection and
-        # need no vendor-specific recovery adapter.
-        # Pseudocode -- GUID: DJANGO-003, DJANGO-005.
-        # INPUT: the backend-neutral connection after test schema creation.
-        # existing_tables <- SET(connection.introspection.table_names()).
-        # FOR EACH model otherwise eligible for test-database serialization:
-        #     IF model.db_table IS NOT IN existing_tables:
-        #         SKIP the model before constructing or evaluating a queryset.
-        #     ELSE:
-        #         ORDER the model's objects by primary key and YIELD them.
-        # OUTPUT: the serializer receives objects only from existing tables.
-        # FAILURE: propagate introspection and serialization failures normally;
-        # do not catch or classify backend-specific missing-table exceptions.
+        # GUID: DJANGO-003, DJANGO-005. Restrict serialization to models whose
+        # tables were created, using backend-independent introspection.
+        table_names = set(self.connection.introspection.table_names())
         # Iteratively return every object for all models to serialize.
         def get_objects():
             from django.db.migrations.loader import MigrationLoader
@@ -138,7 +126,10 @@ class BaseDatabaseCreation:
                     for model in app_config.get_models():
                         if (
                             model._meta.can_migrate(self.connection) and
-                            router.allow_migrate_model(self.connection.alias, model)
+                            router.allow_migrate_model(self.connection.alias, model) and
+                            self.connection.introspection.identifier_converter(
+                                model._meta.db_table
+                            ) in table_names
                         ):
                             queryset = model._default_manager.using(
                                 self.connection.alias,
