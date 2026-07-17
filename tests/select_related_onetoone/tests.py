@@ -227,7 +227,22 @@ class ReverseSelectRelatedTestCase(TestCase):
         model, field, and related names, select_related() with only() selects
         requested columns and leaves unrequested columns deferred.
         """
-        self.assertTrue(True)
+        image = Image.objects.create(name="cover")
+        Product.objects.create(
+            name="book", description="internal description", image=image
+        )
+
+        with self.assertNumQueries(1):
+            image = (
+                Image.objects.select_related("product")
+                .only("name", "product__name")
+                .get(pk=image.pk)
+            )
+            self.assertEqual(image.name, "cover")
+            self.assertEqual(image.product.name, "book")
+        self.assertEqual(
+            image.product.get_deferred_fields(), {"description", "image_id"}
+        )
 
     def test_django_009_equivalent_reverse_o2o_only_populates_relation(self):
         """
@@ -235,7 +250,19 @@ class ReverseSelectRelatedTestCase(TestCase):
         model, field, and related names, select_related() with only() populates
         the reverse-related instance.
         """
-        self.assertTrue(True)
+        image = Image.objects.create(name="cover")
+        product = Product.objects.create(name="book", image=image)
+
+        with self.assertNumQueries(1):
+            image = (
+                Image.objects.select_related("product")
+                .only("name", "product__name")
+                .get(pk=image.pk)
+            )
+        with self.assertNumQueries(0):
+            self.assertIsInstance(image.product, Product)
+            self.assertEqual(image.product.pk, product.pk)
+            self.assertIs(image.product.image, image)
 
     def test_django_009_inherited_reverse_o2o_only_selects_and_defers_fields(self):
         """
@@ -243,7 +270,20 @@ class ReverseSelectRelatedTestCase(TestCase):
         deferred-field behavior with select_related() selects requested fields
         and leaves unrequested fields deferred.
         """
-        self.assertTrue(True)
+        child = Child4.objects.create(name1="n1", name2="n2", value=1, value4=4)
+
+        with self.assertNumQueries(1):
+            parent = (
+                Parent2.objects.select_related("child1", "child1__child4")
+                .only("id2", "child1__value", "child1__child4__value4")
+                .get(id2=child.id2)
+            )
+            self.assertEqual(parent.id2, child.id2)
+            self.assertEqual(parent.child1.value, 1)
+            self.assertEqual(parent.child1.child4.value4, 4)
+        self.assertIn("name2", parent.get_deferred_fields())
+        self.assertIn("name1", parent.child1.get_deferred_fields())
+        self.assertIn("name1", parent.child1.child4.get_deferred_fields())
 
     def test_django_009_inherited_reverse_o2o_only_populates_correct_instances(self):
         """
@@ -251,7 +291,24 @@ class ReverseSelectRelatedTestCase(TestCase):
         deferred-field behavior with select_related() populates the correct
         inherited and related instances.
         """
-        self.assertTrue(True)
+        child = Child4.objects.create(name1="n1", name2="n2", value=1, value4=4)
+
+        with self.assertNumQueries(1):
+            parent = (
+                Parent2.objects.select_related("child1", "child1__child4")
+                .only("id2", "child1__value", "child1__child4__value4")
+                .get(id2=child.id2)
+            )
+        with self.assertNumQueries(0):
+            child1 = parent.child1
+            child4 = child1.child4
+            self.assertIsInstance(parent, Parent2)
+            self.assertIsInstance(child1, Child1)
+            self.assertIsInstance(child4, Child4)
+            self.assertEqual(child1.pk, child.pk)
+            self.assertEqual(child4.pk, child.pk)
+            self.assertIs(child1.parent2_ptr, parent)
+            self.assertIs(child4.child1_ptr, child1)
 
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
