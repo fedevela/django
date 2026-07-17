@@ -40,6 +40,11 @@ class SessionStore(SessionBase):
             self._session_key = None
 
     def load(self):
+        # Architecture contract [SES-007]: this method owns database-record
+        # retrieval and the handoff to SessionBase.decode(). Malformed-value
+        # containment remains inside that inherited decoding boundary; load()
+        # exposes only its mapping-compatible result (or an empty mapping when
+        # no record exists) to SessionBase's mapping interface.
         # Pseudocode [SES-007]:
         #   INPUT the current database-backed session key.
         #   FETCH its unexpired persisted session record.
