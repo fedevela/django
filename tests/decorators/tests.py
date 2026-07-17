@@ -1,4 +1,4 @@
-from functools import update_wrapper, wraps
+from functools import WRAPPER_ASSIGNMENTS, partial, update_wrapper, wraps
 from unittest import TestCase
 
 from django.contrib.admin.views.decorators import staff_member_required
@@ -288,15 +288,96 @@ class MethodDecoratorTests(SimpleTestCase):
 
     def test_mdp_001_function_decorator_observes_all_original_wrapper_assignment_metadata(self):
         """GUID: MDP-001 - Preserve original wrapper-assignment metadata."""
-        self.assertTrue(True)
+        observed = {}
+
+        def decorator(func):
+            observed.update({
+                attr: getattr(func, attr)
+                for attr in WRAPPER_ASSIGNMENTS if hasattr(func, attr)
+            })
+            return func
+
+        def method(self):
+            return "result"
+
+        metadata_values = {
+            "__module__": "original module",
+            "__name__": "original_name",
+            "__qualname__": "original_qualname",
+            "__doc__": "original doc",
+            "__annotations__": {"return": "original annotation"},
+            "__type_params__": ("original type parameter",),
+        }
+        metadata = {
+            attr: metadata_values[attr] for attr in WRAPPER_ASSIGNMENTS
+        }
+        for attr in WRAPPER_ASSIGNMENTS:
+            setattr(method, attr, metadata[attr])
+
+        decorated_method = method_decorator(decorator)(method)
+
+        class Test:
+            method = decorated_method
+
+        observed.clear()
+        self.assertEqual(Test().method(), "result")
+        self.assertEqual(observed, metadata)
 
     def test_mdp_002_wraps_decorator_invocation_avoids_missing_metadata_attribute_error(self):
         """GUID: MDP-002 - Invoke a wraps-based decorator without metadata errors."""
-        self.assertTrue(True)
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            if isinstance(func, partial):
+                for attr in WRAPPER_ASSIGNMENTS:
+                    getattr(wrapper, attr)
+            return wrapper
+
+        def method(self):
+            return "result"
+
+        if "__type_params__" in WRAPPER_ASSIGNMENTS:
+            method.__type_params__ = ("original type parameter",)
+        decorated_method = method_decorator(decorator)(method)
+
+        class Test:
+            method = decorated_method
+
+        self.assertEqual(Test().method(), "result")
 
     def test_mdp_004_missing_optional_wrapper_metadata_allows_adaptation_and_invocation(self):
         """GUID: MDP-004 - Tolerate absent optional wrapper metadata."""
-        self.assertTrue(True)
+        class CallableWithoutMetadata:
+            def __call__(self, instance):
+                return "result"
+
+            def __get__(self, instance, cls=None):
+                if instance is None:
+                    return self
+                return partial(self, instance)
+
+        original = CallableWithoutMetadata()
+        missing = [
+            attr for attr in WRAPPER_ASSIGNMENTS if not hasattr(original, attr)
+        ]
+        self.assertTrue(missing)
+        observed_missing = set()
+
+        def decorator(func):
+            observed_missing.update(
+                attr for attr in missing if not hasattr(func, attr)
+            )
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            method = method_decorator(decorator)(original)
+
+        self.assertEqual(Test().method(), "result")
+        self.assertEqual(observed_missing, set(missing))
 
     def test_bad_iterable(self):
         decorators = {myattr_dec_m, myattr2_dec_m}

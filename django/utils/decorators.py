@@ -37,22 +37,6 @@ def _multi_decorate(decorators, method):
         # 'self' argument, but it's a closure over self so it can call
         # 'func'. Also, wrap method.__get__() in a function because new
         # attributes can't be set on bound method objects, only on functions.
-        # Pseudocode obligations: GUID: MDP-001, GUID: MDP-002, GUID: MDP-004.
-        #
-        # adapted_method := a mutable callable bound to this instance
-        # FOR each attribute in functools.WRAPPER_ASSIGNMENTS:
-        #     IF method exposes attribute:
-        #         copy its original value to adapted_method  # MDP-001
-        #     ELSE:
-        #         leave it absent; do not synthesize metadata  # MDP-004
-        # FOR each supplied decorator, in established application order:
-        #     hand off adapted_method with its copied metadata to decorator
-        #     adapted_method := decorator(adapted_method)
-        #     IF decorator uses functools.wraps():
-        #         copied wrapper-assignment metadata remains available, so
-        #         decoration and later invocation raise no metadata-only
-        #         AttributeError  # MDP-002
-        # invoke adapted_method with the caller's arguments and return result
         # Architecture contract (GUID: MDP-001, GUID: MDP-002, GUID: MDP-004):
         # `method` owns the original metadata; this local, mutable callable is
         # the metadata transport boundary. Metadata preparation belongs after
@@ -61,6 +45,7 @@ def _multi_decorate(decorators, method):
         # mirrors only available standard wrapper-assignment attributes, so it
         # neither depends on decorator internals nor invents absent metadata.
         bound_method = partial(method.__get__(self, type(self)))
+        update_wrapper(bound_method, method)
         for dec in decorators:
             bound_method = dec(bound_method)
         return bound_method(*args, **kwargs)
