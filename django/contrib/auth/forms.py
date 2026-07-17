@@ -34,6 +34,13 @@ class ReadOnlyPasswordHashWidget(forms.Widget):
     template_name = 'auth/widgets/read_only_password_hash.html'
     read_only = True
 
+    # RPH-001 through RPH-004 -- architecture boundary: this widget owns the
+    # label-target exception through the existing Widget.id_for_label()
+    # contract. BoundField and the admin helpers remain generic consumers of
+    # that contract, while get_context() remains the independent owner of the
+    # password-hash display. The implementation belongs at this seam; it must
+    # not special-case ReadOnlyPasswordHashWidget in the generic consumers.
+
     # RPH-001, RPH-002, RPH-004 -- label-association protocol:
     # PROCEDURE id_for_label(generated_field_id):
     #     IGNORE generated_field_id because this widget renders password-hash
