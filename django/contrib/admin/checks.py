@@ -921,6 +921,41 @@ class ModelAdminChecks(BaseModelAdminChecks):
     # - GEV-003: a metadata-only reverse relation reaches admin.E108 here.
     # - GEV-004: a metadata-only many-to-many related name reaches admin.E108 here.
     def _check_list_display_item(self, obj, item, label):
+        # GEV-005 / GEV-006 — preserve every supported list_display reference.
+        # Logic obligations and verification loci:
+        # - GEV-005 maps to
+        #   test_gev_005_valid_model_field_passes_list_display_check_without_e108.
+        # - GEV-006 callable maps to
+        #   test_gev_006_valid_callable_passes_list_display_check_without_e108.
+        # - GEV-006 model attribute maps to
+        #   test_gev_006_valid_model_attribute_passes_list_display_check_without_e108.
+        # - GEV-006 ModelAdmin attribute maps to
+        #   test_gev_006_valid_modeladmin_attribute_passes_list_display_check_without_e108.
+        #
+        # INPUT: the registered ModelAdmin and one candidate list_display entry.
+        # RESOLUTION PROCEDURE:
+        # 1. If the entry itself is callable, transition CANDIDATE -> CALLABLE ->
+        #    ACCEPTED and return no error (GEV-006).
+        # 2. Otherwise, if the ModelAdmin exposes the named entry, transition
+        #    CANDIDATE -> MODELADMIN_ATTRIBUTE -> ACCEPTED and return no error
+        #    (GEV-006).
+        # 3. Otherwise, ask model metadata for the named field. If a field is found,
+        #    transition CANDIDATE -> MODEL_FIELD, then apply the existing
+        #    displayability boundary. A displayable field must not emit admin.E108
+        #    (GEV-005); a metadata-only name continues through the GEV-003/GEV-004
+        #    compatibility decision below.
+        # 4. If model metadata reports no field, ask the model namespace for the
+        #    named attribute. If present, transition CANDIDATE -> MODEL_ATTRIBUTE ->
+        #    ACCEPTED and return no error after applicable field-kind checks
+        #    (GEV-006).
+        # 5. Only if both model metadata and the model namespace reject the name may
+        #    the entry transition CANDIDATE -> UNRESOLVED -> REJECTED_E108.
+        # 6. For a resolved model field, preserve the separate field-kind decision:
+        #    prohibited many-to-many/reverse-foreign-key fields follow admin.E109;
+        #    every other valid field transitions MODEL_FIELD -> ACCEPTED with no
+        #    admin.E108 (GEV-005).
+        # OUTPUT: supported references produce no admin.E108; unsupported names
+        # alone enter the existing admin.E108 failure path.
         # GEV-001 / GEV-002 — list_display check-time resolution parity.
         # Logic obligations:
         # - GEV-001 maps to
