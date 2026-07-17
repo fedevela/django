@@ -13,6 +13,14 @@ class classonlymethod(classmethod):
 def _update_method_wrapper(_wrapper, decorator):
     # _multi_decorate()'s bound_method isn't available in this scope. Cheat by
     # using it on a dummy function.
+    # Pseudocode obligation: GUID: MDP-009.
+    #
+    # decorated_probe := apply decorator to a mutable dummy callable
+    # IF decoration fails:
+    #     propagate the decorator failure; no resulting method is produced
+    # merge decorated_probe's wrapper-update mappings into resulting_wrapper
+    # copy custom attributes exposed by decorated_probe, preserving their values
+    # hand resulting_wrapper back to _multi_decorate() for the next decorator
     @decorator
     def dummy(*args, **kwargs):
         pass
@@ -54,6 +62,15 @@ def _multi_decorate(decorators, method):
     for dec in decorators:
         _update_method_wrapper(_wrapper, dec)
     # Preserve any existing attributes of 'method', including the name.
+    # Pseudocode obligations: GUID: MDP-003, GUID: MDP-009.
+    #
+    # FOR each standard wrapper-assignment attribute exposed by method:
+    #     copy the original value to resulting_wrapper  # MDP-003
+    # merge method's wrapper-update mappings without removing decorator-produced
+    # custom attributes already accumulated on resulting_wrapper  # MDP-009
+    # set resulting_wrapper's original-callable link to method
+    # return resulting_wrapper with original identity metadata and preserved
+    # decorator-produced observable state
     update_wrapper(_wrapper, method)
     return _wrapper
 
