@@ -266,6 +266,17 @@ class Command(BaseCommand):
                     if self.scriptable:
                         self.stdout.write(migration_string)
                 if not self.dry_run:
+                    # GUID: MIG-006 - Preserve historical migration files:
+                    # INPUT: the loader's existing migration history plus each
+                    # newly detected migration and its newly allocated path.
+                    # REQUIRE: serialize only the new migration represented by
+                    # this writer; do not select any path belonging to a loaded
+                    # historical migration for writing or replacement.
+                    # OUTPUT: create the new migration file while every prior
+                    # migration file remains byte-for-byte unchanged and
+                    # available as the dependency history for later execution.
+                    # FAILURE PATH: if the target path resolves to an existing
+                    # historical migration, stop instead of overwriting history.
                     # Write the migrations file to the disk.
                     migrations_directory = os.path.dirname(writer.path)
                     if not directory_created.get(app_label):

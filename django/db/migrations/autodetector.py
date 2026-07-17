@@ -1213,6 +1213,15 @@ class MigrationAutodetector:
                 neither_m2m = not old_field.many_to_many and not new_field.many_to_many
                 if both_m2m or neither_m2m:
                     # Either both fields are m2m or neither is
+                    # GUID: MIG-009 - Preserve other supported alterations:
+                    # IF both definitions remain on the same side of the
+                    # concrete/M2M boundary, retain the established AlterField
+                    # decision path, including default handling, dependencies,
+                    # and its single emitted operation.
+                    # OUTPUT: observable generation for supported alterations
+                    # is unchanged by the cross-boundary transition path.
+                    # FAILURE PATH: do not route a same-kind alteration through
+                    # remove/add merely because another field crosses kinds.
                     preserve_default = True
                     if (
                         old_field.null
@@ -1528,6 +1537,14 @@ class MigrationAutodetector:
                 )
 
     def _generate_removed_altered_foo_together(self, operation):
+        # GUID: MIG-009 - Preserve independent unique_together changes:
+        # FOR each model whose old and target together values differ, compute
+        # only their intersection needed before field operations and enqueue
+        # the same option operation with its existing dependencies.
+        # IF no concrete/M2M field transition consumes the ordering boundary,
+        # leave this established generation result and later addition phase
+        # unchanged. FAILURE PATH: do not remove unrelated tuples or introduce
+        # field-transition operations into an independent option-only change.
         for (
             old_value,
             new_value,
