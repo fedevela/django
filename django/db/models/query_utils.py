@@ -91,6 +91,11 @@ class Q(tree.Node):
         return path, args, kwargs
 
 
+# Architecture [GUID: DEFER-007]: Query field selection communicates an
+# excluded concrete field through its absence from the model instance state.
+# This descriptor owns the attribute-access boundary for that state and uses
+# Model.refresh_from_db(fields=...) as the existing deferred-loading port.
+# Keep only()/defer() selection logic independent of this loading mechanism.
 class DeferredAttribute:
     """
     A wrapper for a deferred-loading field. When the value is read from this
