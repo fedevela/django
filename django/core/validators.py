@@ -107,7 +107,6 @@ class URLValidator(RegexValidator):
         if scheme not in self.schemes:
             raise ValidationError(self.message, code=self.code, params={'value': value})
 
-        # URL-001, URL-002: Don't expose urlsplit()'s ValueError to callers.
         try:
             splitted_url = urlsplit(value)
         except ValueError:
@@ -142,7 +141,7 @@ class URLValidator(RegexValidator):
         # section 3.1. It's defined to be 255 bytes or less, but this includes
         # one byte for the length of the name and one byte for the trailing dot
         # that's used to indicate absolute names in DNS.
-        if len(splitted_url.hostname) > 253:
+        if splitted_url.hostname is None or len(splitted_url.hostname) > 253:
             raise ValidationError(self.message, code=self.code, params={'value': value})
 
 
