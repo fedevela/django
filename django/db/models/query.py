@@ -677,6 +677,14 @@ class QuerySet(AltersData):
                 "ignore_conflicts and update_conflicts are mutually exclusive."
             )
         db_features = connections[self.db].features
+        # BULKUPSERT-006 pseudocode option contract:
+        # INPUT: ignore-conflicts request and backend conflict capabilities.
+        # IF ignore conflicts is requested:
+        #   IF the backend cannot ignore conflicts, fail with the established
+        #   unsupported-operation error before any insert is attempted.
+        #   ELSE select the existing IGNORE conflict mode for the insert handoff.
+        # DO NOT reinterpret IGNORE as UPDATE or add any returned-primary-key
+        # guarantee.
         if ignore_conflicts:
             if not db_features.supports_ignore_conflicts:
                 raise NotSupportedError(
@@ -1896,6 +1904,17 @@ class QuerySet(AltersData):
         #   each row with its corresponding object across all batches.
         #   OTHERWISE execute without requesting returned rows.
         # OUTPUT: the ordered concatenation of all rows returned by all batches.
+        # BULKUPSERT-006 pseudocode IGNORE preservation flow:
+        # FOR EACH batch in IGNORE conflict mode:
+        #   EXECUTE the insert with IGNORE passed through to the backend.
+        #   IF an input row conflicts, let the backend ignore that row and
+        #   continue processing the operation under its existing semantics.
+        #   REQUEST no returned fields because ignored and inserted inputs do
+        #   not have a guaranteed one-to-one returned-row correspondence.
+        #   THEREFORE perform no returned-primary-key handoff for the batch and
+        #   leave each object's primary-key value without a new guarantee.
+        # OUTPUT: ignored rows remain ignored; no primary key is promised for an
+        # ignored object, and conflict-update behavior remains outside this flow.
         for item in [objs[i : i + batch_size] for i in range(0, len(objs), batch_size)]:
             if bulk_return and (
                 on_conflict is None or on_conflict == OnConflict.UPDATE
