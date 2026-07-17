@@ -680,6 +680,33 @@ class QuerySet(AltersData):
         of OnConflict.IGNORE; returned-field and primary-key assignment remain
         downstream responsibilities.
         """
+        # GUID: BULKUPSERT-008 -- conflict-option validation preservation.
+        # INPUT: conflict flags, resolved update_fields and unique_fields, and
+        # the selected database backend's existing conflict capabilities.
+        # VALIDATE IN THE ESTABLISHED ORDER:
+        #   IF ignore_conflicts and update_conflicts are both requested,
+        #     REJECT the mutually exclusive modes before selecting a backend
+        #     conflict mode.
+        #   IF ignore_conflicts is requested:
+        #     IF the backend does not support it, PROPAGATE the established
+        #       unsupported-option failure;
+        #     ELSE HAND OFF IGNORE as the selected conflict mode.
+        #   ELSE IF update_conflicts is requested:
+        #     IF the backend does not support it, PROPAGATE the established
+        #       unsupported-option failure.
+        #     REQUIRE a nonempty update_fields selection.
+        #     IF unique_fields is supplied but targeted conflict updates are
+        #       unsupported, REJECT the unsupported target option.
+        #     IF unique_fields is absent but the backend requires a target,
+        #       REJECT the incomplete conflict-update request.
+        #     FOR EACH update field, REJECT non-concrete or many-to-many fields,
+        #       then REJECT primary-key fields.
+        #     FOR EACH unique field, REJECT non-concrete or many-to-many fields.
+        #     ONLY AFTER every check succeeds, HAND OFF UPDATE as the selected
+        #       conflict mode.
+        #   ELSE HAND OFF no conflict mode.
+        # FAILURE PATH: preserve each existing exception type and message and
+        # stop before insert execution; do not add or relax validation rules.
         if ignore_conflicts and update_conflicts:
             raise ValueError(
                 "ignore_conflicts and update_conflicts are mutually exclusive."
@@ -784,6 +811,18 @@ class QuerySet(AltersData):
         if not objs:
             return objs
         opts = self.model._meta
+        # GUID: BULKUPSERT-008 -- conflict-field resolution preservation.
+        # INPUT: caller-provided update_fields and unique_fields names.
+        # IF unique_fields is nonempty, map the "pk" alias to the model's
+        # primary-key name and resolve every name through the model metadata.
+        # IF update_fields is nonempty, resolve every name through the same
+        # model metadata.
+        # FAILURE PATH: if any name cannot be resolved, propagate the existing
+        # field-resolution error and do not enter conflict-option validation or
+        # execute an insert.
+        # HANDOFF: pass only the resolved field objects to
+        # _check_bulk_create_options(), which applies capability and field-shape
+        # validation before a conflict mode can be selected.
         if unique_fields:
             # Primary key is allowed in unique_fields.
             unique_fields = [
