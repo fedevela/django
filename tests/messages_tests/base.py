@@ -1,8 +1,11 @@
+import json
+
 from django.contrib.messages import constants, get_level, set_level
 from django.contrib.messages.api import MessageFailure
 from django.contrib.messages.constants import DEFAULT_LEVELS
 from django.contrib.messages.storage import default_storage
 from django.contrib.messages.storage.base import Message
+from django.contrib.messages.storage.cookie import MessageEncoder
 from django.http import HttpRequest, HttpResponse
 from django.test import modify_settings, override_settings
 from django.urls import reverse
@@ -118,25 +121,55 @@ class BaseTests:
         storing = self.stored_messages_count(storage, response)
         self.assertEqual(storing, 2)
 
+    def storage_round_trip(self, level, message, extra_tags):
+        storage = self.get_storage()
+        storage.add(level, message, extra_tags=extra_tags)
+        response = self.get_response()
+        storage.update(response)
+        storage.request.COOKIES.update({
+            name: cookie.value for name, cookie in response.cookies.items()
+        })
+        return list(self.storage_class(storage.request))[0]
+
     def test_msg_001_empty_extra_tags_survives_storage_round_trip(self):
         """GUID: MSG-001: Empty extra_tags survives a storage round trip."""
-        pass
+        message = self.storage_round_trip(constants.INFO, 'Test message', '')
+        self.assertEqual(message.extra_tags, '')
 
     def test_msg_002_none_extra_tags_survives_serialization_round_trip(self):
         """GUID: MSG-002: None extra_tags survives serialization."""
-        pass
+        message = self.storage_round_trip(constants.INFO, 'Test message', None)
+        self.assertIsNone(message.extra_tags)
 
     def test_msg_004_nonempty_extra_tags_survives_serialization_unchanged(self):
         """GUID: MSG-004: Non-empty extra_tags survives unchanged."""
-        pass
+        message = self.storage_round_trip(
+            constants.INFO, 'Test message', 'extra tag',
+        )
+        self.assertEqual(message.extra_tags, 'extra tag')
 
     def test_msg_005_empty_extra_tags_preserves_message_and_level(self):
         """GUID: MSG-005: Empty extra_tags preserves message and level."""
-        pass
+        message = self.storage_round_trip(constants.WARNING, 'Keep me', '')
+        self.assertEqual(message.message, 'Keep me')
+        self.assertEqual(message.level, constants.WARNING)
 
     def test_msg_006_serialized_data_without_extra_tags_deserializes_to_none(self):
         """GUID: MSG-006: Omitted extra_tags deserializes to None."""
-        pass
+        request = self.get_request()
+        storage = self.storage_class(request)
+        serialized = [[
+            MessageEncoder.message_key, 0, constants.INFO, 'Legacy message',
+        ]]
+        if hasattr(storage, 'serialize_messages'):
+            request.session[storage.session_key] = json.dumps(serialized)
+        else:
+            cookie_storage = getattr(storage, 'storages', [storage])[0]
+            request.COOKIES[cookie_storage.cookie_name] = cookie_storage._encode(
+                serialized,
+            )
+        message = list(storage)[0]
+        self.assertIsNone(message.extra_tags)
 
     def test_existing_add_read_update(self):
         storage = self.get_existing_storage()
