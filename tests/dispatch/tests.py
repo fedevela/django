@@ -1,7 +1,9 @@
 import gc
+import logging
 import sys
 import weakref
 from types import TracebackType
+from unittest import mock
 
 from django.dispatch import Signal, receiver
 from django.test import SimpleTestCase
@@ -213,23 +215,77 @@ class SendRobustLoggingContractTests(SimpleTestCase):
 
     def test_sigrob_001_receiver_exception_logs_at_exception_level_with_exception_info_and_traceback(self):
         """GUID: SIGROB-001 - A handled receiver exception is fully logged."""
-        self.assertTrue(True)
+        signal = Signal()
+
+        def fails(**kwargs):
+            raise ValueError('receiver failure')
+
+        signal.connect(fails)
+        with self.assertLogs('django.dispatch', 'ERROR') as cm:
+            responses = signal.send_robust(sender=self)
+
+        self.assertEqual(len(cm.records), 1)
+        record = cm.records[0]
+        self.assertEqual(record.levelno, logging.ERROR)
+        self.assertIs(record.exc_info[1], responses[0][1])
+        self.assertIsInstance(record.exc_info[2], TracebackType)
 
     def test_sigrob_004_receiver_exception_log_identifies_failing_receiver(self):
         """GUID: SIGROB-004 - A failure log identifies its receiver."""
-        self.assertTrue(True)
+        signal = Signal()
+
+        def failing_receiver(**kwargs):
+            raise ValueError('receiver failure')
+
+        signal.connect(failing_receiver)
+        with self.assertLogs('django.dispatch', 'ERROR') as cm:
+            signal.send_robust(sender=self)
+
+        self.assertIn('failing_receiver', cm.records[0].getMessage())
 
     def test_sigrob_005_multiple_receiver_exceptions_log_distinct_failure_records(self):
         """GUID: SIGROB-005 - Each handled failure has a distinct log record."""
-        self.assertTrue(True)
+        signal = Signal()
+
+        def failing_receiver_one(**kwargs):
+            raise ValueError('first failure')
+
+        def failing_receiver_two(**kwargs):
+            raise TypeError('second failure')
+
+        signal.connect(failing_receiver_one)
+        signal.connect(failing_receiver_two)
+        with self.assertLogs('django.dispatch', 'ERROR') as cm:
+            responses = signal.send_robust(sender=self)
+
+        self.assertEqual(len(cm.records), 2)
+        for record, (receiver, response) in zip(cm.records, responses):
+            self.assertIn(receiver.__name__, record.getMessage())
+            self.assertIs(record.exc_info[1], response)
+            self.assertIsInstance(record.exc_info[2], TracebackType)
 
     def test_sigrob_007_successful_receiver_logs_no_receiver_failure_exception(self):
         """GUID: SIGROB-007 - A successful receiver has no failure log."""
-        self.assertTrue(True)
+        signal = Signal()
+
+        def succeeds(**kwargs):
+            return 'success'
+
+        signal.connect(succeeds)
+        with mock.patch('django.dispatch.dispatcher.logger.error') as mocked_log:
+            responses = signal.send_robust(sender=self)
+
+        self.assertEqual(responses, [(succeeds, 'success')])
+        mocked_log.assert_not_called()
 
     def test_sigrob_008_empty_dispatch_preserves_return_and_logs_no_receiver_failure_exception(self):
         """GUID: SIGROB-008 - An empty dispatch keeps its return and has no failure log."""
-        self.assertTrue(True)
+        signal = Signal()
+        with mock.patch('django.dispatch.dispatcher.logger.error') as mocked_log:
+            responses = signal.send_robust(sender=self)
+
+        self.assertEqual(responses, [])
+        mocked_log.assert_not_called()
 
 
 class ReceiverTestCase(SimpleTestCase):
