@@ -39,17 +39,73 @@ from .models import (
 
 
 class BulkCreateUpdateConflictsContractTests(TestCase):
+    def bulk_create(self, objs):
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["iso_two_letter", "name"]
+        return Country.objects.bulk_create(
+            objs,
+            update_conflicts=True,
+            update_fields=["description"],
+            unique_fields=unique_fields,
+        )
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_001_inserted_object_receives_database_generated_pk(self):
         """GUID: BULKUPSERT-001"""
-        self.assertTrue(True)
+        country = Country(name="Germany", iso_two_letter="DE")
 
+        self.bulk_create([country])
+
+        self.assertEqual(country.pk, Country.objects.get().pk)
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_002_updated_object_receives_existing_matched_row_pk(self):
         """GUID: BULKUPSERT-002"""
-        self.assertTrue(True)
+        existing = Country.objects.create(
+            name="Germany", iso_two_letter="DE", description="old"
+        )
+        conflicting = Country(
+            name="Germany", iso_two_letter="DE", description="new"
+        )
 
+        self.bulk_create([conflicting])
+
+        self.assertEqual(conflicting.pk, existing.pk)
+        existing.refresh_from_db()
+        self.assertEqual(existing.description, "new")
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_003_mixed_batch_returned_pks_match_input_objects(self):
         """GUID: BULKUPSERT-003"""
-        self.assertTrue(True)
+        existing = Country.objects.create(
+            name="Germany", iso_two_letter="DE", description="old"
+        )
+        countries = [
+            Country(name="Australia", iso_two_letter="AU"),
+            Country(name="Germany", iso_two_letter="DE", description="new"),
+            Country(name="Japan", iso_two_letter="JP"),
+        ]
+
+        self.bulk_create(countries)
+
+        self.assertEqual(countries[1].pk, existing.pk)
+        self.assertEqual(
+            [country.pk for country in countries],
+            list(
+                Country.objects.filter(
+                    iso_two_letter__in=["AU", "DE", "JP"]
+                )
+                .order_by("iso_two_letter")
+                .values_list("pk", flat=True)
+            ),
+        )
 
 
 class BulkCreateTests(TestCase):

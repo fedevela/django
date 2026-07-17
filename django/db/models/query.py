@@ -825,7 +825,7 @@ class QuerySet(AltersData):
                 connection = connections[self.db]
                 if (
                     connection.features.can_return_rows_from_bulk_insert
-                    and on_conflict is None
+                    and (on_conflict is None or on_conflict == OnConflict.UPDATE)
                 ):
                     assert len(returned_columns) == len(objs_without_pk)
                 for obj_without_pk, results in zip(objs_without_pk, returned_columns):
@@ -1864,13 +1864,18 @@ class QuerySet(AltersData):
         #   OTHERWISE execute without requesting returned rows.
         # OUTPUT: the ordered concatenation of all rows returned by all batches.
         for item in [objs[i : i + batch_size] for i in range(0, len(objs), batch_size)]:
-            if bulk_return and on_conflict is None:
+            if bulk_return and (
+                on_conflict is None or on_conflict == OnConflict.UPDATE
+            ):
                 inserted_rows.extend(
                     self._insert(
                         item,
                         fields=fields,
                         using=self.db,
                         returning_fields=self.model._meta.db_returning_fields,
+                        on_conflict=on_conflict,
+                        update_fields=update_fields,
+                        unique_fields=unique_fields,
                     )
                 )
             else:
