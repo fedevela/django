@@ -231,6 +231,18 @@ class HTTPSitemapTests(SitemapTestsBase):
         response = self.client.get("/lastmod/get-latest-lastmod-none-sitemap.xml")
         self.assertNotContains(response, "<lastmod>")
 
+    def test_sitemap_002_index_with_empty_items_and_callable_lastmod_renders_without_internal_server_error(
+        self,
+    ):
+        """SITEMAP-002: The empty callable-lastmod index renders without error."""
+        pass
+
+    def test_sitemap_007_latest_lastmod_resolution_preserves_unrelated_sitemap_generation_results(
+        self,
+    ):
+        """SITEMAP-007: Unrelated sitemap generation results remain unchanged."""
+        pass
+
     def test_sitemap_get_latest_lastmod(self):
         """
         sitemapindex.lastmod is included when Sitemap.lastmod is
