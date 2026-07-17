@@ -23,6 +23,23 @@ class DatabaseClient(BaseDatabaseClient):
         sslcert = options.get("sslcert")
         sslkey = options.get("sslkey")
 
+        # Pseudocode for GUIDs PGSQL-005, PGSQL-006, PGSQL-007:
+        # - INPUT: established connection settings and the ordered ``parameters``.
+        # - INITIALIZE the command with ``psql``.
+        # - FOR EACH established command setting (user, host, port), when present:
+        #     - append its established option and value without changing meaning;
+        #       retain password, service, passfile, and SSL settings for their
+        #       established environment-variable mapping. [PGSQL-005]
+        # - APPEND every parameter once, unchanged and in input order. [PGSQL-007]
+        # - IF a configured database name is present:
+        #     - append that name after all parameters. [PGSQL-005/006]
+        #     - IF parameters is empty, hand off ``psql`` followed by that name so
+        #       the normal interactive shell opens. [PGSQL-006]
+        # - ELSE, when no database name is configured:
+        #     - append no database-name argument: neither an empty value nor a
+        #       synthesized name; hand off all parameters unchanged. [PGSQL-007]
+        # - OUTPUT: the ordered command plus the established environment mapping;
+        #   propagate construction or process-launch failures unchanged.
         if not dbname and not service:
             # Connect to the default 'postgres' db.
             dbname = "postgres"
