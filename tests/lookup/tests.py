@@ -1,4 +1,5 @@
 import collections.abc
+from collections import namedtuple
 from datetime import datetime
 from math import ceil
 from operator import attrgetter
@@ -14,6 +15,12 @@ from django.utils.deprecation import RemovedInDjango40Warning
 from .models import (
     Article, Author, Freebie, Game, IsNullWithNoneAsRHS, Player, Season, Tag,
 )
+
+
+# RANGE-001..RANGE-007 integration fixture: this test-only type is the named
+# two-bound contract passed from Query.resolve_lookup_value() to the Range
+# lookup. RANGE-008 remains represented by built-in tuple values in this locus.
+NamedTupleRangeBounds = namedtuple('NamedTupleRangeBounds', ('lower', 'upper'))
 
 
 class NamedTupleRangeLookupContractTests(TestCase):

@@ -1069,6 +1069,10 @@ class Query(BaseExpression):
             sql = '(%s)' % sql
         return sql, params
 
+    # RANGE-001..RANGE-008 architecture boundary: Query owns recursive RHS
+    # expression resolution and preservation of supported container structure.
+    # Container-specific reconstruction belongs at the existing list/tuple seam
+    # below; lookup classes, including Range, consume its reconstructed result.
     def resolve_lookup_value(self, value, can_reuse, allow_joins):
         if hasattr(value, 'resolve_expression'):
             value = value.resolve_expression(
