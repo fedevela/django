@@ -65,6 +65,14 @@ class RenderableMixin:
         renderer = renderer or self.renderer
         template = template_name or self.template_name
         context = context or self.get_context()
+        # GUID: MGMT-005 pseudocode:
+        # INPUT the resolved template for a form rendering request.
+        # IF the template is a deprecated default form or formset template,
+        # THEN emit its deprecation warning before rendering; otherwise continue
+        # without that warning. Thus, at the management/ordinary boundary, a
+        # management form resolved to its non-default template skips the warning,
+        # while an ordinary form resolved to default.html emits it.
+        # OUTPUT the renderer result without altering the form's rendered content.
         if (
             template == "django/forms/default.html"
             or template == "django/forms/formsets/default.html"
