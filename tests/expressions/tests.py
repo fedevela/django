@@ -843,15 +843,34 @@ class BasicExpressionsTests(TestCase):
 
     def test_qex_003_nonempty_q_or_exists_constructs_usable_orm_query(self):
         """QEX-003: Q(...) | Exists(...) constructs a usable ORM query."""
-        self.assertTrue(True)
+        is_poc = Company.objects.filter(point_of_contact=OuterRef('pk'))
+        self.gmbh.point_of_contact = self.max
+        self.gmbh.save()
+        self.assertCountEqual(
+            Employee.objects.filter(Q(salary__lt=15) | Exists(is_poc)),
+            [self.example_inc.ceo, self.max],
+        )
 
     def test_qex_003_exists_or_nonempty_q_constructs_usable_orm_query(self):
         """QEX-003: Exists(...) | Q(...) constructs a usable ORM query."""
-        self.assertTrue(True)
+        is_poc = Company.objects.filter(point_of_contact=OuterRef('pk'))
+        self.gmbh.point_of_contact = self.max
+        self.gmbh.save()
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_poc) | Q(salary__lt=15)),
+            [self.example_inc.ceo, self.max],
+        )
 
     def test_qex_004_reversed_q_exists_disjunctions_return_equivalent_results(self):
         """QEX-004: Reversing Q/Exists disjunction operands preserves results."""
-        self.assertTrue(True)
+        is_poc = Company.objects.filter(point_of_contact=OuterRef('pk'))
+        self.gmbh.point_of_contact = self.max
+        self.gmbh.save()
+        q = Q(salary__lt=15)
+        self.assertCountEqual(
+            Employee.objects.filter(q | Exists(is_poc)),
+            Employee.objects.filter(Exists(is_poc) | q),
+        )
 
 
 class IterableLookupInnerExpressionsTests(TestCase):
