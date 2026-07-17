@@ -895,8 +895,8 @@ class ModelAdminChecks(BaseModelAdminChecks):
                 )
             )
 
-    # GEV-001 / GEV-002 / GEV-003 / GEV-004 — architecture contract for
-    # list_display resolution.
+    # GEV-001 / GEV-002 / GEV-003 / GEV-004 / GEV-005 / GEV-006 —
+    # architecture contract for list_display resolution.
     # ModelAdminChecks owns pre-request acceptance or rejection of each entry.
     # _check_list_display() is the sole inbound collection seam; admin.E108 and
     # admin.E109 are the existing outbound validation contracts.
@@ -915,11 +915,24 @@ class ModelAdminChecks(BaseModelAdminChecks):
     # contracts. The utilities and model metadata must not depend on checks or
     # acquire responsibility for emitting admin.E108.
     #
+    # GEV-005 / GEV-006 preserve the existing accepted-reference ports at this
+    # seam: model field metadata, the ModelAdmin namespace, the model namespace,
+    # and callable entries. ModelAdminChecks owns their validation composition;
+    # each provider continues to own only its field, attribute, or callable.
+    # No adapter or public contract is required between these existing owners.
+    # Dependency direction remains checks -> ModelAdmin/model metadata/model
+    # namespace, while accepted values flow onward through the unchanged admin
+    # rendering utilities. Field-kind rejection remains the separate admin.E109
+    # contract and must not be folded into unresolved-reference admin.E108.
+    #
     # Verification ownership remains in ListDisplayTests:
     # - GEV-001: unresolvable model/ModelAdmin entries reach admin.E108 here.
     # - GEV-002: the reverse query name "choice" reaches admin.E108 here.
     # - GEV-003: a metadata-only reverse relation reaches admin.E108 here.
     # - GEV-004: a metadata-only many-to-many related name reaches admin.E108 here.
+    # - GEV-005: valid model fields remain accepted without admin.E108 here.
+    # - GEV-006: valid callable, model attribute, and ModelAdmin attribute entries
+    #   remain accepted without admin.E108 here.
     def _check_list_display_item(self, obj, item, label):
         # GEV-005 / GEV-006 — preserve every supported list_display reference.
         # Logic obligations and verification loci:
