@@ -275,6 +275,12 @@ class BoundWidget:
             return self.data['template_name']
         return self.parent_widget.template_name
 
+    # Architecture (BWID-001, BWID-002): BoundWidget owns the label-target
+    # contract at the boundary between option data and subwidget templates.
+    # ChoiceWidget.create_option() supplies the authoritative attrs['id']; both
+    # input rendering and this template-facing property depend on that value.
+    # Keep ID construction upstream in ChoiceWidget and keep this boundary free
+    # of dependencies on the option name or index.
     @property
     def id_for_label(self):
         # BWID-001 — authoritative subwidget ID contract:
