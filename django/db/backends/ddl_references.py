@@ -210,6 +210,22 @@ class Expressions(TableColumns):
         super().__init__(table, columns)
 
     def rename_table_references(self, old_table, new_table):
+        # Pseudocode contract — SQLITE-001, SQLITE-002, SQLITE-005, SQLITE-008:
+        # INPUT: deferred expression-index columns and a completed temporary
+        # table rename from old_table to new_table.
+        # IF this expression collection belongs to another table: RETURN with
+        # expressions and column associations unchanged.
+        # CLONE the expressions before mutation and rebuild tracked columns.
+        # FOR EACH resolved Col in the clone:
+        #   IF Col.alias names a table: replace old_table with new_table;
+        #   ELSE Col.alias is absent: preserve it as absent so SQLite receives
+        #   an unqualified column reference instead of "new_table"."column";
+        #   retain Col.target.column so F("name") and F("value") remain bound
+        #   to the remade table's corresponding name and value columns.
+        # OUTPUT: deferred unique-index SQL targets the renamed table while its
+        # expressions contain only SQLite-valid column qualification.
+        # FAILURE: do not emit or execute SQL if expression compilation fails;
+        # propagate the database/compiler error to the table-remake operation.
         if self.table != old_table:
             return
         expressions = deepcopy(self.expressions)

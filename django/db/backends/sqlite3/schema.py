@@ -155,6 +155,22 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
           4. Rename the "new__app_model" table to "app_model"
           5. Restore any index of the previous "app_model" table.
         """
+        # Pseudocode contract — SQLITE-001, SQLITE-003, SQLITE-005, SQLITE-008:
+        # INPUT: the model state produced by the unchanged CreateModel and
+        # AddConstraint operations, plus an AlterField(old_field, new_field).
+        # IF a field is altered:
+        #   replace old_field in the temporary model body with new_field so the
+        #   requested final definition (value.max_length = 150) owns the remake;
+        #   map the new column to the corresponding old column for data copying.
+        # COPY the model's named constraints into the temporary model metadata;
+        # preserve each expression's field targets, including name and value.
+        # CREATE the temporary table, COPY its data, DROP the old table, and
+        # RENAME the temporary table to the original table name.
+        # HAND OFF deferred expression-index SQL to table-reference renaming,
+        # then execute it against the remade table.
+        # FAILURE: propagate any create, copy, drop, rename, or deferred-index
+        # database error; successful completion returns with the final field
+        # definition and named expression constraint both retained.
         # Self-referential fields must be recreated rather than copied from
         # the old model to ensure their remote_field.field_name doesn't refer
         # to an altered field.
