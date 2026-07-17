@@ -9,6 +9,13 @@ class AutocompleteJsonView(BaseListView):
     paginate_by = 20
     admin_site = None
 
+    # Result-serialization boundary (GUID: ACJ-001, ACJ-002, ACJ-003,
+    # ACJ-004, ACJ-005): this view owns the object-to-result contract. Its
+    # overridable serialization method belongs here, immediately before get(),
+    # while get() remains the sole page-to-response integration seam. The
+    # dependency points from get() to that method; pagination and queryset
+    # selection remain upstream and outside the serialization boundary.
+
     # Serialization extension-point pseudocode (GUID: ACJ-001, ACJ-003, ACJ-004):
     # def serialize_result(obj, to_field_name):
     #     Read the identifier from the resolved to_field_name on obj.
