@@ -30,6 +30,22 @@ from .utils import get_callable
 
 
 class ResolverMatch:
+    # Partial-backed match initialization pseudocode:
+    # - GUID: RPR-006 (resolution outcome): accept the callable and the
+    #   URL-derived args/kwargs without changing match success or failure.
+    # - IF the callable is a functools.partial:
+    #     - GUID: RPR-001: select its underlying callable for display identity.
+    #     - GUID: RPR-002: read its bound positional arguments as an ordered
+    #       sequence, preserving every value at its original index.
+    #     - GUID: RPR-003: read its bound keyword arguments as name/value pairs,
+    #       preserving every name and its associated value.
+    #     - GUID: RPR-006 (invocation meaning): retain the original partial as
+    #       the callable used by the match; unwrapping is for descriptive
+    #       metadata only and must neither call the view nor merge, reorder, or
+    #       mutate its bound arguments or the URL-derived args/kwargs.
+    # - ELSE retain the existing callable identity and argument handling.
+    # - Propagate existing resolver failures unchanged; partial inspection must
+    #   not introduce a new resolution branch or failure state.
     def __init__(self, func, args, kwargs, url_name=None, app_names=None, namespaces=None, route=None, tried=None):
         self.func = func
         self.args = args
@@ -59,6 +75,20 @@ class ResolverMatch:
         return (self.func, self.args, self.kwargs)[index]
 
     def __repr__(self):
+        # Partial-backed representation pseudocode:
+        # - IF the retained callable is a functools.partial:
+        #     - GUID: RPR-001: emit the underlying callable identity instead of
+        #       the generic functools.partial type.
+        #     - GUID: RPR-002: emit each pre-bound positional value by iterating
+        #       the saved positional sequence from first element to last.
+        #     - GUID: RPR-003: emit each pre-bound keyword name with its saved
+        #       value; an absent keyword mapping contributes no keyword entries.
+        # - ELSE emit the existing non-partial callable path.
+        # - GUID: RPR-004: combine that callable description with the match's
+        #   URL args/kwargs and metadata so the same complete representation is
+        #   produced after resolution is attached to a request or response.
+        # - GUID: RPR-006: representation is observational only; do not invoke
+        #   the callable, alter either argument source, or change the match.
         return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name=%s, app_names=%s, namespaces=%s, route=%s)" % (
             self._func_path, self.args, self.kwargs, self.url_name,
             self.app_names, self.namespaces, self.route,
