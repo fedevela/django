@@ -58,6 +58,11 @@ class BaseDatabaseCreation:
         settings.DATABASES[self.connection.alias]["NAME"] = test_database_name
         self.connection.settings_dict["NAME"] = test_database_name
 
+        # Architecture boundary — GUID: DJANGO-001, DJANGO-002, DJANGO-007
+        # BaseDatabaseCreation owns schema-strategy selection. Keep the
+        # migration-disabled adapter local to this management-command seam so
+        # backend subclasses remain responsible only for physical database
+        # creation and the test runner remains unaware of schema strategy.
         # Pseudocode contract — GUID: DJANGO-001, DJANGO-002, DJANGO-007
         # INPUT: the isolated database exists and TEST["MIGRATE"] selects the
         # schema-setup strategy.

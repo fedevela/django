@@ -715,6 +715,10 @@ class DiscoverRunner:
         databases = self.get_databases(suite)
         with self.time_keeper.timed('Total database setup'):
             old_config = self.setup_databases(aliases=databases)
+        # Architecture boundary — GUID: DJANGO-004, DJANGO-008
+        # DiscoverRunner owns only lifecycle sequencing. Schema strategy stays
+        # behind setup_databases(); its returned old_config remains the sole
+        # handoff into the existing teardown_databases() integration seam.
         # Pseudocode contract — GUID: DJANGO-004
         # WHEN database setup returns successfully, transition from SETUP_COMPLETE
         # to TEST_EXECUTION without branching on TEST["MIGRATE"]:
