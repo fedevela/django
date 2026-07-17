@@ -58,7 +58,27 @@ class BaseDatabaseCreation:
         settings.DATABASES[self.connection.alias]["NAME"] = test_database_name
         self.connection.settings_dict["NAME"] = test_database_name
 
-        if self.connection.settings_dict['TEST']['MIGRATE']:
+        # Ownership boundary -- GUID: DJANGO-006. BaseDatabaseCreation owns the
+        # migration-enabled default path; TEST.MIGRATE=False is the only schema
+        # substitution seam, and migration execution remains behind call_command.
+        # Pseudocode -- GUID: DJANGO-006
+        # Verification:
+        # test_django_006_migrations_enabled_creation_behavior_remains_unchanged
+        # INPUT TEST.MIGRATE and the configured test-database connection.
+        # IF migrations are enabled:
+        #     preserve the configured migration modules without substitution.
+        # INVOKE the existing migrate command with the test database alias,
+        # reduced verbosity, noninteractive operation, and syncdb enabled.
+        # IF migration raises an error, propagate it and stop creation.
+        # OTHERWISE continue to the existing optional serialization handoff.
+        # GUID: DJANGO-001, DJANGO-002, DJANGO-007. Use migrate's syncdb path
+        # to create the model-defined schema without loading migration history.
+        try:
+            if self.connection.settings_dict['TEST']['MIGRATE'] is False:
+                old_migration_modules = settings.MIGRATION_MODULES
+                settings.MIGRATION_MODULES = {
+                    app.label: None for app in apps.get_app_configs()
+                }
             # We report migrate messages at one level lower than that
             # requested. This ensures we don't get flooded with messages during
             # testing (unless you really ask to be flooded).
@@ -69,11 +89,17 @@ class BaseDatabaseCreation:
                 database=self.connection.alias,
                 run_syncdb=True,
             )
+        finally:
+            if self.connection.settings_dict['TEST']['MIGRATE'] is False:
+                settings.MIGRATION_MODULES = old_migration_modules
 
         # We then serialize the current state of the database into a string
         # and store it on the connection. This slightly horrific process is so people
         # who are testing on databases without transactions or who are using
         # a TransactionTestCase still get a clean database on every test run.
+        # Architecture seam -- GUID: DJANGO-005, DJANGO-009. Test-database
+        # creation owns the lifecycle; the base serializer owns post-schema model
+        # eligibility through the connection's backend-neutral introspection API.
         if serialize:
             self.connection._test_serialized_contents = self.serialize_db_to_string()
 
@@ -97,6 +123,23 @@ class BaseDatabaseCreation:
         Designed only for test runner usage; will not handle large
         amounts of data.
         """
+        # Integration contract -- GUID: DJANGO-006. Migration-aware model
+        # selection remains local to the base serializer; its dependencies point
+        # to the connection, MigrationLoader, router, and serializer interfaces.
+        # Pseudocode -- GUID: DJANGO-006
+        # Verification:
+        # test_django_006_migrations_enabled_serialization_behavior_remains_unchanged
+        # PRECONDITION the migration-enabled test database has been created.
+        # DISCOVER its existing tables and migration-enabled application set.
+        # FOR EACH eligible model in each migrated, serializable application:
+        #     IF migration policy permits the model and its table exists:
+        #         read objects from the test-database alias in primary-key order.
+        # SERIALIZE the ordered object stream to JSON and return the string.
+        # IF discovery, object reading, or serialization fails, propagate the
+        # error without producing replacement serialized contents.
+        # GUID: DJANGO-003, DJANGO-005. Restrict serialization to models whose
+        # tables were created, using backend-independent introspection.
+        table_names = set(self.connection.introspection.table_names())
         # Iteratively return every object for all models to serialize.
         def get_objects():
             from django.db.migrations.loader import MigrationLoader
@@ -110,7 +153,10 @@ class BaseDatabaseCreation:
                     for model in app_config.get_models():
                         if (
                             model._meta.can_migrate(self.connection) and
-                            router.allow_migrate_model(self.connection.alias, model)
+                            router.allow_migrate_model(self.connection.alias, model) and
+                            self.connection.introspection.identifier_converter(
+                                model._meta.db_table
+                            ) in table_names
                         ):
                             queryset = model._default_manager.using(
                                 self.connection.alias,

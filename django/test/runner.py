@@ -715,6 +715,15 @@ class DiscoverRunner:
         databases = self.get_databases(suite)
         with self.time_keeper.timed('Total database setup'):
             old_config = self.setup_databases(aliases=databases)
+        # Architecture boundary — GUID: DJANGO-004, DJANGO-008
+        # DiscoverRunner owns only lifecycle sequencing. Schema strategy stays
+        # behind setup_databases(); its returned old_config remains the sole
+        # handoff into the existing teardown_databases() integration seam.
+        # Pseudocode contract — GUID: DJANGO-004
+        # WHEN database setup returns successfully, transition from SETUP_COMPLETE
+        # to TEST_EXECUTION without branching on TEST["MIGRATE"]:
+        #     run database checks, then execute the configured test suite.
+        # IF setup raises, do not enter TEST_EXECUTION; propagate the setup failure.
         run_failed = False
         try:
             self.run_checks(databases)
@@ -724,6 +733,14 @@ class DiscoverRunner:
             raise
         finally:
             try:
+                # Pseudocode contract — GUID: DJANGO-008
+                # ON exit from TEST_EXECUTION, whether the suite succeeds or raises:
+                #     transition to TEARDOWN using the saved isolated-database config.
+                #     invoke the normal teardown path without branching on
+                #     TEST["MIGRATE"], preserving ordinary keep-database and original
+                #     database-name restoration semantics.
+                # IF teardown raises after a run failure, preserve the run failure;
+                # ELSE propagate the teardown failure normally.
                 with self.time_keeper.timed('Total database teardown'):
                     self.teardown_databases(old_config)
                 self.teardown_test_environment()
