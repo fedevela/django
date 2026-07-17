@@ -58,6 +58,25 @@ class BaseDatabaseCreation:
         settings.DATABASES[self.connection.alias]["NAME"] = test_database_name
         self.connection.settings_dict["NAME"] = test_database_name
 
+        # Pseudocode contract — GUID: DJANGO-001, DJANGO-002, DJANGO-007
+        # INPUT: the isolated database exists and TEST["MIGRATE"] selects the
+        # schema-setup strategy.
+        # IF migrations are enabled:
+        #     apply the configured migration plan and synchronize unmigrated apps.
+        # ELSE:
+        #     mark every installed app as having no migration module for the
+        #     duration of schema setup.
+        #     synchronize the model-defined schema without applying or validating
+        #     the project's migration history.
+        #     do not require migration-history repair, model changes, manual table
+        #     creation, or removal of TEST["MIGRATE"].
+        # FINALLY:
+        #     restore temporary migration configuration, including on failure.
+        # ON schema-setup failure:
+        #     propagate the failure after restoration; do not report setup complete.
+        # ON success:
+        #     rejoin the common serialization, cache-table, connection, and return
+        #     path so migration-disabled setup completes like ordinary setup.
         if self.connection.settings_dict['TEST']['MIGRATE']:
             # We report migrate messages at one level lower than that
             # requested. This ensures we don't get flooded with messages during
