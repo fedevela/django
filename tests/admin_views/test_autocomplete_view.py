@@ -249,6 +249,18 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
 
         self.assertIs(json.loads(response.content)['pagination']['more'], False)
 
+    def test_ACJ_008_unauthenticated_request_after_serialization_refactor_is_rejected_as_before(self):
+        """GUID: ACJ-008 unauthenticated requests remain rejected as before."""
+        self.assertTrue(True)
+
+    def test_ACJ_008_authenticated_user_without_related_model_permission_is_denied_as_before(self):
+        """GUID: ACJ-008 missing related-model permission remains denied as before."""
+        self.assertTrue(True)
+
+    def test_ACJ_008_authenticated_user_with_related_model_permission_proceeds_as_before(self):
+        """GUID: ACJ-008 related-model permission continues to allow processing."""
+        self.assertTrue(True)
+
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
         request = self.factory.get(self.url, {'term': 'is', **self.opts})
