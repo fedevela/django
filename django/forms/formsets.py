@@ -25,6 +25,9 @@ DEFAULT_MIN_NUM = 0
 DEFAULT_MAX_NUM = 1000
 
 
+# MGMT-004 ownership boundary: ManagementForm owns management-field parsing and
+# safe fallback counts; BaseFormSet consumes its cleaned result and translates
+# field errors at the full_clean() integration seam.
 class ManagementForm(Form):
     """
     Keep track of how many form instances are displayed on the page. If adding
@@ -146,6 +149,8 @@ class BaseFormSet(RenderableFormMixin):
     @cached_property
     def management_form(self):
         """Return the ManagementForm instance for this FormSet."""
+        # MGMT-004 integration seam: bound formset data enters the owning
+        # ManagementForm here; BaseFormSet.full_clean() consumes its outcome.
         if self.is_bound:
             form = ManagementForm(
                 self.data,
