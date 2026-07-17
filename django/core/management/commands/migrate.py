@@ -52,6 +52,9 @@ class Command(BaseCommand):
                 "database."
             ),
         )
+        # Selection boundary [MIGDB-005]: this existing option default owns
+        # implicit database selection. Downstream migration code receives the
+        # resolved option and must not introduce a second implicit default.
         parser.add_argument(
             "--fake",
             action="store_true",
@@ -95,6 +98,14 @@ class Command(BaseCommand):
 
     @no_translations
     def handle(self, *args, **options):
+        # Pseudocode [MIGDB-001]:
+        #   selected_alias := the explicit database option
+        #   selected_connection := connection identified by selected_alias
+        #   run preparation, migration planning, and migration execution through
+        #       selected_connection
+        #   hand selected_connection.alias to every pre/post-migration handler
+        #   if any selected-database operation fails: propagate the failure;
+        #       never retry or fall back to another alias
         database = options["database"]
         if not options["skip_checks"]:
             self.check(databases=[database])
@@ -378,8 +389,10 @@ class Command(BaseCommand):
             [ModelState.from_model(apps.get_model(*model)) for model in model_keys]
         )
 
-        # Send the post_migrate signal, so individual apps can do whatever they need
-        # to do at this point.
+        # Architecture seam [MIGDB-001, MIGDB-005]: The selected connection
+        # owns the migration lifecycle. Its alias is the database contract
+        # passed to every post-migrate receiver through the ``using`` signal
+        # argument, including when selection came from the option default.
         emit_post_migrate_signal(
             self.verbosity,
             self.interactive,

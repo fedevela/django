@@ -42,6 +42,30 @@ def create_permissions(
     apps=global_apps,
     **kwargs,
 ):
+    # Architecture boundary
+    # [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-005, MIGDB-006]: This
+    # post-migrate receiver owns permission database confinement. ``using`` is
+    # its sole database dependency, whether explicitly or implicitly selected,
+    # and must be preserved by downstream managers. Permission-result stability
+    # therefore depends on the migration lifecycle supplying this contract.
+    # Pseudocode [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-006]:
+    #   selected_alias := using supplied by the migration lifecycle
+    #   if the application has no models: return without database access
+    #   ensure its content types exist on selected_alias
+    #   resolve the historical ContentType and Permission models
+    #   if either model is unavailable: return without database access
+    #   if migrations for Permission are disallowed on selected_alias: return
+    #   for each application model:
+    #       bind the ContentType manager to selected_alias before lookup
+    #       resolve the model's content type through that bound manager
+    #       retain that selected-database object for permission association
+    #   query existing permissions through a queryset bound to selected_alias
+    #   derive missing permissions with the retained content-type objects
+    #   bulk-create them through a queryset bound to selected_alias
+    #   bound reads/writes bypass router read/write selection callbacks
+    #   if a bound lookup or write fails: propagate the database failure;
+    #       never consult or fall back to another alias
+    #   output := permissions whose content_type provenance is selected_alias
     if not app_config.models_module:
         return
 
@@ -65,6 +89,26 @@ def create_permissions(
     except LookupError:
         return
 
+    # Allowance boundary [MIGDB-004]: this receiver owns enforcement of the
+    # Permission migration decision. The router receives ``using`` as the sole
+    # database dependency; rejection terminates before Permission manager
+    # access, while allowance leaves that dependency unchanged for every
+    # downstream permission operation.
+    # Pseudocode [MIGDB-004]:
+    #   selected_alias := using
+    #   allowance := evaluate Permission migration rules for selected_alias
+    #   if allowance is rejected:
+    #       transition permission processing to terminated
+    #       test_MIGDB_004_rejection_creates_no_selected_database_permission_data:
+    #           create no Permission data on selected_alias
+    #       test_MIGDB_004_rejection_does_not_read_or_write_a_fallback_database:
+    #           perform no permission read or write through a fallback alias
+    #       return
+    #   otherwise:
+    #       test_MIGDB_004_allowed_selected_database_processing_is_not_redirected:
+    #           continue permission processing with selected_alias unchanged
+    #           bind every subsequent permission read and write to selected_alias
+    #           never redirect processing to another alias
     if not router.allow_migrate_model(using, Permission):
         return
 
@@ -74,8 +118,9 @@ def create_permissions(
     # The codenames and ctypes that should exist.
     ctypes = set()
     for klass in app_config.get_models():
-        # Force looking up the content types in the current database
-        # before creating foreign keys to them.
+        # Bound-manager seam [MIGDB-002, MIGDB-003, MIGDB-006]: ContentType
+        # lookup and foreign-key provenance remain owned by ``using``; router
+        # read/write selection isn't a dependency of this path.
         ctype = ContentType.objects.db_manager(using).get_for_model(
             klass, for_concrete_model=False
         )
@@ -96,7 +141,7 @@ def create_permissions(
     )
 
     perms = [
-        Permission(codename=codename, name=name, content_type=ct)
+        Permission(codename=codename, name=name, content_type_id=ct.pk)
         for ct, (codename, name) in searched_perms
         if (ct.pk, codename) not in all_perms
     ]
