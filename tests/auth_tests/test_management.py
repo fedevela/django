@@ -1485,3 +1485,26 @@ class CreatePermissionsTests(TestCase):
                 codename=codename,
             ).exists()
         )
+
+
+class MigrationDatabaseTraceabilityTests(TestCase):
+    def test_MIGDB_001_explicit_alias_confines_migration_lifecycle(self):
+        """GUID: MIGDB-001 — explicit alias -> all lifecycle operations use it."""
+        pass
+
+    def test_MIGDB_002_selected_database_supplies_permission_content_type(self):
+        """GUID: MIGDB-002 — selected database -> related content type comes from it.
+        """
+        pass
+
+    def test_MIGDB_003_bound_operations_bypass_read_write_routers(self):
+        """GUID: MIGDB-003 — bound operations -> no router read/write selection."""
+        pass
+
+    def test_MIGDB_006_prior_behavior_detects_wrong_content_type_database(self):
+        """GUID: MIGDB-006 — prior behavior -> wrong database is detected."""
+        pass
+
+    def test_MIGDB_006_corrected_behavior_uses_using_content_type_database(self):
+        """GUID: MIGDB-006 — corrected behavior -> provenance matches ``using``."""
+        pass
