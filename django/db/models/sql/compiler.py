@@ -1297,6 +1297,28 @@ class SQLCompiler:
             # IF a reusable object has the wrong model or relationship level:
             # do not reuse or cache it at that position; continue with the
             # correctly materialized object from the selected row.
+
+            # Filtered-relation klass_info architecture (DJFR-001..DJFR-007):
+            #
+            # This branch is the adapter boundary between setup_joins() path
+            # resolution and RelatedPopulator's model-agnostic row materializer.
+            # SQLCompiler owns the resolved terminal model, alias, selected
+            # columns, and setter contract; RelatedPopulator depends only on
+            # that klass_info contract and must not interpret relation paths.
+            #
+            # For a filtered alias, ``model`` and ``select_fields`` describe
+            # the terminal path level, while ``remote_setter`` owns attachment
+            # of that terminal object to the root annotation name. A
+            # ``local_setter`` reverse-cache link is structurally valid only
+            # when the resolved field directly relates the root and terminal
+            # objects. Multi-level paths must keep intermediate cache ownership
+            # with their own relationship levels; they must not project the
+            # terminal field's reverse cache onto the root object.
+            #
+            # Keeping this distinction in the existing klass_info seam avoids
+            # a new public contract or query stage: ordinary select_related()
+            # and known-related-object population retain their current owners,
+            # and all filtered objects continue to come from the selected row.
             def local_setter(final_field, obj, from_obj):
                 # Set a reverse fk object when relation is non-empty.
                 if from_obj:
