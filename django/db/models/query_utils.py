@@ -47,6 +47,15 @@ class Q(tree.Node):
         # allocating an independent children container; Q owns selecting the
         # survivor. Leaf lookup values remain opaque references across this
         # boundary, so the seam must not depend on deepcopy or serialization.
+        # QCOMB-004/QCOMB-007 architecture:
+        # Q.__or__ owns OR-connector selection; this method owns combination
+        # topology and the empty-operand compatibility boundary. For two
+        # non-empty operands it delegates child placement, in operand order,
+        # to the inherited Node.add() contract. Query compilation remains the
+        # downstream consumer of the resulting Q tree, while condition values
+        # stay opaque to this boundary. Thus dependency points from Q's public
+        # operator seam through _combine() to Node's tree contract, without a
+        # serialization, lookup-resolution, or evaluation dependency here.
         # QCOMB-001/QCOMB-002/QCOMB-003/QCOMB-005/QCOMB-006 pseudocode:
         # INPUT: the left Q (`self`), the proposed right operand, and connector.
         # IF the right operand is not a Q, follow the existing type-error path
