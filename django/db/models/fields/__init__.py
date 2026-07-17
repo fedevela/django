@@ -2539,7 +2539,7 @@ class AutoFieldMeta(type):
         #     DELEGATE to the ordinary AutoField subclass check.
         #     RETURN its result so unrelated fields remain unaffected and any
         #     invalid-candidate failure follows the standard metaclass path.
-        return subclass in self._subclasses or super().__subclasscheck__(subclass)
+        return issubclass(subclass, self._subclasses) or super().__subclasscheck__(subclass)
 
 
 class AutoField(AutoFieldMixin, IntegerField, metaclass=AutoFieldMeta):
