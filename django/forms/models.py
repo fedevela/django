@@ -1159,6 +1159,32 @@ class InlineForeignKeyField(Field):
 
 
 class ModelChoiceIteratorValue:
+    # MCI-001, MCI-002, MCI-003, MCI-008 -- hash contract pseudocode:
+    #
+    # def __hash__(self):
+    #     INPUT: the raw value stored by this wrapper
+    #     ATTEMPT to hash the raw value directly
+    #     IF raw-value hashing succeeds:
+    #         RETURN that hash unchanged
+    #         # Equal wrapper/raw keys then share a dictionary probe path, so
+    #         # membership and lookup proceed to the existing equality check.
+    #     IF raw-value hashing raises TypeError:
+    #         PROPAGATE the same failure; do not make the raw value hashable
+    #
+    # MCI-004, MCI-005 -- equality and sequence-membership pseudocode:
+    # WHEN comparing with another ModelChoiceIteratorValue:
+    #     UNWRAP the other operand to its raw value
+    # OTHERWISE:
+    #     KEEP the other operand unchanged
+    # RETURN the raw value's equality result for the resulting operand
+    # LET sequence membership continue to use this equality result unchanged
+    #
+    # MCI-006, MCI-007 -- choice-widget handoff pseudocode:
+    # PRESERVE this wrapper as the option value produced by iterator.choice()
+    # FOR selection, expose its existing string conversion to the widget's
+    # normalized selected values and preserve the resulting selected state
+    # FOR rendering, hand off the same wrapper and instance without mutation;
+    # expose the raw value through string conversion and retain representation
     def __init__(self, value, instance):
         self.value = value
         self.instance = instance
