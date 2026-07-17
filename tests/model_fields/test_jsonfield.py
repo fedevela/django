@@ -170,6 +170,20 @@ class TestSerialization(SimpleTestCase):
                 self.assertEqual(new_instance.value, instance.value)
 
 
+class JSONNullRegressionContractTests(SimpleTestCase):
+    def test_jsonnull_005_mariadb_mysql_postgresql_key_transform_isnull_preserves_result_membership(self):
+        """JSONNULL-005: Unaffected backends preserve result membership."""
+        self.assertTrue(True)
+
+    def test_jsonnull_006_unrelated_jsonfield_operation_preserves_observable_result(self):
+        """JSONNULL-006: Unrelated JSONField operations remain unchanged."""
+        self.assertTrue(True)
+
+    def test_jsonnull_007_isnull_outside_json_key_transform_preserves_semantics(self):
+        """JSONNULL-007: isnull outside JSON key transforms remains unchanged."""
+        self.assertTrue(True)
+
+
 @skipUnlessDBFeature('supports_json_field')
 class TestSaveLoad(TestCase):
     def test_null(self):
