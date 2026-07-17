@@ -1187,6 +1187,9 @@ class ModelChoiceField(ChoiceField):
     """A ChoiceField whose choices are a model QuerySet."""
     # This class is a subclass of ChoiceField for purity, but it doesn't
     # actually use any of ChoiceField's implementation.
+    # Architecture (MCF-001, MCF-003): ModelChoiceField owns the complete
+    # invalid-choice message contract; neither ChoiceField nor the queryset
+    # adapter supplies diagnostic message context.
     # GUID: MCF-001 -- Default invalid-choice diagnostic logic.
     # Pseudocode: DEFINE the default ``invalid_choice`` message with a
     # ``%(value)s`` placeholder so rendering identifies the submitted value.
@@ -1279,6 +1282,10 @@ class ModelChoiceField(ChoiceField):
         return super().prepare_value(value)
 
     def to_python(self, value):
+        # Architecture (MCF-002, MCF-004, MCF-005): This method is the
+        # integration seam between submitted values and queryset resolution.
+        # Only a resolved model crosses the success boundary; lookup failures
+        # cross the field boundary as the existing invalid_choice contract.
         # GUID: MCF-002, MCF-003, MCF-004, MCF-005 -- Invalid-choice flow.
         # Pseudocode:
         #   submitted_value <- value; retain it unchanged for diagnostics.
