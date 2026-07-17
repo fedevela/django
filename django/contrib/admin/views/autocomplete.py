@@ -9,22 +9,9 @@ class AutocompleteJsonView(BaseListView):
     paginate_by = 20
     admin_site = None
 
-    # Result-serialization boundary (GUID: ACJ-001, ACJ-002, ACJ-003,
-    # ACJ-004, ACJ-005): this view owns the object-to-result contract. Its
-    # overridable serialization method belongs here, immediately before get(),
-    # while get() remains the sole page-to-response integration seam. The
-    # dependency points from get() to that method; pagination and queryset
-    # selection remain upstream and outside the serialization boundary.
-
-    # Serialization extension-point pseudocode (GUID: ACJ-001, ACJ-003, ACJ-004):
-    # def serialize_result(obj, to_field_name):
-    #     Read the identifier from the resolved to_field_name on obj.
-    #     Convert that identifier and obj's display value to strings.
-    #     Return exactly {'id': identifier_string, 'text': display_string}.
-    #     Permit a subclass override to call this default procedure and augment
-    #     its mapping with JSON-serializable fields, without overriding get().
-    #     If field access or string conversion fails, propagate the failure;
-    #     do not substitute a different identifier or a partial result.
+    def serialize_result(self, obj, to_field_name):
+        """Convert the provided model object to a dictionary."""
+        return {'id': str(getattr(obj, to_field_name)), 'text': str(obj)}
 
     def get(self, request, *args, **kwargs):
         """
@@ -41,20 +28,9 @@ class AutocompleteJsonView(BaseListView):
 
         self.object_list = self.get_queryset()
         context = self.get_context_data()
-        # Page serialization pseudocode (GUID: ACJ-002, ACJ-003, ACJ-004, ACJ-005):
-        # Initialize an empty ordered results sequence.
-        # For each obj in context['object_list'], in its existing page order:
-        #     Call self.serialize_result(obj, to_field_name) exactly once.
-        #     Append the returned mapping to results before advancing to obj.
-        # Serialize only this page sequence; do not iterate self.object_list or
-        # otherwise select, skip, reorder, or fetch objects across page bounds.
-        # Dynamic dispatch supplies subclass-added fields for each page result.
-        # If serialization fails, propagate the failure and stop response
-        # construction; do not retry the object or emit a partial mapping.
-        # Return results with pagination.more derived from this page's has_next().
         return JsonResponse({
             'results': [
-                {'id': str(getattr(obj, to_field_name)), 'text': str(obj)}
+                self.serialize_result(obj, to_field_name)
                 for obj in context['object_list']
             ],
             'pagination': {'more': context['page_obj'].has_next()},

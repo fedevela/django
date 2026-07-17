@@ -81,23 +81,124 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
 
     def test_ACJ_001_default_serialization_returns_exact_id_and_text_mapping(self):
         """GUID: ACJ-001 default serialization returns the exact id/text mapping."""
-        self.assertTrue(True)
+        question = Question.objects.create(question='A question')
+
+        result = AutocompleteJsonView().serialize_result(question, 'big_id')
+
+        self.assertEqual(result, {
+            'id': str(question.big_id),
+            'text': 'A question',
+        })
 
     def test_ACJ_002_get_serializes_each_current_page_object_once_in_order(self):
         """GUID: ACJ-002 get() serializes each current-page object once in order."""
-        self.assertTrue(True)
+        questions = [
+            Question.objects.create(question='Question %s' % index)
+            for index in range(3)
+        ]
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            serialized_objects = []
+
+            def get_queryset(self):
+                return super().get_queryset().order_by('big_id')
+
+            def serialize_result(self, obj, to_field_name):
+                self.serialized_objects.append(obj)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, self.opts)
+        request.user = self.superuser
+        RecordingAutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        self.assertEqual(
+            RecordingAutocompleteJsonView.serialized_objects,
+            questions,
+        )
 
     def test_ACJ_003_override_adds_field_to_each_result_preserving_id_and_text(self):
         """GUID: ACJ-003 an override augments every result while preserving defaults."""
-        self.assertTrue(True)
+        questions = [
+            Question.objects.create(question='Question %s' % index)
+            for index in range(2)
+        ]
+
+        class CustomAutocompleteJsonView(AutocompleteJsonView):
+            def get_queryset(self):
+                return super().get_queryset().order_by('big_id')
+
+            def serialize_result(self, obj, to_field_name):
+                result = super().serialize_result(obj, to_field_name)
+                result['posted'] = obj.posted.isoformat()
+                return result
+
+        request = self.factory.get(self.url, self.opts)
+        request.user = self.superuser
+        response = CustomAutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        self.assertEqual(json.loads(response.content)['results'], [
+            {
+                'id': str(question.big_id),
+                'text': question.question,
+                'posted': question.posted.isoformat(),
+            }
+            for question in questions
+        ])
 
     def test_ACJ_004_resolved_target_field_is_passed_and_determines_default_id(self):
         """GUID: ACJ-004 the resolved target field is passed and determines the id."""
-        self.assertTrue(True)
+        question = Question.objects.create(question='A question')
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            to_field_names = []
+
+            def serialize_result(self, obj, to_field_name):
+                self.to_field_names.append(to_field_name)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, {
+            **self.opts,
+            'field_name': 'question_with_to_field',
+        })
+        request.user = self.superuser
+        response = RecordingAutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        self.assertEqual(RecordingAutocompleteJsonView.to_field_names, ['uuid'])
+        self.assertEqual(
+            json.loads(response.content)['results'][0]['id'],
+            str(question.uuid),
+        )
 
     def test_ACJ_005_serialization_preserves_result_order_and_page_boundaries(self):
         """GUID: ACJ-005 serialization preserves result order and page boundaries."""
-        self.assertTrue(True)
+        questions = [
+            Question.objects.create(question='Question %s' % index)
+            for index in range(PAGINATOR_SIZE + 2)
+        ]
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            serialized_objects = []
+
+            def get_queryset(self):
+                return super().get_queryset().order_by('big_id')
+
+            def serialize_result(self, obj, to_field_name):
+                self.serialized_objects.append(obj)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, {**self.opts, 'page': 2})
+        request.user = self.superuser
+        response = RecordingAutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        expected_questions = questions[PAGINATOR_SIZE:]
+        self.assertEqual(
+            RecordingAutocompleteJsonView.serialized_objects,
+            expected_questions,
+        )
+        self.assertEqual(
+            [result['id'] for result in json.loads(response.content)['results']],
+            [str(question.big_id) for question in expected_questions],
+        )
 
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
