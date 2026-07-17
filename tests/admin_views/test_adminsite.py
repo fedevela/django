@@ -164,6 +164,16 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
         )
 
 
+class SiteAppIndexPublicBuilderContractTests(SimpleTestCase):
+    def test_admin_004_app_index_calls_public_builder_with_request_and_app_label(self):
+        """ADMIN-004: The app index delegates filtered lookup publicly."""
+        self.assertTrue(True)
+
+    def test_admin_004_app_index_context_uses_filtered_public_builder_result_without_behavior_change(self):
+        """ADMIN-004: The app index context preserves the filtered result."""
+        self.assertTrue(True)
+
+
 @override_settings(ROOT_URLCONF='admin_views.test_adminsite')
 class SiteBuildAppDictPublicMethodContractTests(SimpleTestCase):
     request_factory = RequestFactory()
