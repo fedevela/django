@@ -676,14 +676,52 @@ class OptimizerTests(SimpleTestCase):
         MIGOPT-001: An uninterrupted same-model, same-field AlterField sequence
         collapses to its final operation.
         """
-        self.assertTrue(True)
+        final_operation = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=128)
+        )
+        self.assertOptimizesTo(
+            [
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                migrations.AlterField(
+                    "book", "Title", models.CharField(max_length=191)
+                ),
+                final_operation,
+            ],
+            [final_operation],
+        )
 
     def test_MIGOPT_002_retained_alter_field_preserves_final_definition_exactly(self):
         """
         MIGOPT-002: The AlterField retained from a same-field sequence preserves
         the final operation's field definition exactly.
         """
-        self.assertTrue(True)
+        final_field = models.CharField(
+            max_length=128,
+            null=True,
+            help_text="help",
+            default=None,
+        )
+        final_operation = migrations.AlterField(
+            "Book",
+            "title",
+            final_field,
+            preserve_default=False,
+        )
+        result, _ = self.optimize(
+            [
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                final_operation,
+            ],
+            "migrations",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIs(result[0], final_operation)
+        self.assertIs(result[0].field, final_field)
+        self.assertIs(result[0].preserve_default, False)
 
     def test_MIGOPT_003_book_title_sequence_retains_final_field_definition(self):
         """
@@ -691,7 +729,33 @@ class OptimizerTests(SimpleTestCase):
         AlterField with max_length=128, null=True, help_text="help", and
         default=None.
         """
-        self.assertTrue(True)
+        operations = [
+            migrations.AlterField(
+                "book", "title", models.CharField(max_length=255)
+            ),
+            migrations.AlterField(
+                "book", "title", models.CharField(max_length=128, null=True)
+            ),
+            migrations.AlterField(
+                "book",
+                "title",
+                models.CharField(
+                    max_length=128,
+                    null=True,
+                    help_text="help",
+                    default=None,
+                ),
+            ),
+        ]
+        result, _ = self.optimize(operations, "migrations")
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], migrations.AlterField)
+        self.assertEqual(result[0].model_name, "book")
+        self.assertEqual(result[0].name, "title")
+        self.assertEqual(result[0].field.max_length, 128)
+        self.assertIs(result[0].field.null, True)
+        self.assertEqual(result[0].field.help_text, "help")
+        self.assertIsNone(result[0].field.default)
 
     def test_create_model_rename_field(self):
         """

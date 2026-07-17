@@ -271,7 +271,11 @@ class AlterField(FieldOperation):
         #   -> AlterField(book.title, final_definition)
         # becomes [the final AlterField], whose field has max_length=128,
         # null=True, help_text="help", and default=None.
-        if isinstance(operation, RemoveField) and self.is_same_field_operation(
+        if isinstance(operation, AlterField) and self.is_same_field_operation(
+            operation
+        ):
+            return [operation]
+        elif isinstance(operation, RemoveField) and self.is_same_field_operation(
             operation
         ):
             return [operation]
