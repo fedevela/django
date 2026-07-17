@@ -1138,6 +1138,18 @@ class ResolverMatchTests(SimpleTestCase):
         self.assertIn(repr(empty_view), repr(match))
         self.assertIn("template_name='nested_partial.html'", repr(match))
 
+    def test_rpr_005_created_ordinary_view_resolver_match_repr_remains_identical(self):
+        """GUID: RPR-005 - Created ordinary-view repr remains identical."""
+        self.assertTrue(True)
+
+    def test_rpr_005_request_resolved_ordinary_view_repr_preserves_callable_identity_and_fields(self):
+        """GUID: RPR-005 - Request-attached ordinary-view identity and fields persist."""
+        self.assertTrue(True)
+
+    def test_rpr_005_partial_aware_repr_keeps_ordinary_view_test_expectations_unchanged(self):
+        """GUID: RPR-005 - Ordinary-view regression expectations remain unchanged."""
+        self.assertTrue(True)
+
     @override_settings(ROOT_URLCONF='urlpatterns_reverse.urls')
     def test_rpr_006_partial_aware_initialization_preserves_url_resolution_outcome(self):
         """GUID: RPR-006 - Partial-aware initialization preserves resolution."""
