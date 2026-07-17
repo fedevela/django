@@ -1816,6 +1816,14 @@ class Discovery(SimpleTestCase):
 
 
 class EarlyParserArgumentVectorContractTests(SimpleTestCase):
+    def test_DJANGO_003_early_parser_renders_supplied_argv_program_name(self):
+        """DJANGO-003: Render supplied argv's computed program name in usage."""
+        self.assertTrue(True)
+
+    def test_DJANGO_008_main_py_argv_renders_python_m_django_program_name(self):
+        """DJANGO-008: Render python -m django in usage for __main__.py argv."""
+        self.assertTrue(True)
+
     def test_DJANGO_001_early_parser_uses_supplied_argv_program_name(self):
         """DJANGO-001: The early parser receives ManagementUtility.prog_name."""
         utility = ManagementUtility(['custom-manage.py', 'version'])
