@@ -1207,46 +1207,28 @@ class ManyToManyField(RelatedField):
         self.db_table = db_table
         self.swappable = swappable
 
-    # Architecture trace: GUID M2M-001, M2M-002, M2M-003, M2M-008.
-    #
-    # ManyToManyField owns this validation through a private
-    # _check_ineffective_symmetrical_related_name() seam. The checker belongs
-    # beside the other field-specific check helpers below and is aggregated
-    # only by check(); construction and relation-contribution paths must not
-    # depend on it. Its inward dependencies are the normalized
-    # remote_field.symmetrical flag and the preserved _related_name argument;
-    # its outward contract is a list of standard checks.Error instances whose
-    # obj is this field. This keeps relation metadata below the checker and the
-    # model system-check result boundary above it.
     def check(self, **kwargs):
-        # Pseudocode trace: GUID M2M-001, M2M-002, M2M-003, M2M-008.
-        #
-        # During this system-check phase, append the result of a dedicated
-        # ineffective-symmetrical-related-name check to the errors below.
-        # Do not perform this validation in __init__ or contribute_to_class.
-        #
-        # CHECK ineffective symmetrical related_name:
-        #   INPUTS:
-        #     - remote_field.symmetrical, already normalized by __init__ so
-        #       explicit and inferred self-referential symmetry share one path.
-        #     - _related_name, which preserves the developer-supplied value
-        #       before contribute_to_class replaces the remote related name.
-        #   IF remote_field.symmetrical IS false OR _related_name IS None:
-        #     RETURN an empty error list.
-        #   OTHERWISE:
-        #     CREATE one established model system-check Error whose message
-        #     states that related_name is ineffective because a symmetrical
-        #     relationship has no reverse relation.
-        #     SET the Error object to this field so the diagnostic identifies
-        #     the offending model field.
-        #     SET a dedicated fields.E*** identifier allocated for this check.
-        #     RETURN the single Error.
         return [
             *super().check(**kwargs),
             *self._check_unique(**kwargs),
             *self._check_relationship_model(**kwargs),
             *self._check_ignored_options(**kwargs),
+            *self._check_ineffective_symmetrical_related_name(**kwargs),
             *self._check_table_uniqueness(**kwargs),
+        ]
+
+    def _check_ineffective_symmetrical_related_name(self, **kwargs):
+        """Check GUIDs M2M-001, M2M-002, M2M-003, and M2M-008."""
+        if not self.remote_field.symmetrical or self._related_name is None:
+            return []
+        return [
+            checks.Error(
+                'related_name is ineffective on a symmetrical '
+                'ManyToManyField because a symmetrical relationship has no '
+                'reverse relation.',
+                obj=self,
+                id='fields.E341',
+            )
         ]
 
     def _check_unique(self, **kwargs):
