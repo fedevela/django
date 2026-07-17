@@ -11,13 +11,25 @@ from .fields import (
 
 @isolate_apps('model_options')
 class TestDefaultPK(SimpleTestCase):
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectBigAutoField',
+    )
     def test_AUTOPK_003_model_without_explicit_pk_uses_configured_custom_bigautofield_descendant_instance(self):
         """AUTOPK-003: The implicit PK uses the configured custom BigAutoField class."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            pass
 
+        self.assertIsInstance(Model._meta.pk, DirectBigAutoField)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectSmallAutoField',
+    )
     def test_AUTOPK_003_model_without_explicit_pk_uses_configured_custom_smallautofield_descendant_instance(self):
         """AUTOPK-003: The implicit PK uses the configured custom SmallAutoField class."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, DirectSmallAutoField)
 
     @override_settings(
         DEFAULT_AUTO_FIELD='model_options.fields.DirectBigAutoField',
