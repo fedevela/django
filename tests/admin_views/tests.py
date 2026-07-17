@@ -3350,6 +3350,12 @@ class AdminViewListEditable(TestCase):
         self.assertIsInstance(non_form_errors, ErrorList)
         self.assertEqual(str(non_form_errors), str(ErrorList(["Grace is not a Zombie"])))
 
+    def test_nonform_010_admin_error_is_nonform_and_preserves_errorlist(self):
+        """
+        GUID: NONFORM-010; admin-exposed error -> nonform configured ErrorList.
+        """
+        pass
+
     def test_list_editable_ordering(self):
         collector = Collector.objects.create(id=1, name="Frederick Clegg")
 

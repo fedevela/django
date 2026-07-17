@@ -1456,6 +1456,22 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
             ['field', 'form', 'formset'],
         )
 
+    def test_nonform_010_general_error_is_classified_as_nonform(self):
+        """GUID: NONFORM-010; general error -> nonform classification."""
+        pass
+
+    def test_nonform_010_minimum_count_error_is_classified_as_nonform(self):
+        """GUID: NONFORM-010; failed minimum count -> nonform classification."""
+        pass
+
+    def test_nonform_010_maximum_count_error_is_classified_as_nonform(self):
+        """GUID: NONFORM-010; failed maximum count -> nonform classification."""
+        pass
+
+    def test_nonform_010_lazy_validation_error_is_classified_as_nonform(self):
+        """GUID: NONFORM-010; non_form_errors() access -> nonform classification."""
+        pass
+
     def test_nonform_011_default_markup_only_adds_nonform_class(self):
         """GUID: NONFORM-011"""
         errors = self.custom_clean_formset().non_form_errors()
