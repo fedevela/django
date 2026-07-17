@@ -1187,6 +1187,12 @@ class ModelChoiceField(ChoiceField):
     """A ChoiceField whose choices are a model QuerySet."""
     # This class is a subclass of ChoiceField for purity, but it doesn't
     # actually use any of ChoiceField's implementation.
+    # Pseudocode — GUID: MCF-011
+    # DEFINE the default invalid_choice message with Django's existing lazy
+    # translation mechanism and retain the named ``value`` interpolation slot.
+    # WHEN an invalid_choice failure is rendered, RESOLVE that lazy message in
+    # the active locale, THEN interpolate the submitted value supplied by the
+    # existing ValidationError parameter flow; REQUIRE no new localization API.
     default_error_messages = {
         'invalid_choice': _('Select a valid choice. %(value)s is not one of'
                             ' the available choices.'),
@@ -1314,6 +1320,13 @@ class ModelChoiceField(ChoiceField):
         # IF empty and required, PROPAGATE the existing required ValidationError
         # (message, code, and parameters); IF empty and optional, ALLOW it.
         # OTHERWISE continue without altering the resolved model object.
+        # Pseudocode — GUID: MCF-010
+        # DELEGATE non-invalid_choice validation to the inherited validation
+        # pipeline without intercepting or rewriting its diagnostics.
+        # IF an inherited validation step raises a ValidationError whose code is
+        # not invalid_choice, PROPAGATE the same message, code, and parameters.
+        # OTHERWISE RETURN control unchanged so subsequent inherited validation
+        # steps retain the same diagnostic success and failure paths.
         return Field.validate(self, value)
 
     def has_changed(self, initial, data):
