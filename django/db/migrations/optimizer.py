@@ -42,6 +42,22 @@ class MigrationOptimizer:
         new_operations = []
         for i, operation in enumerate(operations):
             right = True  # Should we reduce on the right or on the left.
+            # MIGOPT-007 -- intervening-operation reduction boundary:
+            # INPUT: a candidate operation, each later operation, and the
+            # ordered operations between that pair.
+            # FOR each later operation, request a pair reduction without
+            # removing or reordering any intervening operation in advance.
+            # IF the pair is reducible on the current traversal side, accept it
+            # only when every intervening operation explicitly permits the
+            # required traversal; then retain the intervening operations in
+            # their valid relative order around the replacement.
+            # ELSE mark that traversal direction as blocked and continue only
+            # along a direction still permitted by the encountered operations.
+            # IF any intervening operation prevents the required traversal,
+            # reject reduction across it, append the original operation, and
+            # leave both same-field AlterField operations in the result.
+            # OUTPUT: a reduction confined to one uninterrupted optimizable
+            # region, or the unchanged operations at the blocking boundary.
             # Compare it to each operation after it
             for j, other in enumerate(operations[i + 1 :]):
                 result = operation.reduce(other, app_label)

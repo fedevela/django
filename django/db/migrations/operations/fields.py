@@ -291,6 +291,20 @@ class AlterField(FieldOperation):
         #   may return the later AlterField.
         # OUTPUT for either distinct-target branch: no collapsed AlterField and
         # no target data transferred between operations.
+        #
+        # MIGOPT-006 -- semantic-state preservation gate:
+        # INPUT: the candidate replacement for this intermediate AlterField and
+        # the migration state entering the candidate reduction region.
+        # DERIVE expected_state by applying every operation in the unreduced
+        # region in order; derive reduced_state by applying the candidate
+        # replacement sequence to an equivalent entering state.
+        # IF expected_state and reduced_state differ, reject the candidate and
+        # return no replacement so this AlterField remains in the operation
+        # sequence; this is the preservation/failure path.
+        # ELSE the state-equivalence obligation is satisfied and the existing
+        # same-target replacement branch may return the later AlterField.
+        # OUTPUT: either a state-equivalent replacement or a non-reduction
+        # handoff that preserves the intermediate AlterField unchanged.
         if isinstance(operation, AlterField):
             if self.is_same_field_operation(operation):
                 return [operation]
