@@ -738,6 +738,11 @@ class QuerySet(AltersData):
         signals, and do not set the primary key attribute if it is an
         autoincrement field (except if features.can_return_rows_from_bulk_insert=True).
         Multi-table models are not supported.
+
+        Architecture contract (BULKUPSERT-012, BULKUPSERT-013): bulk_create()
+        owns assignment of compiler-returned rows to model instances, while
+        the model's db_returning_fields remains the authority for which values
+        may be assigned.
         """
         # When you bulk insert you don't get the primary keys back (if it's an
         # autoincrement, except if can_return_rows_from_bulk_insert=True), so
@@ -1860,6 +1865,10 @@ class QuerySet(AltersData):
         BULKUPSERT-003): this boundary owns ordered aggregation of rows returned
         by the insert compiler. Assignment of those rows to model instances
         remains the responsibility of bulk_create().
+
+        Return-set contract (BULKUPSERT-004, BULKUPSERT-013): this boundary
+        passes the model-governed db_returning_fields to the insert compiler;
+        it does not derive returned fields from conflict-update inputs.
         """
         connection = connections[self.db]
         ops = connection.ops

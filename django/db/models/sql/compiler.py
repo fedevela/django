@@ -1624,6 +1624,10 @@ class SQLInsertCompiler(SQLCompiler):
     # Insert-return boundary for BULKUPSERT-001, BULKUPSERT-002, and
     # BULKUPSERT-003. The compiler materializes backend-returned fields in
     # statement row order; QuerySet owns their interpretation and assignment.
+    # For BULKUPSERT-005, this boundary owns backend-specific returning-clause
+    # rendering and placement after the conflict clause. QuerySet remains the
+    # owner of return-set selection (BULKUPSERT-004, BULKUPSERT-013) and result
+    # assignment (BULKUPSERT-012, BULKUPSERT-013).
     returning_fields = None
     returning_params = ()
 
