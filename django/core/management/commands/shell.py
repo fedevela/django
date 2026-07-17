@@ -94,7 +94,11 @@ class Command(BaseCommand):
         #     OTHERWISE:
         #         PRESERVE every requested observable effect.
         #         RETURN immediately, skipping stdin and interactive-shell paths.
-        # Execute the command and exit.
+        # Command-option execution boundary — GUID: SHELL-001, GUID: SHELL-003.
+        # This branch owns the snippet namespace contract and terminal return;
+        # keep it independent of the stdin and interactive-shell paths below.
+        # The exec() call is the namespace integration seam: its implementation
+        # must provide one mapping as both the globals and locals namespaces.
         if options['command']:
             exec(options['command'])
             return
