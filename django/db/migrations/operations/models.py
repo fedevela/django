@@ -917,6 +917,17 @@ class RenameIndex(IndexOperation):
         return self.new_name.lower()
 
     def deconstruct(self):
+        # RIX-008 deconstruction/reconstruction pseudocode:
+        # INPUT: the operation's model_name, new_name, and exactly one old identity.
+        # EMIT the existing qualified class name, no positional arguments, and
+        # keyword arguments containing model_name and new_name.
+        # IF old_name identifies an explicitly named index, EMIT old_name only.
+        # ELSE EMIT old_fields only, preserving its value and field order.
+        # RECONSTRUCT by invoking that class with the emitted arguments; the result
+        # must select the same named/unnamed branch and retain the same transitions.
+        # OUTPUT: serialization shape and operation attributes are unchanged; this
+        # procedure performs no state or database mutation and introduces no new
+        # serialization failure path.
         kwargs = {
             "model_name": self.model_name,
             "new_name": self.new_name,
@@ -928,12 +939,15 @@ class RenameIndex(IndexOperation):
         return (self.__class__.__qualname__, [], kwargs)
 
     def state_forwards(self, app_label, state):
-        # RIX-001 / RIX-004 state-transition pseudocode:
+        # RIX-001 / RIX-004 / RIX-005 / RIX-007 state-transition pseudocode:
         # INPUT: the pre-rename project state and this operation's old identity.
         # IF the old identity is an unnamed unique_together-derived index:
         #   ADD an explicitly named Index carrying old_fields and new_name.
         #   REMOVE the legacy grouped-field option that represented the unnamed index.
-        # ELSE rename the explicitly named index in place.
+        # ELSE rename only the explicitly named old_name index to new_name in place;
+        #   preserve the established named-index state transition (RIX-005).
+        # RIX-007 target-set invariant: do not add, remove, rename, or rewrite any
+        # index or constraint whose identity is outside this operation's old/new pair.
         # OUTPUT: the forward state identifies exactly the index name that the
         # database forward transition must leave in the schema.
         if self.old_fields:
@@ -954,7 +968,8 @@ class RenameIndex(IndexOperation):
             )
 
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
-        # RIX-001 / RIX-003 / RIX-004 / RIX-006 forward-transition pseudocode:
+        # RIX-001 / RIX-003 / RIX-004 / RIX-005 / RIX-006 / RIX-007
+        # forward-transition pseudocode:
         # INPUT: historical from_state, forward to_state, and the target database.
         # IF migration is disallowed for the target model, RETURN without mutation.
         # IF old_fields identifies an unnamed index:
@@ -962,9 +977,16 @@ class RenameIndex(IndexOperation):
         #   DISCOVER index names on the historical table matching those columns.
         #   IF exactly one name is not found, FAIL before attempting a rename.
         #   USE that sole name as the original index identity.
-        # ELSE obtain the original explicitly named index from from_state.
+        # ELSE obtain the original explicitly named index from from_state by
+        # old_name, preserving the established RIX-005 resolution path.
         # OBTAIN the requested named index from to_state.
         # RENAME original identity -> requested identity on the same table.
+        # RIX-007 noninterference obligation:
+        #   DEFINE the mutation target as only {original identity, requested identity}.
+        #   ISSUE exactly one rename through SchemaEditor for that target pair.
+        #   LEAVE every other index and constraint name, existence, and behavior
+        #   unchanged; do not use an unrelated identity as a fallback match.
+        #   IF target resolution fails or is ambiguous, FAIL before issuing a rename.
         # OUTPUT: only new_name exists and the schema agrees with to_state; after a
         # backward restoration, the same discovery selects the original identity,
         # so a subsequent forward rename cannot collide with a leftover new_name.
@@ -1008,7 +1030,8 @@ class RenameIndex(IndexOperation):
         schema_editor.rename_index(model, old_index, new_index)
 
     def database_backwards(self, app_label, schema_editor, from_state, to_state):
-        # RIX-002 / RIX-003 / RIX-004 / RIX-006 backward-transition pseudocode:
+        # RIX-002 / RIX-003 / RIX-004 / RIX-005 / RIX-006 / RIX-007
+        # backward-transition pseudocode:
         # INPUT: current from_state (new_name) and historical to_state (unnamed index).
         # IF old_fields identifies the historical unnamed index:
         #   RESOLVE the current named index from from_state.
@@ -1019,9 +1042,17 @@ class RenameIndex(IndexOperation):
         #   OUTPUT: new_name is absent; the recovered name exists; schema identity
         #   agrees with to_state; RETURN without changing operation attributes.
         # ELSE temporarily reverse the explicit names, delegate to the forward
-        # rename procedure, and RESTORE the operation attributes even after use.
+        # rename procedure, and RESTORE the operation attributes after use; this is
+        # the established explicitly named backward transition required by RIX-005.
         # A later forward call therefore receives the original operation identity
         # and can transition the restored schema to new_name again without collision.
+        # RIX-007 cycle invariant:
+        #   FORWARD mutates only old identity -> new identity.
+        #   BACKWARD mutates only new identity -> old identity.
+        #   FORWARD-AGAIN repeats only old identity -> new identity.
+        #   AFTER each transition, preserve all identities outside that pair and
+        #   propagate resolution or database failures without compensating changes
+        #   to unrelated indexes or constraints.
         # RIX-006 forward/backward/forward-again sequence obligation:
         #   START with the backend-generated unnamed index identity.
         #   FORWARD leaves {new_name present, generated name absent}.
