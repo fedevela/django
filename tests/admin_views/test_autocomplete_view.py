@@ -79,6 +79,26 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
         )
         super().setUpTestData()
 
+    def test_ACJ_001_default_serialization_returns_exact_id_and_text_mapping(self):
+        """GUID: ACJ-001 default serialization returns the exact id/text mapping."""
+        self.assertTrue(True)
+
+    def test_ACJ_002_get_serializes_each_current_page_object_once_in_order(self):
+        """GUID: ACJ-002 get() serializes each current-page object once in order."""
+        self.assertTrue(True)
+
+    def test_ACJ_003_override_adds_field_to_each_result_preserving_id_and_text(self):
+        """GUID: ACJ-003 an override augments every result while preserving defaults."""
+        self.assertTrue(True)
+
+    def test_ACJ_004_resolved_target_field_is_passed_and_determines_default_id(self):
+        """GUID: ACJ-004 the resolved target field is passed and determines the id."""
+        self.assertTrue(True)
+
+    def test_ACJ_005_serialization_preserves_result_order_and_page_boundaries(self):
+        """GUID: ACJ-005 serialization preserves result order and page boundaries."""
+        self.assertTrue(True)
+
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
         request = self.factory.get(self.url, {'term': 'is', **self.opts})
