@@ -190,10 +190,6 @@ class AdminReadonlyField:
             'is_hidden': is_hidden,
         }
         self.form = form
-        # DJA-001/DJA-002/DJA-003 architecture boundary: AdminReadonlyField
-        # retains the active ModelAdmin as its site-context dependency. Related
-        # admin URL construction must obtain the AdminSite namespace through
-        # this object; helpers.py must not depend on the global default site.
         self.model_admin = model_admin
         self.is_first = is_first
         self.is_checkbox = False
@@ -208,32 +204,16 @@ class AdminReadonlyField:
         return format_html('<label{}>{}{}</label>', flatatt(attrs), capfirst(label), self.form.label_suffix)
 
     def get_admin_url(self, remote_field, remote_obj):
-        # DJA-001/DJA-002/DJA-003/DJA-004/DJA-006 architecture seam: keep
-        # related change-link construction and its NoReverseMatch fallback in
-        # this private rendering helper. Dependency direction is
-        # AdminReadonlyField -> ModelAdmin.admin_site -> URL resolver; the
-        # related model metadata and quoted primary key remain resolver inputs.
-        # DJA-005 remains owned by contents(), which alone decides whether a
-        # relation reaches this seam.
-        # DJA-001/DJA-002/DJA-003/DJA-004/DJA-006 pseudocode:
-        # INPUT: the related field, its object, and this read-only field's
-        # active ModelAdmin.
-        # BUILD the related model's admin change-view name.
-        # SELECT the URL namespace from the AdminSite associated with the
-        # active ModelAdmin; the selected URL configuration supplies that
-        # site's configured prefix, including the default site's unchanged
-        # namespace and prefix.
-        # QUOTE the related object's primary key with the existing admin
-        # quoting operation, then reverse the change view in that namespace.
-        # IF reversal succeeds, RETURN a link to the related object.
-        # IF reversal raises NoReverseMatch, RETURN the existing string
-        # representation without a link and do not propagate the exception.
         url_name = 'admin:%s_%s_change' % (
             remote_field.model._meta.app_label,
             remote_field.model._meta.model_name,
         )
         try:
-            url = reverse(url_name, args=[quote(remote_obj.pk)])
+            url = reverse(
+                url_name,
+                args=[quote(remote_obj.pk)],
+                current_app=self.model_admin.admin_site.name,
+            )
             return format_html('<a href="{}">{}</a>', url, remote_obj)
         except NoReverseMatch:
             return str(remote_obj)
@@ -263,12 +243,6 @@ class AdminReadonlyField:
             else:
                 if isinstance(f.remote_field, ManyToManyRel) and value is not None:
                     result_repr = ", ".join(map(str, value.all()))
-                # DJA-005 pseudocode:
-                # PRESERVE the existing link-eligibility decision exactly.
-                # IF the read-only value follows the currently linked relation
-                # types and is non-null, HAND OFF to related admin URL creation.
-                # OTHERWISE continue through the existing non-link rendering
-                # branches; do not make any additional related field linkable.
                 elif (
                     isinstance(f.remote_field, (ForeignObjectRel, OneToOneField)) and
                     value is not None
