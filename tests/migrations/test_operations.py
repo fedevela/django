@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.core.exceptions import FieldDoesNotExist
 from django.db import (
     IntegrityError, connection, migrations, models, transaction,
@@ -653,11 +655,44 @@ class OperationTests(OperationTestBase):
 
     def test_rmn_001_rename_model_same_effective_table_updates_state_model_name(self):
         """GUID: RMN-001"""
-        self.assertTrue(True)
+        project_state = ProjectState()
+        project_state.add_model(ModelState(
+            "migrations",
+            "Pony",
+            [],
+            options={"db_table": "stable_pony_table"},
+        ))
+        operation = migrations.RenameModel("Pony", "Horse")
+
+        new_state = project_state.clone()
+        operation.state_forwards("migrations", new_state)
+
+        self.assertNotIn(("migrations", "pony"), new_state.models)
+        self.assertIn(("migrations", "horse"), new_state.models)
+        self.assertEqual(
+            project_state.apps.get_model("migrations", "Pony")._meta.db_table,
+            new_state.apps.get_model("migrations", "Horse")._meta.db_table,
+        )
 
     def test_rmn_002_rename_model_explicit_unchanged_db_table_skips_schema_mutation(self):
         """GUID: RMN-002"""
-        self.assertTrue(True)
+        project_state = ProjectState()
+        project_state.add_model(ModelState(
+            "migrations",
+            "Pony",
+            [],
+            options={"db_table": "stable_pony_table"},
+        ))
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards("migrations", new_state)
+        schema_editor = mock.Mock()
+
+        operation.database_forwards(
+            "migrations", schema_editor, project_state, new_state,
+        )
+
+        self.assertEqual(schema_editor.method_calls, [])
 
     def test_rename_model_state_forwards(self):
         """

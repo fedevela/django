@@ -346,9 +346,11 @@ class RenameModel(ModelOperation):
         # - ELSE: execute the existing database-visible rename flow.
         # - OUTPUT: equal table names leave the database schema unchanged;
         #   unequal table names follow the normal RenameModel effects.
+        old_model = from_state.apps.get_model(app_label, self.old_name)
         new_model = to_state.apps.get_model(app_label, self.new_name)
+        if old_model._meta.db_table == new_model._meta.db_table:
+            return
         if self.allow_migrate_model(schema_editor.connection.alias, new_model):
-            old_model = from_state.apps.get_model(app_label, self.old_name)
             # Move the main table
             schema_editor.alter_db_table(
                 new_model,
