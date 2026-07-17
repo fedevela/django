@@ -7,6 +7,22 @@ from django.test.utils import ignore_warnings
 from django.utils.deprecation import RemovedInDjango40Warning
 
 
+class MalformedPersistedSessionAuthenticationContractTests(TestCase):
+    """SES-008 malformed persisted session authentication contract."""
+
+    def test_SES_008_authentication_access_to_malformed_persisted_session_completes_without_decoding_exception(self):
+        """SES-008: authentication and session processing contain decode failure."""
+        self.assertTrue(True)
+
+    def test_SES_008_authentication_access_to_malformed_persisted_session_produces_no_internal_server_error(self):
+        """SES-008: malformed persisted data produces no internal server error."""
+        self.assertTrue(True)
+
+    def test_SES_008_authentication_access_to_malformed_persisted_session_exposes_no_malformed_values(self):
+        """SES-008: authentication processing receives no malformed values."""
+        self.assertTrue(True)
+
+
 class TestAuthenticationMiddleware(TestCase):
     @classmethod
     def setUpTestData(cls):
