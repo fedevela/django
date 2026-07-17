@@ -219,6 +219,28 @@ class Options:
         return new_objs
 
     def _get_default_pk_class(self):
+        # AUTOPK-002 pseudocode -- prepare a model with a configured automatic
+        # field descendant:
+        # INPUT: a model without an explicit primary key and the configured
+        # DEFAULT_AUTO_FIELD dotted path.
+        # RESOLVE the effective dotted path from the app configuration or the
+        # global setting.
+        # IF the path is empty:
+        #     FAIL with the existing empty-configuration error.
+        # IMPORT the class identified by the path.
+        # IF the path isn't importable:
+        #     FAIL with the existing import error.
+        # ASK the AutoField subclass boundary whether the imported class is a
+        # supported automatic field.
+        # SUCCESS BRANCHES (all remain AUTOPK-002 traceable):
+        #     - direct BigAutoField descendant -> accept the class;
+        #     - indirect BigAutoField descendant -> accept the class;
+        #     - direct SmallAutoField descendant -> accept the class;
+        #     - indirect SmallAutoField descendant -> accept the class.
+        # IF the class is outside the supported AutoField hierarchy:
+        #     FAIL with the existing "must subclass AutoField" error.
+        # RETURN the accepted class to _prepare(), which instantiates it as the
+        # model's implicit primary key and completes model preparation.
         pk_class_path = getattr(
             self.app_config,
             'default_auto_field',
