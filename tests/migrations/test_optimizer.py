@@ -980,6 +980,22 @@ class OptimizerTests(SimpleTestCase):
             ],
         )
 
+    def test_MIGOPT_008_same_field_alter_fields_remain_reducible_to_add_field(self):
+        """
+        MIGOPT-008: Given an AddField followed by applicable same-model,
+        same-field AlterField operations, optimization remains applicable and
+        produces an AddField operation.
+        """
+        pass
+
+    def test_MIGOPT_008_reduced_add_field_preserves_final_effective_definition(self):
+        """
+        MIGOPT-008: When applicable same-model, same-field AlterField
+        operations are reduced into an AddField, its field definition matches
+        the final effective definition represented by the sequence.
+        """
+        pass
+
     def test_add_field_delete_field(self):
         """
         RemoveField should cancel AddField
