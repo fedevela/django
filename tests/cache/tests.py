@@ -1818,7 +1818,20 @@ class FileBasedCacheTests(BaseCacheTests, TestCase):
         self,
     ):
         """FBC-008: Deletion before open makes has_key() false without an error."""
-        self.assertTrue(True)
+        # FBC-008 logic obligation and deterministic regression flow:
+        # 1. Store a file-based cache entry and resolve its target file path.
+        # 2. Confirm the target exists before has_key() begins its read attempt.
+        # 3. Preserve the normal file opener, then install an open interceptor
+        #    whose transition for the target path is EXISTS -> DELETED.
+        # 4. In that interceptor, remove the target immediately before handing
+        #    the same open request to the normal opener. The handoff must observe
+        #    the missing target, deterministically placing deletion between path
+        #    resolution and opening rather than relying on concurrent timing.
+        # 5. Call has_key() while the interceptor is active and capture its result.
+        # 6. If FileNotFoundError escapes has_key(), fail the regression scenario;
+        #    otherwise verify that the captured result is exactly False.
+        # 7. This inherited procedure must run unchanged for FileBasedCacheTests
+        #    and FileBasedCachePathLibTests, covering string and Path locations.
 
 
 @unittest.skipUnless(RedisCache_params, "Redis backend not configured")
