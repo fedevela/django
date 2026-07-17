@@ -2154,6 +2154,22 @@ class StartProject(LiveServerTestCase, AdminScriptTestCase):
 
 class StartApp(AdminScriptTestCase):
 
+    def assertAppCreated(self, target):
+        self.assertTrue(os.path.isfile(os.path.join(target, '__init__.py')))
+        self.assertTrue(os.path.isfile(os.path.join(target, 'apps.py')))
+        self.assertTrue(os.path.isfile(os.path.join(target, 'models.py')))
+
+    def _directory_contents(self, target):
+        contents = {}
+        for root, dirs, files in os.walk(target):
+            dirs.sort()
+            for filename in sorted(files):
+                path = os.path.join(root, filename)
+                relative_path = os.path.relpath(path, target)
+                with open(path, 'rb') as app_file:
+                    contents[relative_path] = app_file.read()
+        return contents
+
     def test_invalid_name(self):
         """startapp validates that app name is a valid Python identifier."""
         for bad_name in ('7testproject', '../testproject'):
@@ -2199,27 +2215,113 @@ class StartApp(AdminScriptTestCase):
 
     def test_django_001_existing_valid_target_with_trailing_native_separator_succeeds(self):
         """GUID: DJANGO-001: A valid target with a trailing native separator succeeds."""
-        pass
+        target = os.path.join(self.test_dir, 'valid_target')
+        os.mkdir(target)
+
+        out, err = self.run_django_admin(['startapp', 'app', target + os.sep])
+
+        self.assertNoOutput(out)
+        self.assertNoOutput(err)
+        self.assertAppCreated(target)
 
     def test_django_002_equivalent_target_path_forms_generate_equivalent_output(self):
         """GUID: DJANGO-002: Equivalent target path forms generate equivalent output."""
-        pass
+        target = os.path.join(self.test_dir, 'target_without_separator')
+        target_with_separator = os.path.join(self.test_dir, 'target_with_separator')
+        os.mkdir(target)
+        os.mkdir(target_with_separator)
+
+        outputs = [
+            self.run_django_admin(['startapp', 'app', target]),
+            self.run_django_admin([
+                'startapp', 'app', target_with_separator + os.sep,
+            ]),
+        ]
+
+        for out, err in outputs:
+            self.assertNoOutput(out)
+            self.assertNoOutput(err)
+        self.assertAppCreated(target)
+        self.assertAppCreated(target_with_separator)
+        self.assertEqual(
+            self._directory_contents(target),
+            self._directory_contents(target_with_separator),
+        )
 
     def test_django_004_trailing_separator_validates_final_nonempty_component(self):
         """GUID: DJANGO-004: Validation uses the final non-empty target component."""
-        pass
+        invalid_parent = os.path.join(self.test_dir, 'invalid.parent')
+        target = os.path.join(invalid_parent, 'valid_target')
+        os.makedirs(target)
+
+        out, err = self.run_django_admin(['startapp', 'app', target + os.sep])
+
+        self.assertNoOutput(out)
+        self.assertNoOutput(err)
+        self.assertAppCreated(target)
 
     def test_django_005_trailing_separator_keeps_output_in_supplied_target(self):
         """GUID: DJANGO-005: Generated output remains confined to the supplied target."""
-        pass
+        parent = os.path.join(self.test_dir, 'parent')
+        target = os.path.join(parent, 'target')
+        sibling = os.path.join(parent, 'sibling')
+        os.makedirs(target)
+        os.mkdir(sibling)
+
+        out, err = self.run_django_admin(['startapp', 'app', target + os.sep])
+
+        self.assertNoOutput(out)
+        self.assertNoOutput(err)
+        self.assertAppCreated(target)
+        self.assertFalse(os.path.exists(os.path.join(parent, 'apps.py')))
+        self.assertFalse(os.path.exists(os.path.join(sibling, 'apps.py')))
 
     def test_django_006_target_without_trailing_separator_retains_behavior(self):
         """GUID: DJANGO-006: A target without a trailing separator retains its behavior."""
-        pass
+        target = os.path.join(self.test_dir, 'valid_target')
+        os.mkdir(target)
+
+        out, err = self.run_django_admin(['startapp', 'app', target])
+
+        self.assertNoOutput(out)
+        self.assertNoOutput(err)
+        self.assertAppCreated(target)
+
+        unchanged_invalid_target = os.path.join(target, '.')
+        _, err = self.run_django_admin([
+            'startapp', 'other_app', unchanged_invalid_target,
+        ])
+        self.assertOutput(
+            err,
+            "CommandError: '.' is not a valid app directory. Please make "
+            "sure the directory is a valid identifier.",
+        )
 
     def test_django_007_repeated_native_separators_match_single_separator(self):
         """GUID: DJANGO-007: Repeated native separators behave like one separator."""
-        pass
+        single_target = os.path.join(self.test_dir, 'single_target')
+        repeated_target = os.path.join(self.test_dir, 'repeated_target')
+        os.mkdir(single_target)
+        os.mkdir(repeated_target)
+
+        outputs = [
+            self.run_django_admin([
+                'startapp', 'app', single_target + os.sep,
+            ]),
+            self.run_django_admin([
+                'startapp', 'app', repeated_target + (os.sep * 3),
+            ]),
+        ]
+
+        for out, err in outputs:
+            self.assertNoOutput(out)
+            self.assertNoOutput(err)
+        self.assertAppCreated(single_target)
+        self.assertAppCreated(repeated_target)
+        self.assertEqual(
+            self._directory_contents(single_target),
+            self._directory_contents(repeated_target),
+        )
 
     def test_importable_target_name(self):
         _, err = self.run_django_admin(['startapp', 'app', 'os'])
