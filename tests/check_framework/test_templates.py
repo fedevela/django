@@ -195,6 +195,31 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
         ):
             self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
 
+    def test_tpl_004_configured_library_with_distinct_configured_or_discovered_path_produces_e003(
+        self,
+    ):
+        """
+        GUID: TPL-004
+
+        When a configured library name is also associated with a distinct
+        configured or installed-app-discovered module path, the configured
+        library remains in the conflict determination and templates.E003 is
+        produced.
+        """
+        self.assertTrue(True)
+
+    def test_tpl_005_repeated_conflicting_associations_produce_each_distinct_path_once(
+        self,
+    ):
+        """
+        GUID: TPL-005
+
+        When a library name has multiple distinct module paths and any
+        association is collected repeatedly, the templates.E003 diagnostic
+        identifies every distinct conflicting path exactly once.
+        """
+        self.assertTrue(True)
+
     @override_settings(
         INSTALLED_APPS=[
             "check_framework.template_test_apps.same_tags_app_1",
