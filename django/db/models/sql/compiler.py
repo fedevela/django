@@ -226,6 +226,13 @@ class SQLCompiler:
             ]
         return expressions
 
+    # Architecture contract (DJANGO-010): Query owns the established
+    # deferred-loading request and selection mask, while Query.setup_joins()
+    # owns relation join topology. This compiler boundary consumes both and
+    # owns the ordered projection plus the ``klass_info`` indexes handed to
+    # RelatedPopulator. Reverse one-to-one corrections must remain inside that
+    # metadata pipeline; unaffected only()/select_related() paths retain their
+    # existing masks, joins, selected-column order, and population contract.
     def get_select(self, with_col_aliases=False):
         """
         Return three values:

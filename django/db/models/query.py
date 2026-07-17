@@ -2578,6 +2578,14 @@ class RelatedPopulator:
     that dependency direction, and no schema-specific relation names cross this
     boundary.
 
+    Architecture contract (DJANGO-010): This remains the sole population
+    consumer for supported only()/select_related() combinations. It depends on
+    SQLCompiler's selected indexes and relation metadata, never on query-planning
+    internals; omitted names remain deferred, nested populators retain the same
+    ownership, and field-provided setters remain the relationship-cache seam.
+    Corrections in the compiler must preserve this input contract for every
+    unaffected relation path.
+
     The idea is that each select_related() model will be populated by a
     different RelatedPopulator instance. The RelatedPopulator instances get
     klass_info and select (computed in SQLCompiler) plus the used db as
