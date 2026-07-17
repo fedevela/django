@@ -890,6 +890,20 @@ class ModelAdminChecks(BaseModelAdminChecks):
                 )
             )
 
+    # GEV-001 / GEV-002 — architecture contract for list_display resolution.
+    # ModelAdminChecks owns pre-request acceptance or rejection of each entry.
+    # _check_list_display() is the sole inbound collection seam; admin.E108 and
+    # admin.E109 are the existing outbound validation contracts.
+    #
+    # Resolution at this boundary may depend on the registered ModelAdmin's
+    # namespace and the model class/_meta contract. It must not depend on a
+    # model instance, ChangeList construction, or request-time rendering.
+    # Accepted entries must remain compatible with the separate rendering
+    # boundary owned by django.contrib.admin.utils.lookup_field().
+    #
+    # Verification ownership remains in ListDisplayTests:
+    # - GEV-001: unresolvable model/ModelAdmin entries reach admin.E108 here.
+    # - GEV-002: the reverse query name "choice" reaches admin.E108 here.
     def _check_list_display_item(self, obj, item, label):
         # GEV-001 / GEV-002 — list_display check-time resolution parity.
         # Logic obligations:
