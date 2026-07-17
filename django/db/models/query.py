@@ -733,6 +733,17 @@ class QuerySet(AltersData):
                     "This database backend does not support ignoring conflicts."
                 )
             return OnConflict.IGNORE
+        # GUID: BULKUPSERT-009 -- unsupported conflict-update preservation.
+        # INPUT: the update-conflicts request and the selected backend's
+        # existing supports_update_conflicts capability.
+        # IF conflict updates are requested:
+        #   IF the capability is false, REJECT with the established
+        #   unsupported-operation failure before validating update fields,
+        #   selecting UPDATE, or executing an insert.
+        #   ELSE continue through the existing field and target validation;
+        #   ONLY after it succeeds, HAND OFF UPDATE to the insert pipeline.
+        # FAILURE PATH: do not infer support, bypass the capability check, or
+        # alter its exception type or message.
         elif update_conflicts:
             if not db_features.supports_update_conflicts:
                 raise NotSupportedError(
@@ -1981,6 +1992,20 @@ class QuerySet(AltersData):
         #   each row with its corresponding object across all batches.
         #   OTHERWISE execute without requesting returned rows.
         # OUTPUT: the ordered concatenation of all rows returned by all batches.
+        # GUID: BULKUPSERT-010 -- non-returning conflict-update preservation.
+        # INPUT: validated UPDATE conflict mode, conflict fields, batches, and
+        # the selected backend's existing bulk-row-return capability.
+        # IF conflict mode is UPDATE and bulk rows cannot be returned:
+        #   FOR EACH batch, EXECUTE the existing conflict-update insert with
+        #   update_fields and unique_fields unchanged.
+        #   REQUEST no returning fields and COLLECT no positional result rows.
+        #   HAND OFF an empty returned-row sequence to bulk_create(), so its
+        #   positional assignment loop assigns no database-generated values.
+        # OUTPUT: the backend retains its existing insert/update effects, while
+        # objects without preassigned primary keys receive no populated-primary-
+        # key guarantee from this operation.
+        # FAILURE PATH: propagate the backend's existing execution failure; do
+        # not synthesize returned rows, primary keys, or new backend support.
         # BULKUPSERT-006 pseudocode IGNORE preservation flow:
         # FOR EACH batch in IGNORE conflict mode:
         #   EXECUTE the insert with IGNORE passed through to the backend.
