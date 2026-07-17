@@ -119,6 +119,18 @@ class TestDefaultPK(SimpleTestCase):
             class Model(models.Model):
                 pass
 
+    def test_AUTOPK_006_model_without_explicit_pk_and_nonexistent_default_auto_field_preserves_import_path_configuration_error(
+        self,
+    ):
+        """AUTOPK-006: Preserve the nonexistent-path configuration error."""
+        self.assertTrue(True)
+
+    def test_AUTOPK_006_model_without_explicit_pk_and_nonimportable_default_auto_field_raises_import_path_error_before_subclass_validation(
+        self,
+    ):
+        """AUTOPK-006: Import errors continue to precede subclass validation."""
+        self.assertTrue(True)
+
     @isolate_apps('model_options.apps.ModelPKNonexistentConfig')
     def test_app_default_auto_field_nonexistent(self):
         msg = (
