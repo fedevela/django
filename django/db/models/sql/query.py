@@ -776,24 +776,16 @@ class Query(BaseExpression):
         if select_mask is None:
             select_mask = {}
         select_mask[opts.pk] = {}
-        # DJANGO-001, DJANGO-002 pseudocode:
-        # FOR each explicitly requested field at the current model level:
-        #     resolve its metadata field from opts; propagate resolution errors.
-        #     IF it is a reverse one-to-one relation:
-        #         use the related model's concrete forward field as the mask key,
-        #         so reverse select_related() column lookup finds the restriction.
-        #     ELSE:
-        #         use the resolved field itself as the mask key.
-        #     retain that key in select_mask alongside the model identity above.
-        #     IF the request has nested field paths:
-        #         reject a non-relation with FieldError;
-        #         recurse into the concrete related model with the nested mask,
-        #         retaining its identity/linking field even when both are one PK.
-        # RETURN the mask containing only requested fields and required identities.
         # Only include fields mentioned in the mask.
         for field_name, field_mask in mask.items():
             field = opts.get_field(field_name)
-            field_select_mask = select_mask.setdefault(field, {})
+            # Retrieve the actual field associated with reverse relationships
+            # as that's what is expected in the select mask.
+            if field in opts.related_objects:
+                field_key = field.field
+            else:
+                field_key = field
+            field_select_mask = select_mask.setdefault(field_key, {})
             if field_mask:
                 if not field.is_relation:
                     raise FieldError(next(iter(field_mask)))

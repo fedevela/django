@@ -56,7 +56,16 @@ class ReverseSelectRelatedTestCase(TestCase):
         requested primary and related fields plus required identity/linking
         columns while leaving all other related fields unselected.
         """
-        pass
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+            self.assertEqual(user.username, "test")
+            self.assertEqual(user.userprofile.state, "KS")
+        self.assertEqual(user.get_deferred_fields(), {"email"})
+        self.assertEqual(user.userprofile.get_deferred_fields(), {"city"})
 
     def test_django_002_reverse_primary_key_o2o_only_restricts_columns(self):
         """
@@ -64,7 +73,16 @@ class ReverseSelectRelatedTestCase(TestCase):
         link is its primary key keeps the shared identity/linking column while
         leaving unrequested related fields unselected.
         """
-        pass
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userstat")
+                .only("username", "userstat__posts")
+                .get(username="test")
+            )
+            self.assertEqual(user.username, "test")
+            self.assertEqual(user.userstat.posts, 150)
+        self.assertEqual(user.get_deferred_fields(), {"email"})
+        self.assertEqual(user.userstat.get_deferred_fields(), {"results_id"})
 
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
@@ -265,6 +283,9 @@ class ReverseSelectRelatedTestCase(TestCase):
             self.assertEqual(p.child1.name2, "n2")
         p = qs.get(name2="n2")
         with self.assertNumQueries(0):
+            self.assertEqual(p.child1.value, 1)
+            self.assertEqual(p.child1.child4.value4, 4)
+        with self.assertNumQueries(2):
             self.assertEqual(p.child1.name1, "n1")
             self.assertEqual(p.child1.child4.name1, "n1")
 
