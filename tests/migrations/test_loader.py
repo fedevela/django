@@ -1,6 +1,7 @@
 import compileall
 import os
 from importlib import import_module
+from unittest import mock
 
 from django.db import connection, connections
 from django.db.migrations.exceptions import (
@@ -18,6 +19,254 @@ class RecorderTests(TestCase):
     Tests recording migrations as applied or not.
     """
     databases = {'default', 'other'}
+
+    # MIGREC-008 recorder-verification architecture:
+    # RecorderTests owns the per-alias storage contract because its boundary is
+    # MigrationRecorder rather than migration orchestration. The recorder's
+    # bound connection is the alias-isolation port; router.allow_migrate_model
+    # is the permission seam; and has_table(), schema_editor(), and migration_qs
+    # are the independently observable schema/query seams. Keep denied and
+    # allowed scenarios separate so permitted-path state cannot satisfy a
+    # denied-path observation. Command-level alias coordination belongs in
+    # MigrateTests, not in this unit-level owner.
+    def test_MIGREC_008_denied_alias_does_not_create_query_insert_or_delete_migration_history(self):
+        """MIGREC-008: Denied aliases remain isolated from recorder I/O."""
+        test_connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(test_connection)
+        operations = {
+            'ensure schema': (recorder.ensure_schema, None),
+            'read': (recorder.applied_migrations, {}),
+            'insert': (
+                lambda: recorder.record_applied('myapp', '0001_initial'),
+                None,
+            ),
+            'delete': (
+                lambda: recorder.record_unapplied('myapp', '0001_initial'),
+                None,
+            ),
+        }
+
+        for operation, (recorder_operation, expected_result) in operations.items():
+            with self.subTest(operation=operation), mock.patch(
+                'django.db.migrations.recorder.router.allow_migrate_model',
+                return_value=False,
+            ) as allow_migrate_model, mock.patch.object(
+                recorder, 'has_table',
+            ) as has_table, mock.patch.object(
+                MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            ) as migration_qs:
+                self.assertEqual(recorder_operation(), expected_result)
+
+            allow_migrate_model.assert_called_once_with(
+                'blocked', recorder.Migration,
+            )
+            has_table.assert_not_called()
+            migration_qs.assert_not_called()
+            test_connection.cursor.assert_not_called()
+            test_connection.schema_editor.assert_not_called()
+
+    def test_MIGREC_008_allowed_alias_retains_create_read_insert_and_delete_migration_history(self):
+        """MIGREC-008: Allowed aliases retain all migration-history behavior."""
+        test_connection = mock.MagicMock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        schema_editor = test_connection.schema_editor.return_value.__enter__.return_value
+        migration_qs = mock.MagicMock()
+        migration = mock.Mock(app='myapp')
+        migration.name = '0001_initial'
+        migration_qs.__iter__.side_effect = [iter([migration]), iter([])]
+
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'has_table',
+            side_effect=[False, True, True, True, True, True],
+        ), mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            return_value=migration_qs,
+        ):
+            recorder.ensure_schema()
+            recorder.ensure_schema()
+            recorder.record_applied('myapp', '0001_initial')
+            applied_migrations = recorder.applied_migrations()
+            recorder.record_unapplied('myapp', '0001_initial')
+            remaining_migrations = recorder.applied_migrations()
+
+        self.assertEqual(
+            allow_migrate_model.call_args_list,
+            [mock.call('allowed', recorder.Migration)] * 8,
+        )
+        schema_editor.create_model.assert_called_once_with(recorder.Migration)
+        migration_qs.create.assert_called_once_with(
+            app='myapp', name='0001_initial',
+        )
+        self.assertEqual(
+            applied_migrations,
+            {('myapp', '0001_initial'): migration},
+        )
+        migration_qs.filter.assert_called_once_with(
+            app='myapp', name='0001_initial',
+        )
+        migration_qs.filter.return_value.delete.assert_called_once_with()
+        self.assertEqual(remaining_migrations, {})
+
+    def test_MIGREC_001_migration_permission_for_internal_model_uses_recorder_connection_alias(self):
+        """MIGREC-001: Each recorder uses its own alias for permission."""
+        recorder = MigrationRecorder(connection)
+        recorder_other = MigrationRecorder(connections['other'])
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            side_effect=lambda alias, model: alias == 'default',
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'has_table', return_value=True,
+        ):
+            recorder.ensure_schema()
+            recorder_other.ensure_schema()
+        self.assertEqual(
+            allow_migrate_model.call_args_list,
+            [
+                mock.call('default', recorder.Migration),
+                mock.call('other', recorder_other.Migration),
+            ],
+        )
+
+    def test_MIGREC_002_ensure_schema_does_not_create_table_when_migration_permission_denied(self):
+        """MIGREC-002: Denied permission leaves django_migrations absent."""
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model:
+            recorder.ensure_schema()
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        connection.cursor.assert_not_called()
+        connection.schema_editor.assert_not_called()
+
+    def test_MIGREC_003_record_applied_is_noop_without_table_when_migration_permission_denied(self):
+        """MIGREC-003: Denied record_applied() neither creates nor writes."""
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+        ) as migration_qs, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema:
+            recorder.record_applied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        ensure_schema.assert_not_called()
+        migration_qs.assert_not_called()
+
+    def test_MIGREC_004_record_unapplied_is_noop_when_migration_permission_denied(self):
+        """MIGREC-004: Denied record_unapplied() neither creates nor deletes."""
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+        ) as migration_qs, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema:
+            recorder.record_unapplied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        ensure_schema.assert_not_called()
+        migration_qs.assert_not_called()
+
+    def test_MIGREC_005_applied_migrations_returns_empty_without_io_when_migration_permission_denied(self):
+        """MIGREC-005: Denied applied_migrations() returns empty without I/O."""
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+        ) as migration_qs, mock.patch.object(
+            recorder, 'has_table',
+        ) as has_table:
+            applied_migrations = recorder.applied_migrations()
+        self.assertEqual(applied_migrations, {})
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        has_table.assert_not_called()
+        migration_qs.assert_not_called()
+
+    def test_MIGREC_006_ensure_schema_creates_table_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder schema creation retains behavior."""
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        schema_editor = test_connection.schema_editor.return_value.__enter__.return_value
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'has_table', return_value=False,
+        ):
+            recorder.ensure_schema()
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
+        schema_editor.create_model.assert_called_once_with(recorder.Migration)
+
+    def test_MIGREC_006_applied_migrations_reads_history_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder history reads retain behavior."""
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        migration = mock.Mock(app='myapp', name='0001_initial')
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'has_table', return_value=True,
+        ), mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            return_value=[migration],
+        ):
+            applied_migrations = recorder.applied_migrations()
+        self.assertEqual(applied_migrations, {('myapp', '0001_initial'): migration})
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
+
+    def test_MIGREC_006_record_applied_inserts_history_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder history inserts retain behavior."""
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        migration_qs = mock.Mock()
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            return_value=migration_qs,
+        ):
+            recorder.record_applied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
+        ensure_schema.assert_called_once_with()
+        migration_qs.create.assert_called_once_with(app='myapp', name='0001_initial')
+
+    def test_MIGREC_006_record_unapplied_deletes_history_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder history deletions retain behavior."""
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        migration_qs = mock.Mock()
+        filtered_qs = migration_qs.filter.return_value
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            return_value=migration_qs,
+        ):
+            recorder.record_unapplied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
+        ensure_schema.assert_called_once_with()
+        migration_qs.filter.assert_called_once_with(app='myapp', name='0001_initial')
+        filtered_qs.delete.assert_called_once_with()
 
     def test_apply(self):
         """

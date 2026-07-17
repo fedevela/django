@@ -31,6 +31,83 @@ class MigrateTests(MigrationTestBase):
     """
     databases = {'default', 'other'}
 
+    # MIGREC-008 command-verification architecture:
+    # MigrateTests owns the multi-database integration contract at the
+    # call_command('migrate', database=...) boundary. Compose one recorder per
+    # connections[alias] and install the recorder-model router through the
+    # settings seam. Observe permitted history through that alias's recorder;
+    # observe denied isolation through connection introspection so verification
+    # never queries a table whose absence is part of the contract. Recorder I/O
+    # details remain owned by RecorderTests.
+    @override_settings(MIGRATION_MODULES={'migrations': 'migrations.test_migrations'})
+    def test_MIGREC_008_processing_keeps_migration_history_only_on_permitted_alias(self):
+        """MIGREC-008: Mixed-alias processing records only permitted history."""
+        class RecorderRouter:
+            def allow_migrate(self, db, app_label, model_name=None, **hints):
+                if app_label == 'migrations' and model_name == 'migration':
+                    return db == 'default'
+                return False
+
+        migration = {'app': 'migrations', 'name': '0001_initial'}
+        recorders = {
+            alias: MigrationRecorder(connections[alias]) for alias in self.databases
+        }
+        for recorder in recorders.values():
+            recorder.migration_qs.filter(**migration).delete()
+
+        denied_recorder = recorders['other']
+        with connections['other'].schema_editor() as editor:
+            editor.delete_model(denied_recorder.Migration)
+        try:
+            with self.settings(DATABASE_ROUTERS=[RecorderRouter()]):
+                call_command(
+                    'migrate', 'migrations', '0001', database='default', fake=True,
+                    verbosity=0,
+                )
+                call_command(
+                    'migrate', 'migrations', '0001', database='other', fake=True,
+                    verbosity=0,
+                )
+
+            self.assertTrue(recorders['default'].has_table())
+            self.assertTrue(
+                recorders['default'].migration_qs.filter(**migration).exists(),
+            )
+            self.assertFalse(denied_recorder.has_table())
+        finally:
+            if not denied_recorder.has_table():
+                with connections['other'].schema_editor() as editor:
+                    editor.create_model(denied_recorder.Migration)
+
+    @override_settings(MIGRATION_MODULES={'migrations': 'migrations.test_migrations'})
+    def test_MIGREC_007_processing_completes_with_history_only_on_recorder_permitted_alias(self):
+        """MIGREC-007: Processing persists history only on the permitted alias."""
+        class RecorderRouter:
+            def allow_migrate(self, db, app_label, model_name=None, **hints):
+                if app_label == 'migrations' and model_name == 'migration':
+                    return db == 'default'
+                return False
+
+        migration = {'app': 'migrations', 'name': '0001_initial'}
+        recorders = {
+            alias: MigrationRecorder(connections[alias]) for alias in self.databases
+        }
+        for recorder in recorders.values():
+            recorder.migration_qs.filter(**migration).delete()
+
+        with self.settings(DATABASE_ROUTERS=[RecorderRouter()]):
+            call_command(
+                'migrate', 'migrations', '0001', database='default', fake=True,
+                verbosity=0,
+            )
+            call_command(
+                'migrate', 'migrations', '0001', database='other', fake=True,
+                verbosity=0,
+            )
+
+        self.assertTrue(recorders['default'].migration_qs.filter(**migration).exists())
+        self.assertFalse(recorders['other'].migration_qs.filter(**migration).exists())
+
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_migrate(self):
         """
