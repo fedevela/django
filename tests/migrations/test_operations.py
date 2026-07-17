@@ -4,6 +4,7 @@ from django.db.migrations.autodetector import MigrationAutodetector
 from django.db.migrations.migration import Migration
 from django.db.migrations.operations.fields import FieldOperation
 from django.db.migrations.state import ModelState, ProjectState
+from django.db.migrations.writer import MigrationWriter
 from django.db.models.functions import Abs
 from django.db.transaction import atomic
 from django.test import SimpleTestCase, override_settings, skipUnlessDBFeature
@@ -2812,47 +2813,14 @@ class OperationTests(OperationTestBase):
 
     def _apply_fk_in_unique_together_changed_to_m2m(self):
         app_label = "test_mig_combined_transition"
-        project_state = self.apply_operations(
-            app_label,
-            ProjectState(),
-            operations=[
-                migrations.CreateModel(
-                    "Target",
-                    fields=[("id", models.AutoField(primary_key=True))],
-                ),
-                migrations.CreateModel(
-                    "Source",
-                    fields=[
-                        ("id", models.AutoField(primary_key=True)),
-                        (
-                            "target",
-                            models.ForeignKey(
-                                "%s.Target" % app_label,
-                                models.CASCADE,
-                            ),
-                        ),
-                        ("name", models.CharField(max_length=20)),
-                    ],
-                    options={"unique_together": {("target", "name")}},
-                ),
-            ],
-        )
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        with connection.schema_editor() as editor:
+            project_state = historical_migration.apply(ProjectState(), editor)
         self.assertUniqueConstraintExists(
             "%s_source" % app_label,
             ["target_id", "name"],
         )
-        target_state = project_state.clone()
-        target_operations = [
-            migrations.AlterUniqueTogether("Source", set()),
-            migrations.RemoveField("Source", "target"),
-            migrations.AddField(
-                "Source",
-                "target",
-                models.ManyToManyField("%s.Target" % app_label),
-            ),
-        ]
-        for operation in target_operations:
-            operation.state_forwards(app_label, target_state)
+        target_state = self._get_fk_to_m2m_target_state(app_label, project_state)
 
         # Exercise the generated combined migration rather than a hand-built
         # approximation of its operation order (GUID: MIG-003/MIG-004/MIG-005).
@@ -2873,6 +2841,48 @@ class OperationTests(OperationTestBase):
         with connection.schema_editor() as editor:
             project_state = migration.apply(project_state, editor)
         return app_label, project_state
+
+    def _get_fk_in_unique_together_migration(self, app_label):
+        migration = Migration("0001_initial", app_label)
+        migration.operations = [
+            migrations.CreateModel(
+                "Target",
+                fields=[("id", models.AutoField(primary_key=True))],
+            ),
+            migrations.CreateModel(
+                "Source",
+                fields=[
+                    ("id", models.AutoField(primary_key=True)),
+                    (
+                        "target",
+                        models.ForeignKey("%s.Target" % app_label, models.CASCADE),
+                    ),
+                    ("name", models.CharField(max_length=20)),
+                ],
+                options={"unique_together": {("target", "name")}},
+            ),
+        ]
+        return migration
+
+    def _get_fk_to_m2m_target_state(self, app_label, project_state):
+        target_state = project_state.clone()
+        for operation in [
+            migrations.AlterUniqueTogether("Source", set()),
+            migrations.RemoveField("Source", "target"),
+            migrations.AddField(
+                "Source",
+                "target",
+                models.ManyToManyField("%s.Target" % app_label),
+            ),
+        ]:
+            operation.state_forwards(app_label, target_state)
+        return target_state
+
+    def _get_combined_transition(self, app_label, project_state):
+        target_state = self._get_fk_to_m2m_target_state(app_label, project_state)
+        changes = MigrationAutodetector(project_state, target_state)._detect_changes()
+        self.assertEqual(len(changes[app_label]), 1)
+        return changes[app_label][0]
 
     def test_mig_003_combined_relationship_transition_applies_without_constraint_count_value_error(
         self,
@@ -2927,43 +2937,209 @@ class OperationTests(OperationTestBase):
         self,
     ):
         """GUID: MIG-006 - Generation leaves previous migration files unchanged."""
-        self.assertTrue(True)
+        app_label = "test_mig_006_files"
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        historical_contents = MigrationWriter(
+            historical_migration, include_header=False
+        ).as_string()
+        project_state = historical_migration.mutate_state(ProjectState())
+
+        self._get_combined_transition(app_label, project_state)
+
+        self.assertEqual(
+            MigrationWriter(
+                historical_migration, include_header=False
+            ).as_string(),
+            historical_contents,
+        )
 
     def test_mig_006_combined_migration_keeps_previous_migration_files_usable(self):
         """GUID: MIG-006 - Existing history remains usable through the transition."""
-        self.assertTrue(True)
+        app_label = "test_mig_006_history"
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        with connection.schema_editor() as editor:
+            project_state = historical_migration.apply(ProjectState(), editor)
+        combined_migration = self._get_combined_transition(app_label, project_state)
+
+        with connection.schema_editor() as editor:
+            project_state = combined_migration.apply(project_state, editor)
+
+        self.assertTableExists("%s_source_target" % app_label)
+        self.assertTrue(
+            project_state.models[app_label, "source"].get_field("target").many_to_many
+        )
 
     def test_mig_007_combined_migration_preserves_unrelated_schema_state(self):
         """GUID: MIG-007 - Unrelated fields, relations, and constraints remain."""
-        self.assertTrue(True)
+        app_label = "test_mig_007_schema"
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        historical_migration.operations.append(
+            migrations.CreateModel(
+                "Unrelated",
+                fields=[
+                    ("id", models.AutoField(primary_key=True)),
+                    ("code", models.CharField(max_length=20, unique=True)),
+                    (
+                        "target",
+                        models.ForeignKey("%s.Target" % app_label, models.CASCADE),
+                    ),
+                ],
+            )
+        )
+        with connection.schema_editor() as editor:
+            project_state = historical_migration.apply(ProjectState(), editor)
+        old_model = project_state.models[app_label, "unrelated"]
+        combined_migration = self._get_combined_transition(app_label, project_state)
+
+        with connection.schema_editor() as editor:
+            new_state = combined_migration.apply(project_state, editor)
+
+        new_model = new_state.models[app_label, "unrelated"]
+        self.assertEqual(new_model.fields, old_model.fields)
+        self.assertColumnExists("%s_unrelated" % app_label, "code")
+        self.assertFKExists(
+            "%s_unrelated" % app_label,
+            ["target_id"],
+            ("%s_target" % app_label, "id"),
+        )
+        self.assertUniqueConstraintExists("%s_unrelated" % app_label, ["code"])
 
     def test_mig_007_combined_migration_preserves_unrelated_application_data(self):
         """GUID: MIG-007 - Unrelated application data remains unchanged."""
-        self.assertTrue(True)
+        app_label = "test_mig_007_data"
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        historical_migration.operations.append(
+            migrations.CreateModel(
+                "Unrelated",
+                fields=[
+                    ("id", models.AutoField(primary_key=True)),
+                    ("payload", models.CharField(max_length=40)),
+                ],
+            )
+        )
+        with connection.schema_editor() as editor:
+            project_state = historical_migration.apply(ProjectState(), editor)
+        Unrelated = project_state.apps.get_model(app_label, "Unrelated")
+        row = Unrelated.objects.create(payload="preserve me")
+        combined_migration = self._get_combined_transition(app_label, project_state)
+
+        with connection.schema_editor() as editor:
+            new_state = combined_migration.apply(project_state, editor)
+
+        Unrelated = new_state.apps.get_model(app_label, "Unrelated")
+        self.assertEqual(
+            Unrelated.objects.values_list("id", "payload").get(),
+            (row.pk, "preserve me"),
+        )
 
     def test_mig_008_combined_migration_applies_on_supported_backend_without_manual_repair(
         self,
     ):
         """GUID: MIG-008 - Supported backends require no manual repair."""
-        self.assertTrue(True)
+        app_label, project_state = self._apply_fk_in_unique_together_changed_to_m2m()
+
+        self.assertTableExists("%s_source_target" % app_label)
+        self.assertTrue(
+            project_state.models[app_label, "source"].get_field("target").many_to_many
+        )
 
     def test_mig_009_independent_unique_together_change_behavior_remains_unchanged(
         self,
     ):
         """GUID: MIG-009 - Independent unique_together behavior remains unchanged."""
-        self.assertTrue(True)
+        app_label = "test_mig_009_unique"
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        with connection.schema_editor() as editor:
+            project_state = historical_migration.apply(ProjectState(), editor)
+        target_state = project_state.clone()
+        migrations.AlterUniqueTogether("Source", set()).state_forwards(
+            app_label, target_state
+        )
+
+        changes = MigrationAutodetector(project_state, target_state)._detect_changes()
+
+        self.assertEqual(len(changes[app_label]), 1)
+        operations = changes[app_label][0].operations
+        self.assertEqual(
+            [type(operation) for operation in operations],
+            [migrations.AlterUniqueTogether],
+        )
+        self.assertEqual(operations[0].unique_together, set())
+        with connection.schema_editor() as editor:
+            changes[app_label][0].apply(project_state, editor)
+        self.assertUniqueConstraintExists(
+            "%s_source" % app_label, ["target_id", "name"], value=False
+        )
+        self.assertColumnExists("%s_source" % app_label, "target_id")
 
     def test_mig_009_other_supported_field_alteration_behavior_remains_unchanged(
         self,
     ):
         """GUID: MIG-009 - Other supported field alterations remain unchanged."""
-        self.assertTrue(True)
+        app_label = "test_mig_009_field"
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        with connection.schema_editor() as editor:
+            project_state = historical_migration.apply(ProjectState(), editor)
+        Target = project_state.apps.get_model(app_label, "Target")
+        Source = project_state.apps.get_model(app_label, "Source")
+        target = Target.objects.create()
+        source = Source.objects.create(target=target, name="preserve me")
+        target_state = project_state.clone()
+        migrations.AlterField(
+            "Source", "name", models.CharField(max_length=40)
+        ).state_forwards(app_label, target_state)
+
+        changes = MigrationAutodetector(project_state, target_state)._detect_changes()
+
+        self.assertEqual(len(changes[app_label]), 1)
+        operations = changes[app_label][0].operations
+        self.assertEqual(
+            [type(operation) for operation in operations], [migrations.AlterField]
+        )
+        self.assertEqual(operations[0].field.max_length, 40)
+        with connection.schema_editor() as editor:
+            new_state = changes[app_label][0].apply(project_state, editor)
+        Source = new_state.apps.get_model(app_label, "Source")
+        self.assertEqual(Source.objects.get(pk=source.pk).name, "preserve me")
+        self.assertEqual(
+            new_state.models[app_label, "source"].get_field("name").max_length,
+            40,
+        )
 
     def test_mig_010_two_migration_remove_constraint_then_convert_relationship_sequence_remains_applicable(
         self,
     ):
         """GUID: MIG-010 - The established two-migration sequence remains applicable."""
-        self.assertTrue(True)
+        app_label = "test_mig_010_sequence"
+        historical_migration = self._get_fk_in_unique_together_migration(app_label)
+        with connection.schema_editor() as editor:
+            project_state = historical_migration.apply(ProjectState(), editor)
+        remove_constraint = Migration("0002_remove_constraint", app_label)
+        remove_constraint.operations = [
+            migrations.AlterUniqueTogether("Source", set())
+        ]
+        with connection.schema_editor() as editor:
+            project_state = remove_constraint.apply(project_state, editor)
+        convert_relationship = Migration("0003_convert_relationship", app_label)
+        convert_relationship.operations = [
+            migrations.RemoveField("Source", "target"),
+            migrations.AddField(
+                "Source",
+                "target",
+                models.ManyToManyField("%s.Target" % app_label),
+            ),
+        ]
+
+        with connection.schema_editor() as editor:
+            project_state = convert_relationship.apply(project_state, editor)
+
+        self.assertUniqueConstraintExists(
+            "%s_source" % app_label, ["target_id", "name"], value=False
+        )
+        self.assertTableExists("%s_source_target" % app_label)
+        self.assertTrue(
+            project_state.models[app_label, "source"].get_field("target").many_to_many
+        )
 
     @skipUnlessDBFeature("allows_multiple_constraints_on_same_fields")
     def test_remove_unique_together_on_pk_field(self):
