@@ -31,6 +31,22 @@ class PasswordResetTokenGenerator:
         """
         Check that a password reset token is correct for a given user.
         """
+        # Pseudocode contract (GUID: PRT-004, PRT-005):
+        # INPUT user, presented_token, current_time, permitted_lifetime
+        # IF user or presented_token is absent:
+        #     REJECT presented_token
+        # PARSE issued_at and signature from presented_token
+        # IF parsing fails:
+        #     REJECT presented_token
+        # DERIVE expected_token from issued_at and the user's current
+        # token-relevant state (primary key, password, last login, and
+        # effective email), using each supported hashing mode in turn
+        # IF presented_token matches no expected_token:
+        #     REJECT presented_token  # PRT-005: established state changes
+        # COMPUTE token_age from current_time and issued_at
+        # IF token_age exceeds permitted_lifetime:
+        #     REJECT presented_token  # PRT-005: expiration remains effective
+        # ACCEPT presented_token      # PRT-004: state unchanged and in lifetime
         if not (user and token):
             return False
         # Parse the token
