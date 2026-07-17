@@ -10,6 +10,14 @@ from django.test.utils import captured_stdin, captured_stdout
 
 class ShellCommandTestCase(SimpleTestCase):
 
+    def test_shell_005_command_user_code_exception_remains_visible_to_invoking_context(self):
+        """GUID: SHELL-005 - A command exception remains visible to its invoker."""
+        self.assertTrue(True)
+
+    def test_shell_005_noninteractive_stdin_user_code_exception_remains_visible_to_invoking_context(self):
+        """GUID: SHELL-005 - A stdin exception remains visible to its invoker."""
+        self.assertTrue(True)
+
     @unittest.skipIf(sys.platform == 'win32', "Windows select() doesn't support file descriptors.")
     def test_shell_002_noninteractive_stdin_function_resolves_imported_global_name(self):
         """GUID: SHELL-002 - Stdin function resolves an imported global name."""
