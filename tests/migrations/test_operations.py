@@ -1,3 +1,4 @@
+import unittest
 from unittest import mock
 
 from django.core.exceptions import FieldDoesNotExist
@@ -694,13 +695,44 @@ class OperationTests(OperationTestBase):
 
         self.assertEqual(schema_editor.method_calls, [])
 
+    def _apply_rmn_003_rename_model(self, app_label):
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(
+            app_label,
+            related_model=True,
+            db_table=db_table,
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        rider_table = "%s_rider" % app_label
+
+        self.assertFKExists(rider_table, ["pony_id"], (db_table, "id"))
+        with CaptureQueriesContext(connection) as captured_queries:
+            with connection.schema_editor() as editor:
+                operation.database_forwards(
+                    app_label, editor, project_state, new_state,
+                )
+        self.assertFKExists(rider_table, ["pony_id"], (db_table, "id"))
+        return [query["sql"] for query in captured_queries]
+
+    @unittest.skipUnless(
+        connection.vendor == "postgresql", "PostgreSQL specific test.",
+    )
     def test_rmn_003_postgresql_rename_model_same_table_does_not_drop_fk_constraints(self):
         """GUID: RMN-003 - Existing foreign-key constraints aren't dropped."""
-        self.assertTrue(True)
+        queries = self._apply_rmn_003_rename_model("test_rmn_003_drop")
 
+        self.assertFalse(any("DROP CONSTRAINT" in query for query in queries))
+
+    @unittest.skipUnless(
+        connection.vendor == "postgresql", "PostgreSQL specific test.",
+    )
     def test_rmn_003_postgresql_rename_model_same_table_does_not_recreate_fk_constraints(self):
         """GUID: RMN-003 - Existing foreign-key constraints aren't recreated."""
-        self.assertTrue(True)
+        queries = self._apply_rmn_003_rename_model("test_rmn_003_create")
+
+        self.assertFalse(any("ADD CONSTRAINT" in query for query in queries))
 
     def test_rename_model_state_forwards(self):
         """
