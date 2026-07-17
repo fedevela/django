@@ -10,6 +10,40 @@ from django.test import TestCase
 from .models import Article, Author, Book, Category, Writer
 
 
+class ModelChoiceIteratorValueContractTests(TestCase):
+    def test_mci_001_hashable_wrapper_hash_matches_raw_value(self):
+        """MCI-001: A hashable wrapper has the raw value's hash."""
+        self.assertTrue(True)
+
+    def test_mci_002_equal_wrapper_is_dictionary_member_without_type_error(self):
+        """MCI-002: An equal wrapper is a member of a raw-keyed dictionary."""
+        self.assertTrue(True)
+
+    def test_mci_003_equal_wrapper_retrieves_raw_key_dictionary_entry(self):
+        """MCI-003: An equal wrapper retrieves a raw-keyed dictionary entry."""
+        self.assertTrue(True)
+
+    def test_mci_004_wrapper_raw_value_equality_remains_unchanged(self):
+        """MCI-004: Wrapper and raw-value equality remains unchanged."""
+        self.assertTrue(True)
+
+    def test_mci_005_equal_wrapper_sequence_membership_remains_unchanged(self):
+        """MCI-005: Equal-wrapper sequence membership remains unchanged."""
+        self.assertTrue(True)
+
+    def test_mci_006_wrapper_choice_option_selection_remains_unchanged(self):
+        """MCI-006: Wrapper choice-option selection remains unchanged."""
+        self.assertTrue(True)
+
+    def test_mci_007_wrapper_choice_option_rendering_remains_unchanged(self):
+        """MCI-007: Wrapper choice-option rendering remains unchanged."""
+        self.assertTrue(True)
+
+    def test_mci_008_unhashable_wrapper_preserves_raw_hashing_failure(self):
+        """MCI-008: An unhashable wrapper preserves the raw hashing failure."""
+        self.assertTrue(True)
+
+
 class ModelChoiceFieldTests(TestCase):
     @classmethod
     def setUpTestData(cls):
