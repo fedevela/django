@@ -1842,6 +1842,11 @@ class QuerySet(AltersData):
     ):
         """
         Helper method for bulk_create() to insert objs one batch at a time.
+
+        Architecture contract (BULKUPSERT-001, BULKUPSERT-002,
+        BULKUPSERT-003): this boundary owns ordered aggregation of rows returned
+        by the insert compiler. Assignment of those rows to model instances
+        remains the responsibility of bulk_create().
         """
         connection = connections[self.db]
         ops = connection.ops

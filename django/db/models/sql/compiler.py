@@ -1621,6 +1621,9 @@ class SQLCompiler:
 
 
 class SQLInsertCompiler(SQLCompiler):
+    # Insert-return boundary for BULKUPSERT-001, BULKUPSERT-002, and
+    # BULKUPSERT-003. The compiler materializes backend-returned fields in
+    # statement row order; QuerySet owns their interpretation and assignment.
     returning_fields = None
     returning_params = ()
 
