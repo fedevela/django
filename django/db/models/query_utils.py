@@ -40,6 +40,9 @@ class Q(tree.Node):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
+        # QEX-003 / QEX-004 architecture: Q owns normalization into logical
+        # tree children. Conditional expressions enter through this boundary;
+        # expression classes must not acquire Q-specific combination rules.
         # QEX-003 / QEX-004 pseudocode -- non-empty Q/Exists disjunction:
         # INPUT: `self` is a non-empty Q, `other` is the candidate operand,
         # and `conn` identifies the requested logical connector.

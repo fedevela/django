@@ -111,6 +111,8 @@ class Combinable:
         return self._combine(other, self.BITXOR, False)
 
     def __or__(self, other):
+        # QEX-003 / QEX-004 integration seam: conditional expression pairs
+        # depend on Q for logical-tree composition and query handoff.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
             return Q(self) | Q(other)
         raise NotImplementedError(
