@@ -986,7 +986,22 @@ class OptimizerTests(SimpleTestCase):
         same-field AlterField operations, optimization remains applicable and
         produces an AddField operation.
         """
-        pass
+        self.assertOptimizesTo(
+            [
+                migrations.AddField("Book", "title", models.TextField()),
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=128)
+                ),
+            ],
+            [
+                migrations.AddField(
+                    "Book", "title", models.CharField(max_length=128)
+                ),
+            ],
+        )
 
     def test_MIGOPT_008_reduced_add_field_preserves_final_effective_definition(self):
         """
@@ -994,7 +1009,26 @@ class OptimizerTests(SimpleTestCase):
         operations are reduced into an AddField, its field definition matches
         the final effective definition represented by the sequence.
         """
-        pass
+        final_field = models.CharField(
+            max_length=128,
+            null=True,
+            help_text="Book title",
+            default=None,
+        )
+        result, _ = self.optimize(
+            [
+                migrations.AddField("Book", "title", models.TextField()),
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                migrations.AlterField("Book", "title", final_field),
+            ],
+            "migrations",
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], migrations.AddField)
+        self.assertIs(result[0].field, final_field)
 
     def test_add_field_delete_field(self):
         """
