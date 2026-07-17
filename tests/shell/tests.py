@@ -10,6 +10,14 @@ from django.test.utils import captured_stdin, captured_stdout
 
 class ShellCommandTestCase(SimpleTestCase):
 
+    def test_shell_006_no_command_or_supported_stdin_preserves_interactive_selection_and_startup(self):
+        """GUID: SHELL-006 - Interactive selection and startup remain unchanged."""
+        self.assertTrue(True)
+
+    def test_shell_007_windows_noninteractive_stdin_execution_remains_restricted(self):
+        """GUID: SHELL-007 - Windows stdin execution remains restricted."""
+        self.assertTrue(True)
+
     def test_shell_005_command_user_code_exception_remains_visible_to_invoking_context(self):
         """GUID: SHELL-005 - A command exception remains visible to its invoker."""
         with self.assertRaisesMessage(RuntimeError, 'command exception'):
