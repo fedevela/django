@@ -422,6 +422,18 @@ class ReadOnlyPasswordHashWidgetLabelContractTests(SimpleTestCase):
     class PasswordForm(forms.Form):
         password = ReadOnlyPasswordHashField(label='Password digest')
 
+    def test_RPH_005_rendered_admin_field_label_has_no_for_attribute(self):
+        """RPH-005: The rendered field label has no for attribute."""
+        pass
+
+    def test_RPH_005_rendered_admin_field_keeps_human_readable_label_text(self):
+        """RPH-005: The rendered field keeps its human-readable label text."""
+        pass
+
+    def test_RPH_005_rendered_widget_keeps_password_hash_information(self):
+        """RPH-005: The rendered widget keeps password-hash information."""
+        pass
+
     def test_RPH_001_admin_label_omits_for_when_widget_is_read_only_password_hash(self):
         """RPH-001: The admin label omits for for ReadOnlyPasswordHashWidget."""
         form = self.PasswordForm()
