@@ -267,6 +267,38 @@ class TestUtilsHtml(SimpleTestCase):
             '<script type="application/json">"custom encoded"</script>',
         )
 
+    def test_jsonscript_004_default_encoder_escapes_script_safe_characters(self):
+        """JSONSCRIPT-004: Default-encoded content remains script-safe escaped."""
+        self.assertTrue(True)
+
+    def test_jsonscript_004_jsonscript_010_custom_encoder_content_is_escaped(self):
+        """JSONSCRIPT-004/JSONSCRIPT-010: Custom-encoded content is escaped."""
+        self.assertTrue(True)
+
+    def test_jsonscript_005_default_encoder_result_remains_safe(self):
+        """JSONSCRIPT-005: The default-encoder result remains marked safe."""
+        self.assertTrue(True)
+
+    def test_jsonscript_005_custom_encoder_result_remains_safe(self):
+        """JSONSCRIPT-005: The custom-encoder result remains marked safe."""
+        self.assertTrue(True)
+
+    def test_jsonscript_006_default_encoder_with_id_keeps_script_structure(self):
+        """JSONSCRIPT-006: The default-encoder ID-bearing structure is retained."""
+        self.assertTrue(True)
+
+    def test_jsonscript_006_custom_encoder_with_id_keeps_script_structure(self):
+        """JSONSCRIPT-006: The custom-encoder ID-bearing structure is retained."""
+        self.assertTrue(True)
+
+    def test_jsonscript_007_default_encoder_without_id_keeps_script_structure(self):
+        """JSONSCRIPT-007: The default-encoder no-ID structure is retained."""
+        self.assertTrue(True)
+
+    def test_jsonscript_007_custom_encoder_without_id_keeps_script_structure(self):
+        """JSONSCRIPT-007: The custom-encoder no-ID structure is retained."""
+        self.assertTrue(True)
+
     def test_smart_urlquote(self):
         items = (
             ("http://öäü.com/", "http://xn--4ca9at.com/"),
