@@ -1,6 +1,7 @@
 import compileall
 import os
 from importlib import import_module
+from unittest import mock
 
 from django.db import connection, connections
 from django.db.migrations.exceptions import (
@@ -21,11 +22,36 @@ class RecorderTests(TestCase):
 
     def test_MIGREC_001_migration_permission_for_internal_model_uses_recorder_connection_alias(self):
         """MIGREC-001: Each recorder uses its own alias for permission."""
-        pass
+        recorder = MigrationRecorder(connection)
+        recorder_other = MigrationRecorder(connections['other'])
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            side_effect=lambda alias, model: alias == 'default',
+        ) as allow_migrate_model, mock.patch.object(
+            MigrationRecorder, 'has_table', return_value=True,
+        ):
+            recorder.ensure_schema()
+            recorder_other.ensure_schema()
+        self.assertEqual(
+            allow_migrate_model.call_args_list,
+            [
+                mock.call('default', recorder.Migration),
+                mock.call('other', recorder_other.Migration),
+            ],
+        )
 
     def test_MIGREC_002_ensure_schema_does_not_create_table_when_migration_permission_denied(self):
         """MIGREC-002: Denied permission leaves django_migrations absent."""
-        pass
+        connection = mock.Mock(alias='blocked')
+        recorder = MigrationRecorder(connection)
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=False,
+        ) as allow_migrate_model:
+            recorder.ensure_schema()
+        allow_migrate_model.assert_called_once_with('blocked', recorder.Migration)
+        connection.cursor.assert_not_called()
+        connection.schema_editor.assert_not_called()
 
     def test_apply(self):
         """
