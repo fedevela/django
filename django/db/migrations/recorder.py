@@ -58,6 +58,18 @@ class MigrationRecorder:
 
     def ensure_schema(self):
         """Ensure the table exists and has the correct schema."""
+        # MIGREC-001 pseudocode — bind permission to this recorder's alias:
+        # migration_allowed = ROUTER.ALLOW_MIGRATE_MODEL(
+        #     database_alias=self.connection.alias,
+        #     model=self.Migration,
+        # )
+        # MIGREC-002 pseudocode — permission gates schema creation:
+        # IF migration_allowed IS FALSE:
+        #     RETURN without opening a schema editor or creating a table
+        # OTHERWISE:
+        #     CONTINUE with the existing table-presence and creation flow
+        # IF that creation flow raises a database error:
+        #     PRESERVE the existing MigrationSchemaMissing failure handoff
         # If the table's there, that's fine - we've never changed its schema
         # in the codebase.
         if self.has_table():
