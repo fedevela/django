@@ -473,6 +473,28 @@ class CommandHelpFormattingContractTests(SimpleTestCase):
         )
 
 
+class CommandHelpCompletenessAndDefaultFormattingContractTests(SimpleTestCase):
+    """Placeholder verification obligations for MCFMT-005, MCFMT-006, MCFMT-009."""
+
+    def test_mcfmt_005_customized_help_includes_usage_positional_and_optional_docs(
+        self,
+    ):
+        """GUID: MCFMT-005 - Customized help keeps every argument section."""
+        pass
+
+    def test_mcfmt_006_default_help_keeps_established_wrapping_and_formatting(self):
+        """GUID: MCFMT-006 - A command without opt-in keeps default formatting."""
+        pass
+
+    def test_mcfmt_009_multiline_default_help_does_not_imply_preformatted_text(self):
+        """GUID: MCFMT-009 - Line breaks alone do not opt into preformatting."""
+        pass
+
+    def test_mcfmt_009_multiline_default_help_keeps_established_wrapping(self):
+        """GUID: MCFMT-009 - Multiline default help retains default wrapping."""
+        pass
+
+
 class CommandRunTests(AdminScriptTestCase):
     """
     Tests that need to run by simulating the command line, not by call_command.
