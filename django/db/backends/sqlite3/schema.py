@@ -252,6 +252,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 if delete_field.name not in index.fields
             ]
 
+        # Architecture ownership — SQLITE-001, SQLITE-003, SQLITE-005,
+        # SQLITE-008: _remake_table owns the temporary model's final field and
+        # constraint topology. Constraint expression internals remain owned by
+        # ddl_references.Expressions when their deferred DDL is retargeted.
         constraints = list(model._meta.constraints)
 
         # Provide isolated instances of the fields to the new model body so
@@ -308,6 +312,10 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         # Delete the old table to make way for the new
         self.delete_model(model, handle_autom2m=False)
 
+        # Integration seam — SQLITE-001, SQLITE-002, SQLITE-005, SQLITE-008:
+        # alter_db_table() retargets deferred Statement references through the
+        # Reference interface. SQLite consumes those statements only after the
+        # temporary table has acquired the original name.
         # Rename the new table to take way for the old
         self.alter_db_table(
             new_model, new_model._meta.db_table, model._meta.db_table,

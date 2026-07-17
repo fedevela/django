@@ -201,6 +201,13 @@ class Statement(Reference):
         return self.template % self.parts
 
 
+# Architecture boundary — SQLITE-001, SQLITE-002, SQLITE-005, SQLITE-008:
+# Expressions is the deferred-DDL reference adapter for expression indexes. It
+# owns expression/column reference identity across table renames; schema editors
+# depend only on the Reference rename contract and remain responsible for when
+# deferred statements are renamed and executed. Backend-specific SQL validity
+# must therefore be preserved inside this boundary without coupling migration
+# operations or the SQLite schema editor to expression-tree internals.
 class Expressions(TableColumns):
     def __init__(self, table, expressions, compiler, quote_value):
         self.compiler = compiler
