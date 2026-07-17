@@ -893,6 +893,12 @@ class RenameIndex(IndexOperation):
     # seam; backend capability policy and physical DDL stay downstream of it, and
     # backend schema editors must not depend on migration state or operation history.
 
+    # Compatibility boundary (RIX-005, RIX-007, RIX-008): this operation owns the
+    # explicit old/new index identity pair and its existing constructor/deconstruct
+    # contract. ProjectState supplies historical index definitions, while only that
+    # resolved pair crosses the SchemaEditor.rename_index() mutation seam; unrelated
+    # index and constraint identities remain outside the operation's ownership.
+
     def __init__(self, model_name, new_name, old_name=None, old_fields=None):
         if not old_name and not old_fields:
             raise ValueError(
