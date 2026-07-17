@@ -1,4 +1,5 @@
 from copy import copy, deepcopy
+from unittest.mock import patch
 
 from django.core.checks import Error
 from django.core.checks.templates import (
@@ -13,6 +14,9 @@ from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 
+# OWNERSHIP — GUID: TPL-006
+# This class and CheckTemplateStringIfInvalidTest retain the established E001
+# and E002 outcome contracts independently of duplicate-library-name coverage.
 class CheckTemplateSettingsAppDirsTest(SimpleTestCase):
     TEMPLATES_APP_DIRS_AND_LOADERS = [
         {
@@ -104,6 +108,10 @@ class CheckTemplateStringIfInvalidTest(SimpleTestCase):
             self.assertEqual(check_string_if_invalid_is_string(None), [self.error1])
 
 
+# OWNERSHIP — GUID: TPL-007, TPL-008
+# This class owns both sides of the E003 regression boundary. Its existing
+# settings helper and discovery seam are shared test infrastructure, so the new
+# cases require no new dependency beyond the existing registered check callable.
 class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
@@ -129,6 +137,188 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
                 },
             },
         }
+
+    def test_tpl_001_repeated_identical_associations_are_one_distinct_module(self):
+        """
+        GUID: TPL-001
+
+        Repeated identical library-name-to-module-path associations from
+        configuration, installed-app discovery, or both are treated as one
+        distinct module.
+        """
+        module_path = (
+            "check_framework.template_test_apps.same_tags_app_1."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", module_path), ("same_tags", module_path)],
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
+
+    def test_tpl_002_one_distinct_module_path_does_not_produce_e003(self):
+        """
+        GUID: TPL-002
+
+        A library name associated with only one distinct module path does not
+        produce templates.E003, regardless of repeated occurrences.
+        """
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
+
+    @override_settings(
+        INSTALLED_APPS=["check_framework.template_test_apps.same_tags_app_1"]
+    )
+    def test_tpl_003_identical_configured_and_discovered_library_does_not_produce_e003(
+        self,
+    ):
+        """
+        GUID: TPL-003
+
+        A configured library and an installed-app-discovered library with the
+        same name and identical module path do not produce templates.E003.
+        """
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
+
+    def test_tpl_004_configured_library_with_distinct_configured_or_discovered_path_produces_e003(
+        self,
+    ):
+        """
+        GUID: TPL-004
+
+        When a configured library name is also associated with a distinct
+        configured or installed-app-discovered module path, the configured
+        library remains in the conflict determination and templates.E003 is
+        produced.
+        """
+        discovered_module_path = (
+            "check_framework.template_test_apps.same_tags_app_2."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", discovered_module_path)],
+        ):
+            self.assertEqual(
+                check_for_template_tags_with_the_same_name(None),
+                [self.error_same_tags],
+            )
+
+    def test_tpl_005_repeated_conflicting_associations_produce_each_distinct_path_once(
+        self,
+    ):
+        """
+        GUID: TPL-005
+
+        When a library name has multiple distinct module paths and any
+        association is collected repeatedly, the templates.E003 diagnostic
+        identifies every distinct conflicting path exactly once.
+        """
+        first_module_path = (
+            "check_framework.template_test_apps.same_tags_app_1."
+            "templatetags.same_tags"
+        )
+        second_module_path = (
+            "check_framework.template_test_apps.same_tags_app_2."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[
+                ("same_tags", first_module_path),
+                ("same_tags", second_module_path),
+                ("same_tags", second_module_path),
+            ],
+        ):
+            self.assertEqual(
+                check_for_template_tags_with_the_same_name(None),
+                [self.error_same_tags],
+            )
+
+    def test_tpl_007_identical_configured_discovered_path_produces_no_e003(
+        self,
+    ):
+        """
+        GUID: TPL-007
+
+        An identical configured-and-discovered association doesn't produce
+        templates.E003.
+        """
+        module_path = (
+            "check_framework.template_test_apps.same_tags_app_1."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", module_path)],
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
+
+    def test_tpl_008_same_name_distinct_module_paths_transition_to_e003(self):
+        """
+        GUID: TPL-008
+
+        A library name associated with distinct module paths continues to
+        produce templates.E003.
+        """
+        discovered_module_path = (
+            "check_framework.template_test_apps.same_tags_app_2."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", discovered_module_path)],
+        ):
+            self.assertEqual(
+                check_for_template_tags_with_the_same_name(None),
+                [self.error_same_tags],
+            )
 
     @override_settings(
         INSTALLED_APPS=[

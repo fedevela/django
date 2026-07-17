@@ -49,16 +49,51 @@ def check_string_if_invalid_is_string(app_configs, **kwargs):
 
 @register(Tags.templates)
 def check_for_template_tags_with_the_same_name(app_configs, **kwargs):
+    # ARCHITECTURE — GUID: TPL-001, TPL-002, TPL-003, TPL-004, TPL-005
+    # This check owns the private association-normalization boundary shared by
+    # settings and installed-app discovery. Both sources feed one per-name,
+    # distinct-module collection; templates.E003 depends only on that normalized
+    # collection, while discovery and template-tag loading remain outside this
+    # module's ownership.
+    # CONTRACT — GUID: TPL-004, TPL-005
+    # Configured associations cross the same normalization boundary as discovered
+    # associations and remain represented by their module paths. The normalized
+    # collection is the sole input to both genuine-conflict classification and
+    # E003 path rendering, so repeated associations cannot become duplicate
+    # diagnostic entries.
+    # PSEUDOCODE — GUID: TPL-001, TPL-002, TPL-003, TPL-004, TPL-005
+    # LOGIC OBLIGATION — GUID: TPL-004
+    # A configured association remains an input to the conflict decision when
+    # the same library name has another, distinct configured or discovered path.
+    # LOGIC OBLIGATION — GUID: TPL-005
+    # A genuine-conflict diagnostic contains every distinct path once, even when
+    # one or more source associations repeat.
+    # INPUT: configured and installed-app-discovered (library name, module path)
+    # associations.
+    # STATE: map each library name to a set of its distinct module paths.
+    # FOR each configured association, add its module path to the name's set and
+    # retain it for the same conflict decision used by discovered associations.
+    # FOR each discovered association, add its module path to the name's set;
+    # an identical configured or previously discovered path leaves the set unchanged.
+    # FOR each library name:
+    #   IF its set contains more than one distinct module path, emit templates.E003
+    #   with a deterministic ordering of all distinct paths, each rendered once.
+    #   ELSE emit no error, regardless of how often or from which sources the sole
+    #   association was collected.
+    # ERROR PATH: a set with multiple paths is the genuine-conflict state and
+    # hands off its name and normalized paths to templates.E003 construction.
+    # NON-ERROR PATH: zero or one distinct path produces no diagnostic.
+    # OUTPUT: all templates.E003 errors produced by the distinct-path decision.
     errors = []
-    libraries = defaultdict(list)
+    libraries = defaultdict(set)
 
     for conf in settings.TEMPLATES:
         custom_libraries = conf.get("OPTIONS", {}).get("libraries", {})
         for module_name, module_path in custom_libraries.items():
-            libraries[module_name].append(module_path)
+            libraries[module_name].add(module_path)
 
     for module_name, module_path in get_template_tag_modules():
-        libraries[module_name].append(module_path)
+        libraries[module_name].add(module_path)
 
     for library_name, items in libraries.items():
         if len(items) > 1:
@@ -66,7 +101,7 @@ def check_for_template_tags_with_the_same_name(app_configs, **kwargs):
                 Error(
                     E003.msg.format(
                         repr(library_name),
-                        ", ".join(repr(item) for item in items),
+                        ", ".join(repr(item) for item in sorted(items)),
                     ),
                     id=E003.id,
                 )
