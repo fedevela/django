@@ -1244,7 +1244,14 @@ class FormsFormsetTestCase(SimpleTestCase):
 
 
 class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
-    """FormSet non-form errors have their own error list classification."""
+    """
+    FormSet non-form errors have their own error list classification.
+
+    NONFORM-010 architecture: this test case owns the direct BaseFormSet
+    classification contract. General, count-limit, and lazy-validation paths
+    enter through formset_factory() and observe the ErrorList returned by
+    BaseFormSet.non_form_errors(); admin integration remains in admin_views.
+    """
 
     @staticmethod
     def custom_clean_formset(error_class=ErrorList):

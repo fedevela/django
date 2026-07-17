@@ -3107,6 +3107,9 @@ class AdminViewUnicodeTest(TestCase):
 
 @override_settings(ROOT_URLCONF='admin_views.urls')
 class AdminViewListEditable(TestCase):
+    # NONFORM-010 architecture: admin classification coverage is owned at this
+    # list-editable response boundary. It consumes the FormSet contract through
+    # response.context['cl'].formset and must not substitute its ErrorList type.
 
     @classmethod
     def setUpTestData(cls):
