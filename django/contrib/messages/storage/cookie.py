@@ -8,6 +8,13 @@ from django.http import SimpleCookie
 from django.utils.safestring import SafeData, mark_safe
 
 
+# Serialization architecture boundary (MSG-001, MSG-002, MSG-004, MSG-005,
+# MSG-006): MessageEncoder and MessageDecoder own the compact Message wire
+# contract. CookieStorage reaches that contract through MessageSerializer;
+# SessionStorage imports the codecs directly; FallbackStorage only composes
+# those two storage backends. Keep extra_tags compatibility decisions here so
+# every serializing backend depends on one representation rather than defining
+# a backend-specific variant.
 class MessageEncoder(json.JSONEncoder):
     """
     Compactly serialize instances of the ``Message`` class as JSON.
