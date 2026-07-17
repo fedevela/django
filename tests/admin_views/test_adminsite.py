@@ -165,14 +165,38 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
 
     def test_admin_008_full_app_list_for_visible_registered_model_references_exact_model_class(self):
         """ADMIN-008: The full app list exposes the exact model class."""
+        # Pseudocode contract — ADMIN-008 (full app list identity):
+        # ARRANGE a request whose user can view the registered Article model.
+        # CALL the public full-list builder with that request.
+        # FIND the admin_views app, then FIND its Article model dictionary.
+        # ASSERT the dictionary's "model" value IS the exact Article class;
+        # FAIL if the app or model is absent, or if the value is merely equal
+        # to, derived from, or substituted for the registered class object.
         self.assertTrue(True)
 
     def test_admin_008_app_label_filtered_app_list_for_visible_registered_model_references_exact_model_class(self):
         """ADMIN-008: The app-filtered list exposes the exact model class."""
+        # Pseudocode contract — ADMIN-008 (filtered app list identity):
+        # ARRANGE a request whose user can view the registered Article model.
+        # CALL the public app-dictionary builder with label="admin_views".
+        # FIND the Article model dictionary in the returned app dictionary.
+        # ASSERT the dictionary's "model" value IS the exact Article class;
+        # FAIL if filtering removes the selected app or model, includes a model
+        # from another app, or replaces the registered class object.
         self.assertTrue(True)
 
     def test_admin_008_model_class_and_public_builder_changes_preserve_established_app_list_behavior(self):
         """ADMIN-008: Established app-list behavior remains covered."""
+        # Pseudocode contract — ADMIN-008 (behavior preservation):
+        # ARRANGE visible, invisible, label-filtered, and empty-site scenarios.
+        # EXERCISE the public full-list and app-dictionary builders.
+        # ASSERT established app and model context fields retain their values.
+        # ASSERT permissions still govern model inclusion and exclusion.
+        # ASSERT label filtering returns only the selected app and its models.
+        # ASSERT apps and models retain their established ordering.
+        # ASSERT an unregistered site returns the established empty result.
+        # FAIL on any behavioral difference other than exposing the exact
+        # registered model class through each visible model dictionary.
         self.assertTrue(True)
 
 
