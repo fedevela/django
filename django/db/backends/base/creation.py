@@ -84,6 +84,9 @@ class BaseDatabaseCreation:
         # and store it on the connection. This slightly horrific process is so people
         # who are testing on databases without transactions or who are using
         # a TransactionTestCase still get a clean database on every test run.
+        # Architecture seam -- GUID: DJANGO-005, DJANGO-009. Test-database
+        # creation owns the lifecycle; the base serializer owns post-schema model
+        # eligibility through the connection's backend-neutral introspection API.
         if serialize:
             self.connection._test_serialized_contents = self.serialize_db_to_string()
 
@@ -107,6 +110,10 @@ class BaseDatabaseCreation:
         Designed only for test runner usage; will not handle large
         amounts of data.
         """
+        # Ownership contract -- GUID: DJANGO-003, DJANGO-005. Existing-table
+        # filtering belongs here, before model managers form querysets; backend
+        # creation subclasses supply introspection through their connection and
+        # need no vendor-specific recovery adapter.
         # Pseudocode -- GUID: DJANGO-003, DJANGO-005.
         # INPUT: the backend-neutral connection after test schema creation.
         # existing_tables <- SET(connection.introspection.table_names()).

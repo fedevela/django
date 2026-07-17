@@ -158,6 +158,9 @@ class MigrationDisabledTestDatabaseLifecycleTests(SimpleTestCase):
 
 
 class MigrationDisabledSerializationContractTests(SimpleTestCase):
+    # Integration boundary -- GUID: DJANGO-003, DJANGO-005, DJANGO-009.
+    # Regression fixtures belong at the base creation contract and enter through
+    # create_test_db(); backend-specific creation suites inherit the behavior.
     def test_django_003_migrate_false_serialization_skips_models_with_absent_tables(self):
         """GUID: DJANGO-003."""
         # Pseudocode -- logic obligation: absent tables are never queried.
