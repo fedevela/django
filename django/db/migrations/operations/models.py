@@ -348,6 +348,21 @@ class RenameModel(ModelOperation):
         #   unequal table names follow the normal RenameModel effects.
         old_model = from_state.apps.get_model(app_label, self.old_name)
         new_model = to_state.apps.get_model(app_label, self.new_name)
+        # GUID: RMN-003
+        # LOGIC OBLIGATION (PostgreSQL foreign-key preservation):
+        # - INPUT: the resolved old and new models, their effective table
+        #   names, and the foreign-key constraints already attached to or
+        #   referencing that table.
+        # - DECISION: evaluate effective table-name equality before handing
+        #   any related field to the schema editor.
+        # - IF equal: terminate this database transition; perform neither the
+        #   foreign-key drop transition nor the foreign-key create transition.
+        # - ELSE: continue the existing rename flow; foreign-key handling is
+        #   outside RMN-003 because the effective table name changed.
+        # - OUTPUT: on equality, preserve every existing foreign-key constraint
+        #   and emit no foreign-key DDL.
+        # - FAILURE: propagate model-resolution failure before this decision;
+        #   do not begin constraint mutation or attempt compensating creation.
         if old_model._meta.db_table == new_model._meta.db_table:
             return
         if self.allow_migrate_model(schema_editor.connection.alias, new_model):
