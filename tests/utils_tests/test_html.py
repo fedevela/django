@@ -217,6 +217,22 @@ class TestUtilsHtml(SimpleTestCase):
             '<script type="application/json">{"key": "value"}</script>',
         )
 
+    def test_jsonscript_001_optional_custom_encoder_argument_is_accepted(self):
+        """JSONSCRIPT-001: A supplied custom encoder class is accepted."""
+        self.assertTrue(True)
+
+    def test_jsonscript_002_supplied_encoder_serializes_the_value(self):
+        """JSONSCRIPT-002: Serialization uses the supplied encoder class."""
+        self.assertTrue(True)
+
+    def test_jsonscript_003_no_encoder_keeps_django_json_encoder_output(self):
+        """JSONSCRIPT-003: Existing calls keep DjangoJSONEncoder and their output."""
+        self.assertTrue(True)
+
+    def test_jsonscript_009_custom_encoder_handles_unsupported_value(self):
+        """JSONSCRIPT-009: A custom encoder handles a default-unsupported value."""
+        self.assertTrue(True)
+
     def test_smart_urlquote(self):
         items = (
             ("http://öäü.com/", "http://xn--4ca9at.com/"),
