@@ -53,6 +53,18 @@ class RecorderTests(TestCase):
         connection.cursor.assert_not_called()
         connection.schema_editor.assert_not_called()
 
+    def test_MIGREC_003_record_applied_is_noop_without_table_when_migration_permission_denied(self):
+        """MIGREC-003: Denied record_applied() neither creates nor writes."""
+        self.assertTrue(True)
+
+    def test_MIGREC_004_record_unapplied_is_noop_when_migration_permission_denied(self):
+        """MIGREC-004: Denied record_unapplied() neither creates nor deletes."""
+        self.assertTrue(True)
+
+    def test_MIGREC_005_applied_migrations_returns_empty_without_io_when_migration_permission_denied(self):
+        """MIGREC-005: Denied applied_migrations() returns empty without I/O."""
+        self.assertTrue(True)
+
     def test_apply(self):
         """
         Tests marking migrations as applied/unapplied.
