@@ -45,9 +45,9 @@ class ResolverMatch:
         self.namespaces = [x for x in namespaces if x] if namespaces else []
         self.namespace = ':'.join(self.namespaces)
 
-        # ResolverMatch owns the stable ordinary-callable display path consumed
-        # by __repr__; request resolution only transports this state (GUID: RPR-005).
-        if not hasattr(func, '__name__'):
+        if isinstance(func, functools.partial):
+            self._func_path = repr(func)
+        elif not hasattr(func, '__name__'):
             # A class-based view
             self._func_path = func.__class__.__module__ + '.' + func.__class__.__name__
         else:
@@ -61,30 +61,8 @@ class ResolverMatch:
         return (self.func, self.args, self.kwargs)[index]
 
     def __repr__(self):
-        # Representation boundary (GUID: RPR-005): partial display adaptation
-        # is isolated here and depends on stored match state. The ordinary-view
-        # contract continues to depend on the initializer-owned _func_path.
-        # Ordinary-view compatibility pseudocode (GUID: RPR-005):
-        # - INPUT: the callable and representation fields retained by this
-        #   ResolverMatch, whether created directly or attached by resolution.
-        # - IF the retained callable is an ordinary non-partial view:
-        #     - Keep self.func as the callable identity; do not unwrap, replace,
-        #       invoke, or otherwise transition the match to a different state.
-        #     - Select the existing self._func_path as its display value.
-        # - ELSE delegate callable display selection to the partial-specific
-        #   path without extending that handling to another callable wrapper.
-        # - FORMAT the selected display value with the existing args, kwargs,
-        #   url_name, app_names, namespaces, and route fields, in their existing
-        #   order and representation format.
-        # - OUTPUT the formatted representation without mutating any field.
-        # - PROPAGATE existing field-formatting failures unchanged; introduce
-        #   no ordinary-view-specific fallback or error state.
-        if isinstance(self.func, functools.partial):
-            func = repr(self.func)
-        else:
-            func = self._func_path
-        return "ResolverMatch(func=%s, args=%s, kwargs=%s, url_name=%s, app_names=%s, namespaces=%s, route=%s)" % (
-            func, self.args, self.kwargs, self.url_name,
+        return "ResolverMatch(func=%s, args=%r, kwargs=%r, url_name=%r, app_names=%r, namespaces=%r, route=%r)" % (
+            self._func_path, self.args, self.kwargs, self.url_name,
             self.app_names, self.namespaces, self.route,
         )
 
