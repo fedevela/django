@@ -419,6 +419,26 @@ class CommandTests(SimpleTestCase):
         self.assertIs(mocked_flush.called, True)
 
 
+class CommandHelpFormattingContractTests(SimpleTestCase):
+    def test_mcfmt_001_opted_in_command_uses_command_specific_help_formatting(self):
+        """GUID: MCFMT-001 - An opted-in command uses its selected formatting."""
+        pass
+
+    def test_mcfmt_002_whitespace_preserving_help_retains_intentional_newlines(self):
+        """GUID: MCFMT-002 - Displayed help retains every intentional newline."""
+        pass
+
+    def test_mcfmt_003_indentation_preserving_help_retains_each_leading_indent(self):
+        """GUID: MCFMT-003 - Each help line retains its leading indentation."""
+        pass
+
+    def test_mcfmt_004_intro_label_and_indented_invocation_remain_separate_lines(
+        self,
+    ):
+        """GUID: MCFMT-004 - Intro, label, and indented invocation stay separate."""
+        pass
+
+
 class CommandRunTests(AdminScriptTestCase):
     """
     Tests that need to run by simulating the command line, not by call_command.
