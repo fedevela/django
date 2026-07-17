@@ -3354,6 +3354,13 @@ class AdminViewListEditable(TestCase):
         """
         GUID: NONFORM-010; admin-exposed error -> nonform configured ErrorList.
         """
+        # GIVEN an admin list-editable submission that makes its FormSet raise
+        # a non-form validation error.
+        # WHEN the admin response exposes that FormSet through its context.
+        # THEN obtain non_form_errors() and assert that the returned object both
+        # carries the ``nonform`` classification and retains the FormSet's
+        # configured ErrorList type.
+        # AND fail if admin handling replaces the list type or its classification.
         pass
 
     def test_list_editable_ordering(self):

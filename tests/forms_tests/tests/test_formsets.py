@@ -1458,18 +1458,36 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
 
     def test_nonform_010_general_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; general error -> nonform classification."""
+        # GIVEN a bound FormSet whose general clean hook raises a non-form error.
+        # WHEN validation produces the FormSet's non-form error list.
+        # THEN assert that the list carries the ``nonform`` classification.
+        # AND fail if the error is absent or classified as a field/form error.
         pass
 
     def test_nonform_010_minimum_count_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; failed minimum count -> nonform classification."""
+        # GIVEN a bound FormSet with minimum-count validation enabled and fewer
+        # submitted forms than its configured minimum.
+        # WHEN validation follows the too-few-forms failure branch.
+        # THEN assert that the resulting non-form error list carries the
+        # ``nonform`` classification.
         pass
 
     def test_nonform_010_maximum_count_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; failed maximum count -> nonform classification."""
+        # GIVEN a bound FormSet with maximum-count validation enabled and more
+        # submitted forms than its configured maximum.
+        # WHEN validation follows the too-many-forms failure branch.
+        # THEN assert that the resulting non-form error list carries the
+        # ``nonform`` classification.
         pass
 
     def test_nonform_010_lazy_validation_error_is_classified_as_nonform(self):
         """GUID: NONFORM-010; non_form_errors() access -> nonform classification."""
+        # GIVEN an unvalidated bound FormSet that will produce a non-form error.
+        # WHEN non_form_errors() is the first validation-triggering access.
+        # THEN assert that validation populates the non-form error list and that
+        # the returned list carries the ``nonform`` classification.
         pass
 
     def test_nonform_011_default_markup_only_adds_nonform_class(self):
