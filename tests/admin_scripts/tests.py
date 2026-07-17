@@ -1895,23 +1895,108 @@ class EarlyParserArgumentVectorContractTests(SimpleTestCase):
 
     def test_DJANGO_004_given_pythonpath_when_early_parser_runs_effect_is_preserved(self):
         """DJANGO-004: Preserve --pythonpath's effect during early parsing."""
-        pass
+        pythonpath = '/example/early-pythonpath'
+        with mock.patch.object(sys, 'path', sys.path[:]), mock.patch(
+            'sys.stdout', new=StringIO(),
+        ):
+            ManagementUtility([
+                'manage.py', 'version', '--pythonpath', pythonpath,
+            ]).execute()
+
+            self.assertEqual(sys.path[0], pythonpath)
 
     def test_DJANGO_005_given_settings_when_early_parser_runs_effect_is_preserved(self):
         """DJANGO-005: Preserve --settings' effect during early parsing."""
-        pass
+        with mock.patch.dict(
+            os.environ, {'DJANGO_SETTINGS_MODULE': 'original.settings'},
+        ), mock.patch('sys.stdout', new=StringIO()):
+            ManagementUtility([
+                'manage.py', 'version', '--settings', 'early.settings',
+            ]).execute()
+
+            self.assertEqual(
+                os.environ['DJANGO_SETTINGS_MODULE'],
+                'early.settings',
+            )
 
     def test_DJANGO_006_when_early_parser_is_initialized_automatic_help_remains_disabled(self):
         """DJANGO-006: Keep automatic help disabled on the early parser."""
-        pass
+        parsers = []
+
+        class InspectingCommandParser(CommandParser):
+            def parse_known_args(self, *args, **kwargs):
+                parsers.append(self)
+                return super().parse_known_args(*args, **kwargs)
+
+        with mock.patch(
+            'django.core.management.CommandParser', InspectingCommandParser,
+        ), mock.patch('sys.stdout', new=StringIO()):
+            ManagementUtility(['manage.py', 'version']).execute()
+
+        self.assertEqual(len(parsers), 1)
+        option_strings = {
+            option
+            for action in parsers[0]._actions
+            for option in action.option_strings
+        }
+        self.assertNotIn('-h', option_strings)
+        self.assertNotIn('--help', option_strings)
 
     def test_DJANGO_007_given_abbreviated_option_early_parser_does_not_accept_it_as_complete(self):
         """DJANGO-007: Do not accept abbreviated early options as complete."""
-        pass
+        parse_results = []
+
+        class ResultCapturingCommandParser(CommandParser):
+            def parse_known_args(self, *args, **kwargs):
+                result = super().parse_known_args(*args, **kwargs)
+                parse_results.append(result)
+                return result
+
+        with mock.patch.dict(
+            os.environ, {'DJANGO_SETTINGS_MODULE': 'original.settings'},
+        ), mock.patch(
+            'django.core.management.CommandParser',
+            ResultCapturingCommandParser,
+        ), mock.patch('sys.stdout', new=StringIO()):
+            ManagementUtility([
+                'manage.py', 'version', '--sett', 'abbreviated.settings',
+            ]).execute()
+
+            self.assertEqual(
+                os.environ['DJANGO_SETTINGS_MODULE'],
+                'original.settings',
+            )
+
+        self.assertEqual(len(parse_results), 1)
+        options, unknown = parse_results[0]
+        self.assertIsNone(options.settings)
+        self.assertIn('--sett', unknown)
 
     def test_DJANGO_009_given_matching_program_names_normal_parsing_behavior_is_preserved(self):
         """DJANGO-009: Preserve normal parsing when program names agree."""
-        pass
+        argv = [
+            'manage.py', 'ordinary', '--settings=early.settings',
+            '--pythonpath=/example/early-pythonpath', '--verbosity=2',
+        ]
+        command = mock.Mock()
+        utility = ManagementUtility(argv)
+        with mock.patch.object(sys, 'argv', argv[:]), mock.patch.object(
+            sys, 'path', sys.path[:],
+        ), mock.patch.dict(
+            os.environ, {'DJANGO_SETTINGS_MODULE': 'original.settings'},
+        ), mock.patch.object(
+            utility, 'fetch_command', return_value=command,
+        ):
+            utility.execute()
+
+            self.assertEqual(utility.prog_name, os.path.basename(sys.argv[0]))
+            self.assertEqual(
+                os.environ['DJANGO_SETTINGS_MODULE'],
+                'early.settings',
+            )
+            self.assertEqual(sys.path[0], '/example/early-pythonpath')
+
+        command.run_from_argv.assert_called_once_with(argv)
 
 
 class ArgumentOrder(AdminScriptTestCase):
