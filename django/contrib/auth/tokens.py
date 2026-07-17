@@ -76,6 +76,13 @@ class PasswordResetTokenGenerator:
         ).hexdigest()[::2]  # Limit to shorten the URL.
         return "%s-%s" % (ts_b36, hash_string)
 
+    # Architecture contract (GUID: PRT-001, PRT-002, PRT-003):
+    # _make_hash_value() owns the configured-email token binding. Keeping the
+    # binding at this private hash-input boundary makes generation and
+    # validation consume the same state without adding a second integration
+    # path. This module depends only on the user contract
+    # get_email_field_name() plus tolerant attribute access; it must not depend
+    # on a concrete user model or require that the configured attribute exists.
     def _make_hash_value(self, user, timestamp):
         """
         Hash the user's primary key and some user state that's sure to change
