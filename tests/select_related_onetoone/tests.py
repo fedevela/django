@@ -50,6 +50,22 @@ class ReverseSelectRelatedTestCase(TestCase):
             u = User.objects.select_related("userprofile").get(username="test")
             self.assertEqual(u.userprofile.state, "KS")
 
+    def test_django_001_reverse_o2o_only_restricts_related_columns(self):
+        """
+        DJANGO-001: select_related() with only() on a reverse one-to-one keeps
+        requested primary and related fields plus required identity/linking
+        columns while leaving all other related fields unselected.
+        """
+        pass
+
+    def test_django_002_reverse_primary_key_o2o_only_restricts_columns(self):
+        """
+        DJANGO-002: select_related() with only() on a reverse one-to-one whose
+        link is its primary key keeps the shared identity/linking column while
+        leaving unrequested related fields unselected.
+        """
+        pass
+
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
             u = User.objects.select_related("userstat__results").get(username="test")
