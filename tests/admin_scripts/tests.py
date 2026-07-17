@@ -17,7 +17,8 @@ from unittest import mock
 from django import conf, get_version
 from django.conf import settings
 from django.core.management import (
-    BaseCommand, CommandError, call_command, color,
+    BaseCommand, CommandError, CommandParser, ManagementUtility, call_command,
+    color,
 )
 from django.core.management.commands.loaddata import Command as LoaddataCommand
 from django.core.management.commands.runserver import (
@@ -1812,6 +1813,190 @@ class Discovery(SimpleTestCase):
             out = StringIO()
             call_command('duplicate', stdout=out)
             self.assertEqual(out.getvalue().strip(), 'simple_app')
+
+
+class EarlyParserArgumentVectorContractTests(SimpleTestCase):
+    def render_early_parser_usage(self, argv, global_argv):
+        rendered_usages = []
+
+        class UsageCapturingCommandParser(CommandParser):
+            def parse_known_args(self, *args, **kwargs):
+                rendered_usages.append(self.format_usage())
+                return super().parse_known_args(*args, **kwargs)
+
+        with mock.patch.object(sys, 'argv', global_argv), mock.patch(
+            'django.core.management.CommandParser',
+            UsageCapturingCommandParser,
+        ), mock.patch('sys.stdout', new=StringIO()):
+            utility = ManagementUtility(argv)
+            utility.execute()
+
+        self.assertEqual(len(rendered_usages), 1)
+        return utility, rendered_usages[0]
+
+    def test_DJANGO_003_early_parser_renders_supplied_argv_program_name(self):
+        """DJANGO-003: Render supplied argv's computed program name in usage."""
+        utility, usage = self.render_early_parser_usage(
+            ['/project/custom-manage.py', 'version'],
+            ['/different/global-manage.py', 'check'],
+        )
+
+        self.assertEqual(utility.prog_name, 'custom-manage.py')
+        self.assertEqual(
+            usage,
+            'usage: custom-manage.py subcommand [options] [args]\n',
+        )
+        self.assertNotIn('global-manage.py', usage)
+
+    def test_DJANGO_008_main_py_argv_renders_python_m_django_program_name(self):
+        """DJANGO-008: Render python -m django in usage for __main__.py argv."""
+        utility, usage = self.render_early_parser_usage(
+            ['/project/django/__main__.py', 'version'],
+            ['/different/global-manage.py', 'check'],
+        )
+
+        self.assertEqual(utility.prog_name, 'python -m django')
+        self.assertEqual(
+            usage,
+            'usage: python -m django subcommand [options] [args]\n',
+        )
+
+    def test_DJANGO_001_early_parser_uses_supplied_argv_program_name(self):
+        """DJANGO-001: The early parser receives ManagementUtility.prog_name."""
+        utility = ManagementUtility(['custom-manage.py', 'version'])
+        with mock.patch(
+            'django.core.management.CommandParser', wraps=CommandParser,
+        ) as parser_class, mock.patch('sys.stdout', new=StringIO()):
+            utility.execute()
+
+        parser_class.assert_called_once_with(
+            prog=utility.prog_name,
+            usage='%(prog)s subcommand [options] [args]',
+            add_help=False,
+            allow_abbrev=False,
+        )
+
+    def test_DJANGO_002_supplied_argv_parses_when_global_program_name_is_none(self):
+        """DJANGO-002: A usable supplied argv is independent of sys.argv[0]."""
+        with mock.patch.object(sys, 'argv', [None]), mock.patch(
+            'sys.stdout', new=StringIO(),
+        ):
+            ManagementUtility(['custom-manage.py', 'version']).execute()
+
+    def test_DJANGO_010_supplied_argv_early_parsing_preserves_global_argv(self):
+        """DJANGO-010: Early parsing leaves process-global sys.argv unchanged."""
+        global_argv = ['global-manage.py', 'check']
+        recorded_argv = global_argv[:]
+        with mock.patch.object(sys, 'argv', global_argv), mock.patch(
+            'sys.stdout', new=StringIO(),
+        ):
+            ManagementUtility(['custom-manage.py', 'version']).execute()
+            self.assertEqual(sys.argv, recorded_argv)
+
+    def test_DJANGO_004_given_pythonpath_when_early_parser_runs_effect_is_preserved(self):
+        """DJANGO-004: Preserve --pythonpath's effect during early parsing."""
+        pythonpath = '/example/early-pythonpath'
+        with mock.patch.object(sys, 'path', sys.path[:]), mock.patch(
+            'sys.stdout', new=StringIO(),
+        ):
+            ManagementUtility([
+                'manage.py', 'version', '--pythonpath', pythonpath,
+            ]).execute()
+
+            self.assertEqual(sys.path[0], pythonpath)
+
+    def test_DJANGO_005_given_settings_when_early_parser_runs_effect_is_preserved(self):
+        """DJANGO-005: Preserve --settings' effect during early parsing."""
+        with mock.patch.dict(
+            os.environ, {'DJANGO_SETTINGS_MODULE': 'original.settings'},
+        ), mock.patch('sys.stdout', new=StringIO()):
+            ManagementUtility([
+                'manage.py', 'version', '--settings', 'early.settings',
+            ]).execute()
+
+            self.assertEqual(
+                os.environ['DJANGO_SETTINGS_MODULE'],
+                'early.settings',
+            )
+
+    def test_DJANGO_006_when_early_parser_is_initialized_automatic_help_remains_disabled(self):
+        """DJANGO-006: Keep automatic help disabled on the early parser."""
+        parsers = []
+
+        class InspectingCommandParser(CommandParser):
+            def parse_known_args(self, *args, **kwargs):
+                parsers.append(self)
+                return super().parse_known_args(*args, **kwargs)
+
+        with mock.patch(
+            'django.core.management.CommandParser', InspectingCommandParser,
+        ), mock.patch('sys.stdout', new=StringIO()):
+            ManagementUtility(['manage.py', 'version']).execute()
+
+        self.assertEqual(len(parsers), 1)
+        option_strings = {
+            option
+            for action in parsers[0]._actions
+            for option in action.option_strings
+        }
+        self.assertNotIn('-h', option_strings)
+        self.assertNotIn('--help', option_strings)
+
+    def test_DJANGO_007_given_abbreviated_option_early_parser_does_not_accept_it_as_complete(self):
+        """DJANGO-007: Do not accept abbreviated early options as complete."""
+        parse_results = []
+
+        class ResultCapturingCommandParser(CommandParser):
+            def parse_known_args(self, *args, **kwargs):
+                result = super().parse_known_args(*args, **kwargs)
+                parse_results.append(result)
+                return result
+
+        with mock.patch.dict(
+            os.environ, {'DJANGO_SETTINGS_MODULE': 'original.settings'},
+        ), mock.patch(
+            'django.core.management.CommandParser',
+            ResultCapturingCommandParser,
+        ), mock.patch('sys.stdout', new=StringIO()):
+            ManagementUtility([
+                'manage.py', 'version', '--sett', 'abbreviated.settings',
+            ]).execute()
+
+            self.assertEqual(
+                os.environ['DJANGO_SETTINGS_MODULE'],
+                'original.settings',
+            )
+
+        self.assertEqual(len(parse_results), 1)
+        options, unknown = parse_results[0]
+        self.assertIsNone(options.settings)
+        self.assertIn('--sett', unknown)
+
+    def test_DJANGO_009_given_matching_program_names_normal_parsing_behavior_is_preserved(self):
+        """DJANGO-009: Preserve normal parsing when program names agree."""
+        argv = [
+            'manage.py', 'ordinary', '--settings=early.settings',
+            '--pythonpath=/example/early-pythonpath', '--verbosity=2',
+        ]
+        command = mock.Mock()
+        utility = ManagementUtility(argv)
+        with mock.patch.object(sys, 'argv', argv[:]), mock.patch.object(
+            sys, 'path', sys.path[:],
+        ), mock.patch.dict(
+            os.environ, {'DJANGO_SETTINGS_MODULE': 'original.settings'},
+        ), mock.patch.object(
+            utility, 'fetch_command', return_value=command,
+        ):
+            utility.execute()
+
+            self.assertEqual(utility.prog_name, os.path.basename(sys.argv[0]))
+            self.assertEqual(
+                os.environ['DJANGO_SETTINGS_MODULE'],
+                'early.settings',
+            )
+            self.assertEqual(sys.path[0], '/example/early-pythonpath')
+
+        command.run_from_argv.assert_called_once_with(argv)
 
 
 class ArgumentOrder(AdminScriptTestCase):
