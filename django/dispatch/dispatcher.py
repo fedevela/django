@@ -1,9 +1,13 @@
+import logging
 import threading
 import warnings
 import weakref
 
 from django.utils.deprecation import RemovedInDjango40Warning
 from django.utils.inspect import func_accepts_kwargs
+
+
+logger = logging.getLogger('django.dispatch')
 
 
 def _make_id(target):
@@ -153,6 +157,9 @@ class Signal:
     def has_listeners(self, sender=None):
         return bool(self._live_receivers(sender))
 
+    # GUID: SIGROB-009 - Signal.send owns the non-robust dispatch contract.
+    # Its only dispatch seam is receiver resolution through _live_receivers();
+    # send_robust is a sibling boundary, never a dependency of this path.
     def send(self, sender, **named):
         """
         Send signal from sender to all connected receivers.
@@ -171,6 +178,17 @@ class Signal:
 
         Return a list of tuple pairs [(receiver, response), ... ].
         """
+        # GUID: SIGROB-009 - Preserve non-robust signal dispatch behavior.
+        # LOGIC OBLIGATION:
+        #   INPUT sender and named receiver arguments.
+        #   IF no receiver can be dispatched for sender, RETURN an empty list.
+        #   OTHERWISE, FOR EACH live receiver in established dispatch order:
+        #     INVOKE receiver with this signal, sender, and named arguments.
+        #     IF invocation succeeds, APPEND (receiver, response) in that order.
+        #     IF invocation raises, PROPAGATE the exception immediately and STOP;
+        #       DO NOT catch or log it, convert it to a result, or continue dispatch.
+        #   RETURN the ordered successful receiver-response pairs.
+        #   KEEP Signal.send_robust() error handling isolated from this procedure.
         if not self.receivers or self.sender_receivers_cache.get(sender) is NO_RECEIVERS:
             return []
 
@@ -208,6 +226,10 @@ class Signal:
             try:
                 response = receiver(signal=self, sender=sender, **named)
             except Exception as err:
+                logger.error(
+                    'Error calling %s in Signal.send_robust() (%s)',
+                    receiver.__qualname__, err, exc_info=err,
+                )
                 responses.append((receiver, err))
             else:
                 responses.append((receiver, response))
