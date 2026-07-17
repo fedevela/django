@@ -679,7 +679,6 @@ class URLField(CharField):
         super().__init__(strip=True, **kwargs)
 
     def to_python(self, value):
-
         def split_url(url):
             """
             Return a list of url parts via urlparse.urlsplit(), or raise
