@@ -57,37 +57,105 @@ class JoinTests(SimpleTestCase):
 
 
 class JoinContractTraceabilityTests(SimpleTestCase):
+    @setup(
+        {
+            "join_001": (
+                "{% autoescape off %}{{ values|join:separator }}{% endautoescape %}"
+            )
+        }
+    )
     def test_join_001_autoescape_disabled_context_separator_returns_direct_join(self):
         """JOIN-001: Preserve items and a context separator without escaping."""
-        pass
+        values = ["<first>", "second & last"]
+        separator = " <&> "
+        output = self.engine.render_to_string(
+            "join_001", {"values": values, "separator": separator}
+        )
+        self.assertEqual(output, separator.join(values))
 
+    @setup({"join_002": "{{ values|join:separator }}"})
     def test_join_002_autoescape_enabled_escapes_items_and_separator(self):
         """JOIN-002: Preserve HTML-safe escaping for items and the separator."""
-        pass
+        output = self.engine.render_to_string(
+            "join_002",
+            {"values": ["<first>", "second & last"], "separator": " <&> "},
+        )
+        self.assertEqual(
+            output, "&lt;first&gt; &lt;&amp;&gt; second &amp; last"
+        )
 
+    @setup(
+        {
+            "literal": (
+                '{% autoescape off %}{{ values|join:"<&>" }}{% endautoescape %}'
+            ),
+            "context": (
+                "{% autoescape off %}{{ values|join:separator }}{% endautoescape %}"
+            ),
+        }
+    )
     def test_join_003_autoescape_disabled_literal_and_context_separators_match(self):
         """JOIN-003: Apply disabled autoescape consistently to both separator forms."""
-        pass
+        context = {"values": ["<first>", "second & last"], "separator": "<&>"}
+        literal = self.engine.render_to_string("literal", context)
+        contextual = self.engine.render_to_string("context", context)
+        self.assertEqual(literal, contextual)
+        self.assertEqual(literal, "<first><&>second & last")
 
+    @setup(
+        {
+            "literal": '{{ values|join:"<&>" }}',
+            "context": "{{ values|join:separator }}",
+        }
+    )
     def test_join_003_autoescape_enabled_literal_and_context_separators_match(self):
         """JOIN-003: Apply enabled autoescape consistently to both separator forms."""
-        pass
+        context = {
+            "values": ["<first>", "second & last"],
+            "separator": mark_safe("<&>"),
+        }
+        literal = self.engine.render_to_string("literal", context)
+        contextual = self.engine.render_to_string("context", context)
+        self.assertEqual(literal, contextual)
+        self.assertEqual(literal, "&lt;first&gt;<&>second &amp; last")
 
+    @setup(
+        {
+            "join_004": (
+                "{% autoescape off %}{{ values|join:separator }}{% endautoescape %}"
+            )
+        }
+    )
     def test_join_004_autoescape_disabled_preserves_order_contents_and_semantics(self):
         """JOIN-004: Preserve valid joining behavior with autoescape disabled."""
-        pass
+        values = ("third >", "<first>", "second &")
+        separator = " :: "
+        output = self.engine.render_to_string(
+            "join_004", {"values": values, "separator": separator}
+        )
+        self.assertEqual(output, separator.join(values))
 
+    @setup({"join_004": "{{ values|join:separator }}"})
     def test_join_004_autoescape_enabled_preserves_order_contents_and_semantics(self):
         """JOIN-004: Preserve valid joining behavior with autoescape enabled."""
-        pass
+        output = self.engine.render_to_string(
+            "join_004",
+            {
+                "values": ("third >", "<first>", "second &"),
+                "separator": " :: ",
+            },
+        )
+        self.assertEqual(output, "third &gt; :: &lt;first&gt; :: second &amp;")
 
     def test_join_005_autoescape_disabled_noniterable_preserves_fallback(self):
         """JOIN-005: Preserve the noniterable fallback with autoescape disabled."""
-        pass
+        value = object()
+        self.assertIs(join(value, "<&>", autoescape=False), value)
 
     def test_join_005_autoescape_enabled_noniterable_preserves_fallback(self):
         """JOIN-005: Preserve the noniterable fallback with autoescape enabled."""
-        pass
+        value = object()
+        self.assertIs(join(value, "<&>", autoescape=True), value)
 
 
 class FunctionTests(SimpleTestCase):
@@ -103,7 +171,7 @@ class FunctionTests(SimpleTestCase):
     def test_autoescape_off(self):
         self.assertEqual(
             join(["<a>", "<img>", "</a>"], "<br>", autoescape=False),
-            "<a>&lt;br&gt;<img>&lt;br&gt;</a>",
+            "<a><br><img><br></a>",
         )
 
     def test_noniterable_arg(self):

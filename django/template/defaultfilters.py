@@ -610,7 +610,8 @@ def join(value, arg, autoescape=True):
     try:
         if autoescape:
             value = [conditional_escape(v) for v in value]
-        data = conditional_escape(arg).join(value)
+            arg = conditional_escape(arg)
+        data = arg.join(value)
     except TypeError:  # Fail silently if arg isn't iterable.
         return value
     return mark_safe(data)
