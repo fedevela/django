@@ -314,9 +314,31 @@ class RenameModel(ModelOperation):
         )
 
     def state_forwards(self, app_label, state):
+        # GUID: RMN-001
+        # LOGIC OBLIGATION:
+        # - INPUT: app_label, old_name, new_name, and the current migration
+        #   state; effective database table equality does not alter this flow.
+        # - TRANSITION: rename the state identity from old_name to new_name,
+        #   removing the old state key, creating the new state key, preserving
+        #   the model definition, and updating references to its identity.
+        # - OUTPUT: state contains only the new model identity.
+        # - FAILURE: propagate an invalid or missing state identity error; do
+        #   not substitute a database-table decision for the state transition.
         state.rename_model(app_label, self.old_name, self.new_name)
 
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        # GUID: RMN-002
+        # LOGIC OBLIGATION:
+        # - INPUT: resolve the old model from from_state and the renamed model
+        #   from to_state; failure to resolve either model propagates before
+        #   any schema mutation.
+        # - DECISION: compare the models' effective _meta.db_table names.
+        # - IF equal: return with no schema_editor calls, including table,
+        #   related-field, or M2M alterations.
+        # - ELSE IF migration is disallowed: return with no schema mutation.
+        # - ELSE: execute the existing database-visible rename flow.
+        # - OUTPUT: equal table names leave the database schema unchanged;
+        #   unequal table names follow the normal RenameModel effects.
         new_model = to_state.apps.get_model(app_label, self.new_name)
         if self.allow_migrate_model(schema_editor.connection.alias, new_model):
             old_model = from_state.apps.get_model(app_label, self.old_name)
