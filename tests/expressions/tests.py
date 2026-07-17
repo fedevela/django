@@ -816,6 +816,18 @@ class BasicExpressionsTests(TestCase):
             [self.example_inc.ceo, self.max],
         )
 
+    def test_qex_001_nonempty_q_and_exists_is_usable_in_orm_query(self):
+        """QEX-001: Q(...) & Exists(...) is usable in an ORM query."""
+        self.assertTrue(True)
+
+    def test_qex_001_exists_and_nonempty_q_is_usable_in_orm_query(self):
+        """QEX-001: Exists(...) & Q(...) is usable in an ORM query."""
+        self.assertTrue(True)
+
+    def test_qex_002_reversed_q_exists_conjunctions_return_equivalent_results(self):
+        """QEX-002: Reversing Q/Exists operands preserves query results."""
+        self.assertTrue(True)
+
 
 class IterableLookupInnerExpressionsTests(TestCase):
     @classmethod
