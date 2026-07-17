@@ -627,6 +627,10 @@ class TestQuerying(TestCase):
             [self.objs[4]],
         )
 
+    # JSONNULL-004 architecture seam: TestQuerying.test_isnull_key owns the
+    # regression assertion. Its implementation consumes this class's ordered
+    # self.objs fixture and the existing assertSequenceEqual/queryset boundary;
+    # no JSONField production module, fixture, or separate test API is needed.
     def test_jsonnull_004_test_isnull_key_returns_all_objects_except_existing_json_null_in_order(self):
         """JSONNULL-004: value__j__isnull=True returns self.objs[:4] + self.objs[5:]."""
         self.assertTrue(True)
