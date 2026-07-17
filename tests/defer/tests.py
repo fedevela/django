@@ -32,6 +32,12 @@ class OnlyThenDeferContractTests(TestCase):
             name="p1", value="v1", related=secondary,
         )
 
+    def assert_initially_loaded_fields(self, obj, expected):
+        concrete_fields = {field.attname for field in obj._meta.concrete_fields}
+        with self.assertNumQueries(0):
+            loaded_fields = concrete_fields - obj.get_deferred_fields()
+        self.assertEqual(loaded_fields, expected)
+
     def test_defer_001_only_name_then_defer_name_selects_only_primary_key(self):
         """GUID: DEFER-001"""
         obj = Primary.objects.only("name").defer("name").get(pk=self.primary.pk)
@@ -112,7 +118,10 @@ class OnlyThenDeferContractTests(TestCase):
         #       fields remain deferred, preserving established only() behavior.
         #   FAILURE PATH: fail if evaluation changes the selected-field boundary
         #       or if inspecting deferred state triggers an additional query.
-        pass
+        with self.assertNumQueries(1):
+            obj = Primary.objects.only("name").get(pk=self.primary.pk)
+
+        self.assert_initially_loaded_fields(obj, {"id", "name"})
 
     def test_defer_008_valid_defer_outside_affected_chain_preserves_selected_fields(self):
         """GUID: DEFER-008"""
@@ -125,7 +134,12 @@ class OnlyThenDeferContractTests(TestCase):
         #       including the primary key, remains initially loaded.
         #   FAILURE PATH: fail if unrelated fields change loading state or if
         #       inspecting deferred state triggers an additional query.
-        pass
+        with self.assertNumQueries(1):
+            obj = Primary.objects.defer("name").get(pk=self.primary.pk)
+
+        self.assert_initially_loaded_fields(
+            obj, {"id", "value", "related_id"},
+        )
 
     def test_defer_009_unevaluated_only_defer_chain_executes_no_queries(self):
         """GUID: DEFER-009"""
@@ -139,7 +153,9 @@ class OnlyThenDeferContractTests(TestCase):
         #       transition from construction state to execution state.
         #   FAILURE PATH: any query during chaining, or premature result-cache
         #       population, violates laziness and fails the regression case.
-        pass
+        with self.assertNumQueries(0):
+            queryset = Primary.objects.only("name").defer("name")
+            self.assertIsNone(queryset._result_cache)
 
     def test_defer_010_affected_chain_initial_columns_ignore_backend_quoting(self):
         """GUID: DEFER-010"""
@@ -157,7 +173,35 @@ class OnlyThenDeferContractTests(TestCase):
         #       COMPARE field-name sets, never rendered SQL or quoted identifiers.
         #   FAILURE PATH: fail on any missing or extra selected field; do not
         #       normalize, strip, or assume a database backend's quoting syntax.
-        pass
+        primary_key = Primary._meta.pk.attname
+        cases = (
+            (
+                "only name then defer name",
+                Primary.objects.only("name").defer("name"),
+                {primary_key},
+            ),
+            (
+                "only name then defer name and value",
+                Primary.objects.only("name").defer("name").defer("value"),
+                {primary_key},
+            ),
+            (
+                "only name and value then defer name",
+                Primary.objects.only("name", "value").defer("name"),
+                {primary_key, "value"},
+            ),
+            (
+                "only name and value then defer both",
+                Primary.objects.only("name", "value").defer("name").defer("value"),
+                {primary_key},
+            ),
+        )
+
+        for description, queryset, expected in cases:
+            with self.subTest(description):
+                with self.assertNumQueries(1):
+                    obj = queryset.get(pk=self.primary.pk)
+                self.assert_initially_loaded_fields(obj, expected)
 
 
 class DeferTests(AssertionMixin, TestCase):
