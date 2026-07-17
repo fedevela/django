@@ -327,11 +327,39 @@ class BaseCommand:
         #       emit them in the same order as three separate output lines;
         #       retain the invocation's leading indentation.
         #
+        # MCFMT-005:
+        #   AFTER selecting command-specific help formatting:
+        #       construct the parser with the command's usage and description;
+        #       register every positional argument and every optional argument;
+        #       WHEN help is rendered:
+        #           emit the usage section;
+        #           emit documentation for all registered positional arguments;
+        #           emit documentation for all registered optional arguments.
+        #   The formatting selection changes presentation only; it must not
+        #   remove any part of the parser's argument model.
+        #
+        # MCFMT-006:
+        #   IF the command has not explicitly selected customized formatting:
+        #       select the established default formatter;
+        #       pass the command help and complete argument model to it without
+        #       altering the established wrapping, ordering, or section format.
+        #
+        # MCFMT-009:
+        #   determine customized formatting from explicit command selection,
+        #   not from the presence of newline characters in the help text;
+        #   IF multiline help has no explicit customized-formatting selection:
+        #       follow the MCFMT-006 default branch;
+        #       treat the text as an ordinary description and apply the
+        #       established default wrapping and formatting.
+        #
         # OUTPUT: a parser whose command description follows the selected
-        # formatting behavior when help is rendered.
+        # formatting behavior when help is rendered and whose help retains the
+        # complete usage, positional-argument, and optional-argument sections.
         # FAILURE: if a selected behavior cannot format the help text, surface
         # that failure through the parser help-formatting path; do not silently
-        # substitute the default behavior and violate the command's selection.
+        # substitute the default behavior and violate the command's selection;
+        # likewise, do not infer a fallback or customized branch from help-text
+        # line breaks, and do not return partially rendered argument sections.
         # MCFMT-001 integration seam: parser construction receives the
         # command-owned formatter selection here. The existing
         # DjangoHelpFormatter argument is the default side of that contract.
