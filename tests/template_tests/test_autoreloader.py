@@ -93,9 +93,18 @@ class TemplateReloadTests(SimpleTestCase):
     }],
 )
 class EncompassingTemplateDirectoryTests(SimpleTestCase):
-    def test_arld_002_saving_settings_in_base_dir_template_dirs_triggers_autoreload(self):
+    @mock.patch('django.template.autoreload.reset_loaders')
+    @mock.patch('django.utils.autoreload.trigger_reload')
+    def test_arld_002_saving_settings_in_base_dir_template_dirs_triggers_autoreload(
+        self, mock_trigger_reload, mock_reset_loaders,
+    ):
         """ARLD-002: Saving settings.py under a BASE_DIR template dir reloads."""
-        self.assertTrue(True)
+        settings_file = ROOT / 'settings.py'
+
+        utils_autoreload.BaseReloader().notify_file_changed(settings_file)
+
+        mock_trigger_reload.assert_called_once_with(settings_file)
+        mock_reset_loaders.assert_not_called()
 
     @mock.patch('django.utils.autoreload.trigger_reload')
     def test_arld_001_saving_monitored_non_template_file_in_base_dir_triggers_autoreload(self, mock_trigger_reload):
