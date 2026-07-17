@@ -118,7 +118,7 @@ def create_permissions(
     )
 
     perms = [
-        Permission(codename=codename, name=name, content_type=ct)
+        Permission(codename=codename, name=name, content_type_id=ct.pk)
         for ct, (codename, name) in searched_perms
         if (ct.pk, codename) not in all_perms
     ]

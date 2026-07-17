@@ -1495,23 +1495,115 @@ class MigrationDatabaseTraceabilityTests(TestCase):
     # across distinct databases without relocating these existing obligations.
     databases = {"default", "other"}
 
+    @staticmethod
+    def _permission(using):
+        return Permission.objects.using(using).get(
+            content_type__app_label="auth",
+            content_type__model="permission",
+            codename="add_permission",
+        )
+
+    def _remove_other_permission_content_type(self):
+        """Give auth.Permission content types different keys on each database."""
+        ContentType.objects.clear_cache()
+        default_content_type = ContentType.objects.db_manager(
+            "default"
+        ).get_for_model(Permission)
+        other_content_type = ContentType.objects.db_manager("other").get_for_model(
+            Permission
+        )
+        Permission.objects.using("other").filter(
+            content_type=other_content_type
+        ).delete()
+        other_content_type.delete(using="other")
+        ContentType.objects.using("other").get_or_create(
+            app_label="migdb",
+            model="marker",
+        )
+        return default_content_type
+
+    def assertPermissionContentTypeDatabase(self, permission, using):
+        self.assertEqual(permission._state.db, using)
+        content_type = ContentType.objects.using(using).get(
+            pk=permission.content_type_id
+        )
+        self.assertEqual(content_type.app_label, "auth")
+        self.assertEqual(content_type.model, "permission")
+
     def test_MIGDB_001_explicit_alias_confines_migration_lifecycle(self):
         """GUID: MIGDB-001 — explicit alias -> all lifecycle operations use it."""
-        pass
+        self._remove_other_permission_content_type()
+
+        with self.assertNumQueries(0, using="default"):
+            call_command(
+                "migrate",
+                database="other",
+                interactive=False,
+                verbosity=0,
+            )
+
+        self.assertPermissionContentTypeDatabase(self._permission("other"), "other")
 
     def test_MIGDB_002_selected_database_supplies_permission_content_type(self):
         """GUID: MIGDB-002 — selected database -> related content type comes from it.
         """
-        pass
+        default_content_type = self._remove_other_permission_content_type()
+
+        create_permissions(
+            apps.get_app_config("auth"),
+            interactive=False,
+            verbosity=0,
+            using="other",
+        )
+
+        permission = self._permission("other")
+        self.assertNotEqual(permission.content_type_id, default_content_type.pk)
+        self.assertPermissionContentTypeDatabase(permission, "other")
 
     def test_MIGDB_003_bound_operations_bypass_read_write_routers(self):
         """GUID: MIGDB-003 — bound operations -> no router read/write selection."""
-        pass
+        self._remove_other_permission_content_type()
+        database_router = mock.Mock()
+        database_router.allow_migrate.return_value = True
+        database_router.db_for_read.side_effect = AssertionError(
+            "Unexpected database read selection."
+        )
+        database_router.db_for_write.side_effect = AssertionError(
+            "Unexpected database write selection."
+        )
+
+        with override_settings(DATABASE_ROUTERS=[database_router]):
+            create_permissions(
+                apps.get_app_config("auth"),
+                interactive=False,
+                verbosity=0,
+                using="other",
+            )
+
+        database_router.db_for_read.assert_not_called()
+        database_router.db_for_write.assert_not_called()
 
     def test_MIGDB_006_prior_behavior_detects_wrong_content_type_database(self):
         """GUID: MIGDB-006 — prior behavior -> wrong database is detected."""
-        pass
+        default_content_type = self._remove_other_permission_content_type()
+        wrong_permission = Permission(
+            codename="add_permission",
+            name="Can add permission",
+            content_type=default_content_type,
+        )
+
+        with self.assertRaises(AssertionError):
+            self.assertPermissionContentTypeDatabase(wrong_permission, "other")
 
     def test_MIGDB_006_corrected_behavior_uses_using_content_type_database(self):
         """GUID: MIGDB-006 — corrected behavior -> provenance matches ``using``."""
-        pass
+        self._remove_other_permission_content_type()
+
+        create_permissions(
+            apps.get_app_config("auth"),
+            interactive=False,
+            verbosity=0,
+            using="other",
+        )
+
+        self.assertPermissionContentTypeDatabase(self._permission("other"), "other")
