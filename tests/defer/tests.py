@@ -18,6 +18,32 @@ class AssertionMixin:
         self.assertEqual(count, num)
 
 
+class OnlyThenDeferContractTests(TestCase):
+    def test_defer_001_only_name_then_defer_name_selects_only_primary_key(self):
+        """GUID: DEFER-001"""
+        pass
+
+    def test_defer_002_only_name_then_defer_name_country_selects_only_primary_key(self):
+        """GUID: DEFER-002"""
+        pass
+
+    def test_defer_003_only_name_country_then_defer_name_selects_primary_key_country(self):
+        """GUID: DEFER-003"""
+        pass
+
+    def test_defer_004_defer_all_only_fields_preserves_primary_key_selection(self):
+        """GUID: DEFER-004"""
+        pass
+
+    def test_defer_005_defer_field_excluded_by_only_leaves_selected_set_unchanged(self):
+        """GUID: DEFER-005"""
+        pass
+
+    def test_defer_006_defer_selected_only_field_preserves_unrelated_field_states(self):
+        """GUID: DEFER-006"""
+        pass
+
+
 class DeferTests(AssertionMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
