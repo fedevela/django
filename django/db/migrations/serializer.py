@@ -163,6 +163,21 @@ class FrozensetSerializer(BaseUnorderedSequenceSerializer):
 
 class FunctionTypeSerializer(BaseSerializer):
     def serialize(self):
+        # MIGSER-003 -- generated migration import and application flow:
+        # INPUT: a field default bound to a class nested beneath an importable
+        # module, and a migration operation containing its serialized reference.
+        # SERIALIZE the reference as <module>.<complete owner qualname>.<method>
+        # and EMIT the matching module import with the migration definition.
+        # ON migration import:
+        #   IMPORT the module, then RESOLVE every owner and method component in
+        #   order; IF any component is absent, FAIL import with the resulting
+        #   missing-attribute error and do not mark the migration as imported.
+        #   OTHERWISE bind the resolved default and TRANSITION to IMPORTED.
+        # ON migration application from IMPORTED:
+        #   HAND OFF the operation containing that already-resolved default to
+        #   the migration executor; TRANSITION to APPLIED when it completes.
+        # OUTPUT: an imported, applicable migration without a missing-attribute
+        # failure caused by the serialized default. Do not invoke the default.
         if getattr(self.value, "__self__", None) and isinstance(
             self.value.__self__, type
         ):
