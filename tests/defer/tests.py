@@ -19,29 +19,70 @@ class AssertionMixin:
 
 
 class OnlyThenDeferContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        secondary = Secondary.objects.create(first="x1", second="y1")
+        cls.primary = Primary.objects.create(
+            name="p1", value="v1", related=secondary,
+        )
+
     def test_defer_001_only_name_then_defer_name_selects_only_primary_key(self):
         """GUID: DEFER-001"""
-        pass
+        obj = Primary.objects.only("name").defer("name").get(pk=self.primary.pk)
+
+        self.assertEqual(obj.get_deferred_fields(), {"name", "value", "related_id"})
 
     def test_defer_002_only_name_then_defer_name_country_selects_only_primary_key(self):
         """GUID: DEFER-002"""
-        pass
+        obj = (
+            Primary.objects.only("name")
+            .defer("name")
+            .defer("value")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.get_deferred_fields(), {"name", "value", "related_id"})
 
     def test_defer_003_only_name_country_then_defer_name_selects_primary_key_country(self):
         """GUID: DEFER-003"""
-        pass
+        obj = (
+            Primary.objects.only("name", "value")
+            .defer("name")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.get_deferred_fields(), {"name", "related_id"})
+        self.assertEqual(obj.value, "v1")
 
     def test_defer_004_defer_all_only_fields_preserves_primary_key_selection(self):
         """GUID: DEFER-004"""
-        pass
+        obj = (
+            Primary.objects.only("name", "value")
+            .defer("name")
+            .defer("value")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.pk, self.primary.pk)
+        self.assertEqual(obj.get_deferred_fields(), {"name", "value", "related_id"})
 
     def test_defer_005_defer_field_excluded_by_only_leaves_selected_set_unchanged(self):
         """GUID: DEFER-005"""
-        pass
+        obj = Primary.objects.only("name").defer("value").get(pk=self.primary.pk)
+
+        self.assertEqual(obj.name, "p1")
+        self.assertEqual(obj.get_deferred_fields(), {"value", "related_id"})
 
     def test_defer_006_defer_selected_only_field_preserves_unrelated_field_states(self):
         """GUID: DEFER-006"""
-        pass
+        obj = (
+            Primary.objects.only("name", "value")
+            .defer("name")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.value, "v1")
+        self.assertEqual(obj.get_deferred_fields(), {"name", "related_id"})
 
 
 class DeferTests(AssertionMixin, TestCase):

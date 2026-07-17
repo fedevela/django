@@ -694,7 +694,7 @@ class Query(BaseExpression):
         #       required-field rules add the primary key to every restricted model.
         #   FAILURE PATH: propagate field-resolution errors from the normal
         #       conversion path; an empty immediate-only set needs no field lookup.
-        if not field_names:
+        if not field_names and defer:
             return
         orig_opts = self.get_meta()
         seen = {}
