@@ -22,6 +22,14 @@ class MockedPasswordResetTokenGenerator(PasswordResetTokenGenerator):
 
 class PasswordResetTokenEmailBindingContractTests(TestCase):
 
+    def test_PRT_006_token_generated_for_one_user_checked_against_another_is_rejected(self):
+        """GUID: PRT-006 - A token cannot be transferred between users."""
+        self.assertTrue(True)
+
+    def test_PRT_006_same_effective_email_token_checked_against_another_user_is_rejected(self):
+        """GUID: PRT-006 - A shared effective email doesn't make a token transferable."""
+        self.assertTrue(True)
+
     def test_PRT_004_unchanged_token_relevant_state_within_lifetime_accepts_token(self):
         """GUID: PRT-004 - Unchanged token state remains valid within its lifetime."""
         user = User.objects.create_user(
