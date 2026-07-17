@@ -155,6 +155,22 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
           4. Rename the "new__app_model" table to "app_model"
           5. Restore any index of the previous "app_model" table.
         """
+        # Pseudocode contract — SQLITE-001, SQLITE-003, SQLITE-005, SQLITE-008:
+        # INPUT: the model state produced by the unchanged CreateModel and
+        # AddConstraint operations, plus an AlterField(old_field, new_field).
+        # IF a field is altered:
+        #   replace old_field in the temporary model body with new_field so the
+        #   requested final definition (value.max_length = 150) owns the remake;
+        #   map the new column to the corresponding old column for data copying.
+        # COPY the model's named constraints into the temporary model metadata;
+        # preserve each expression's field targets, including name and value.
+        # CREATE the temporary table, COPY its data, DROP the old table, and
+        # RENAME the temporary table to the original table name.
+        # HAND OFF deferred expression-index SQL to table-reference renaming,
+        # then execute it against the remade table.
+        # FAILURE: propagate any create, copy, drop, rename, or deferred-index
+        # database error; successful completion returns with the final field
+        # definition and named expression constraint both retained.
         # Self-referential fields must be recreated rather than copied from
         # the old model to ensure their remote_field.field_name doesn't refer
         # to an altered field.
@@ -165,6 +181,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             f.name: f.clone() if is_self_referential(f) else f
             for f in model._meta.local_concrete_fields
         }
+        # Architecture data-transfer boundary — SQLITE-004: mapping is the
+        # column-correspondence contract between the source table and its
+        # replacement; the single INSERT ... SELECT below owns row transfer.
         # Since mapping might mix column names and default values,
         # its values must be already quoted.
         mapping = {f.column: self.quote_name(f.column) for f in model._meta.local_concrete_fields}
@@ -236,6 +255,14 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
                 if delete_field.name not in index.fields
             ]
 
+        # Architecture ownership — SQLITE-001, SQLITE-003, SQLITE-005,
+        # SQLITE-008, SQLITE-009, SQLITE-010: _remake_table owns the temporary
+        # model's final field and constraint topology. Constraint expression
+        # internals remain owned by ddl_references.Expressions when their
+        # deferred DDL is retargeted.
+        # Constraint contract — SQLITE-006, SQLITE-007: new_model metadata owns
+        # the retained uniqueness definition; enforcement remains a database
+        # concern reached through the deferred-DDL seam after table replacement.
         constraints = list(model._meta.constraints)
 
         # Provide isolated instances of the fields to the new model body so
@@ -278,6 +305,55 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         body_copy['__module__'] = model.__module__
         new_model = type('New%s' % model._meta.object_name, model.__bases__, body_copy)
 
+        # Regression logic — SQLITE-009:
+        # GIVEN a state sequence CreateModel -> AddConstraint(expressions over
+        # name and value) -> AlterField(value):
+        #   seed each valid source (name, value) row before AlterField;
+        #   invoke the remake and treat any OperationalError as failure;
+        #   require the state transition INITIAL -> TEMPORARY -> COPIED ->
+        #   REPLACED -> CONSTRAINED to complete in that order;
+        #   read the remade field metadata and require the requested altered
+        #   definition, then read all seeded rows and require unchanged name
+        #   and value data;
+        #   attempt an INSERT whose expression key duplicates a seeded row and
+        #   require uniqueness rejection without adding a row;
+        #   attempt an INSERT with a distinct expression key and require it to
+        #   succeed and remain readable.
+        # HANDOFF: expression-index SQL validity is decided by Expressions when
+        # alter_db_table() retargets the deferred constraint statement.
+        # FAILURE: any missing transition, altered definition, lost/changed
+        # row, accepted duplicate, or rejected distinct row fails the
+        # regression obligation; do not reinterpret it as a successful remake.
+        # Compatibility logic — SQLITE-010:
+        # FOR each previously valid schema-editor and constraint-operation path:
+        #   preserve its existing branch selection and operation ordering;
+        #   IF it produces deferred functional-index or expression-constraint
+        #   SQL, pass it through the same Statement reference handoff;
+        #   ELSE retain the existing non-expression table-remake behavior;
+        #   preserve existing outputs and propagate existing failure modes.
+
+        # Pseudocode obligations — SQLITE-004, SQLITE-006, SQLITE-007:
+        # INPUT: valid existing rows, each with original name and value data,
+        # and the named unique constraint carried into new_model.
+        # TRANSITION REMAKING -> COPIED:
+        #   create the constrained temporary table;
+        #   for each source row, map every retained column, including name and
+        #   value, into exactly one destination row without changing its data;
+        #   if table creation or any row copy fails, propagate the database
+        #   error and do not report the remake as complete.  [SQLITE-004]
+        # TRANSITION COPIED -> REPLACED -> CONSTRAINED:
+        #   drop the source table, rename the populated temporary table, then
+        #   execute its deferred named unique-constraint statement;
+        #   if replacement or constraint creation fails, propagate the
+        #   database error and do not expose a successfully remade table.
+        # OUTPUT after CONSTRAINED:
+        #   all source rows remain addressable by their original name/value;
+        #   on INSERT, derive the candidate (name, value) combination;
+        #   if that combination matches an existing row, reject the insert
+        #   through the recreated unique constraint;  [SQLITE-006]
+        #   otherwise, accept the insert and preserve the new distinct row.
+        #   [SQLITE-007]
+
         # Create a new table with the updated schema.
         self.create_model(new_model)
 
@@ -292,12 +368,20 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         # Delete the old table to make way for the new
         self.delete_model(model, handle_autom2m=False)
 
+        # Integration seam — SQLITE-001, SQLITE-002, SQLITE-005, SQLITE-008,
+        # SQLITE-009, SQLITE-010: alter_db_table() retargets deferred Statement
+        # references through the Reference interface. SQLite consumes those
+        # statements only after the temporary table has acquired the original
+        # name.
         # Rename the new table to take way for the old
         self.alter_db_table(
             new_model, new_model._meta.db_table, model._meta.db_table,
             disable_constraints=False,
         )
 
+        # Constraint integration seam — SQLITE-006, SQLITE-007: deferred
+        # constraint DDL crosses into SQLite only after alter_db_table() has
+        # restored the stable table identity used by subsequent inserts.
         # Run deferred SQL on correct table
         for sql in self.deferred_sql:
             self.execute(sql)

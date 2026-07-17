@@ -201,6 +201,14 @@ class Statement(Reference):
         return self.template % self.parts
 
 
+# Architecture boundary — SQLITE-001, SQLITE-002, SQLITE-005, SQLITE-008,
+# SQLITE-009, SQLITE-010:
+# Expressions is the deferred-DDL reference adapter for expression indexes. It
+# owns expression/column reference identity across table renames; schema editors
+# depend only on the Reference rename contract and remain responsible for when
+# deferred statements are renamed and executed. Backend-specific SQL validity
+# must therefore be preserved inside this boundary without coupling migration
+# operations or the SQLite schema editor to expression-tree internals.
 class Expressions(TableColumns):
     def __init__(self, table, expressions, compiler, quote_value):
         self.compiler = compiler
@@ -210,12 +218,45 @@ class Expressions(TableColumns):
         super().__init__(table, columns)
 
     def rename_table_references(self, old_table, new_table):
+        # Expression SQL verification logic — SQLITE-009:
+        # GIVEN a deferred unique expression index recreated by a SQLite table
+        # remake, first retarget its table identity, then compile its expression
+        # columns; require the CREATE INDEX table target to name new_table while
+        # every column reference inside the expression remains unqualified.
+        # IF compiled expression SQL contains old_table.column or
+        # new_table.column, reject it as invalid for SQLite and fail the remake;
+        # ELSE hand the valid statement back for deferred execution.
+        # Continuity logic — SQLITE-010:
+        # FOR schema-editor reference checks, functional indexes, expression
+        # constraints, and their rename operations, preserve expression order,
+        # functions, parameters, tracked target columns, and reference answers.
+        # IF the referenced table does not match old_table, perform no mutation;
+        # IF it matches, clone before mutation and change only explicit table
+        # aliases plus the tracked table identity; propagate compile/rename
+        # failures through the pre-existing caller path.
+        # Pseudocode contract — SQLITE-001, SQLITE-002, SQLITE-005, SQLITE-008:
+        # INPUT: deferred expression-index columns and a completed temporary
+        # table rename from old_table to new_table.
+        # IF this expression collection belongs to another table: RETURN with
+        # expressions and column associations unchanged.
+        # CLONE the expressions before mutation and rebuild tracked columns.
+        # FOR EACH resolved Col in the clone:
+        #   IF Col.alias names a table: replace old_table with new_table;
+        #   ELSE Col.alias is absent: preserve it as absent so SQLite receives
+        #   an unqualified column reference instead of "new_table"."column";
+        #   retain Col.target.column so F("name") and F("value") remain bound
+        #   to the remade table's corresponding name and value columns.
+        # OUTPUT: deferred unique-index SQL targets the renamed table while its
+        # expressions contain only SQLite-valid column qualification.
+        # FAILURE: do not emit or execute SQL if expression compilation fails;
+        # propagate the database/compiler error to the table-remake operation.
         if self.table != old_table:
             return
         expressions = deepcopy(self.expressions)
         self.columns = []
         for col in self.compiler.query._gen_cols([expressions]):
-            col.alias = new_table
+            if col.alias:
+                col.alias = new_table
         self.expressions = expressions
         super().rename_table_references(old_table, new_table)
 
