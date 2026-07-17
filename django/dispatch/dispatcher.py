@@ -201,34 +201,7 @@ class Signal:
 
         If any receiver raises an error (specifically any subclass of
         Exception), return the error instance as the result for that receiver.
-
-        Architecture contract:
-            This method owns robust outcome isolation and ordered result
-            assembly. ``_live_receivers()`` owns receiver selection and order;
-            receiver callables own their opaque return values and exception
-            instances; logging is an observational dependency and doesn't own
-            or transform either outcome. Each selected receiver retains one
-            ``(receiver, response_or_exception)`` result entry.
-
-            GUID: SIGROB-002 places exception identity and non-propagation at
-            this outcome boundary. GUID: SIGROB-003 requires the boundary to
-            remain per receiver so one failure cannot terminate dispatch.
-            GUID: SIGROB-006 keeps successful values opaque while the existing
-            robust result-pair contract integrates successes and failures.
         """
-        # Robust-dispatch result continuity pseudocode:
-        # - Initialize an ordered result sequence for the live receivers.
-        # - For each receiver, invoke it once with this signal, sender, and the
-        #   supplied named arguments.
-        # - GUID: SIGROB-002 — If invocation raises an Exception, report the
-        #   failure, append (receiver, the identical caught exception object),
-        #   and do not propagate that exception to the caller.
-        # - GUID: SIGROB-003 — After recording a failure, continue iteration so
-        #   every subsequent live receiver is still invoked.
-        # - GUID: SIGROB-006 — If invocation succeeds, append (receiver,
-        #   response) without transforming the response; preserve both success
-        #   and failure entries in receiver iteration order.
-        # - Return the completed result sequence after all receivers are handled.
         if not self.receivers or self.sender_receivers_cache.get(sender) is NO_RECEIVERS:
             return []
 

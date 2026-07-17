@@ -292,15 +292,63 @@ class SendRobustResultContinuityContractTests(SimpleTestCase):
 
     def test_sigrob_002_logging_failing_receiver_returns_same_exception_object_without_propagating(self):
         """GUID: SIGROB-002 - A handled failure preserves its exception."""
-        self.assertTrue(True)
+        signal = Signal()
+        receiver_exception = ValueError('receiver failure')
+
+        def fails(**kwargs):
+            raise receiver_exception
+
+        signal.connect(fails)
+        with mock.patch('django.dispatch.dispatcher.logger.error') as mocked_log:
+            responses = signal.send_robust(sender=self)
+
+        self.assertEqual(len(responses), 1)
+        self.assertIs(responses[0][0], fails)
+        self.assertIs(responses[0][1], receiver_exception)
+        mocked_log.assert_called_once()
+        self.assertIs(mocked_log.call_args.kwargs['exc_info'], receiver_exception)
 
     def test_sigrob_003_failing_receiver_does_not_prevent_subsequent_receiver_invocation(self):
         """GUID: SIGROB-003 - Dispatch continues after a receiver failure."""
-        self.assertTrue(True)
+        signal = Signal()
+        receiver_calls = []
+
+        def fails(**kwargs):
+            receiver_calls.append('fails')
+            raise ValueError('receiver failure')
+
+        def succeeds(**kwargs):
+            receiver_calls.append('succeeds')
+            return 'subsequent response'
+
+        signal.connect(fails)
+        signal.connect(succeeds)
+        with mock.patch('django.dispatch.dispatcher.logger.error'):
+            responses = signal.send_robust(sender=self)
+
+        self.assertEqual(receiver_calls, ['fails', 'succeeds'])
+        self.assertEqual(responses[1], (succeeds, 'subsequent response'))
 
     def test_sigrob_006_mixed_dispatch_preserves_successful_result_in_receiver_sequence_when_another_fails(self):
         """GUID: SIGROB-006 - A failure leaves successful results unchanged."""
-        self.assertTrue(True)
+        signal = Signal()
+        successful_response = object()
+        receiver_exception = ValueError('receiver failure')
+
+        def fails(**kwargs):
+            raise receiver_exception
+
+        def succeeds(**kwargs):
+            return successful_response
+
+        signal.connect(fails)
+        signal.connect(succeeds)
+        with mock.patch('django.dispatch.dispatcher.logger.error'):
+            responses = signal.send_robust(sender=self)
+
+        self.assertEqual([receiver for receiver, response in responses], [fails, succeeds])
+        self.assertIs(responses[0][1], receiver_exception)
+        self.assertIs(responses[1][1], successful_response)
 
 
 class ReceiverTestCase(SimpleTestCase):
