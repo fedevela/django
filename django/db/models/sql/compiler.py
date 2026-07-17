@@ -286,7 +286,8 @@ class SQLCompiler:
 
         ret = []
         for col, alias in select:
-            # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-004, EMPTYIN-006
+            # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-004, EMPTYIN-005,
+            # EMPTYIN-006
             # Architecture contract: predicate reduction remains owned by the
             # expression tree and ExpressionWrapper remains transparent. This
             # selected-column boundary owns materializing reduction outcomes as
@@ -294,6 +295,9 @@ class SQLCompiler:
             # formatting to the selected expression. Keep the dependency
             # direction expression tree -> selected-column compiler -> backend
             # formatting; lookup-specific handling doesn't belong here.
+            # When this compiler supplies an AggregateQuery's inner projection,
+            # the same boundary owns that materialization; the outer aggregate
+            # compiler depends only on the projected value and its alias.
             #
             # Logic obligation for a directly selected Boolean annotation:
             #
@@ -1728,6 +1732,12 @@ class SQLAggregateCompiler(SQLCompiler):
         parameters.
         """
         sql, params = [], []
+        # EMPTYIN-005, EMPTYIN-006 architecture seam: this compiler owns only
+        # the outer aggregate projection and the composition of its already
+        # prepared inner query. Boolean empty-membership materialization stays
+        # behind the inner SQLCompiler selected-column boundary. Dependency
+        # therefore runs Query.get_aggregation() -> inner SQLCompiler -> this
+        # outer compiler; no lookup- or predicate-specific branch belongs here.
         # EMPTYIN-005, EMPTYIN-006
         # Logic obligation for an aggregate whose input is an empty-membership
         # Boolean annotation:
