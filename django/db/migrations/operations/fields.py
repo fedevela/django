@@ -247,6 +247,23 @@ class AlterField(FieldOperation):
         return "alter_%s_%s" % (self.model_name_lower, self.name_lower)
 
     def reduce(self, operation, app_label):
+        # MIGOPT-001/MIGOPT-002 -- same-field AlterField reduction:
+        # INPUT: this AlterField and the later operation selected by the optimizer.
+        # IF the later operation is an AlterField for the same normalized model
+        # and field, RETURN a one-item replacement containing that later operation.
+        # Retain the later operation object itself so its complete field definition
+        # and operation options remain exact; do not reconstruct or merge it.
+        # The optimizer repeats this transition to fold an uninterrupted sequence
+        # of two or more matching AlterField operations down to its final member.
+        # OTHERWISE, continue to the existing reduction branches below; a
+        # non-reducible intervening operation remains an optimizer boundary.
+        #
+        # MIGOPT-003 -- concrete book.title state transition:
+        # AlterField(book.title, definition_1)
+        #   -> AlterField(book.title, definition_2)
+        #   -> AlterField(book.title, final_definition)
+        # becomes [the final AlterField], whose field has max_length=128,
+        # null=True, help_text="help", and default=None.
         if isinstance(operation, RemoveField) and self.is_same_field_operation(
             operation
         ):
