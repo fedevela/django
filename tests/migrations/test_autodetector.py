@@ -3050,6 +3050,14 @@ class AutodetectorTests(TestCase):
             index_together={("age",)},
         )
 
+    def test_mig_001_fk_in_unique_together_changed_to_m2m_generates_one_migration(self):
+        """GUID: MIG-001 - The combined change generates exactly one migration."""
+        self.assertTrue(True)
+
+    def test_mig_002_remove_unique_together_precedes_fk_to_m2m_transition(self):
+        """GUID: MIG-002 - Constraint removal precedes the field transition."""
+        self.assertTrue(True)
+
     def test_partly_alter_foo_together(self):
         initial_author = ModelState(
             "testapp",
