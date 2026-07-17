@@ -298,6 +298,28 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         body_copy['__module__'] = model.__module__
         new_model = type('New%s' % model._meta.object_name, model.__bases__, body_copy)
 
+        # Pseudocode obligations — SQLITE-004, SQLITE-006, SQLITE-007:
+        # INPUT: valid existing rows, each with original name and value data,
+        # and the named unique constraint carried into new_model.
+        # TRANSITION REMAKING -> COPIED:
+        #   create the constrained temporary table;
+        #   for each source row, map every retained column, including name and
+        #   value, into exactly one destination row without changing its data;
+        #   if table creation or any row copy fails, propagate the database
+        #   error and do not report the remake as complete.  [SQLITE-004]
+        # TRANSITION COPIED -> REPLACED -> CONSTRAINED:
+        #   drop the source table, rename the populated temporary table, then
+        #   execute its deferred named unique-constraint statement;
+        #   if replacement or constraint creation fails, propagate the
+        #   database error and do not expose a successfully remade table.
+        # OUTPUT after CONSTRAINED:
+        #   all source rows remain addressable by their original name/value;
+        #   on INSERT, derive the candidate (name, value) combination;
+        #   if that combination matches an existing row, reject the insert
+        #   through the recreated unique constraint;  [SQLITE-006]
+        #   otherwise, accept the insert and preserve the new distinct row.
+        #   [SQLITE-007]
+
         # Create a new table with the updated schema.
         self.create_model(new_model)
 
