@@ -188,6 +188,14 @@ class MigrationAutodetector:
         self.generate_renamed_fields()
         self.generate_renamed_indexes()
         # Generate removal of foo together.
+        # GUID: MIG-002 - Logic obligation and deterministic flow:
+        # GIVEN an old concrete ForeignKey included in unique_together,
+        # AND the target state removes that tuple and makes the field M2M,
+        # IF the old and target unique_together values differ,
+        # THEN enqueue the operation that removes the obsolete tuple;
+        # THEN, and only then, enqueue the concrete-to-M2M field transition below.
+        # FAILURE PATH: do not transition the field while its obsolete tuple is
+        # still present, because the tuple refers to the original concrete field.
         self.generate_removed_altered_unique_together()
         self.generate_removed_altered_index_together()
         # Generate field operations.
@@ -348,6 +356,15 @@ class MigrationAutodetector:
                 # Make a migration! Well, only if there's stuff to put in it
                 if dependencies or chopped:
                     if not self.generated_operations[app_label] or chop_mode:
+                        # GUID: MIG-001 - Combined migration grouping handoff:
+                        # IF the ordered batch contains the unique_together
+                        # removal and concrete-to-M2M remove/add transition,
+                        # AND no unresolved external operation blocks the batch,
+                        # THEN consume the complete batch in this pass and emit
+                        # exactly one migration containing the ordered sequence.
+                        # FAILURE PATH: an unresolved dependency must follow the
+                        # dependency-resolution path; it must not silently split
+                        # this combined same-model change into separate outputs.
                         subclass = type(
                             "Migration",
                             (Migration,),
@@ -1209,6 +1226,21 @@ class MigrationAutodetector:
                     )
                 else:
                     # We cannot alter between m2m and concrete fields
+                    # GUID: MIG-001 - Logic obligation and deterministic flow:
+                    # INPUT: one retained model field whose old and target
+                    # definitions cross the concrete/M2M boundary.
+                    # REQUIRE: any obsolete unique_together containing this
+                    # field has already been reduced by the earlier generation
+                    # phase (MIG-002).
+                    # TRANSITION: enqueue removal of the concrete field, then
+                    # enqueue addition of its M2M definition in the same app's
+                    # pending operation stream.
+                    # OUTPUT: keep both transition operations with the related
+                    # constraint removal so the builder can emit one combined
+                    # migration rather than independent changes.
+                    # FAILURE PATH: if the prerequisite constraint removal
+                    # cannot be ordered, do not treat an in-place alteration as
+                    # a valid fallback.
                     self._generate_removed_field(app_label, model_name, field_name)
                     self._generate_added_field(app_label, model_name, field_name)
 
