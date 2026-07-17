@@ -168,8 +168,8 @@ class SessionBase:
         #   ON a contained suspicious-operation failure:
         #       EMIT the existing warning through its applicable security logger,
         #       THEN RETURN an empty mapping.  [SES-010]
-        encoded_data = base64.b64decode(session_data.encode('ascii'))
         try:
+            encoded_data = base64.b64decode(session_data.encode('ascii'))
             # could produce ValueError if there is no ':'
             hash, serialized = encoded_data.split(b':', 1)
             expected_hash = self._hash(serialized)

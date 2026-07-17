@@ -41,44 +41,69 @@ from .models import SessionStore as CustomDatabaseSession
 
 
 class SafeSessionDecodingContractTests(SimpleTestCase):
-    """Issue #508 safe session decoding verification placeholders."""
+    """Issue #508 safe session decoding regression coverage."""
+
+    def setUp(self):
+        self.session = CookieSession()
+
+    def incorrectly_padded_legacy_data(self):
+        encoded = self.session._legacy_encode({'secret': 'value'})
+        encoded = encoded.rstrip('=')
+        return encoded if len(encoded) % 4 else encoded[:-1]
 
     def test_SES_001_incorrectly_padded_legacy_base64_decode_contains_exception(self):
         """SES-001: malformed Base64 decoding transitions to no exception."""
-        self.assertTrue(True)
+        self.assertEqual(
+            self.session._legacy_decode(self.incorrectly_padded_legacy_data()),
+            {},
+        )
 
     def test_SES_002_malformed_legacy_decode_contains_exception_and_values(self):
         """SES-002: malformed legacy input transitions to contained failure."""
-        self.assertTrue(True)
+        self.assertEqual(self.session._legacy_decode('\xe9:secret'), {})
 
     def test_SES_003_current_and_legacy_decode_failure_returns_empty_mapping(self):
         """SES-003: failure of both formats transitions to an empty mapping."""
-        self.assertTrue(True)
+        decoded = self.session.decode('not-a-valid-session')
+        self.assertEqual(decoded, {})
+        self.assertIsInstance(decoded, dict)
 
     def test_SES_004_invalid_signature_decode_rejects_stored_values(self):
         """SES-004: invalidly signed data transitions to no exposed values."""
-        self.assertTrue(True)
+        encoded = self.session._legacy_encode({'secret': 'value'})
+        decoded = self.session.decode(base64.b64encode(
+            b'invalid-signature:' + base64.b64decode(encoded).split(b':', 1)[1]
+        ).decode('ascii'))
+        self.assertEqual(decoded, {})
+        self.assertNotIn('secret', decoded)
 
     def test_SES_005_valid_current_format_decode_preserves_values(self):
         """SES-005: valid current-format data retains its existing values."""
-        self.assertTrue(True)
+        values = {'key': 'value', 'number': 42}
+        self.assertEqual(self.session.decode(self.session.encode(values)), values)
 
     def test_SES_006_valid_legacy_format_decode_preserves_values(self):
         """SES-006: valid legacy-format data retains its existing values."""
-        self.assertTrue(True)
+        values = {'key': 'value', 'number': 42}
+        self.assertEqual(
+            self.session.decode(self.session._legacy_encode(values)),
+            values,
+        )
 
     def test_SES_009_incorrectly_padded_legacy_regression_returns_empty_mapping(self):
         """SES-009: the reported malformed Base64 case fails gracefully."""
-        # Pseudocode [SES-009]:
-        #   ARRANGE legacy session input whose Base64 padding is incorrect.
-        #   ACT by passing that input through the public session decode boundary.
-        #   VERIFY decoding propagates no malformed-data exception.
-        #   VERIFY the result is an empty mapping-compatible session.
-        self.assertTrue(True)
+        decoded = self.session.decode(self.incorrectly_padded_legacy_data())
+        self.assertEqual(decoded, {})
+        self.assertIsInstance(decoded, dict)
 
     def test_SES_010_suspicious_session_decode_preserves_security_reporting(self):
         """SES-010: applicable suspicious data retains security reporting."""
-        self.assertTrue(True)
+        encoded = base64.b64encode(b'invalid-signature:{"secret":"value"}')
+        with self.assertLogs(
+            'django.security.SuspiciousSession', 'WARNING'
+        ) as captured:
+            self.assertEqual(self.session.decode(encoded.decode('ascii')), {})
+        self.assertIn('Session data corrupted', captured.output[0])
 
 
 class SessionTestsMixin:
