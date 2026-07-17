@@ -12,11 +12,65 @@ class ShellCommandTestCase(SimpleTestCase):
 
     def test_shell_006_no_command_or_supported_stdin_preserves_interactive_selection_and_startup(self):
         """GUID: SHELL-006 - Interactive selection and startup remain unchanged."""
-        self.assertTrue(True)
+        from django.core.management.commands.shell import Command
+
+        command = Command()
+        stdin = mock.Mock()
+        stdin.isatty.return_value = True
+        with mock.patch(
+            'django.core.management.commands.shell.sys.stdin', stdin,
+        ), mock.patch.object(
+            command, 'ipython', side_effect=ImportError,
+        ) as ipython, mock.patch.object(
+            command, 'bpython', side_effect=ImportError,
+        ) as bpython, mock.patch.object(
+            command, 'python', return_value='started',
+        ) as python:
+            result = command.handle(
+                command=None,
+                interface=None,
+                no_startup=False,
+            )
+
+        self.assertEqual(result, 'started')
+        ipython.assert_called_once()
+        bpython.assert_called_once()
+        python.assert_called_once()
+        options = ipython.call_args.args[0]
+        self.assertIs(bpython.call_args.args[0], options)
+        self.assertIs(python.call_args.args[0], options)
+        self.assertEqual(
+            options,
+            {'command': None, 'interface': None, 'no_startup': False},
+        )
 
     def test_shell_007_windows_noninteractive_stdin_execution_remains_restricted(self):
         """GUID: SHELL-007 - Windows stdin execution remains restricted."""
-        self.assertTrue(True)
+        from django.core.management.commands.shell import Command
+
+        command = Command()
+        stdin = mock.Mock()
+        stdin.isatty.return_value = False
+        with mock.patch(
+            'django.core.management.commands.shell.sys.platform', 'win32',
+        ), mock.patch(
+            'django.core.management.commands.shell.sys.stdin', stdin,
+        ), mock.patch(
+            'django.core.management.commands.shell.select.select',
+        ) as select, mock.patch.object(
+            command, 'python', return_value='started',
+        ) as python:
+            result = command.handle(
+                command=None,
+                interface='python',
+                no_startup=False,
+            )
+
+        self.assertEqual(result, 'started')
+        stdin.isatty.assert_not_called()
+        stdin.read.assert_not_called()
+        select.assert_not_called()
+        python.assert_called_once()
 
     def test_shell_005_command_user_code_exception_remains_visible_to_invoking_context(self):
         """GUID: SHELL-005 - A command exception remains visible to its invoker."""
