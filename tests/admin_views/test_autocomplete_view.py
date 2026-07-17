@@ -202,15 +202,52 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
 
     def test_ACJ_006_successful_response_retains_results_and_pagination_members(self):
         """GUID: ACJ-006 successful responses retain results and pagination."""
-        self.assertTrue(True)
+        question = Question.objects.create(question='A question')
+
+        class CustomAutocompleteJsonView(AutocompleteJsonView):
+            def serialize_result(self, obj, to_field_name):
+                result = super().serialize_result(obj, to_field_name)
+                result['custom'] = True
+                return result
+
+        request = self.factory.get(self.url, self.opts)
+        request.user = self.superuser
+        response = CustomAutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        data = json.loads(response.content)
+        self.assertEqual(set(data), {'results', 'pagination'})
+        self.assertEqual(data['results'], [{
+            'id': str(question.big_id),
+            'text': question.question,
+            'custom': True,
+        }])
+        self.assertEqual(data['pagination'], {'more': False})
 
     def test_ACJ_007_next_page_sets_pagination_more_true(self):
         """GUID: ACJ-007 a next page sets pagination.more to true."""
-        self.assertTrue(True)
+        Question.objects.bulk_create([
+            Question(question='Question %s' % index)
+            for index in range(PAGINATOR_SIZE + 1)
+        ])
+        request = self.factory.get(self.url, self.opts)
+        request.user = self.superuser
+
+        response = AutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        self.assertIs(json.loads(response.content)['pagination']['more'], True)
 
     def test_ACJ_007_no_next_page_sets_pagination_more_false(self):
         """GUID: ACJ-007 no next page sets pagination.more to false."""
-        self.assertTrue(True)
+        Question.objects.bulk_create([
+            Question(question='Question %s' % index)
+            for index in range(PAGINATOR_SIZE + 1)
+        ])
+        request = self.factory.get(self.url, {**self.opts, 'page': 2})
+        request.user = self.superuser
+
+        response = AutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        self.assertIs(json.loads(response.content)['pagination']['more'], False)
 
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
