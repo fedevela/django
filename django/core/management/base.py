@@ -257,6 +257,11 @@ class BaseCommand:
     # MCFMT-009 architecture: formatter selection is configuration metadata,
     # separate from this opaque help payload. Neither BaseCommand nor
     # CommandParser may infer the formatter contract by inspecting the payload.
+    #
+    # MCFMT-007 architecture: BaseCommand owns help as an opaque semantic
+    # payload. create_parser() may pass it across the presentation boundary,
+    # but formatter implementations must not become producers or editors of
+    # command meaning.
     help = ""
 
     # Configuration shortcuts that alter various logic.
@@ -391,6 +396,12 @@ class BaseCommand:
         # the CommandParser model only. BaseCommand continues to populate that
         # single model with base options and self.add_arguments() below, so a
         # selected formatter cannot replace or bypass usage or argument metadata.
+        #
+        # MCFMT-007, MCFMT-008 dependency boundary: CommandParser receives help
+        # and formatter_class as description-presentation inputs. Argument
+        # ownership remains with BaseCommand and add_arguments(); downstream
+        # parsing and execution depend on the completed parser model, never on
+        # its formatter_class.
         kwargs.setdefault("formatter_class", DjangoHelpFormatter)
         parser = CommandParser(
             prog="%s %s" % (os.path.basename(prog_name), subcommand),
@@ -495,6 +506,9 @@ class BaseCommand:
         to stderr. If the ``--traceback`` option is present or the raised
         ``Exception`` is not ``CommandError``, raise it.
         """
+        # MCFMT-008 architecture: this is the formatter-independent integration
+        # seam from the parser-owned argument model to command execution. Keep
+        # formatter dependencies inside create_parser()'s presentation boundary.
         # MCFMT-008 — formatting-independent parse and execution flow:
         #   INPUT: the command-line token sequence after program and command.
         #   create the parser, allowing its formatter choice to affect help
