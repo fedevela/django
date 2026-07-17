@@ -122,17 +122,43 @@ class SubqueryContractTraceabilityTests(SimpleTestCase):
         self.assertTrue(sql.endswith(')'))
         self.assertEqual(params, ('Example Inc.',))
 
+    @isolate_apps('expressions')
     def test_subquery_007_app_queryset_without_manual_flag_compiles_intact_parenthesized_sql(self):
         """GUID: SUBQUERY-007 - App queryset SQL retains complete framing."""
-        self.assertTrue(True)
+        class App(Model):
+            pass
 
+        queryset = App.objects.all()
+        subquery = Subquery(queryset)
+        compiler = queryset.query.get_compiler(connection=connection)
+
+        sql, params = subquery.as_sql(compiler, connection)
+
+        self.assertIs(queryset.query.subquery, False)
+        self.assertTrue(sql.startswith('(SELECT'))
+        self.assertTrue(sql.endswith(')'))
+        self.assertEqual(params, ())
+
+    @isolate_apps('expressions')
     def test_subquery_007_compiled_sql_preserves_inner_edges_and_parameters(self):
         """GUID: SUBQUERY-007 - compilation preserves SQL edges and parameters."""
-        self.assertTrue(True)
+        class App(Model):
+            name = CharField(max_length=100)
 
-    def test_subquery_008_existing_expression_and_subquery_suites_remain_passing(self):
-        """GUID: SUBQUERY-008 - existing expression and subquery behavior remains valid."""
-        self.assertTrue(True)
+        queryset = App.objects.filter(name='Example App')
+        subquery = Subquery(queryset)
+        compiler = queryset.query.get_compiler(connection=connection)
+        inner_sql, inner_params = subquery.query.as_sql(compiler, connection)
+
+        sql, params = subquery.as_sql(compiler, connection)
+
+        self.assertTrue(inner_sql.startswith('(SELECT'))
+        self.assertTrue(inner_sql.endswith(')'))
+        self.assertEqual(sql, inner_sql)
+        self.assertEqual(sql[0], inner_sql[0])
+        self.assertEqual(sql[-1], inner_sql[-1])
+        self.assertEqual(params, inner_params)
+        self.assertEqual(params, ('Example App',))
 
 
 class BasicExpressionsTests(TestCase):
