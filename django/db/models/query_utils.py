@@ -108,6 +108,21 @@ class DeferredAttribute:
             return self
         data = instance.__dict__
         field_name = self.field.attname
+        # Pseudocode [GUID: DEFER-007]:
+        #   INPUT an instance produced by an only()/defer() chain and the
+        #       descriptor's field name.
+        #   IF the field value is already present in the instance data:
+        #       RETURN the cached value without another database load.
+        #   ELSE the initial query excluded the field:
+        #       TRY to reuse an eligible value from the parent chain.
+        #       IF no parent-chain value is available:
+        #           LOAD this field through the instance's normal targeted
+        #           refresh path.
+        #       ELSE CACHE the reusable parent-chain value as this field.
+        #       RETURN the value now stored in the instance data.
+        #   STATE TRANSITION: deferred/absent -> loaded/cached.
+        #   FAILURE PATH: propagate normal parent lookup or targeted refresh
+        #       failures; do not invent a separate deferred-loading mechanism.
         if field_name not in data:
             # Let's see if the field is part of the parent chain. If so we
             # might be able to reuse the already loaded value. Refs #18343.
