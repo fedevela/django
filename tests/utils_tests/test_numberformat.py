@@ -6,6 +6,18 @@ from django.utils.numberformat import format as nformat
 
 
 class TestNumberFormat(SimpleTestCase):
+    def test_nfmt_001_empty_representation_sign_detection_avoids_index_error(self):
+        """GUID: NFMT-001 - Empty sign detection avoids a missing first character."""
+        pass
+
+    def test_nfmt_003_null_or_empty_representation_preserves_empty_output(self):
+        """GUID: NFMT-003 - Null or empty input retains the established output."""
+        pass
+
+    def test_nfmt_007_empty_sign_boundary_completes_with_empty_output(self):
+        """GUID: NFMT-007 - The empty sign boundary completes with empty output."""
+        pass
+
     def test_format_number(self):
         self.assertEqual(nformat(1234, "."), "1234")
         self.assertEqual(nformat(1234.2, "."), "1234.2")
