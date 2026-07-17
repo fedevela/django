@@ -225,6 +225,23 @@ class Options:
     # admitted classes cross that seam, and _prepare() alone owns instantiating
     # and attaching one to a model without an explicit key.
     def _get_default_pk_class(self):
+        # AUTOPK-006 pseudocode -- preserve invalid import-path errors:
+        # PRECONDITION: model preparation needs an implicit primary key because
+        # the model declares no explicit primary key.
+        # INPUT: the effective DEFAULT_AUTO_FIELD dotted path and the source
+        # that supplied it.
+        # ATTEMPT to import the object identified by the dotted path.
+        # IF the target does not exist OR its dotted path cannot be imported:
+        #     BUILD the existing configuration error naming the source and the
+        #     invalid dotted path.
+        #     RAISE that import-path configuration error, preserving the
+        #     original import failure as its cause.
+        #     HALT resolution before asking whether the target subclasses
+        #     AutoField; do not emit a subclass-validation error and do not
+        #     return a class to model preparation.
+        # ELSE:
+        #     HAND OFF the imported object to the existing AutoField subclass
+        #     validation flow.
         # AUTOPK-004 pseudocode -- reject an unrelated default automatic field:
         # PRECONDITION: model preparation needs an implicit primary key because
         # the model declares no explicit primary key.
