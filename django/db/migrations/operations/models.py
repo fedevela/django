@@ -307,6 +307,13 @@ class RenameModel(ModelOperation):
     # database-visible rename, the existing schema-editor seams continue to
     # own table, related-field, and M2M transitions. Preservation therefore
     # adds no backend dependency, runtime adapter, or public operation API.
+    #
+    # ARCHITECTURE (GUID: RMN-009): RenameModel owns the coordination between
+    # its two existing boundaries: state_forwards() establishes the new model
+    # identity, and database_forwards() compares the rendered models' effective
+    # table names before delegating a database-visible rename to the schema
+    # editor. The schema editor remains the sole owner of physical table DDL;
+    # migration state has no dependency on backend schema implementation.
 
     def __init__(self, old_name, new_name):
         self.old_name = old_name
