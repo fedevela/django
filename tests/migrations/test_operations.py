@@ -3780,7 +3780,7 @@ class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
             ),
         )
 
-    def _apply_migration_sequence(self):
+    def _apply_migration_sequence(self, rows=()):
         create_model, add_constraint, alter_field = self._operations()
         project_state = ProjectState()
         project_state = self.apply_operations(
@@ -3788,6 +3788,11 @@ class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
             project_state,
             [create_model, add_constraint],
         )
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        Tag.objects.bulk_create([
+            Tag(name=name, value=value)
+            for name, value in rows
+        ])
         with CaptureQueriesContext(connection) as queries:
             project_state = self.apply_operations(
                 self.app_label,
@@ -3850,7 +3855,17 @@ class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
         GUID: SQLITE-004. After the SQLite table-remaking migration completes,
         every existing valid row retains its original name and value data.
         """
-        self.assertTrue(True)
+        rows = [
+            ('color', 'blue'),
+            ('color', 'green'),
+            ('shape', 'round'),
+        ]
+        project_state, _ = self._apply_migration_sequence(rows)
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        self.assertCountEqual(
+            Tag.objects.values_list('name', 'value'),
+            rows,
+        )
 
     def test_sqlite_005_recreated_named_unique_constraint_targets_remade_name_and_value_columns(self):
         """
@@ -3876,14 +3891,30 @@ class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
         GUID: SQLITE-006. After the SQLite table-remaking migration completes,
         the recreated unique constraint rejects a duplicate name and value.
         """
-        self.assertTrue(True)
+        row = ('color', 'blue')
+        project_state, _ = self._apply_migration_sequence([row])
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        with self.assertRaises(IntegrityError):
+            Tag.objects.create(name=row[0], value=row[1])
+        self.assertEqual(
+            Tag.objects.filter(name=row[0], value=row[1]).count(),
+            1,
+        )
 
     def test_sqlite_007_after_table_remake_distinct_name_and_value_insertion_succeeds(self):
         """
         GUID: SQLITE-007. After the SQLite table-remaking migration completes,
         inserting a distinct name and value combination succeeds.
         """
-        self.assertTrue(True)
+        existing_row = ('color', 'blue')
+        distinct_row = ('color', 'green')
+        project_state, _ = self._apply_migration_sequence([existing_row])
+        Tag = project_state.apps.get_model(self.app_label, 'Tag')
+        Tag.objects.create(name=distinct_row[0], value=distinct_row[1])
+        self.assertCountEqual(
+            Tag.objects.values_list('name', 'value'),
+            [existing_row, distinct_row],
+        )
 
     def test_sqlite_008_unchanged_create_model_add_constraint_alter_field_sequence_executes(self):
         """
