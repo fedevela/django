@@ -229,11 +229,35 @@ class RelativeFieldTests(SimpleTestCase):
 
     def test_m2m_007_symmetrical_relationship_metadata_omits_reverse_related_field(self):
         """GUID: M2M-007 -- Symmetry omits the reverse related field."""
-        pass
+        class Model(models.Model):
+            relations = models.ManyToManyField('self', symmetrical=True)
+
+        field = Model._meta.get_field('relations')
+        reverse_fields = [
+            candidate for candidate in Model._meta.get_fields()
+            if candidate.auto_created and not candidate.concrete
+        ]
+        self.assertIn(field, Model._meta.get_fields())
+        self.assertEqual(reverse_fields, [])
+        self.assertIsNone(field.remote_field.get_accessor_name())
 
     def test_m2m_007_after_validation_symmetrical_relationship_metadata_still_omits_reverse_related_field(self):
         """GUID: M2M-007 -- Validation preserves reverse-field omission."""
-        pass
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=True, related_name='related_models'
+            )
+
+        errors = Model.check()
+        field = Model._meta.get_field('relations')
+        reverse_fields = [
+            candidate for candidate in Model._meta.get_fields()
+            if candidate.auto_created and not candidate.concrete
+        ]
+        self.assertEqual([error.id for error in errors], ['fields.E341'])
+        self.assertEqual(reverse_fields, [])
+        self.assertIsNone(field.remote_field.get_accessor_name())
+        self.assertFalse(hasattr(Model, 'related_models'))
 
     def test_m2m_008_construction_succeeds_then_model_checks_report_error(self):
         """GUID: M2M-008 -- Validation is deferred to model system checks."""
