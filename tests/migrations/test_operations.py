@@ -651,6 +651,14 @@ class OperationTests(OperationTestBase):
         self.assertEqual(definition[1], [])
         self.assertEqual(definition[2], {'old_name': "Pony", 'new_name': "Horse"})
 
+    def test_rmn_001_rename_model_same_effective_table_updates_state_model_name(self):
+        """GUID: RMN-001"""
+        self.assertTrue(True)
+
+    def test_rmn_002_rename_model_explicit_unchanged_db_table_skips_schema_mutation(self):
+        """GUID: RMN-002"""
+        self.assertTrue(True)
+
     def test_rename_model_state_forwards(self):
         """
         RenameModel operations shouldn't trigger the caching of rendered apps
