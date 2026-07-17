@@ -25,12 +25,20 @@ DEFAULT_MIN_NUM = 0
 DEFAULT_MAX_NUM = 1000
 
 
+# MGMT-004 ownership boundary: ManagementForm owns management-field parsing and
+# safe fallback counts; BaseFormSet consumes its cleaned result and translates
+# field errors at the full_clean() integration seam.
 class ManagementForm(Form):
     """
     Keep track of how many form instances are displayed on the page. If adding
     new forms via JavaScript, you should increment the count field of this form
     as well.
     """
+
+    # MGMT-005 management-form boundary: this explicit non-default template
+    # keeps warning selection in RenderableMixin without suppressing warnings
+    # for ordinary forms that inherit BaseForm.template_name.
+    template_name = "django/forms/div.html"
 
     TOTAL_FORMS = IntegerField(widget=HiddenInput)
     INITIAL_FORMS = IntegerField(widget=HiddenInput)
@@ -144,6 +152,8 @@ class BaseFormSet(RenderableFormMixin):
     @cached_property
     def management_form(self):
         """Return the ManagementForm instance for this FormSet."""
+        # MGMT-004 integration seam: bound formset data enters the owning
+        # ManagementForm here; BaseFormSet.full_clean() consumes its outcome.
         if self.is_bound:
             form = ManagementForm(
                 self.data,
@@ -404,6 +414,18 @@ class BaseFormSet(RenderableFormMixin):
         if not self.is_bound:  # Stop further processing.
             return
 
+        # Pseudocode — management-data validation contract:
+        # MGMT-004: Validate the bound management form before validating its
+        # member forms, preserving the management field definitions and rules.
+        # If all required management values are valid, accept their cleaned
+        # counts and continue through the existing formset validation flow.
+        # If a provided required value is invalid, retain its conversion error;
+        # if a required value is missing, retain its required-field error.
+        # For either failure, identify each prefixed field name and append the
+        # existing missing-management-form non-form error with its existing code.
+        # In either invalid case, use the management form's fallback counts so
+        # member-form processing remains bounded; preserve all later validation
+        # transitions and propagate unrelated validation failures unchanged.
         if not self.management_form.is_valid():
             error = ValidationError(
                 self.error_messages["missing_management_form"],
