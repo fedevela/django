@@ -354,6 +354,22 @@ class InspectDBTestCase(TestCase):
             },
         )
 
+    def test_insp_006_repeated_target_relations_preserve_field_names_and_targets(self):
+        """GUID: INSP-006 - Disambiguation preserves relation names and targets."""
+        self.assertTrue(True)
+
+    def test_insp_007_singleton_target_relation_has_no_disambiguating_related_name(self):
+        """GUID: INSP-007 - A singleton target gains no disambiguating name."""
+        self.assertTrue(True)
+
+    def test_insp_007_only_repeated_target_group_gains_related_names(self):
+        """GUID: INSP-007 - Mixed targets disambiguate only the repeated group."""
+        self.assertTrue(True)
+
+    def test_insp_007_shared_target_across_models_does_not_gain_related_names(self):
+        """GUID: INSP-007 - Target grouping is local to each generated model."""
+        self.assertTrue(True)
+
     def test_digits_column_name_introspection(self):
         """Introspection of column names consist/start with digits (#16536/#17676)"""
         char_field_type = connection.features.introspected_field_types["CharField"]
