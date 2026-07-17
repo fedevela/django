@@ -13,6 +13,11 @@ class classonlymethod(classmethod):
 def _update_method_wrapper(_wrapper, decorator):
     # _multi_decorate()'s bound_method isn't available in this scope. Cheat by
     # using it on a dummy function.
+    # Architecture contract (GUID: MDP-009): this helper owns the
+    # decorator-state import boundary. The supplied decorator depends only on
+    # a function-shaped probe; `_multi_decorate()` depends on this helper to
+    # transfer the probe's update mappings and custom attributes onto its
+    # resulting wrapper. No decorator-specific contract crosses this seam.
     @decorator
     def dummy(*args, **kwargs):
         pass
@@ -24,6 +29,31 @@ def _multi_decorate(decorators, method):
     Decorate `method` with one or more function decorators. `decorators` can be
     a single decorator or an iterable of decorators.
     """
+    # Pseudocode contract (GUID: MDP-010):
+    # VERIFIES: test_mdp_010_tuple_decorators_apply_with_existing_tuple_behavior
+    # VERIFIES: test_mdp_010_tuple_decorated_method_preserves_call_semantics
+    # INPUT: the supported tuple of function decorators and an instance method.
+    # IF the decorator input is iterable:
+    #     REVERSE its traversal order so sequential wrapping reproduces Python's
+    #     existing stacked-decorator application and invocation behavior.
+    # ELSE:
+    #     TREAT the single decorator as a one-element application sequence.
+    # WHEN the resulting method wrapper is invoked with positional and keyword
+    # arguments:
+    #     BIND the original method to the current instance.
+    #     FOR EACH decorator in the normalized application sequence:
+    #         REPLACE the current callable with that decorator's result.
+    #     INVOKE the final callable with the original positional and keyword
+    #     arguments, and RETURN its result without transformation.
+    # IF binding, decoration, or invocation raises:
+    #     PROPAGATE the exception through the existing call path unchanged.
+    # Architecture contract (GUID: MDP-010): `_multi_decorate()` owns the
+    # supported-tuple normalization boundary. `method_decorator()` passes the
+    # decorator input through unchanged, and this private helper alone selects
+    # the application sequence consumed by both the decoration-time metadata
+    # probe and the invocation-local decorator chain. The bound-method adapter
+    # remains downstream of normalization; positional and keyword arguments
+    # cross only its existing call seam, whose result is returned directly.
     if hasattr(decorators, '__iter__'):
         # Apply a list/tuple of decorators if 'decorators' is one. Decorator
         # functions are applied so that the call order is the same as the
@@ -33,11 +63,28 @@ def _multi_decorate(decorators, method):
         decorators = [decorators]
 
     def _wrapper(self, *args, **kwargs):
+        # Architecture contract (GUID: MDP-005, GUID: MDP-006,
+        # GUID: MDP-007, GUID: MDP-008): `_wrapper` owns the invocation-adapter
+        # boundary. It depends on `method` only through normal descriptor
+        # binding and exposes the resulting function-shaped callable to the
+        # supplied decorators; the decorators never own or receive `self`
+        # separately. Positional and keyword arguments remain opaque across
+        # this boundary. The decorator chain is invocation-local, while the
+        # terminal direct call is the sole caller-facing seam for both the
+        # method's return value and any exception the chain leaves unhandled.
         # bound_method has the signature that 'decorator' expects i.e. no
         # 'self' argument, but it's a closure over self so it can call
         # 'func'. Also, wrap method.__get__() in a function because new
         # attributes can't be set on bound method objects, only on functions.
+        # Architecture contract (GUID: MDP-001, GUID: MDP-002, GUID: MDP-004):
+        # `method` owns the original metadata; this local, mutable callable is
+        # the metadata transport boundary. Metadata preparation belongs after
+        # adapter construction and before the existing decorator loop, which
+        # remains the sole handoff seam to supplied decorators. The boundary
+        # mirrors only available standard wrapper-assignment attributes, so it
+        # neither depends on decorator internals nor invents absent metadata.
         bound_method = partial(method.__get__(self, type(self)))
+        update_wrapper(bound_method, method)
         for dec in decorators:
             bound_method = dec(bound_method)
         return bound_method(*args, **kwargs)
@@ -46,6 +93,12 @@ def _multi_decorate(decorators, method):
     for dec in decorators:
         _update_method_wrapper(_wrapper, dec)
     # Preserve any existing attributes of 'method', including the name.
+    # Architecture contract (GUID: MDP-003, GUID: MDP-009): `_multi_decorate()`
+    # owns the final metadata integration seam. The original `method` is the
+    # authority for standard wrapper-assignment metadata; `_wrapper` remains
+    # the owner of decorator state imported above. The final wrapper merge is
+    # therefore downstream of every decorator-state import and is the single
+    # boundary from which both kinds of observable state leave this module.
     update_wrapper(_wrapper, method)
     return _wrapper
 
@@ -54,12 +107,45 @@ def method_decorator(decorator, name=''):
     """
     Convert a function decorator into a method decorator
     """
+    # Pseudocode contract (GUID: MDP-011, GUID: MDP-012):
+    # VERIFIES: test_mdp_011_class_level_named_callable_decoration_succeeds_and_preserves_invocation
+    # VERIFIES: test_mdp_012_missing_named_method_error_remains_observable
+    # VERIFIES: test_mdp_012_non_callable_named_attribute_error_remains_observable
+    # INPUT: a decorator, a requested attribute name, and an object to decorate.
+    # IF the object is not a class:
+    #     HAND OFF the object to the existing method-decoration flow and RETURN
+    #     its result.
+    # ELSE IF the name is empty or the class has no attribute with that name:
+    #     RAISE the established nonexistent-method error and STOP before any
+    #     metadata-preservation work can run.
+    # RESOLVE the named class attribute.
+    # IF the resolved attribute is not callable:
+    #     RAISE the established non-callable-attribute error and STOP before
+    #     any metadata-preservation work can run.
+    # OTHERWISE:
+    #     HAND OFF the callable attribute to the existing method-decoration
+    #     flow, including its metadata preservation.
+    #     REPLACE the named class attribute with the returned wrapper.
+    #     RETURN the same class so normal instance lookup and invocation use
+    #     the decorated method with existing call semantics.
+    # IF callable decoration fails:
+    #     PROPAGATE the exception without replacing the named class attribute.
     # 'obj' can be a class or a function. If 'obj' is a function at the time it
     # is passed to _dec,  it will eventually be a method of the class it is
     # defined on. If 'obj' is a class, the 'name' is required to be the name
     # of the method that will be decorated.
+    # Architecture contract (GUID: MDP-011, GUID: MDP-012): `_dec()` owns the
+    # class-target adapter boundary. Name lookup and callable validation remain
+    # upstream gates at this boundary, so their established errors leave
+    # `method_decorator()` without crossing the metadata-preserving decoration
+    # seam. Valid named callables alone flow into `_multi_decorate()`, which
+    # owns wrapping and metadata integration; rebinding remains downstream of
+    # that dependency and is the sole class-mutation seam.
     def _dec(obj):
         if not isinstance(obj, type):
+            # Integration seam (GUID: MDP-010): tuple handling belongs to
+            # `_multi_decorate()`; this public adapter only routes the supplied
+            # decorator contract and method into that owning boundary.
             return _multi_decorate(decorator, obj)
         if not (name and hasattr(obj, name)):
             raise ValueError(
@@ -72,6 +158,8 @@ def method_decorator(decorator, name=''):
                 "Cannot decorate '%s' as it isn't a callable attribute of "
                 "%s (%s)." % (name, obj, method)
             )
+        # Integration seam (GUID: MDP-010): class-target decoration converges
+        # on the same private tuple boundary as direct method decoration.
         _wrapper = _multi_decorate(decorator, method)
         setattr(obj, name, _wrapper)
         return obj

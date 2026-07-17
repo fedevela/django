@@ -1,4 +1,4 @@
-from functools import update_wrapper, wraps
+from functools import WRAPPER_ASSIGNMENTS, partial, update_wrapper, wraps
 from unittest import TestCase
 
 from django.contrib.admin.views.decorators import staff_member_required
@@ -286,6 +286,283 @@ class MethodDecoratorTests(SimpleTestCase):
         self.assertEqual(obj.method.x, 1)
         self.assertIs(obj.method(), True)
 
+    def test_mdp_001_function_decorator_observes_all_original_wrapper_assignment_metadata(self):
+        """GUID: MDP-001 - Preserve original wrapper-assignment metadata."""
+        observed = {}
+
+        def decorator(func):
+            observed.update({
+                attr: getattr(func, attr)
+                for attr in WRAPPER_ASSIGNMENTS if hasattr(func, attr)
+            })
+            return func
+
+        def method(self):
+            return "result"
+
+        metadata_values = {
+            "__module__": "original module",
+            "__name__": "original_name",
+            "__qualname__": "original_qualname",
+            "__doc__": "original doc",
+            "__annotations__": {"return": "original annotation"},
+            "__type_params__": ("original type parameter",),
+        }
+        metadata = {
+            attr: metadata_values[attr] for attr in WRAPPER_ASSIGNMENTS
+        }
+        for attr in WRAPPER_ASSIGNMENTS:
+            setattr(method, attr, metadata[attr])
+
+        decorated_method = method_decorator(decorator)(method)
+
+        class Test:
+            method = decorated_method
+
+        observed.clear()
+        self.assertEqual(Test().method(), "result")
+        self.assertEqual(observed, metadata)
+
+    def test_mdp_002_wraps_decorator_invocation_avoids_missing_metadata_attribute_error(self):
+        """GUID: MDP-002 - Invoke a wraps-based decorator without metadata errors."""
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            if isinstance(func, partial):
+                for attr in WRAPPER_ASSIGNMENTS:
+                    getattr(wrapper, attr)
+            return wrapper
+
+        def method(self):
+            return "result"
+
+        if "__type_params__" in WRAPPER_ASSIGNMENTS:
+            method.__type_params__ = ("original type parameter",)
+        decorated_method = method_decorator(decorator)(method)
+
+        class Test:
+            method = decorated_method
+
+        self.assertEqual(Test().method(), "result")
+
+    def test_mdp_003_original_wrapper_assignment_metadata_remains_on_resulting_method(self):
+        """GUID: MDP-003 - Retain original standard wrapper-assignment metadata."""
+        def decorator(func):
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+
+            for attr in WRAPPER_ASSIGNMENTS:
+                setattr(wrapper, attr, decorator_metadata[attr])
+            return wrapper
+
+        def method(self):
+            return "result"
+
+        metadata_values = {
+            "__module__": "original module",
+            "__name__": "original_name",
+            "__qualname__": "original_qualname",
+            "__doc__": "original doc",
+            "__annotations__": {"return": "original annotation"},
+            "__type_params__": ("original type parameter",),
+        }
+        decorator_metadata_values = {
+            "__module__": "decorator module",
+            "__name__": "decorator_name",
+            "__qualname__": "decorator_qualname",
+            "__doc__": "decorator doc",
+            "__annotations__": {"return": "decorator annotation"},
+            "__type_params__": ("decorator type parameter",),
+        }
+        metadata = {
+            attr: metadata_values[attr] for attr in WRAPPER_ASSIGNMENTS
+        }
+        decorator_metadata = {
+            attr: decorator_metadata_values[attr] for attr in WRAPPER_ASSIGNMENTS
+        }
+        for attr, value in metadata.items():
+            setattr(method, attr, value)
+
+        decorated_method = method_decorator(decorator)(method)
+
+        self.assertEqual(
+            {attr: getattr(decorated_method, attr) for attr in WRAPPER_ASSIGNMENTS},
+            metadata,
+        )
+        self.assertIs(decorated_method.__wrapped__, method)
+
+    def test_mdp_004_missing_optional_wrapper_metadata_allows_adaptation_and_invocation(self):
+        """GUID: MDP-004 - Tolerate absent optional wrapper metadata."""
+        class CallableWithoutMetadata:
+            def __call__(self, instance):
+                return "result"
+
+            def __get__(self, instance, cls=None):
+                if instance is None:
+                    return self
+                return partial(self, instance)
+
+        original = CallableWithoutMetadata()
+        missing = [
+            attr for attr in WRAPPER_ASSIGNMENTS if not hasattr(original, attr)
+        ]
+        self.assertTrue(missing)
+        observed_missing = set()
+
+        def decorator(func):
+            observed_missing.update(
+                attr for attr in missing if not hasattr(func, attr)
+            )
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            method = method_decorator(decorator)(original)
+
+        self.assertEqual(Test().method(), "result")
+        self.assertEqual(observed_missing, set(missing))
+
+    def test_mdp_005_bound_instance_and_supplied_arguments_are_delivered_unchanged(self):
+        """GUID: MDP-005 - Preserve binding and argument delivery."""
+        observed = []
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self, *args, **kwargs):
+                observed.append((self, args, kwargs))
+
+        instance = Test()
+        positional = (object(), object())
+        keyword_value = object()
+
+        instance.method(*positional, keyword=keyword_value)
+
+        self.assertEqual(len(observed), 1)
+        bound_instance, received_args, received_kwargs = observed[0]
+        self.assertIs(bound_instance, instance)
+        self.assertEqual(received_args, positional)
+        self.assertEqual(received_kwargs, {"keyword": keyword_value})
+        self.assertIs(received_args[0], positional[0])
+        self.assertIs(received_args[1], positional[1])
+        self.assertIs(received_kwargs["keyword"], keyword_value)
+
+    def test_mdp_006_original_return_value_is_delivered_unchanged(self):
+        """GUID: MDP-006 - Preserve the original return value."""
+        expected = object()
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                return expected
+
+        self.assertIs(Test().method(), expected)
+
+    def test_mdp_007_unhandled_exception_remains_observable_unchanged(self):
+        """GUID: MDP-007 - Preserve an unhandled exception for the caller."""
+        class DistinguishableError(Exception):
+            pass
+
+        expected = DistinguishableError("expected exception")
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                raise expected
+
+        with self.assertRaises(DistinguishableError) as captured:
+            Test().method()
+
+        self.assertIs(captured.exception, expected)
+
+    def test_mdp_008_decorator_executes_once_for_every_method_invocation(self):
+        """GUID: MDP-008 - Execute the decorator once per invocation."""
+        executions = 0
+
+        def decorator(func):
+            nonlocal executions
+            executions += 1
+
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                pass
+
+        # Ignore method_decorator()'s decoration-time metadata probe. This
+        # requirement concerns applying the decorator to each runtime call.
+        executions = 0
+        instance = Test()
+
+        for expected_executions in range(1, 4):
+            instance.method()
+            self.assertEqual(executions, expected_executions)
+
+    def test_mdp_009_decorator_custom_attribute_and_value_remain_on_resulting_method(self):
+        """GUID: MDP-009 - Preserve a decorator-produced custom attribute and value."""
+        custom_value = object()
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            wrapper.decorator_attribute = custom_value
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                return "result"
+
+        self.assertIs(Test.method.decorator_attribute, custom_value)
+        self.assertIs(Test().method.decorator_attribute, custom_value)
+        self.assertEqual(Test().method(), "result")
+
+    def test_mdp_009_decorator_wrapper_updates_remain_on_resulting_method(self):
+        """GUID: MDP-009 - Preserve decorator-produced wrapper updates."""
+        update_value = object()
+
+        def decorator(func):
+            func.decorator_update = update_value
+
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+
+            return update_wrapper(wrapper, func, assigned=())
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                return "result"
+
+        self.assertIs(Test.method.decorator_update, update_value)
+        self.assertIs(Test().method.decorator_update, update_value)
+        self.assertEqual(Test().method(), "result")
+
     def test_bad_iterable(self):
         decorators = {myattr_dec_m, myattr2_dec_m}
         msg = "'set' object is not subscriptable"
@@ -358,6 +635,38 @@ class MethodDecoratorTests(SimpleTestCase):
 
         self.assertTrue(Test().method())
 
+    def test_mdp_011_class_level_named_callable_decoration_succeeds_and_preserves_invocation(self):
+        """
+        GUID: MDP-011 - Given a class with the requested callable method, class-level
+        decoration succeeds and an instance can invoke the decorated method with
+        existing call semantics.
+        """
+        calls = []
+        result = object()
+
+        def decorator(func):
+            @wraps(func)
+            def _wrapper(*args, **kwargs):
+                calls.append((args, kwargs))
+                return func(*args, **kwargs)
+            return _wrapper
+
+        @method_decorator(decorator, name="method")
+        class Test:
+            def method(self, arg, *, option):
+                calls.append((arg, option))
+                return result
+
+        instance = Test()
+        positional = object()
+        keyword = object()
+
+        self.assertIs(instance.method(positional, option=keyword), result)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0][0], (positional,))
+        self.assertEqual(calls[0][1], {"option": keyword})
+        self.assertEqual(calls[1], (positional, keyword))
+
     def test_tuple_of_decorators(self):
         """
         @method_decorator can accept a tuple of decorators.
@@ -393,6 +702,73 @@ class MethodDecoratorTests(SimpleTestCase):
         self.assertEqual(TestFirst().method(), "hello world?!")
         self.assertEqual(TestSecond().method(), "hello world?!")
 
+    def test_mdp_010_tuple_decorators_apply_with_existing_tuple_behavior(self):
+        """
+        GUID: MDP-010 - Apply every decorator using existing tuple behavior.
+        """
+        calls = []
+
+        def record_call(name):
+            def decorator(func):
+                def _wrapper(*args, **kwargs):
+                    calls.append('%s before' % name)
+                    result = func(*args, **kwargs)
+                    calls.append('%s after' % name)
+                    return result
+                return _wrapper
+            return decorator
+
+        decorators = (record_call('first'), record_call('second'))
+
+        class Test:
+            @method_decorator(decorators)
+            def method(self):
+                calls.append('method')
+
+        Test().method()
+
+        self.assertEqual(calls, [
+            'first before',
+            'second before',
+            'method',
+            'second after',
+            'first after',
+        ])
+
+    def test_mdp_010_tuple_decorated_method_preserves_call_semantics(self):
+        """
+        GUID: MDP-010 - Preserve positional arguments, keyword arguments, and return value.
+        """
+        calls = []
+        result = object()
+
+        def record_call(name):
+            def decorator(func):
+                def _wrapper(*args, **kwargs):
+                    calls.append((name, args, kwargs))
+                    return func(*args, **kwargs)
+                return _wrapper
+            return decorator
+
+        positional = object()
+        keyword = object()
+
+        class Test:
+            @method_decorator((record_call('first'), record_call('second')))
+            def method(self, arg, *, option):
+                calls.append(('method', (arg,), {'option': option}))
+                return result
+
+        actual_result = Test().method(positional, option=keyword)
+
+        self.assertIs(actual_result, result)
+        self.assertEqual([name for name, args, kwargs in calls], [
+            'first', 'second', 'method',
+        ])
+        for name, args, kwargs in calls:
+            self.assertIs(args[0], positional)
+            self.assertIs(kwargs['option'], keyword)
+
     def test_invalid_non_callable_attribute_decoration(self):
         """
         @method_decorator on a non-callable attribute raises an error.
@@ -410,6 +786,27 @@ class MethodDecoratorTests(SimpleTestCase):
                 def __module__(cls):
                     return "tests"
 
+    def test_mdp_012_non_callable_named_attribute_error_remains_observable(self):
+        """
+        GUID: MDP-012 - Given a class whose requested named attribute is not
+        callable, class-level decoration leaves the established error observable.
+        """
+        def decorator(func):
+            self.fail("The decorator must not run for a non-callable attribute.")
+
+        msg = (
+            "Cannot decorate 'prop' as it isn't a callable attribute of "
+            "<class 'Test'> (1)"
+        )
+        with self.assertRaisesMessage(TypeError, msg):
+            @method_decorator(decorator, name="prop")
+            class Test:
+                prop = 1
+
+                @classmethod
+                def __module__(cls):
+                    return "tests"
+
     def test_invalid_method_name_to_decorate(self):
         """
         @method_decorator on a nonexistent method raises an error.
@@ -420,6 +817,25 @@ class MethodDecoratorTests(SimpleTestCase):
         )
         with self.assertRaisesMessage(ValueError, msg):
             @method_decorator(lambda: None, name='nonexistent_method')
+            class Test:
+                @classmethod
+                def __module__(cls):
+                    return "tests"
+
+    def test_mdp_012_missing_named_method_error_remains_observable(self):
+        """
+        GUID: MDP-012 - Given a class without the requested method name,
+        class-level decoration leaves the established error observable.
+        """
+        def decorator(func):
+            self.fail("The decorator must not run for a missing method.")
+
+        msg = (
+            "The keyword argument `name` must be the name of a method of the "
+            "decorated class: <class 'Test'>. Got 'missing' instead"
+        )
+        with self.assertRaisesMessage(ValueError, msg):
+            @method_decorator(decorator, name="missing")
             class Test:
                 @classmethod
                 def __module__(cls):
