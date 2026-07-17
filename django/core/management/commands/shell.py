@@ -15,9 +15,6 @@ class Command(BaseCommand):
     )
 
     requires_system_checks = []
-    # GUID: SHELL-006 - This registry owns interactive-shell availability and
-    # precedence; non-interactive dispatch must fall through to its existing
-    # selection seam rather than introduce a parallel interactive path.
     shells = ['ipython', 'bpython', 'python']
 
     def add_arguments(self, parser):
@@ -84,50 +81,18 @@ class Command(BaseCommand):
 
         code.interact(local=imported_objects)
 
-    # GUID: SHELL-005 - This command boundary owns both non-interactive
-    # execution paths. Keep their user-code execution seams in handle(),
-    # outside the interactive-shell adapters and without an intervening
-    # exception-translation boundary.
     def handle(self, **options):
+        # Execute the command and exit.
         if options['command']:
-            # GUID: SHELL-001 - Use a single namespace for the entire snippet.
-            namespace = {}
-            # GUID: SHELL-005 - Execute the command without an exception
-            # boundary; if user code raises, stop this path and propagate the
-            # original exception to the invoking context unchanged.
-            exec(options['command'], namespace, namespace)
-            # GUID: SHELL-003 - Don't start an interactive shell afterwards.
+            exec(options['command'], globals())
             return
 
-        # Execute stdin if it has anything to read and exit. Not supported on
-        # Windows due to select.select() limitations.
-        # GUID: SHELL-007 - The platform restriction is owned at this dispatch
-        # boundary, keeping stdin readiness dependencies out of the interactive
-        # shell adapters.
-        # GUID: SHELL-007 - Non-interactive stdin restriction pseudocode:
-        # IF the platform is Windows, do not inspect, read, or execute stdin;
-        # transition directly to the existing interactive-shell flow.
-        # OTHERWISE, execute stdin only when it is non-interactive and ready;
-        # if either condition fails, transition to the same interactive flow.
+        # Execute stdin if it has anything to read and exit.
+        # Not supported on Windows due to select.select() limitations.
         if sys.platform != 'win32' and not sys.stdin.isatty() and select.select([sys.stdin], [], [], 0)[0]:
-            # GUID: SHELL-002 - Use a single namespace for the entire snippet.
-            namespace = {}
-            # GUID: SHELL-005 - Execute stdin without an exception boundary;
-            # if user code raises, stop this path and propagate the original
-            # exception to the invoking context unchanged.
-            exec(sys.stdin.read(), namespace, namespace)
-            # GUID: SHELL-004 - Don't start an interactive shell afterwards.
+            exec(sys.stdin.read(), globals())
             return
 
-        # GUID: SHELL-006 - Interactive preservation pseudocode:
-        # GIVEN no command was executed and no supported stdin was executed,
-        # IF an interface was requested, consider only that interface;
-        # OTHERWISE, consider shells in the existing self.shells order.
-        # FOR EACH candidate, hand off the unchanged options to its adapter;
-        # return when startup succeeds, but on ImportError try the next one.
-        # IF every candidate raises ImportError, raise the existing CommandError.
-        # GUID: SHELL-006 - This is the integration seam shared by ordinary
-        # interactive startup and fallthrough from non-interactive dispatch.
         available_shells = [options['interface']] if options['interface'] else self.shells
 
         for shell in available_shells:
