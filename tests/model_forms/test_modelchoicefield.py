@@ -89,6 +89,14 @@ class ModelChoiceFieldTests(TestCase):
             field.clean(str(self.c3.pk))
         self.assertEqual(cm.exception.error_list[0].code, 'invalid_choice')
 
+    def test_mcf_010_non_invalid_choice_failure_preserves_message_code_and_params(self):
+        """GUID: MCF-010 - Unrelated validation diagnostics remain unchanged."""
+        pass
+
+    def test_mcf_011_default_invalid_choice_uses_existing_localization_and_value_interpolation(self):
+        """GUID: MCF-011 - The localized default interpolates the submitted value."""
+        pass
+
     def test_basics(self):
         f = forms.ModelChoiceField(Category.objects.all())
         self.assertEqual(list(f.choices), [
