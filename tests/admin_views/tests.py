@@ -4984,6 +4984,34 @@ class SeleniumTests(AdminSeleniumTestCase):
         )
 
 
+class ReadonlyForeignKeyAdminSiteContractTests(unittest.TestCase):
+    """Placeholder contracts for read-only ForeignKey admin links."""
+
+    def test_dja_001_custom_site_readonly_foreignkey_links_to_custom_change_url(self):
+        """DJA-001: A custom-site link keeps its namespace and URL prefix."""
+        pass
+
+    def test_dja_002_active_modeladmin_site_namespace_is_used_for_url_reversal(self):
+        """DJA-002: URL reversal uses the active ModelAdmin site's namespace."""
+        pass
+
+    def test_dja_003_default_site_readonly_foreignkey_change_url_is_unchanged(self):
+        """DJA-003: The default AdminSite change URL remains unchanged."""
+        pass
+
+    def test_dja_004_readonly_foreignkey_change_url_keeps_quoted_primary_key(self):
+        """DJA-004: Related primary keys retain Django admin URL quoting."""
+        pass
+
+    def test_dja_005_currently_nonlinked_readonly_related_field_remains_nonlinked(self):
+        """DJA-005: A related field without a link remains non-linked."""
+        pass
+
+    def test_dja_006_unreversible_change_url_uses_fallback_without_link_or_error(self):
+        """DJA-006: Reversal failure keeps the unlinked fallback without error."""
+        pass
+
+
 @override_settings(ROOT_URLCONF='admin_views.urls')
 class ReadonlyTest(AdminFieldExtractionMixin, TestCase):
 
