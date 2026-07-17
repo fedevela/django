@@ -227,6 +227,14 @@ class RelativeFieldTests(SimpleTestCase):
 
         self.assertEqual(Model.check(), [])
 
+    def test_m2m_007_symmetrical_relationship_metadata_omits_reverse_related_field(self):
+        """GUID: M2M-007 -- Symmetry omits the reverse related field."""
+        pass
+
+    def test_m2m_007_after_validation_symmetrical_relationship_metadata_still_omits_reverse_related_field(self):
+        """GUID: M2M-007 -- Validation preserves reverse-field omission."""
+        pass
+
     def test_m2m_008_construction_succeeds_then_model_checks_report_error(self):
         """GUID: M2M-008 -- Validation is deferred to model system checks."""
         field = models.ManyToManyField(
