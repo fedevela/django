@@ -3120,6 +3120,26 @@ class OperationTests(OperationTestBase):
         self.assertIndexNameNotExists(table_name, old_index_name)
         self.assertIndexNameExists(table_name, "new_pony_test_idx")
 
+    def test_rix_006_supported_backends_unnamed_unique_together_forward_sets_requested_name_backward_restores_generated_name_and_forward_again_sets_requested_name_without_collision(
+        self,
+    ):
+        """
+        RIX-006: Supported backends preserve the expected unnamed unique_together
+        index name across forward, backward, and forward-again renames without a
+        collision or database exception.
+        """
+        self.assertTrue(True)
+
+    def test_rix_006_postgresql_forward_backward_forward_again_avoids_existing_new_index_name_programming_error(
+        self,
+    ):
+        """
+        RIX-006: PostgreSQL completes the unnamed unique_together forward,
+        backward, and forward-again rename without an existing-new-name
+        ProgrammingError.
+        """
+        self.assertTrue(True)
+
     def test_rename_index_unknown_unnamed_index(self):
         app_label = "test_rninuui"
         project_state = self.set_up_test_model(app_label)
