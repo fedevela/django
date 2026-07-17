@@ -1850,6 +1850,10 @@ class QuerySet(AltersData):
         Insert a new record for the given model. This provides an interface to
         the InsertQuery class and is how Model.save() is implemented.
         """
+        # Architecture contract (BULKUPSERT-007): update_fields and
+        # unique_fields belong to InsertQuery's conflict contract, while
+        # returning_fields belongs to compiler result handling. Callers must
+        # preserve these as independent inputs at this adapter seam.
         self._for_write = True
         if using is None:
             using = self.db
