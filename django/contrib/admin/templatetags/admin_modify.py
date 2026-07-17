@@ -118,8 +118,9 @@ def submit_row(context):
             # ELSE:
             #     TRANSITION the result from hidden to visible.   [SAVEAS-006]
             # PUBLISH the result as show_save_as_new for the template.
-            "show_save_as_new": not is_popup
+            "show_save_as_new": has_add_permission
             and has_change_permission
+            and not is_popup
             and change
             and save_as,
             "show_save_and_add_another": can_save_and_add_another,

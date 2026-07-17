@@ -100,29 +100,51 @@ class AdminTemplateTagsTest(AdminViewBasicTestCase):
 
 
 class SubmitRowSaveAsNewContractTests(TestCase):
+    @staticmethod
+    def submit_row_context(**overrides):
+        context = {
+            "add": False,
+            "change": True,
+            "is_popup": False,
+            "save_as": True,
+            "has_add_permission": True,
+            "has_change_permission": True,
+            "has_view_permission": True,
+            "has_editable_inline_admin_formsets": False,
+            "has_delete_permission": True,
+        }
+        context.update(overrides)
+        return submit_row(context)
+
     def test_saveas_001_without_add_permission_hides_save_as_new(self):
         """SAVEAS-001: Missing add permission hides Save as new."""
-        self.assertTrue(True)
+        context = self.submit_row_context(has_add_permission=False)
+        self.assertIs(context["show_save_as_new"], False)
 
     def test_saveas_002_without_change_permission_hides_save_as_new(self):
         """SAVEAS-002: Missing change permission hides Save as new."""
-        self.assertTrue(True)
+        context = self.submit_row_context(has_change_permission=False)
+        self.assertIs(context["show_save_as_new"], False)
 
     def test_saveas_003_popup_view_hides_save_as_new(self):
         """SAVEAS-003: Popup state hides Save as new."""
-        self.assertTrue(True)
+        context = self.submit_row_context(is_popup=True)
+        self.assertIs(context["show_save_as_new"], False)
 
     def test_saveas_004_without_existing_object_change_hides_save_as_new(self):
         """SAVEAS-004: Missing existing-object change state hides Save as new."""
-        self.assertTrue(True)
+        context = self.submit_row_context(change=False, add=True)
+        self.assertIs(context["show_save_as_new"], False)
 
     def test_saveas_005_with_save_as_disabled_hides_save_as_new(self):
         """SAVEAS-005: Disabled save_as hides Save as new."""
-        self.assertTrue(True)
+        context = self.submit_row_context(save_as=False)
+        self.assertIs(context["show_save_as_new"], False)
 
     def test_saveas_006_with_all_visibility_conditions_shows_save_as_new(self):
         """SAVEAS-006: All required visibility conditions show Save as new."""
-        self.assertTrue(True)
+        context = self.submit_row_context()
+        self.assertIs(context["show_save_as_new"], True)
 
 
 class DateHierarchyTests(TestCase):
