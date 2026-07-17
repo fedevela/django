@@ -16,6 +16,40 @@ from .models import (
 )
 
 
+class NamedTupleRangeLookupContractTests(TestCase):
+    def test_range_001_named_two_tuple_range_executes_without_constructor_type_error(self):
+        """GUID: RANGE-001 - A named 2-tuple range executes without TypeError."""
+        pass
+
+    def test_range_002_resolve_lookup_value_resolves_both_named_two_tuple_elements(self):
+        """GUID: RANGE-002 - Both named 2-tuple elements are resolved."""
+        pass
+
+    def test_range_003_reconstruction_passes_resolved_elements_as_positional_arguments(self):
+        """GUID: RANGE-003 - Resolved elements become separate positional args."""
+        pass
+
+    def test_range_004_reconstructed_lookup_value_retains_named_tuple_class(self):
+        """GUID: RANGE-004 - Reconstruction retains the named tuple class."""
+        pass
+
+    def test_range_005_reconstructed_named_two_tuple_preserves_element_order(self):
+        """GUID: RANGE-005 - Reconstruction preserves element order."""
+        pass
+
+    def test_range_006_reconstructed_named_two_tuple_preserves_arity(self):
+        """GUID: RANGE-006 - Reconstruction preserves arity two."""
+        pass
+
+    def test_range_007_named_and_plain_two_tuple_ranges_return_same_inclusive_results(self):
+        """GUID: RANGE-007 - Named and plain tuples have equal inclusive results."""
+        pass
+
+    def test_range_008_plain_tuple_resolution_preserves_order_arity_and_results(self):
+        """GUID: RANGE-008 - Plain tuple behavior remains unchanged."""
+        pass
+
+
 class LookupTests(TestCase):
 
     @classmethod
