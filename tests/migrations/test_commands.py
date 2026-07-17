@@ -20,6 +20,7 @@ from django.db import (
 )
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.utils import truncate_name
+from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.exceptions import InconsistentMigrationHistory
 from django.db.migrations.loader import MigrationLoader
 from django.db.migrations.recorder import MigrationRecorder
@@ -2756,6 +2757,35 @@ class SquashMigrationsTests(MigrationTestBase):
             )
             yield migration_source, migration, historical_sources
 
+    def apply_index_together_migrations(self, using, target, replace_migrations=True):
+        database = connections[using]
+        executor = MigrationExecutor(database)
+        if not replace_migrations:
+            executor.loader = MigrationLoader(database, replace_migrations=False)
+        plan = executor.migration_plan([target])
+        state = executor.migrate([target], plan=plan)
+        return executor, plan, state
+
+    def get_book_index_definitions(self, using):
+        database = connections[using]
+        with database.cursor() as cursor:
+            constraints = database.introspection.get_constraints(
+                cursor, "migrations_book"
+            )
+        return {
+            name: {
+                "columns": tuple(definition["columns"]),
+                "orders": tuple(definition.get("orders", ())),
+                "type": definition.get("type"),
+            }
+            for name, definition in constraints.items()
+            if definition["index"] and not definition["unique"]
+        }
+
+    def unapply_index_together_migrations(self, using):
+        executor = MigrationExecutor(connections[using])
+        executor.migrate([("migrations", None)])
+
     def test_django_001_fully_superseded_index_together_keeps_final_indexes(self):
         """
         GUID: DJANGO-001 - Normal squashing of a fully superseded index_together
@@ -2802,52 +2832,99 @@ class SquashMigrationsTests(MigrationTestBase):
         GUID: DJANGO-003 - Applying the original sequence and its squashed
         replacement to equivalent databases produces equivalent final indexes.
         """
-        # Pseudocode (DJANGO-003):
-        # GIVEN two isolated databases at the same valid pre-migration state
-        # AND the original migration sequence and its generated replacement
-        # WHEN the original sequence is applied to the first database
-        # AND the replacement is applied to the second database
-        # THEN fail immediately if either migration path cannot be applied
-        # AND introspect the indexes on the transitioned model in each database
-        # AND normalize backend-specific index metadata into comparable
-        #     definitions (name, ordered fields, and all defining attributes)
-        # AND assert that both collections of final definitions are equal.
-        self.assertTrue(True)
+        with self.squash_index_together_migrations():
+            try:
+                self.apply_index_together_migrations(
+                    "default",
+                    ("migrations", "0002_rename_index"),
+                    replace_migrations=False,
+                )
+                self.apply_index_together_migrations(
+                    "other",
+                    ("migrations", "0001_squashed_0002_rename_index"),
+                )
+                self.assertEqual(
+                    self.get_book_index_definitions("default"),
+                    self.get_book_index_definitions("other"),
+                )
+            finally:
+                self.unapply_index_together_migrations("default")
+                self.unapply_index_together_migrations("other")
 
     def test_django_004_squash_retains_every_final_index_definition(self):
         """
         GUID: DJANGO-004 - Every final Meta.indexes entry retains its fields
         and definition after squashing.
         """
-        # Pseudocode (DJANGO-004):
-        # GIVEN the final project state produced by the original migration
-        #     sequence and the generated squashed replacement
-        # WHEN final Meta.indexes entries are read from the original state
-        # AND the replacement is applied to an equivalent starting database
-        # AND its resulting indexes are introspected from that database
-        # THEN for each expected Meta.indexes entry:
-        #     derive its complete normalized definition and ordered fields;
-        #     locate the resulting index by its stable identity;
-        #     fail if the index is absent;
-        #     fail if its fields or any defining attribute differs;
-        # AND succeed only after every expected final index has been matched.
-        self.assertTrue(True)
+        with self.squash_index_together_migrations():
+            try:
+                original_executor, _, _ = self.apply_index_together_migrations(
+                    "default",
+                    ("migrations", "0002_rename_index"),
+                    replace_migrations=False,
+                )
+                _, _, squashed_state = self.apply_index_together_migrations(
+                    "other",
+                    ("migrations", "0001_squashed_0002_rename_index"),
+                )
+                original_state = original_executor.loader.project_state(
+                    ("migrations", "0002_rename_index")
+                )
+                expected_indexes = original_state.models[
+                    "migrations", "book"
+                ].options["indexes"]
+                squashed_indexes = squashed_state.models[
+                    "migrations", "book"
+                ].options["indexes"]
+                self.assertEqual(squashed_indexes, expected_indexes)
+
+                definitions = self.get_book_index_definitions("other")
+                self.assertEqual(
+                    set(definitions), {index.name for index in expected_indexes}
+                )
+                for index in expected_indexes:
+                    definition = definitions[index.name]
+                    self.assertEqual(
+                        definition["columns"],
+                        tuple(field.removeprefix("-") for field in index.fields),
+                    )
+                    if definition["orders"]:
+                        self.assertEqual(
+                            definition["orders"],
+                            tuple(
+                                "DESC" if field.startswith("-") else "ASC"
+                                for field in index.fields
+                            ),
+                        )
+            finally:
+                self.unapply_index_together_migrations("default")
+                self.unapply_index_together_migrations("other")
 
     def test_django_005_generated_squashed_migration_loads_and_applies(self):
         """
         GUID: DJANGO-005 - The generated squashed migration remains valid,
         loadable, and executable.
         """
-        # Pseudocode (DJANGO-005):
-        # GIVEN a generated squashed migration in an isolated migration module
-        # WHEN migration caches are refreshed and the module is loaded
-        # THEN fail if import, deserialization, graph construction, replacement
-        #     metadata, dependencies, or operation definitions are invalid
-        # WHEN an executor applies the loaded replacement from a valid starting
-        #     database state to its declared target state
-        # THEN fail on any planning, state-transition, schema, or execution error
-        # AND confirm that the replacement target is recorded as applied.
-        self.assertTrue(True)
+        target = ("migrations", "0001_squashed_0002_rename_index")
+        with self.squash_index_together_migrations() as (_, migration, _):
+            self.assertEqual(
+                migration.replaces,
+                [
+                    ("migrations", "0001_initial"),
+                    ("migrations", "0002_rename_index"),
+                ],
+            )
+            try:
+                executor, plan, state = self.apply_index_together_migrations(
+                    "default", target
+                )
+                self.assertEqual(plan, [(migration, False)])
+                self.assertIn(("migrations", "book"), state.models)
+                self.assertTableExists("migrations_book")
+                executor.loader.build_graph()
+                self.assertIn(target, executor.recorder.applied_migrations())
+            finally:
+                self.unapply_index_together_migrations("default")
 
     def test_django_006_normal_squashing_needs_no_manual_history_rewrite(self):
         """
