@@ -215,6 +215,18 @@ class BulkCreateUpdateConflictsContractTests(TestCase):
         self.assertEqual(existing.name, "updated")
         self.assertEqual(existing.rank, 1)
 
+    def test_BULKUPSERT_009_backend_without_conflict_update_support_rejects_update_conflicts(
+        self,
+    ):
+        """GUID: BULKUPSERT-009"""
+        pass
+
+    def test_BULKUPSERT_010_backend_without_row_returning_retains_conflict_update_without_pk_guarantee(
+        self,
+    ):
+        """GUID: BULKUPSERT-010"""
+        pass
+
     @skipUnlessDBFeature(
         "supports_update_conflicts", "can_return_rows_from_bulk_insert"
     )
