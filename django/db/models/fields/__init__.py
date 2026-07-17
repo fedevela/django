@@ -1011,6 +1011,24 @@ class Field(RegisterLookupMixin):
             "label": capfirst(self.verbose_name),
             "help_text": self.help_text,
         }
+        # Pseudocode (DJANGO-005, DJANGO-007) -- preserve generated field
+        # initial and hidden-initial contracts:
+        # INPUT: model-field default metadata and explicit formfield options.
+        # IF the model field has a callable default:
+        #     pass the callable itself as the generated field's initial source.
+        #     enable hidden-initial transport for later change comparison.
+        #     when no submitted value supersedes it, resolve that source through
+        #     the established form-initial path and expose the resulting value.
+        # ELSE IF the model field has a non-callable default:
+        #     resolve that default once for the generated field's initial value.
+        #     do not enable callable-default hidden-initial behavior.
+        # ELSE:
+        #     add neither a model-default initial nor hidden-initial behavior.
+        # Explicit formfield options then override generated defaults normally.
+        # OUTPUT: callable defaults retain their initial-value contract, while
+        # all other fields retain their existing render/bind metadata.
+        # FAILURE: let default resolution failures follow the existing initial
+        # resolution error path; do not substitute a new value or state.
         if self.has_default():
             if callable(self.default):
                 defaults["initial"] = self.default

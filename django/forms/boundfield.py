@@ -175,6 +175,22 @@ class BoundField:
         # path to report the error; ELSE permit normal empty-form handling.
         # On each unchanged resubmission, repeat this comparison against the
         # carried baseline so the same invalid inline remains active.
+        # Pseudocode (DJANGO-006, DJANGO-007) -- preserve compatibility paths:
+        # INPUT: generated field metadata, resolved initial, visible submitted
+        # data, and any submitted hidden initial.
+        # IF hidden-initial comparison is enabled for a callable default:
+        #     decode the submitted hidden baseline without resolving the
+        #     callable again.
+        #     IF decoding fails, classify the field as changed so ordinary
+        #     validation handles the malformed submission.
+        # ELSE:
+        #     compare against the field's established resolved initial and do
+        #     not introduce hidden-initial transport for non-callable fields.
+        # Apply the field's existing change rule to the chosen baseline and
+        # visible data, then hand the unchanged changed-data result to the
+        # normal ModelForm or inline-form validation path.
+        # OUTPUT: valid submissions keep their established changed-data state;
+        # non-callable fields keep their established comparison behavior.
         field = self.field
         if field.show_hidden_initial:
             hidden_widget = field.hidden_widget()
