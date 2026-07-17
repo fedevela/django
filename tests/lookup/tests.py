@@ -23,38 +23,89 @@ from .models import (
 NamedTupleRangeBounds = namedtuple('NamedTupleRangeBounds', ('lower', 'upper'))
 
 
+class ResolvableLookupValue:
+    def __init__(self, value, resolved_values):
+        self.value = value
+        self.resolved_values = resolved_values
+
+    def resolve_expression(self, *args, **kwargs):
+        self.resolved_values.append(self.value)
+        return self.value
+
+
 class NamedTupleRangeLookupContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        for year in range(1999, 2004):
+            Season.objects.create(year=year)
+
+    def resolve(self, value):
+        return Season.objects.all().query.resolve_lookup_value(value, set(), True)
+
+    def range_years(self, bounds):
+        return list(
+            Season.objects.filter(year__range=bounds)
+            .order_by('year').values_list('year', flat=True)
+        )
+
     def test_range_001_named_two_tuple_range_executes_without_constructor_type_error(self):
         """GUID: RANGE-001 - A named 2-tuple range executes without TypeError."""
-        pass
+        self.assertEqual(
+            self.range_years(NamedTupleRangeBounds(2000, 2002)),
+            [2000, 2001, 2002],
+        )
 
     def test_range_002_resolve_lookup_value_resolves_both_named_two_tuple_elements(self):
         """GUID: RANGE-002 - Both named 2-tuple elements are resolved."""
-        pass
+        resolved_values = []
+        bounds = NamedTupleRangeBounds(
+            ResolvableLookupValue(2000, resolved_values),
+            ResolvableLookupValue(2002, resolved_values),
+        )
+        self.resolve(bounds)
+        self.assertEqual(resolved_values, [2000, 2002])
 
     def test_range_003_reconstruction_passes_resolved_elements_as_positional_arguments(self):
         """GUID: RANGE-003 - Resolved elements become separate positional args."""
-        pass
+        self.assertEqual(
+            self.resolve(NamedTupleRangeBounds(2000, 2002)),
+            NamedTupleRangeBounds(2000, 2002),
+        )
 
     def test_range_004_reconstructed_lookup_value_retains_named_tuple_class(self):
         """GUID: RANGE-004 - Reconstruction retains the named tuple class."""
-        pass
+        resolved = self.resolve(NamedTupleRangeBounds(2000, 2002))
+        self.assertIs(type(resolved), NamedTupleRangeBounds)
 
     def test_range_005_reconstructed_named_two_tuple_preserves_element_order(self):
         """GUID: RANGE-005 - Reconstruction preserves element order."""
-        pass
+        resolved = self.resolve(NamedTupleRangeBounds(2000, 2002))
+        self.assertEqual((resolved.lower, resolved.upper), (2000, 2002))
 
     def test_range_006_reconstructed_named_two_tuple_preserves_arity(self):
         """GUID: RANGE-006 - Reconstruction preserves arity two."""
-        pass
+        resolved = self.resolve(NamedTupleRangeBounds(2000, 2002))
+        self.assertEqual(len(resolved), 2)
 
     def test_range_007_named_and_plain_two_tuple_ranges_return_same_inclusive_results(self):
         """GUID: RANGE-007 - Named and plain tuples have equal inclusive results."""
-        pass
+        named_results = self.range_years(NamedTupleRangeBounds(2000, 2002))
+        plain_results = self.range_years((2000, 2002))
+        self.assertEqual(named_results, plain_results)
+        self.assertEqual(named_results, [2000, 2001, 2002])
 
     def test_range_008_plain_tuple_resolution_preserves_order_arity_and_results(self):
         """GUID: RANGE-008 - Plain tuple behavior remains unchanged."""
-        pass
+        resolved_values = []
+        bounds = (
+            ResolvableLookupValue(2000, resolved_values),
+            ResolvableLookupValue(2002, resolved_values),
+        )
+        resolved = self.resolve(bounds)
+        self.assertIs(type(resolved), tuple)
+        self.assertEqual(resolved, (2000, 2002))
+        self.assertEqual(resolved_values, [2000, 2002])
+        self.assertEqual(self.range_years(resolved), [2000, 2001, 2002])
 
 
 class LookupTests(TestCase):

@@ -1069,36 +1069,23 @@ class Query(BaseExpression):
             sql = '(%s)' % sql
         return sql, params
 
-    # RANGE-001..RANGE-008 architecture boundary: Query owns recursive RHS
-    # expression resolution and preservation of supported container structure.
-    # Container-specific reconstruction belongs at the existing list/tuple seam
-    # below; lookup classes, including Range, consume its reconstructed result.
     def resolve_lookup_value(self, value, can_reuse, allow_joins):
         if hasattr(value, 'resolve_expression'):
             value = value.resolve_expression(
                 self, reuse=can_reuse, allow_joins=allow_joins,
             )
         elif isinstance(value, (list, tuple)):
-            # RANGE-001..RANGE-008 pseudocode contract:
-            # - Resolve every item recursively, once, in input order
-            #   (RANGE-002, RANGE-005, RANGE-006, RANGE-008).
-            # - If the input is a named 2-tuple, reconstruct its original
-            #   class with resolved_item_1 and resolved_item_2 as two separate
-            #   positional arguments (RANGE-003, RANGE-004); never pass the
-            #   resolved items as one generator argument (RANGE-001).
-            # - Otherwise, reconstruct a list or plain tuple through the
-            #   existing iterable-constructor path so its order, arity, and
-            #   lookup results remain unchanged (RANGE-008).
-            # - Return the reconstructed value to lookup preparation; for a
-            #   range lookup, its ordered two bounds must yield the same
-            #   inclusive result set as equivalent plain-tuple bounds,
-            #   including records equal to either bound (RANGE-007).
             # The items of the iterable may be expressions and therefore need
             # to be resolved independently.
-            return type(value)(
+            values = (
                 self.resolve_lookup_value(sub_value, can_reuse, allow_joins)
                 for sub_value in value
             )
+            # Named tuples require each value to be passed as a separate
+            # argument to the constructor.
+            if hasattr(value, '_fields'):
+                return type(value)(*values)
+            return type(value)(values)
         return value
 
     def solve_lookup_type(self, lookup):
