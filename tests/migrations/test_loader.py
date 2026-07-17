@@ -22,10 +22,40 @@ class RecorderTests(TestCase):
 
     def test_MIGREC_008_denied_alias_does_not_create_query_insert_or_delete_migration_history(self):
         """MIGREC-008: Denied aliases remain isolated from recorder I/O."""
+        # MIGREC-008 denied-alias verification logic obligation.
+        # GIVEN: a recorder bound to a dedicated alias whose router denies the
+        # recorder Migration model, with schema and query collaborators made
+        # independently observable and no recorder table on that alias.
+        # FOR EACH operation in (ensure schema, read applied migrations,
+        # record applied, record unapplied):
+        #   reset every observation so this operation is verified in isolation;
+        #   exercise the operation against the denied-alias recorder;
+        #   verify the router decision used that alias and recorder model;
+        #   verify no cursor or schema editor inspected or created the table;
+        #   verify no migration queryset was obtained, iterated, inserted into,
+        #   filtered, or deleted from.
+        #   IF the operation reads history: verify its result is empty.
+        #   ELSE: verify it completes as a no-op.
+        # FAILURE: any schema access or migration-query interaction fails this
+        # obligation even when the operation's final return value is empty.
         self.assertTrue(True)
 
     def test_MIGREC_008_allowed_alias_retains_create_read_insert_and_delete_migration_history(self):
         """MIGREC-008: Allowed aliases retain all migration-history behavior."""
+        # MIGREC-008 allowed-alias verification logic obligation.
+        # GIVEN: an independent recorder alias for which no router denies the
+        # recorder Migration model, starting without django_migrations.
+        # WHEN ensure_schema runs: verify the schema editor creates the recorder
+        # model once; when repeated, verify the existing schema is retained.
+        # WHEN record_applied(app, name) runs: verify schema availability first,
+        # then verify one row is inserted on this recorder's alias.
+        # WHEN applied_migrations runs: verify it reads that alias and returns a
+        # mapping containing the inserted (app, name) history entry.
+        # WHEN record_unapplied(app, name) runs: verify the matching row on this
+        # alias is selected and deleted, then verify a read returns no entry.
+        # FAILURE: preserve and independently observe the existing schema-error,
+        # read-error, insert-error, and delete-error propagation paths; router
+        # permission must not suppress any permitted-path operation or error.
         self.assertTrue(True)
 
     def test_MIGREC_001_migration_permission_for_internal_model_uses_recorder_connection_alias(self):

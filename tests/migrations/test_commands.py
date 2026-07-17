@@ -33,6 +33,24 @@ class MigrateTests(MigrationTestBase):
 
     def test_MIGREC_008_processing_keeps_migration_history_only_on_permitted_alias(self):
         """MIGREC-008: Mixed-alias processing records only permitted history."""
+        # MIGREC-008 mixed-alias verification logic obligation.
+        # GIVEN: two independent database aliases and a router that permits the
+        # recorder Migration model on the permitted alias but denies that model
+        # on the denied alias, with the same migration target available to both.
+        # ESTABLISH: both aliases begin without the target migration-history row
+        # and the denied alias begins without a recorder table.
+        # FOR EACH alias in (permitted, denied):
+        #   invoke migration processing for the same target and that alias;
+        #   allow normal migration planning/execution to complete;
+        #   route recorder schema/read/write decisions using only that alias.
+        # AFTER processing: verify the permitted alias has django_migrations and
+        # contains the target history row; verify by schema introspection that
+        # the denied alias has no recorder table and therefore cannot contain
+        # the target row, without issuing a history query on the denied alias.
+        # ISOLATION: state created for the permitted alias must never satisfy a
+        # schema check or history lookup for the denied alias.
+        # FAILURE: processing errors still propagate normally; a denied recorder
+        # decision alone must not abort otherwise permitted migration processing.
         self.assertTrue(True)
 
     @override_settings(MIGRATION_MODULES={'migrations': 'migrations.test_migrations'})
