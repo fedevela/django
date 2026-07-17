@@ -88,6 +88,14 @@ class FileBasedCache(BaseCache):
             return False
         return True
 
+    # Architecture ownership for the has_key() operation:
+    # - _key_to_file() remains the sole key/version-to-path boundary (FBC-007).
+    # - has_key() owns opening that path and translating only a missing target
+    #   into cache absence (FBC-001, FBC-002, FBC-006).
+    # - _is_expired() remains the expiry and cleanup boundary for an opened
+    #   cache file (FBC-003, FBC-004, FBC-005).
+    # Dependencies therefore flow from has_key() to those existing private
+    # helpers; neither mapping nor expiry cleanup is duplicated here.
     def has_key(self, key, version=None):
         # Pseudocode contract for has_key(key, version):
         # FBC-007: Resolve fname once through the existing _key_to_file() mapping.
