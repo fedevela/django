@@ -154,26 +154,48 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
     def test_parameters(self):
         self.assertEqual(
             self.settings_to_cmd_args_env({"NAME": "dbname"}, ["--help"]),
-            (["psql", "dbname", "--help"], None),
+            (["psql", "--help", "dbname"], None),
         )
 
     def test_pgsql_001_additional_arguments_precede_configured_database_name(self):
         """GUID: PGSQL-001."""
-        self.assertTrue(True)
+        args, _ = self.settings_to_cmd_args_env(
+            {"NAME": "dbname"}, ["--set", "ON_ERROR_STOP=1"]
+        )
+        self.assertEqual(
+            args, ["psql", "--set", "ON_ERROR_STOP=1", "dbname"]
+        )
 
     def test_pgsql_002_additional_arguments_preserve_content_separation_and_order(self):
         """GUID: PGSQL-002."""
-        self.assertTrue(True)
+        parameters = [
+            "--set",
+            "application_name=my app",
+            "-c",
+            "select 'two words';",
+        ]
+        args, _ = self.settings_to_cmd_args_env({"NAME": "dbname"}, parameters)
+        self.assertEqual(args, ["psql", *parameters, "dbname"])
 
     def test_pgsql_003_configured_database_name_is_final_positional_argument(self):
         """GUID: PGSQL-003."""
-        self.assertTrue(True)
+        args, _ = self.settings_to_cmd_args_env(
+            {"NAME": "dbname"}, ["-c", "select 1;"]
+        )
+        self.assertEqual(args[-1], "dbname")
+        self.assertEqual(args, ["psql", "-c", "select 1;", "dbname"])
 
     def test_pgsql_004_command_arguments_precede_database_and_execute_without_ignored_arguments(
         self,
     ):
         """GUID: PGSQL-004; parameters: -c, select * from some_table;."""
-        self.assertTrue(True)
+        sql = "select * from some_table;"
+        client = DatabaseClient(mock.Mock(settings_dict={"NAME": "dbname"}))
+        with mock.patch("subprocess.run") as run:
+            client.runshell(["-c", sql])
+        run.assert_called_once_with(
+            ["psql", "-c", sql, "dbname"], env=None, check=True
+        )
 
     @skipUnless(connection.vendor == "postgresql", "Requires a PostgreSQL connection")
     def test_sigint_handler(self):
