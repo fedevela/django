@@ -151,6 +151,11 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
             ),
         )
 
+    # Architecture contract for GUID PGSQL-008: this established test is the
+    # owning verification seam for PostgreSQL parameter/database argv ordering.
+    # Implementation should extend this locus with representative multiple
+    # parameters; command construction remains owned by DatabaseClient, and the
+    # configured database name remains the final positional argument.
     def test_parameters(self):
         self.assertEqual(
             self.settings_to_cmd_args_env({"NAME": "dbname"}, ["--help"]),
@@ -291,6 +296,12 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
         self.assertNotIn("somepassword", str(ctx.exception))
 
 
+# Architecture boundary for GUID PGSQL-008: this test-only contract scaffold
+# traces the ordering and regression obligations to their existing owners. The
+# ordering obligation integrates through test_parameters above; the regression
+# obligations remain owned by the named tests on
+# PostgreSqlDbshellCommandTestCase and by the existing test runner. No separate
+# production adapter, runtime wiring, or public API belongs at this boundary.
 class PostgreSqlDbshellPGSQL008ContractTestCase(SimpleTestCase):
     def test_pgsql_008_multiple_additional_arguments_precede_configured_database_name_with_content_separation_and_relative_order_preserved(
         self,
