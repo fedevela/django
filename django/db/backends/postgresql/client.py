@@ -23,7 +23,7 @@ class DatabaseClient(BaseDatabaseClient):
         sslcert = options.get("sslcert")
         sslkey = options.get("sslkey")
 
-        if not dbname and not service:
+        if not dbname and not service and not parameters:
             # Connect to the default 'postgres' db.
             dbname = "postgres"
         if user:
@@ -32,9 +32,9 @@ class DatabaseClient(BaseDatabaseClient):
             args += ["-h", host]
         if port:
             args += ["-p", str(port)]
+        args.extend(parameters)
         if dbname:
             args += [dbname]
-        args.extend(parameters)
 
         env = {}
         if passwd:

@@ -152,10 +152,117 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
         )
 
     def test_parameters(self):
+        """GUID: PGSQL-008."""
+        parameters = ["--set", "ON_ERROR_STOP=1", "-c", "select 'two words';"]
         self.assertEqual(
-            self.settings_to_cmd_args_env({"NAME": "dbname"}, ["--help"]),
-            (["psql", "dbname", "--help"], None),
+            self.settings_to_cmd_args_env({"NAME": "dbname"}, parameters),
+            (["psql", *parameters, "dbname"], None),
         )
+
+    def test_pgsql_001_additional_arguments_precede_configured_database_name(self):
+        """GUID: PGSQL-001."""
+        args, _ = self.settings_to_cmd_args_env(
+            {"NAME": "dbname"}, ["--set", "ON_ERROR_STOP=1"]
+        )
+        self.assertEqual(
+            args, ["psql", "--set", "ON_ERROR_STOP=1", "dbname"]
+        )
+
+    def test_pgsql_002_additional_arguments_preserve_content_separation_and_order(self):
+        """GUID: PGSQL-002."""
+        parameters = [
+            "--set",
+            "application_name=my app",
+            "-c",
+            "select 'two words';",
+        ]
+        args, _ = self.settings_to_cmd_args_env({"NAME": "dbname"}, parameters)
+        self.assertEqual(args, ["psql", *parameters, "dbname"])
+
+    def test_pgsql_003_configured_database_name_is_final_positional_argument(self):
+        """GUID: PGSQL-003."""
+        args, _ = self.settings_to_cmd_args_env(
+            {"NAME": "dbname"}, ["-c", "select 1;"]
+        )
+        self.assertEqual(args[-1], "dbname")
+        self.assertEqual(args, ["psql", "-c", "select 1;", "dbname"])
+
+    def test_pgsql_004_command_arguments_precede_database_and_execute_without_ignored_arguments(
+        self,
+    ):
+        """GUID: PGSQL-004; parameters: -c, select * from some_table;."""
+        sql = "select * from some_table;"
+        client = DatabaseClient(mock.Mock(settings_dict={"NAME": "dbname"}))
+        with mock.patch("subprocess.run") as run:
+            client.runshell(["-c", sql])
+        run.assert_called_once_with(
+            ["psql", "-c", sql, "dbname"], env=None, check=True
+        )
+
+    def test_pgsql_005_existing_connection_arguments_and_settings_retain_established_meaning_after_argument_ordering_change(
+        self,
+    ):
+        """GUID: PGSQL-005."""
+        parameters = ["--set", "ON_ERROR_STOP=1"]
+        self.assertEqual(
+            self.settings_to_cmd_args_env(
+                {
+                    "NAME": "dbname",
+                    "USER": "someuser",
+                    "PASSWORD": "somepassword",
+                    "HOST": "somehost",
+                    "PORT": 444,
+                    "OPTIONS": {
+                        "passfile": "~/.custompgpass",
+                        "service": "django_test",
+                        "sslmode": "verify-ca",
+                        "sslrootcert": "root.crt",
+                        "sslcert": "client.crt",
+                        "sslkey": "client.key",
+                    },
+                },
+                parameters,
+            ),
+            (
+                [
+                    "psql",
+                    "-U",
+                    "someuser",
+                    "-h",
+                    "somehost",
+                    "-p",
+                    "444",
+                    *parameters,
+                    "dbname",
+                ],
+                {
+                    "PGPASSWORD": "somepassword",
+                    "PGSERVICE": "django_test",
+                    "PGSSLMODE": "verify-ca",
+                    "PGSSLROOTCERT": "root.crt",
+                    "PGSSLCERT": "client.crt",
+                    "PGSSLKEY": "client.key",
+                    "PGPASSFILE": "~/.custompgpass",
+                },
+            ),
+        )
+
+    def test_pgsql_006_configured_database_name_without_additional_parameters_opens_interactive_shell_as_before(
+        self,
+    ):
+        """GUID: PGSQL-006."""
+        client = DatabaseClient(mock.Mock(settings_dict={"NAME": "dbname"}))
+        with mock.patch("subprocess.run") as run:
+            client.runshell([])
+        run.assert_called_once_with(["psql", "dbname"], env=None, check=True)
+
+    def test_pgsql_007_no_configured_database_name_preserves_additional_arguments_without_appending_database_name(
+        self,
+    ):
+        """GUID: PGSQL-007."""
+        parameters = ["--set", "application_name=my app", "-c", "select 1;"]
+        args, _ = self.settings_to_cmd_args_env({"NAME": ""}, parameters)
+        self.assertEqual(args, ["psql", *parameters])
 
     @skipUnless(connection.vendor == "postgresql", "Requires a PostgreSQL connection")
     def test_sigint_handler(self):
