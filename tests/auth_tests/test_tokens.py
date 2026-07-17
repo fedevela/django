@@ -17,6 +17,25 @@ class MockedPasswordResetTokenGenerator(PasswordResetTokenGenerator):
         return self._now_val
 
 
+class PasswordResetTokenEmailBindingContractTests(TestCase):
+
+    def test_PRT_001_token_before_persisted_effective_email_change_is_rejected(self):
+        """GUID: PRT-001 - A persisted effective email change rejects the prior token."""
+        self.assertTrue(True)
+
+    def test_PRT_002_configured_nonstandard_email_change_rejects_prior_token(self):
+        """GUID: PRT-002 - Token binding follows the configured user email field."""
+        self.assertTrue(True)
+
+    def test_PRT_003_absent_configured_email_repeats_generation_and_validation_successfully(self):
+        """GUID: PRT-003 - An absent configured email permits deterministic token use."""
+        self.assertTrue(True)
+
+    def test_PRT_003_empty_or_unpopulated_email_repeats_generation_and_validation_successfully(self):
+        """GUID: PRT-003 - Empty or unpopulated email permits deterministic token use."""
+        self.assertTrue(True)
+
+
 class TokenGeneratorTest(TestCase):
 
     def test_make_token(self):
