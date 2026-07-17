@@ -214,6 +214,10 @@ class BaseFormSet(RenderableFormMixin):
         index will be None if the form being constructed is a new empty
         form.
         """
+        # Architecture contract (GUID EFORM-005): This method is the snapshot
+        # boundary between stored caller input and per-form argument handling.
+        # Consumers own the returned mapping; self.form_kwargs remains the
+        # source for later empty and ordinary form construction.
         return self.form_kwargs.copy()
 
     def _construct_form(self, i, **kwargs):
@@ -257,6 +261,10 @@ class BaseFormSet(RenderableFormMixin):
 
     @property
     def empty_form(self):
+        # Integration seam (GUID EFORM-005): Empty-form-only argument
+        # normalization belongs after get_form_kwargs(None) and before the form
+        # constructor. Ordinary forms retain the independent forms ->
+        # get_form_kwargs(index) -> _construct_form() dependency path.
         # Pseudocode obligation: GUID EFORM-005.
         # ON each empty_form access:
         #   obtain a distinct working copy of the caller-supplied form_kwargs;
