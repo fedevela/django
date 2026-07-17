@@ -14,86 +14,6 @@ from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 
-# ARCHITECTURE — GUID: TPL-006, TPL-007, TPL-008
-# This test module owns the regression boundary; no production interface or new
-# fixture package is required. TPL-006 remains at the existing E001/E002 test
-# classes below, where complete error-list assertions protect unrelated checks.
-# TPL-007 and TPL-008 belong to CheckTemplateTagLibrariesWithSameName: settings
-# enter through get_settings(), discovery enters through the existing
-# get_template_tag_modules patch seam, and the check's returned Error list is
-# the only output that crosses into the regression assertions. The placeholder
-# methods here retain requirement traceability until implementation is placed in
-# those owning loci.
-class TemplateCheckRegressionContractTests(SimpleTestCase):
-    def test_tpl_006_unrelated_template_check_inputs_preserve_existing_outcomes(self):
-        """
-        GUID: TPL-006
-
-        Given inputs for template system checks unrelated to duplicate library
-        names, running the template check suite preserves their existing
-        expected outcomes.
-        """
-        # PSEUDOCODE — GUID: TPL-006
-        # LOGIC OBLIGATION: prove that changing duplicate-library-name handling
-        # does not change the established results of unrelated template checks.
-        # INPUT: each existing non-duplicate-name template-check scenario and
-        # its established expected error list.
-        # FOR each scenario:
-        #   arrange the same settings input used by its existing regression;
-        #   run the owning template system check;
-        #   compare the complete observed error list with the established list.
-        # IF any error is added, removed, or changed, fail this regression.
-        # ELSE preserve the scenario's existing passing outcome.
-        # OUTPUT: unchanged outcomes for all unrelated template-check scenarios.
-        self.assertTrue(True)
-
-    def test_tpl_007_identical_configured_discovered_path_produces_no_e003(
-        self,
-    ):
-        """
-        GUID: TPL-007
-
-        Given an identical configured-and-discovered library name and module
-        path, running template system checks produces no templates.E003 for
-        that association.
-        """
-        # PSEUDOCODE — GUID: TPL-007
-        # LOGIC OBLIGATION: verify that one identical configured-and-discovered
-        # association remains a single non-conflicting association.
-        # INPUT: a library name, one module path, a configured association of
-        # that pair, and installed-app discovery of that identical pair.
-        # ARRANGE the configured association in TEMPLATES OPTIONS libraries.
-        # ARRANGE discovery to return the same library name and module path.
-        # RUN the template system duplicate-library-name check.
-        # FILTER the observed errors to templates.E003 for the library name.
-        # IF the filtered result is non-empty, fail this regression.
-        # ELSE record the association as the expected non-error transition.
-        # OUTPUT: no templates.E003 for the identical cross-source association.
-        self.assertTrue(True)
-
-    def test_tpl_008_same_name_distinct_module_paths_transition_to_e003(self):
-        """
-        GUID: TPL-008
-
-        Given one library name associated with distinct module paths, running
-        template system checks produces templates.E003 for that name.
-        """
-        # PSEUDOCODE — GUID: TPL-008
-        # LOGIC OBLIGATION: preserve genuine-conflict coverage when one library
-        # name resolves to more than one distinct module path.
-        # INPUT: one library name and at least two distinct associated module
-        # paths supplied by configuration, discovery, or both.
-        # ARRANGE the existing genuine-conflict scenario without collapsing its
-        # distinct paths.
-        # RUN the template system duplicate-library-name check.
-        # LOCATE templates.E003 for the shared library name.
-        # IF no matching error exists, fail this regression.
-        # ELSE verify the error represents the distinct-path conflict expected
-        # by the existing regression contract.
-        # OUTPUT: templates.E003 remains present for the genuine conflict.
-        self.assertTrue(True)
-
-
 # OWNERSHIP — GUID: TPL-006
 # This class and CheckTemplateStringIfInvalidTest retain the established E001
 # and E002 outcome contracts independently of duplicate-library-name coverage.
@@ -343,6 +263,57 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
                 ("same_tags", second_module_path),
                 ("same_tags", second_module_path),
             ],
+        ):
+            self.assertEqual(
+                check_for_template_tags_with_the_same_name(None),
+                [self.error_same_tags],
+            )
+
+    def test_tpl_007_identical_configured_discovered_path_produces_no_e003(
+        self,
+    ):
+        """
+        GUID: TPL-007
+
+        An identical configured-and-discovered association doesn't produce
+        templates.E003.
+        """
+        module_path = (
+            "check_framework.template_test_apps.same_tags_app_1."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", module_path)],
+        ):
+            self.assertEqual(check_for_template_tags_with_the_same_name(None), [])
+
+    def test_tpl_008_same_name_distinct_module_paths_transition_to_e003(self):
+        """
+        GUID: TPL-008
+
+        A library name associated with distinct module paths continues to
+        produce templates.E003.
+        """
+        discovered_module_path = (
+            "check_framework.template_test_apps.same_tags_app_2."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", discovered_module_path)],
         ):
             self.assertEqual(
                 check_for_template_tags_with_the_same_name(None),
