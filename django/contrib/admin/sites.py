@@ -556,6 +556,18 @@ class AdminSite:
         Display the main admin index page, which lists all of the installed
         apps that have been registered in this site.
         """
+        # Pseudocode contract — ADMIN-003:
+        # INPUT the main-index request and optional extra context.
+        # REQUEST the established app-list flow for this request; within that
+        # flow, OBTAIN the full app dictionary by calling the public
+        # build_app_dict(request) builder, then preserve established sorting.
+        # RECEIVE the resulting app list, including the established empty-list
+        # result when the public builder returns an empty dictionary.
+        # ASSIGN that result unchanged to the response context's "app_list";
+        # MERGE all other established context fields and extra context without
+        # changing permissions, filtering, ordering, navigation, or rendering.
+        # PROPAGATE any builder or app-list-flow failure through the established
+        # error path; do not substitute a private builder or fallback result.
         app_list = self.get_app_list(request)
 
         context = {
