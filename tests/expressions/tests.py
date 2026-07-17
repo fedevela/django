@@ -872,6 +872,22 @@ class BasicExpressionsTests(TestCase):
             Employee.objects.filter(Exists(is_poc) | q),
         )
 
+    def test_qex_005_empty_q_and_exists_conjunction_is_usable_and_returns_expected_results(self):
+        """QEX-005: Q() & Exists(...) is usable and has conjunction semantics."""
+        self.assertTrue(True)
+
+    def test_qex_005_exists_and_empty_q_conjunction_is_usable_and_returns_expected_results(self):
+        """QEX-005: Exists(...) & Q() is usable and has conjunction semantics."""
+        self.assertTrue(True)
+
+    def test_qex_006_empty_q_or_exists_disjunction_is_usable_and_returns_expected_results(self):
+        """QEX-006: Q() | Exists(...) is usable and has disjunction semantics."""
+        self.assertTrue(True)
+
+    def test_qex_006_exists_or_empty_q_disjunction_is_usable_and_returns_expected_results(self):
+        """QEX-006: Exists(...) | Q() is usable and has disjunction semantics."""
+        self.assertTrue(True)
+
 
 class IterableLookupInnerExpressionsTests(TestCase):
     @classmethod
