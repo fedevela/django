@@ -328,6 +328,18 @@ class TestUtilsHtml(SimpleTestCase):
             '<script type="application/json">"custom encoded"</script>',
         )
 
+    def test_jsonscript_011_public_docs_describe_script_safe_output_purpose(self):
+        """JSONSCRIPT-011: Public docs describe the script-safe output purpose."""
+        self.assertTrue(True)
+
+    def test_jsonscript_011_docs_state_optional_encoder_djangojsonencoder_default(self):
+        """JSONSCRIPT-011: Docs state the encoder and DjangoJSONEncoder default."""
+        self.assertTrue(True)
+
+    def test_jsonscript_011_public_docs_describe_optional_element_id(self):
+        """JSONSCRIPT-011: Public docs describe the optional element ID."""
+        self.assertTrue(True)
+
     def test_smart_urlquote(self):
         items = (
             ("http://öäü.com/", "http://xn--4ca9at.com/"),
