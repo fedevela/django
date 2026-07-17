@@ -817,6 +817,12 @@ class MultiWidget(Widget):
     def is_hidden(self):
         return all(w.is_hidden for w in self.widgets)
 
+    # ARCHITECTURE — MWLABEL-002, MWLABEL-005, MWLABEL-006:
+    # MultiWidget owns component topology and presentation state here. The
+    # assigned base ID and ordered component values enter through Widget's
+    # context contract; child widgets receive only their suffixed name,
+    # indexed ID, and corresponding value. Label-target selection remains the
+    # separate id_for_label() seam and must not alter this component boundary.
     # Pseudocode trace: MWLABEL-002, MWLABEL-005, MWLABEL-006.
     # PROCEDURE get_context(name, value, attrs):
     #   BUILD the composite context with the inherited widget behavior.
@@ -870,6 +876,11 @@ class MultiWidget(Widget):
     def id_for_label(self, id_):
         return ''
 
+    # ARCHITECTURE — MWLABEL-005, MWLABEL-006:
+    # These hooks are the widget-to-field data seam. MultiWidget delegates
+    # extraction and omission decisions downward to its ordered child widgets
+    # and exposes only their ordered results upward; MultiValueField owns all
+    # validation and compression beyond this boundary.
     # Pseudocode trace: MWLABEL-005, MWLABEL-006.
     # PROCEDURE value_from_datadict(data, files, name):
     #   FOR EACH component paired with its declared name suffix, in order:

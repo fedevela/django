@@ -1008,6 +1008,11 @@ class MultiValueField(Field):
     def validate(self, value):
         pass
 
+    # ARCHITECTURE — MWLABEL-006:
+    # MultiValueField owns validation and compression of the ordered component
+    # values supplied through the MultiWidget data seam. It depends on child
+    # Field.clean() contracts and its subclass compress() contract, but not on
+    # component IDs, rendering, or label-target selection.
     # Pseudocode trace: MWLABEL-006.
     # PROCEDURE clean(value):
     #   IF disabled and value is compressed, DECOMPRESS it with the widget.
