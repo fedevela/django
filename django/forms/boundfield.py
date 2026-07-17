@@ -42,18 +42,6 @@ class BoundField:
         This property is cached so that only one database query occurs when
         rendering ModelChoiceFields.
         """
-        # Architecture (BWID-003): This property is the sole BoundField seam
-        # for admitting auto_id into choice generation. ChoiceWidget owns
-        # indexed input IDs; BoundWidget owns their template-facing exposure.
-        # BWID-003 — default auto_id association preservation:
-        #   INPUT: a bound choice field using the form's default auto_id.
-        #   SELECT base_id := explicit widget ID, otherwise BoundField.auto_id.
-        #   PASS base_id through widget attrs into choice-subwidget generation.
-        #   FOR EACH generated subwidget:
-        #     RETAIN its existing indexed input ID as the sole label target.
-        #     REQUIRE rendered label.for == rendered input.id.
-        #   FAILURE: do not synthesize an alternate ID at the BoundWidget
-        #   boundary; preserve the existing missing-ID behavior.
         id_ = self.field.widget.attrs.get('id') or self.auto_id
         attrs = {'id': id_} if id_ else {}
         attrs = self.build_widget_attrs(attrs)
@@ -233,15 +221,6 @@ class BoundField:
         Useful, for example, for focusing on this field regardless of whether
         it has a single widget or a MultiWidget.
         """
-        # Architecture (BWID-005): BoundField retains this field-level label
-        # contract and depends only on Widget.id_for_label(). It must not
-        # depend on the BoundWidget option-data boundary.
-        # BWID-005 — BoundField label-target non-interference:
-        #   INPUT: the field widget, its optional explicit ID, and auto_id.
-        #   SELECT base_id := explicit widget ID, otherwise BoundField.auto_id.
-        #   DELEGATE base_id to the field widget's existing id_for_label rule.
-        #   RETURN that result unchanged; do not consult BoundWidget data.
-        #   FAILURE/EMPTY RESULT: preserve the widget's existing outcome.
         widget = self.field.widget
         id_ = widget.attrs.get('id') or self.auto_id
         return widget.id_for_label(id_)
@@ -287,17 +266,6 @@ class BoundWidget:
         return self.tag(wrap_label=True)
 
     def tag(self, wrap_label=False):
-        # Architecture (BWID-006): Rendering remains owned by the parent
-        # widget. BoundWidget is only an adapter from option data to that
-        # existing template/renderer boundary; label-ID selection is isolated
-        # in id_for_label below.
-        # BWID-006 — unrelated rendering non-interference:
-        #   INPUT: existing subwidget data and the requested wrap_label state.
-        #   COPY all render data unchanged; override only wrap_label in context.
-        #   RENDER through the existing parent widget template and renderer.
-        #   RETURN template output unchanged for paths that do not read the
-        #   BoundWidget.id_for_label property.
-        #   FAILURE: propagate the existing renderer/template failure unchanged.
         context = {'widget': {**self.data, 'wrap_label': wrap_label}}
         return self.parent_widget._render(self.template_name, context, self.renderer)
 
@@ -307,26 +275,9 @@ class BoundWidget:
             return self.data['template_name']
         return self.parent_widget.template_name
 
-    # Architecture (BWID-001, BWID-002): BoundWidget owns the label-target
-    # contract at the boundary between option data and subwidget templates.
-    # ChoiceWidget.create_option() supplies the authoritative attrs['id']; both
-    # input rendering and this template-facing property depend on that value.
-    # Keep ID construction upstream in ChoiceWidget and keep this boundary free
-    # of dependencies on the option name or index.
     @property
     def id_for_label(self):
-        # BWID-001 — authoritative subwidget ID contract:
-        #   INPUT: subwidget data with an assigned data['attrs']['id'].
-        #   SELECT assigned_id := data['attrs']['id'].
-        #   RETURN assigned_id unchanged; do not reconstruct it from name/index.
-        #   FAILURE: if the assigned ID is absent, preserve the existing mapping
-        #   access failure; this contract defines no fallback behavior.
-        # BWID-002 — CheckboxSelectMultiple label/input association:
-        #   FOR EACH BoundWidget emitted through BoundField.subwidgets:
-        #     USE this authoritative assigned_id as the rendered label target.
-        #     The associated input renders the same data['attrs']['id'].
-        #     THEREFORE label.for MUST EQUAL input.id for custom auto_id formats.
-        return self.data['attrs']['id']
+        return self.data['attrs'].get('id')
 
     @property
     def choice_label(self):
