@@ -93,6 +93,11 @@ class Combinable:
     # conditional-expression adapter for an expression-led operation. It
     # must preserve an existing Q operand as the Q-layer contract boundary;
     # Q owns empty-node identity, logical-tree composition, and cloning.
+    # QEX-007 / QEX-008 / QEX-009 compatibility seam: __and__() and __or__()
+    # remain the shared entry points for every conditional Expression,
+    # including Exists. This module may depend on Q for logical composition,
+    # but Q must not depend on concrete expression types. Expression-led
+    # rejection remains owned here; Q-led rejection remains owned by Q.
     def __and__(self, other):
         # QEX-001 / QEX-002 integration seam: conditional expression pairs
         # depend on Q for logical-tree composition and query handoff.
@@ -1192,6 +1197,9 @@ class Subquery(Expression):
 
 
 class Exists(Subquery):
+    # QEX-007 placement contract: Exists participates through the inherited
+    # Expression/Combinable seam and the BooleanField conditional contract;
+    # it does not own a Q-specific operator, adapter, or dependency.
     template = 'EXISTS(%(subquery)s)'
     output_field = fields.BooleanField()
 

@@ -44,6 +44,11 @@ class Q(tree.Node):
     # OR. Expression-side adapters depend on this boundary; ORM query
     # compilation continues to consume the resulting Q through the existing
     # resolve_expression()/_add_q() seam.
+    # QEX-007 / QEX-008 / QEX-009 counterpart contract: this boundary accepts
+    # Q nodes and the generic conditional-expression protocol, without an
+    # Exists dependency or a concrete-expression registry. It owns Q-led
+    # rejection, preserving the existing dependency direction from expression
+    # adapters into Q and then into query resolution.
     def _combine(self, other, conn):
         # QEX-008 / QEX-009 compatibility-boundary logic:
         # - Receive a Q left operand, a candidate logical counterpart, and the
