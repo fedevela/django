@@ -366,6 +366,16 @@ class CaseInsensitiveMixin:
 # JSONNULL-001, JSONNULL-002, JSONNULL-003: Use key-presence semantics on
 # SQLite and Oracle.
 class KeyTransformIsNull(lookups.IsNull):
+    # JSONNULL-005 logic obligation: preserve unaffected-backend membership.
+    # INPUT: a resolved key-transform ``isnull`` lookup and its connection.
+    # IF the backend is SQLite or Oracle, dispatch only to the specialized
+    # key-presence compiler below.
+    # ELSE (MariaDB, MySQL, PostgreSQL, or another backend), hand off to the
+    # inherited ``IsNull`` compiler without changing result membership.
+    # JSONNULL-006 logic obligation: preserve unrelated JSONField operations.
+    # IF an operation does not resolve to ``KeyTransformIsNull``, leave it on
+    # its existing JSONField lookup/transform path without changing its input,
+    # output, state, or failure propagation.
     # key__isnull=False is the same as has_key='key'
     def as_oracle(self, compiler, connection):
         sql, params = HasKey(

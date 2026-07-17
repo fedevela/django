@@ -507,6 +507,15 @@ class IsNull(BuiltinLookup):
     prepare_rhs = False
 
     def as_sql(self, compiler, connection):
+        # JSONNULL-007 logic obligation: preserve generic ``isnull`` semantics.
+        # INPUT: an ``isnull`` compilation request with lhs and rhs, including
+        # any subclass handoff that has not selected a specialized compiler.
+        # VALIDATE rhs through the existing boolean/deprecation path.
+        # COMPILE lhs using the existing compiler; propagate compilation
+        # failures unchanged.
+        # IF rhs is true, OUTPUT ``lhs IS NULL`` with the compiled parameters.
+        # ELSE, OUTPUT ``lhs IS NOT NULL`` with the compiled parameters.
+        # Do not introduce JSON key-presence decisions into this generic path.
         if not isinstance(self.rhs, bool):
             # When the deprecation ends, replace with:
             # raise ValueError(
