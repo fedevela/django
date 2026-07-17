@@ -30,6 +30,18 @@ from .utils import get_callable
 
 
 class ResolverMatch:
+    # Partial representation architecture (GUID: RPR-001, RPR-002, RPR-003,
+    # RPR-004, RPR-006): ResolverMatch owns all descriptive state derived from
+    # its callback. URLPattern and URLResolver construct this boundary, while
+    # request handlers only transport the resulting match; neither caller
+    # needs partial-specific knowledge.
+    #
+    # Keep the invocation contract (func, args, and kwargs) independent from
+    # private presentation metadata. The latter belongs beside _func_path as
+    # _func_args (an ordered positional sequence) and _func_kwargs (a keyword
+    # mapping), and is consumed only by __repr__(). This dependency direction
+    # preserves the original partial in func and prevents representation needs
+    # from leaking into resolution or request attachment.
     # Partial-backed match initialization pseudocode:
     # - GUID: RPR-006 (resolution outcome): accept the callable and the
     #   URL-derived args/kwargs without changing match success or failure.
@@ -47,6 +59,8 @@ class ResolverMatch:
     # - Propagate existing resolver failures unchanged; partial inspection must
     #   not introduce a new resolution branch or failure state.
     def __init__(self, func, args, kwargs, url_name=None, app_names=None, namespaces=None, route=None, tried=None):
+        # Invocation boundary: these public attributes retain resolver-owned
+        # values unchanged (GUID: RPR-004, RPR-006).
         self.func = func
         self.args = args
         self.kwargs = kwargs
@@ -75,6 +89,10 @@ class ResolverMatch:
         return (self.func, self.args, self.kwargs)[index]
 
     def __repr__(self):
+        # Presentation boundary: partial identity and bound arguments are read
+        # from ResolverMatch's private descriptive metadata, never recovered by
+        # changing or invoking the public invocation contract (GUID: RPR-001,
+        # RPR-002, RPR-003, RPR-004, RPR-006).
         # Partial-backed representation pseudocode:
         # - IF the retained callable is a functools.partial:
         #     - GUID: RPR-001: emit the underlying callable identity instead of
