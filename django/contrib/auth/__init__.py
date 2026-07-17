@@ -168,6 +168,19 @@ def get_user(request):
     Return the user model instance associated with the given request session.
     If no user is retrieved, return an instance of `AnonymousUser`.
     """
+    # Pseudocode [SES-008]:
+    #   INPUT a request whose session may refer to malformed persisted data.
+    #   ACCESS the authentication user key through the session mapping.
+    #   WHEN that access loads persisted data, REQUIRE session decoding to
+    #       contain every malformed-data failure and expose an empty mapping,
+    #       never the malformed values or a session-decoding exception.
+    #   IF the empty mapping contains no authentication user or backend key:
+    #       CLASSIFY the request as unauthenticated.
+    #       RETURN an anonymous user through the normal authentication path.
+    #   ELSE, CONTINUE the existing backend and authentication-hash checks
+    #       using only values produced by successful session decoding.
+    #   COMPLETE authentication processing without allowing malformed
+    #       persisted session data to become an internal server error.
     from .models import AnonymousUser
     user = None
     try:
