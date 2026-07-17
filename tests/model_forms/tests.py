@@ -3101,6 +3101,12 @@ class OtherModelFormTests(TestCase):
         DJANGO-001: A bound generated ModelForm that fails validation redisplays
         the submitted callable-default field value.
         """
+        # Pseudocode (DJANGO-001):
+        # GIVEN a generated ModelForm field whose model default is callable,
+        # bind a value distinct from that default while another input is invalid.
+        # WHEN validation fails and the bound form is rendered,
+        # THEN inspect the visible field and require the submitted value,
+        # failing if either the callable default or hidden initial replaced it.
         self.assertTrue(True)
 
     def test_django_002_rebound_hidden_initial_preserves_change_baseline(self):
@@ -3108,6 +3114,12 @@ class OtherModelFormTests(TestCase):
         DJANGO-002: Rendering and rebinding a callable-default field keeps the
         original changed-data comparison baseline despite its hidden initial.
         """
+        # Pseudocode (DJANGO-002):
+        # GIVEN an invalid bound form with distinct submitted and initial values,
+        # render both the visible field and its hidden initial field.
+        # WHEN their rendered values are rebound without modification,
+        # THEN require changed-data detection to compare the visible submission
+        # with the original baseline, not with a baseline rewritten from it.
         self.assertTrue(True)
 
     def test_django_008_hidden_initial_does_not_neutralize_submitted_value(self):
@@ -3116,6 +3128,13 @@ class OtherModelFormTests(TestCase):
         callable-default ModelForm without its hidden initial replacing or
         neutralizing the submitted value.
         """
+        # Pseudocode (DJANGO-008):
+        # ARRANGE a callable-default ModelForm and an invalid companion input.
+        # ACT 1: bind a non-default value, validate unsuccessfully, and render.
+        # ACT 2: capture visible and hidden values and rebind the rendered data.
+        # ASSERT: the visible value remains the submission after each transition.
+        # ASSERT: the hidden value remains the original comparison baseline.
+        # ASSERT: changed-data detection still reports the submitted difference.
         self.assertTrue(True)
 
 

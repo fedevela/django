@@ -87,6 +87,18 @@ class BoundField:
         attributes passed as attrs. If a widget isn't specified, use the
         field's default widget.
         """
+        # Pseudocode (DJANGO-001, DJANGO-002) -- preserve the two bound values:
+        # INPUT: the visible submitted value, the original initial comparison
+        # baseline, and whether the requested widget is the hidden initial.
+        # IF rendering the visible widget:
+        #     for a bound form, hand the submitted value to the widget,
+        #     including after failure; otherwise hand it the resolved initial.
+        # ELSE IF rendering its hidden initial companion:
+        #     IF bound data contains the prior hidden initial, carry it forward;
+        #     ELSE use the resolved initial as the original baseline;
+        #     never source this value from the visible submitted value.
+        # OUTPUT: visible data remains redisplay data, while hidden data remains
+        # the stable baseline consumed by changed-data detection on rebinding.
         widget = widget or self.field.widget
         if self.field.localize:
             widget.is_localized = True
@@ -137,6 +149,12 @@ class BoundField:
         return self.field.prepare_value(data)
 
     def _has_changed(self):
+        # Pseudocode (DJANGO-002) -- compare across the rendering handoff:
+        # IF a hidden initial is enabled, decode the carried original baseline.
+        #     IF decoding fails, report changed rather than neutralizing data.
+        # ELSE use the field's initial value as the baseline.
+        # Compare submitted visible data with that baseline exactly once and
+        # return the field-specific changed result.
         field = self.field
         if field.show_hidden_initial:
             hidden_widget = field.hidden_widget()
