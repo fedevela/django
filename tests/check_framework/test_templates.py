@@ -206,7 +206,24 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
         library remains in the conflict determination and templates.E003 is
         produced.
         """
-        self.assertTrue(True)
+        discovered_module_path = (
+            "check_framework.template_test_apps.same_tags_app_2."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[("same_tags", discovered_module_path)],
+        ):
+            self.assertEqual(
+                check_for_template_tags_with_the_same_name(None),
+                [self.error_same_tags],
+            )
 
     def test_tpl_005_repeated_conflicting_associations_produce_each_distinct_path_once(
         self,
@@ -218,7 +235,32 @@ class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
         association is collected repeatedly, the templates.E003 diagnostic
         identifies every distinct conflicting path exactly once.
         """
-        self.assertTrue(True)
+        first_module_path = (
+            "check_framework.template_test_apps.same_tags_app_1."
+            "templatetags.same_tags"
+        )
+        second_module_path = (
+            "check_framework.template_test_apps.same_tags_app_2."
+            "templatetags.same_tags"
+        )
+        with self.settings(
+            TEMPLATES=[
+                self.get_settings(
+                    "same_tags", "same_tags_app_1.templatetags.same_tags"
+                ),
+            ]
+        ), patch(
+            "django.core.checks.templates.get_template_tag_modules",
+            return_value=[
+                ("same_tags", first_module_path),
+                ("same_tags", second_module_path),
+                ("same_tags", second_module_path),
+            ],
+        ):
+            self.assertEqual(
+                check_for_template_tags_with_the_same_name(None),
+                [self.error_same_tags],
+            )
 
     @override_settings(
         INSTALLED_APPS=[
