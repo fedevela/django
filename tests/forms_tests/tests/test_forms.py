@@ -714,6 +714,12 @@ Java</label></li>
             'value="paul" id="id_name_1" required> Paul</label>'
         )
 
+    def test_BWID_001_boundwidget_id_for_label_returns_subwidget_attrs_id_unchanged(self):
+        pass
+
+    def test_BWID_002_checkbox_subwidget_labels_with_custom_auto_id_target_rendered_input_ids(self):
+        pass
+
     def test_iterable_boundfield_select(self):
         class BeatleForm(Form):
             name = ChoiceField(choices=[('john', 'John'), ('paul', 'Paul'), ('george', 'George'), ('ringo', 'Ringo')])
