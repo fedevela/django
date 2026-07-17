@@ -1248,6 +1248,32 @@ class SQLCompiler:
             get_related_klass_infos(klass_info, next_klass_infos)
 
         if restricted:
+            # DJANGO-009 pseudocode (equivalent and inherited reverse O2O
+            # column restriction):
+            # LOGIC OBLIGATION
+            # test_django_009_equivalent_reverse_o2o_only_restricts_requested_columns:
+            #     derive candidate reverse relations from model metadata;
+            #     never compare model, field, or related-query names with
+            #     sample-specific literals.
+            # LOGIC OBLIGATION
+            # test_django_009_inherited_reverse_o2o_only_selects_and_defers_fields:
+            #     preserve the selection mask while traversing parent links so
+            #     requested inherited fields are selected and omitted fields
+            #     remain absent from the result-row projection.
+            # INPUT opts, requested select_related tree, select_mask, root_alias.
+            # FOR EACH metadata-derived unique, non-many-to-many reverse field:
+            #     derive its traversal name through related_query_name();
+            #     IF it isn't requested under the applicable selection mask:
+            #         skip it without changing unrelated relation handling;
+            #     resolve its join through the field-derived traversal name;
+            #     determine from_parent from the related and current models;
+            #     project only columns admitted by the reverse field's mask,
+            #     retaining their result-row indexes for later population;
+            #     recurse with the nested request and mask for deeper relations.
+            # IF a requested name matches no metadata-derived relation:
+            #     preserve the existing invalid-field failure path.
+            # OUTPUT relation class information whose selected indexes encode
+            # only requested columns, independent of schema-specific strings.
             related_fields = [
                 (o.field, o.related_model)
                 for o in opts.related_objects

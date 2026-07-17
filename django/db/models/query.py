@@ -2608,6 +2608,21 @@ class RelatedPopulator:
         #  - local_setter, remote_setter: Methods to set cached values on
         #    the object being populated and on the remote object. Usually
         #    these are Field.set_cached_value() methods.
+        # DJANGO-009 pseudocode (inheritance-aware selected-field ordering):
+        # LOGIC OBLIGATION
+        # test_django_009_inherited_reverse_o2o_only_selects_and_defers_fields:
+        # INPUT relation class information and the compiler's selected columns.
+        # IF the related model isn't reached through a parent relationship:
+        #     retain the contiguous selected slice and its field attnames.
+        # ELSE:
+        #     map each selected field attname to its result-row index;
+        #     walk concrete fields in model initialization order;
+        #     include only attnames present in the selected-column map;
+        #     build a row reordering operation from those retained indexes.
+        # REQUIRE the identity field among the retained attnames so existence
+        # can be decided without loading any omitted field.
+        # OUTPUT ordered initialization names and values; omitted names remain
+        # absent so model construction preserves their deferred state.
         select_fields = klass_info["select_fields"]
         from_parent = klass_info["from_parent"]
         if not from_parent:
@@ -2638,6 +2653,30 @@ class RelatedPopulator:
         self.remote_setter = klass_info["remote_setter"]
 
     def populate(self, row, from_obj):
+        # DJANGO-009 pseudocode (equivalent and inherited reverse O2O
+        # population):
+        # LOGIC OBLIGATION
+        # test_django_009_equivalent_reverse_o2o_only_populates_relation:
+        #     populate through field-provided cache setters, without inspecting
+        #     any sample model, field, or related-name string.
+        # LOGIC OBLIGATION
+        # test_django_009_inherited_reverse_o2o_only_populates_correct_instances:
+        #     construct the metadata-designated related model with reordered
+        #     inherited values and attach the matching instances on both sides.
+        # INPUT joined row, primary instance, ordered selected-field metadata,
+        # and metadata-derived local and remote cache setters.
+        # reorder values when parent traversal requires model initialization
+        # order; otherwise read the compiler-designated contiguous slice.
+        # IF the selected related identity is NULL:
+        #     represent absence as None and skip nested and remote population.
+        # ELSE:
+        #     construct the designated model from only selected names and values;
+        #     recursively populate deeper related instances from the same row.
+        # set the local relation cache to the related instance or None.
+        # IF the related instance exists:
+        #     set its remote cache to the exact primary/inherited source instance.
+        # OUTPUT correctly typed, mutually linked instances while every omitted
+        # field remains deferred and every requested field retains its row value.
         # DJANGO-003, DJANGO-004, DJANGO-005 pseudocode (reverse instance):
         # derive reverse-related values from the original joined row, reordering
         # them first when inheritance requires model field order.
