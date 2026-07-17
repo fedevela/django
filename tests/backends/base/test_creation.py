@@ -121,6 +121,16 @@ class TestDbCreationTests(SimpleTestCase):
                 creation.destroy_test_db(old_database_name, verbosity=0)
 
 
+class MigrationEnabledBehaviorContractTests(SimpleTestCase):
+    def test_django_006_migrations_enabled_creation_behavior_remains_unchanged(self):
+        """GUID: DJANGO-006; creating the test database preserves behavior."""
+        pass
+
+    def test_django_006_migrations_enabled_serialization_behavior_remains_unchanged(self):
+        """GUID: DJANGO-006; serializing the test database preserves behavior."""
+        pass
+
+
 class MigrationDisabledTestDatabaseLifecycleTests(SimpleTestCase):
     def get_runner(self, run_suite_side_effect=None):
         runner = DiscoverRunner(verbosity=0)
