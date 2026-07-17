@@ -257,6 +257,12 @@ class BaseFormSet(RenderableFormMixin):
 
     @property
     def empty_form(self):
+        # Architecture boundary (GUID EFORM-001, EFORM-002, EFORM-006):
+        # BaseFormSet owns the standard template-form construction contract,
+        # inherited by model formsets unless they override this property.
+        # get_form_kwargs(None) is the extension input to normalize here;
+        # constructor-owned template invariants and bound data/files must not
+        # cross that input seam into the empty form.
         # Pseudocode obligations: GUID EFORM-001, EFORM-002, EFORM-006.
         # 1. Obtain the form kwargs for the template-form index.
         # 2. If those kwargs contain empty_permitted (True or False), exclude that
