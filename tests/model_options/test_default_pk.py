@@ -3,6 +3,11 @@ from django.db import models
 from django.test import SimpleTestCase, override_settings
 from django.test.utils import isolate_apps
 
+from .fields import (
+    DirectBigAutoField, DirectSmallAutoField, IndirectBigAutoField,
+    IndirectSmallAutoField,
+)
+
 
 @isolate_apps('model_options')
 class TestDefaultPK(SimpleTestCase):
@@ -11,28 +16,40 @@ class TestDefaultPK(SimpleTestCase):
     )
     def test_AUTOPK_002_model_preparation_succeeds_with_direct_bigautofield_descendant(self):
         """AUTOPK-002: An importable direct BigAutoField descendant is accepted."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, DirectBigAutoField)
 
     @override_settings(
         DEFAULT_AUTO_FIELD='model_options.fields.IndirectBigAutoField',
     )
     def test_AUTOPK_002_model_preparation_succeeds_with_indirect_bigautofield_descendant(self):
         """AUTOPK-002: An importable indirect BigAutoField descendant is accepted."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, IndirectBigAutoField)
 
     @override_settings(
         DEFAULT_AUTO_FIELD='model_options.fields.DirectSmallAutoField',
     )
     def test_AUTOPK_002_model_preparation_succeeds_with_direct_smallautofield_descendant(self):
         """AUTOPK-002: An importable direct SmallAutoField descendant is accepted."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, DirectSmallAutoField)
 
     @override_settings(
         DEFAULT_AUTO_FIELD='model_options.fields.IndirectSmallAutoField',
     )
     def test_AUTOPK_002_model_preparation_succeeds_with_indirect_smallautofield_descendant(self):
         """AUTOPK-002: An importable indirect SmallAutoField descendant is accepted."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, IndirectSmallAutoField)
 
     @override_settings(DEFAULT_AUTO_FIELD='django.db.models.NonexistentAutoField')
     def test_default_auto_field_setting_nonexistent(self):
