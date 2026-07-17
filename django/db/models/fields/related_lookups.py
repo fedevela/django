@@ -103,6 +103,21 @@ class RelatedIn(In):
 
 class RelatedLookupMixin:
     def get_prep_lookup(self):
+        # FKPK-006 architecture -- query boundary: related lookups own the
+        # conversion from related-object/scalar identity to target-field lookup
+        # identity, then delegate to normal lookup compilation. This layer reads
+        # persisted field identity and has no dependency on descriptor caches or
+        # model-save preparation.
+        # FKPK-006 pseudocode -- foreign-key and post-save relation querying:
+        # GIVEN an existing supported single-column relation lookup:
+        #     IF the right-hand value is a related model instance, EXTRACT its
+        #     target-field identity; OTHERWISE retain its scalar identity.
+        #     PREPARE that identity with the related target field's existing
+        #     conversion rules, then HAND OFF to normal lookup compilation.
+        #     MATCH rows whose stored local foreign-key identity equals the
+        #     normalized target identity, including after a supported save.
+        #     IF normalization or compilation fails, PROPAGATE the existing
+        #     conversion or query error without changing its semantics.
         if not isinstance(self.lhs, MultiColSource) and not hasattr(self.rhs, 'resolve_expression'):
             # If we get here, we are dealing with single-column relations.
             self.rhs = get_normalized_value(self.rhs, self.lhs)[0]

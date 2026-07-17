@@ -3,14 +3,174 @@ from copy import deepcopy
 
 from django.core.exceptions import FieldError, MultipleObjectsReturned
 from django.db import IntegrityError, models, transaction
-from django.test import TestCase
+from django.test import TestCase, TransactionTestCase
 from django.utils.translation import gettext_lazy
 
 from .models import (
-    Article, Category, Child, ChildNullableParent, City, Country, District,
-    First, Parent, Record, Relation, Reporter, School, Student, Third,
-    ToFieldChild,
+    Article, Category, Child, ChildNullableParent, ChildStringPrimaryKeyParent,
+    City, Country, District, First, Parent, ParentStringPrimaryKey, Record,
+    Relation, Reporter, School, Student, Third, ToFieldChild,
 )
+
+
+class ForeignKeyCharPrimaryKeyContractTests(TransactionTestCase):
+    available_apps = ['many_to_one']
+
+    def test_fkpk_006_assigning_supported_fk_preserves_assignment_behavior(self):
+        """GUID: FKPK-006 - Supported foreign-key assignment is unchanged."""
+        parent = ParentStringPrimaryKey.objects.create(name='stable')
+
+        child = ChildStringPrimaryKeyParent(parent=parent)
+
+        self.assertEqual(child.parent_id, parent.pk)
+        self.assertIs(child.parent, parent)
+
+    def test_fkpk_006_accessing_assigned_fk_preserves_related_object_cache(self):
+        """GUID: FKPK-006 - Related-object caching remains unchanged."""
+        parent = ParentStringPrimaryKey.objects.create(name='stable')
+        child = ChildStringPrimaryKeyParent(parent=parent)
+
+        with self.assertNumQueries(0):
+            related_parent = child.parent
+
+        self.assertIs(related_parent, parent)
+
+    def test_fkpk_006_querying_supported_fk_preserves_matching_rows(self):
+        """GUID: FKPK-006 - Foreign-key query behavior remains unchanged."""
+        parent, child = self.save_supported_related_then_referencing()
+
+        self.assertSequenceEqual(
+            ChildStringPrimaryKeyParent.objects.filter(parent_id=parent.pk),
+            [child],
+        )
+
+    def test_fkpk_006_saving_supported_fk_preserves_model_save_behavior(self):
+        """GUID: FKPK-006 - Existing supported model saves remain unchanged."""
+        parent = ParentStringPrimaryKey.objects.create(name='stable')
+        child = ChildStringPrimaryKeyParent(parent=parent)
+
+        child.save()
+
+        self.assertIsNotNone(child.pk)
+        self.assertTrue(
+            ChildStringPrimaryKeyParent.objects.filter(pk=child.pk).exists()
+        )
+
+    def test_fkpk_006_supported_save_preserves_persisted_fk_identity(self):
+        """GUID: FKPK-006 - A supported save preserves the persisted FK."""
+        parent, child = self.save_supported_related_then_referencing()
+
+        child.refresh_from_db()
+
+        self.assertEqual(child.parent_id, parent.pk)
+
+    def test_fkpk_006_supported_save_preserves_related_object_query(self):
+        """GUID: FKPK-006 - A supported save preserves relation queries."""
+        parent, child = self.save_supported_related_then_referencing()
+
+        self.assertSequenceEqual(
+            ChildStringPrimaryKeyParent.objects.filter(parent=parent),
+            [child],
+        )
+
+    def save_supported_related_then_referencing(self):
+        parent = ParentStringPrimaryKey.objects.create(name='stable')
+        child = ChildStringPrimaryKeyParent.objects.create(parent=parent)
+        return parent, child
+
+    def test_fkpk_005_prepopulated_char_primary_key_persists_as_foreign_key(self):
+        """GUID: FKPK-005 - A prepopulated related key persists as the FK."""
+        parent, child = self.save_prepopulated_related_then_referencing()
+
+        child.refresh_from_db()
+        self.assertEqual(child.parent_id, parent.pk)
+        self.assertEqual(child.parent_id, 'foo')
+
+    def test_fkpk_005_query_by_saved_prepopulated_related_object_returns_reference(self):
+        """GUID: FKPK-005 - The saved related object finds its reference."""
+        parent, child = self.save_prepopulated_related_then_referencing()
+
+        self.assertSequenceEqual(
+            ChildStringPrimaryKeyParent.objects.filter(parent=parent),
+            [child],
+        )
+
+    def test_fkpk_005_related_then_referencing_save_avoids_constraint_violation(self):
+        """GUID: FKPK-005 - Ordered saves preserve a valid prepopulated key."""
+        parent = ParentStringPrimaryKey(name='foo')
+        child = ChildStringPrimaryKeyParent(parent=parent)
+
+        self.assertEqual(child.parent_id, 'foo')
+        with transaction.atomic():
+            parent.save()
+            child.save()
+
+        self.assertTrue(ParentStringPrimaryKey.objects.filter(pk='foo').exists())
+        self.assertTrue(
+            ChildStringPrimaryKeyParent.objects.filter(
+                pk=child.pk,
+                parent_id='foo',
+            ).exists()
+        )
+
+    def save_prepopulated_related_then_referencing(self):
+        parent = ParentStringPrimaryKey(name='foo')
+        child = ChildStringPrimaryKeyParent(parent=parent)
+        with transaction.atomic():
+            parent.save()
+            child.save()
+        return parent, child
+
+    def save_related_then_referencing(self):
+        with transaction.atomic():
+            parent = ParentStringPrimaryKey()
+            child = ChildStringPrimaryKeyParent(parent=parent)
+            parent.name = 'foo'
+            parent.save()
+            child.save()
+        return parent, child
+
+    def test_fkpk_001_save_referencing_object_persists_current_related_char_primary_key(self):
+        """GUID: FKPK-001 - Saving the reference persists the current related key."""
+        parent, child = self.save_related_then_referencing()
+
+        child.refresh_from_db()
+        self.assertEqual(child.parent_id, parent.pk)
+        self.assertEqual(child.parent_id, 'foo')
+
+    def test_fkpk_002_stale_value_sequence_does_not_persist_empty_string_foreign_key(self):
+        """GUID: FKPK-002 - The assigned empty key transitions to the saved key."""
+        parent, child = self.save_related_then_referencing()
+
+        self.assertFalse(ChildStringPrimaryKeyParent.objects.filter(parent_id='').exists())
+        self.assertEqual(
+            ChildStringPrimaryKeyParent.objects.get(pk=child.pk).parent_id,
+            parent.pk,
+        )
+
+    def test_fkpk_003_related_then_referencing_saves_in_atomic_commit_valid_foreign_key(self):
+        """GUID: FKPK-003 - Ordered atomic saves commit a valid relationship."""
+        parent = ParentStringPrimaryKey()
+        child = ChildStringPrimaryKeyParent(parent=parent)
+        parent.name = 'foo'
+
+        with transaction.atomic():
+            parent.save()
+            child.save()
+
+        self.assertEqual(
+            ChildStringPrimaryKeyParent.objects.get(pk=child.pk).parent_id,
+            ParentStringPrimaryKey.objects.get(pk='foo').pk,
+        )
+
+    def test_fkpk_004_saved_related_object_query_returns_referencing_row(self):
+        """GUID: FKPK-004 - Querying by the saved relation returns its reference."""
+        parent, child = self.save_related_then_referencing()
+
+        self.assertSequenceEqual(
+            ChildStringPrimaryKeyParent.objects.filter(parent=parent),
+            [child],
+        )
 
 
 class ManyToOneTests(TestCase):
