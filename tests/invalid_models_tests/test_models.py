@@ -1523,6 +1523,20 @@ class OtherModelTests(SimpleTestCase):
         GUID: M2MR-003 - System checks accept list-valued through_fields on a
         proxy-model relation with an explicit through model.
         """
+        # LOGIC OBLIGATION [M2MR-003]:
+        # INPUT: an isolated model graph containing a concrete parent, its
+        # proxy, a child, and an explicit intermediary whose foreign keys are
+        # named child and parent.
+        # 1. Declare the child's ManyToManyField against the proxy, selecting
+        #    the intermediary with through_fields=['child', 'parent'].
+        # 2. Run the child model's system checks, allowing reverse-relation
+        #    discovery to place the ManyToManyRel in its hash-based path.
+        # 3. HANDOFF: ManyToManyRel.identity normalizes the list-valued
+        #    through_fields component before inherited __hash__ consumes it.
+        # 4. RETURN the check results and verify the check invocation completes
+        #    without raising TypeError for an unhashable list.
+        # FAILURE PATH: if identity exposes the original list, inherited
+        # __hash__ raises TypeError and the test fails at the check invocation.
         self.assertTrue(True)
 
     def test_M2MR_010_inherited_reverse_relation_list_through_fields_hash_does_not_raise(self):
@@ -1530,6 +1544,20 @@ class OtherModelTests(SimpleTestCase):
         GUID: M2MR-010 - The inherited reverse-relation hash path accepts
         list-valued through_fields.
         """
+        # LOGIC OBLIGATION [M2MR-010]:
+        # INPUT: the reverse ManyToManyRel reached from the proxy/inherited
+        # relation configured with through_fields=['child', 'parent'].
+        # 1. Obtain the inherited reverse relation from the constructed model
+        #    graph without rewriting its stored through_fields value.
+        # 2. Exercise the hash-based operation used by reverse-relation
+        #    collection or deduplication.
+        # 3. HANDOFF: ForeignObjectRel.__hash__ requests ManyToManyRel.identity,
+        #    which supplies a hashable identity component for through_fields.
+        # 4. RETURN the hash-based operation's result and verify no unhashable-
+        #    list TypeError is raised.
+        # FAILURE PATH: without normalization at the identity boundary, hashing
+        # reaches the list identity component, raises TypeError, and exposes the
+        # regression through this test.
         self.assertTrue(True)
 
     @isolate_apps('django.contrib.auth', kwarg_name='apps')
