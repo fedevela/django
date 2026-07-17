@@ -1,3 +1,5 @@
+import pickle
+
 from django.db.models import F, Q
 from django.test import SimpleTestCase
 
@@ -5,19 +7,57 @@ from django.test import SimpleTestCase
 class QTests(SimpleTestCase):
     def test_qcomb_004_nonempty_distinct_conditions_or_represents_both_conditions(self):
         """QCOMB-004: OR joins two non-empty distinct query conditions."""
-        self.assertTrue(True)
+        left = Q(price__gt=10)
+        right = Q(category='books')
+
+        combined = left | right
+
+        self.assertEqual(combined.connector, Q.OR)
+        self.assertEqual(combined.children, [
+            ('price__gt', 10),
+            ('category', 'books'),
+        ])
 
     def test_qcomb_007_empty_operand_or_retains_established_observable_result(self):
         """QCOMB-007: OR with either operand empty retains existing behavior."""
-        self.assertTrue(True)
+        q = ~Q(Q(price__gt=10), Q(category='books'), _connector=Q.OR)
+
+        empty_on_left = Q() | q
+        empty_on_right = q | Q()
+
+        self.assertEqual(empty_on_left, q)
+        self.assertEqual(empty_on_right, q)
+        self.assertIsNot(empty_on_left.children, q.children)
+        self.assertIsNot(empty_on_right.children, q.children)
 
     def test_qcomb_007_nonempty_pickleable_values_or_retains_conditions_connector_and_result(self):
         """QCOMB-007: Valid pickleable-value OR combinations remain compatible."""
-        self.assertTrue(True)
+        statuses = ['new', 'queued']
+        owners = ('alice', 'bob')
+        left = Q(status__in=statuses)
+        right = Q(owner__in=owners)
+
+        combined = left | right
+
+        self.assertEqual(combined.connector, Q.OR)
+        self.assertEqual(combined.children, [
+            ('status__in', statuses),
+            ('owner__in', owners),
+        ])
+        self.assertIs(combined.children[0][1], statuses)
+        self.assertIs(combined.children[1][1], owners)
+        self.assertEqual(pickle.loads(pickle.dumps(combined)), combined)
 
     def test_qcomb_007_two_empty_operands_or_retains_established_combination_result(self):
         """QCOMB-007: Combining two empty Q operands retains existing behavior."""
-        self.assertTrue(True)
+        left = Q(_connector=Q.OR, _negated=True)
+        right = Q()
+
+        combined = left | right
+
+        self.assertEqual(combined, left)
+        self.assertIsNot(combined, left)
+        self.assertIsNot(combined.children, left.children)
 
     def test_combine_and_empty(self):
         q = Q(x=1)
