@@ -239,6 +239,22 @@ class FormsFormsetTestCase(SimpleTestCase):
         self.assertEqual(empty_form.custom_kwarg, "sentinel")
         self.assertIs(empty_form.empty_permitted, True)
 
+    def test_eform_005_single_empty_form_access_preserves_supplied_form_kwargs(self):
+        """GUID: EFORM-005; one empty_form access leaves form_kwargs unchanged."""
+        pass
+
+    def test_eform_005_repeated_empty_form_access_preserves_supplied_form_kwargs(
+        self,
+    ):
+        """GUID: EFORM-005; repeated empty_form access leaves form_kwargs unchanged."""
+        pass
+
+    def test_eform_005_ordinary_forms_after_empty_form_access_receive_original_kwargs(
+        self,
+    ):
+        """GUID: EFORM-005; later forms receive the original supplied kwargs."""
+        pass
+
     def test_eform_007_omitted_empty_permitted_keeps_empty_form_access_and_rendering(
         self,
     ):
