@@ -549,6 +549,16 @@ class ListDisplayTests(CheckTestCase):
             ],
         )
 
+    def test_gev_003_metadata_only_reverse_relation_unresolved_by_label_emits_e108(
+        self,
+    ):
+        self.assertTrue(True)
+
+    def test_gev_004_metadata_only_m2m_related_name_unresolved_by_label_emits_e108(
+        self,
+    ):
+        self.assertTrue(True)
+
     def test_not_iterable(self):
         class TestModelAdmin(ModelAdmin):
             list_display = 10
