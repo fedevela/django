@@ -432,6 +432,13 @@ class SimpleLazyObject(LazyObject):
             return result
         return copy.deepcopy(self._wrapped, memo)
 
+    __add__ = new_method_proxy(operator.add)
+
+    def __radd__(self, other):
+        if self._wrapped is empty:
+            self._setup()
+        return operator.add(other, self._wrapped)
+
 
 def partition(predicate, values):
     """
