@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import datetime
 
@@ -17,6 +18,20 @@ from django.utils.html import (
     urlize,
 )
 from django.utils.safestring import mark_safe
+
+
+class JSONScriptUnsupportedValue:
+    """JSONSCRIPT-009 test-only value for the custom-encoder seam."""
+
+    pass
+
+
+class JSONScriptCustomEncoder(json.JSONEncoder):
+    """JSONSCRIPT-001/002/009 test-only encoder contract scaffold."""
+
+    # The behavioral phase supplies default() so this encoder can translate
+    # JSONScriptUnsupportedValue without changing DjangoJSONEncoder.
+    pass
 
 
 class TestUtilsHtml(SimpleTestCase):
@@ -219,14 +234,14 @@ class TestUtilsHtml(SimpleTestCase):
 
     def test_jsonscript_001_optional_custom_encoder_argument_is_accepted(self):
         """JSONSCRIPT-001: A supplied custom encoder class is accepted."""
-        # Arrange a custom encoder and a value it can serialize.
+        # Arrange JSONScriptCustomEncoder and a value it can serialize.
         # Call json_script() with the encoder through its optional argument.
         # Verify the call succeeds and returns the expected script representation.
         self.assertTrue(True)
 
     def test_jsonscript_002_supplied_encoder_serializes_the_value(self):
         """JSONSCRIPT-002: Serialization uses the supplied encoder class."""
-        # Arrange a value whose custom encoding has a distinct representation.
+        # Arrange JSONScriptUnsupportedValue with a distinct custom representation.
         # Serialize the value while supplying the custom encoder.
         # Verify the script contains that distinct custom-encoded representation.
         self.assertTrue(True)
@@ -240,7 +255,7 @@ class TestUtilsHtml(SimpleTestCase):
 
     def test_jsonscript_009_custom_encoder_handles_unsupported_value(self):
         """JSONSCRIPT-009: A custom encoder handles a default-unsupported value."""
-        # Arrange a value unsupported by DjangoJSONEncoder and an encoder for it.
+        # Arrange JSONScriptUnsupportedValue and JSONScriptCustomEncoder.
         # Verify json_script() without the encoder follows the serialization failure path.
         # Call json_script() with the custom encoder and verify serialization succeeds.
         # Verify the resulting script contains the custom-encoded representation.

@@ -59,6 +59,10 @@ _json_script_escapes = {
 }
 
 
+# JSONSCRIPT-001 / JSONSCRIPT-002 / JSONSCRIPT-003 architecture boundary:
+# This utility owns encoder selection and JSON serialization. Its existing
+# escaping and script-tag assembly remain downstream of that serialization seam.
+# The template filter adapter deliberately keeps its current two-argument contract.
 def json_script(value, element_id=None):
     """
     Escape all the HTML/XML special characters with their unicode escapes, so
