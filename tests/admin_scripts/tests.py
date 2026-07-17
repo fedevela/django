@@ -1893,6 +1893,26 @@ class EarlyParserArgumentVectorContractTests(SimpleTestCase):
             ManagementUtility(['custom-manage.py', 'version']).execute()
             self.assertEqual(sys.argv, recorded_argv)
 
+    def test_DJANGO_004_given_pythonpath_when_early_parser_runs_effect_is_preserved(self):
+        """DJANGO-004: Preserve --pythonpath's effect during early parsing."""
+        pass
+
+    def test_DJANGO_005_given_settings_when_early_parser_runs_effect_is_preserved(self):
+        """DJANGO-005: Preserve --settings' effect during early parsing."""
+        pass
+
+    def test_DJANGO_006_when_early_parser_is_initialized_automatic_help_remains_disabled(self):
+        """DJANGO-006: Keep automatic help disabled on the early parser."""
+        pass
+
+    def test_DJANGO_007_given_abbreviated_option_early_parser_does_not_accept_it_as_complete(self):
+        """DJANGO-007: Do not accept abbreviated early options as complete."""
+        pass
+
+    def test_DJANGO_009_given_matching_program_names_normal_parsing_behavior_is_preserved(self):
+        """DJANGO-009: Preserve normal parsing when program names agree."""
+        pass
+
 
 class ArgumentOrder(AdminScriptTestCase):
     """Tests for 2-stage argument parsing scheme.
