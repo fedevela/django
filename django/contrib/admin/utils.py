@@ -398,6 +398,8 @@ def help_text_for_field(name, model):
     return help_text
 
 
+# GUID: NFMT-002 -- Field-aware null display belongs at this boundary between
+# admin list-display value resolution and downstream type-specific formatters.
 def display_for_field(value, field, empty_value_display):
     from django.contrib.admin.templatetags.admin_list import _boolean_icon
 
@@ -414,6 +416,12 @@ def display_for_field(value, field, empty_value_display):
     # general null test.
     elif isinstance(field, models.BooleanField):
         return _boolean_icon(value)
+    # GUID: NFMT-002
+    # INPUT: A resolved list_display value and its concrete model field.
+    # IF the value is null, RETURN the configured empty-value display before
+    # dispatching DecimalField, IntegerField, or FloatField number formatting.
+    # OTHERWISE, continue to the field-specific formatting branches below.
+    # INVARIANT: A null numeric value never reaches formats.number_format().
     elif value is None:
         return empty_value_display
     elif isinstance(field, models.DateTimeField):

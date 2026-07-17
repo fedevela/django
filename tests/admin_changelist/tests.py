@@ -822,6 +822,17 @@ class ChangeListTests(TestCase):
         self.assertContains(response, formats.localize(event.date))
         self.assertNotContains(response, str(event.date))
 
+    def test_nfmt_002_null_number_field_in_list_display_renders_without_exception(self):
+        """GUID: NFMT-002 -- Null number formatting doesn't break a changelist."""
+        Child.objects.create(name="No age", age=None)
+        self.client.force_login(self.superuser)
+
+        response = self.client.get(
+            reverse("admin:admin_changelist_child_changelist")
+        )
+
+        self.assertContains(response, '<td class="field-age">-</td>', html=True)
+
     def test_dynamic_list_display(self):
         """
         Regression tests for #14206: dynamic list_display support.

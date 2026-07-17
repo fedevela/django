@@ -4,6 +4,11 @@ from django.conf import settings
 from django.utils.safestring import mark_safe
 
 
+# Architecture boundary (GUIDs: NFMT-004, NFMT-005, NFMT-006): This module's
+# existing format() entry point owns non-null input normalization, sign handling,
+# and output composition. Keep those stages behind this function boundary and
+# preserve its one-way dependencies on Decimal, settings, and mark_safe; the
+# established TestNumberFormat suite is the integration seam for regressions.
 def format(
     number,
     decimal_sep,
@@ -30,11 +35,21 @@ def format(
     ) and settings.USE_THOUSAND_SEPARATOR
     use_grouping = use_grouping or force_grouping
     use_grouping = use_grouping and grouping != 0
+    # GUID: NFMT-005 - Logic obligation for valid zero and positive numbers:
+    # IF an integer needs neither grouping nor fixed decimal places, THEN return
+    # its established safe representation; OTHERWISE continue through the common
+    # formatting stages and return their established non-negative output.
     # Make the common case fast
     if isinstance(number, int) and not use_grouping and not decimal_pos:
         return mark_safe(number)
     # sign
     sign = ""
+    # GUID: NFMT-006 - Logic obligation for established non-null input types:
+    # 1. IF input is an exponential float, THEN normalize it to Decimal.
+    # 2. IF input is Decimal (including subclasses), THEN preserve the existing
+    #    cutoff, scientific-notation, and fixed-point branches; ELSE stringify it.
+    # 3. Pass the resulting text through sign, decimal, and grouping stages.
+    # 4. Let existing conversion or formatting failures propagate unchanged.
     # Treat potentially very large/small floats as Decimals.
     if isinstance(number, float) and "e" in str(number).lower():
         number = Decimal(str(number))
@@ -68,7 +83,11 @@ def format(
             str_number = "{:f}".format(number)
     else:
         str_number = str(number)
-    if str_number[0] == "-":
+    # GUID: NFMT-004 - Logic obligation for valid negative numbers:
+    # IF the non-empty textual representation begins with "-", THEN record the
+    # negative sign, remove only that prefix for formatting, and restore it when
+    # composing the established output; ELSE leave sign and text unchanged.
+    if str_number and str_number[0] == "-":
         sign = "-"
         str_number = str_number[1:]
     # decimal part
