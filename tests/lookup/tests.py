@@ -1,4 +1,5 @@
 import collections.abc
+from collections import namedtuple
 from datetime import datetime
 from math import ceil
 from operator import attrgetter
@@ -14,6 +15,147 @@ from django.utils.deprecation import RemovedInDjango40Warning
 from .models import (
     Article, Author, Freebie, Game, IsNullWithNoneAsRHS, Player, Season, Tag,
 )
+
+
+# RANGE-001..RANGE-007 and RANGE-009 integration fixture: this test-only type
+# is the named two-bound contract passed from Query.resolve_lookup_value() to
+# the Range lookup. RANGE-008 and RANGE-009 plain compatibility remain
+# represented by built-in tuple values in this locus.
+NamedTupleRangeBounds = namedtuple('NamedTupleRangeBounds', ('lower', 'upper'))
+
+
+class ResolvableLookupValue:
+    def __init__(self, value, resolved_values):
+        self.value = value
+        self.resolved_values = resolved_values
+
+    def resolve_expression(self, *args, **kwargs):
+        self.resolved_values.append(self.value)
+        return self.value
+
+
+class NamedTupleRangeLookupContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        for year in range(1999, 2004):
+            Season.objects.create(year=year)
+
+    def resolve(self, value):
+        return Season.objects.all().query.resolve_lookup_value(value, set(), True)
+
+    def range_years(self, bounds):
+        return list(
+            Season.objects.filter(year__range=bounds)
+            .order_by('year').values_list('year', flat=True)
+        )
+
+    def test_range_001_named_two_tuple_range_executes_without_constructor_type_error(self):
+        """GUID: RANGE-001 - A named 2-tuple range executes without TypeError."""
+        self.assertEqual(
+            self.range_years(NamedTupleRangeBounds(2000, 2002)),
+            [2000, 2001, 2002],
+        )
+
+    def test_range_002_resolve_lookup_value_resolves_both_named_two_tuple_elements(self):
+        """GUID: RANGE-002 - Both named 2-tuple elements are resolved."""
+        resolved_values = []
+        bounds = NamedTupleRangeBounds(
+            ResolvableLookupValue(2000, resolved_values),
+            ResolvableLookupValue(2002, resolved_values),
+        )
+        self.resolve(bounds)
+        self.assertEqual(resolved_values, [2000, 2002])
+
+    def test_range_003_reconstruction_passes_resolved_elements_as_positional_arguments(self):
+        """GUID: RANGE-003 - Resolved elements become separate positional args."""
+        self.assertEqual(
+            self.resolve(NamedTupleRangeBounds(2000, 2002)),
+            NamedTupleRangeBounds(2000, 2002),
+        )
+
+    def test_range_004_reconstructed_lookup_value_retains_named_tuple_class(self):
+        """GUID: RANGE-004 - Reconstruction retains the named tuple class."""
+        resolved = self.resolve(NamedTupleRangeBounds(2000, 2002))
+        self.assertIs(type(resolved), NamedTupleRangeBounds)
+
+    def test_range_005_reconstructed_named_two_tuple_preserves_element_order(self):
+        """GUID: RANGE-005 - Reconstruction preserves element order."""
+        resolved = self.resolve(NamedTupleRangeBounds(2000, 2002))
+        self.assertEqual((resolved.lower, resolved.upper), (2000, 2002))
+
+    def test_range_006_reconstructed_named_two_tuple_preserves_arity(self):
+        """GUID: RANGE-006 - Reconstruction preserves arity two."""
+        resolved = self.resolve(NamedTupleRangeBounds(2000, 2002))
+        self.assertEqual(len(resolved), 2)
+
+    def test_range_007_named_and_plain_two_tuple_ranges_return_same_inclusive_results(self):
+        """GUID: RANGE-007 - Named and plain tuples have equal inclusive results."""
+        named_results = self.range_years(NamedTupleRangeBounds(2000, 2002))
+        plain_results = self.range_years((2000, 2002))
+        self.assertEqual(named_results, plain_results)
+        self.assertEqual(named_results, [2000, 2001, 2002])
+
+    def test_range_008_plain_tuple_resolution_preserves_order_arity_and_results(self):
+        """GUID: RANGE-008 - Plain tuple behavior remains unchanged."""
+        resolved_values = []
+        bounds = (
+            ResolvableLookupValue(2000, resolved_values),
+            ResolvableLookupValue(2002, resolved_values),
+        )
+        resolved = self.resolve(bounds)
+        self.assertIs(type(resolved), tuple)
+        self.assertEqual(resolved, (2000, 2002))
+        self.assertEqual(resolved_values, [2000, 2002])
+        self.assertEqual(self.range_years(resolved), [2000, 2001, 2002])
+
+    def test_range_009_single_iterator_reconstruction_exposes_named_tuple_constructor_error(self):
+        """GUID: RANGE-009 - A single iterator exposes the constructor error."""
+        # RANGE-009 pseudocode:
+        # - Arrange two resolved bounds as one iterator argument.
+        # - Call the named 2-tuple class with that single argument.
+        # - If its constructor raises the missing-positional-argument TypeError,
+        #   record that the erroneous reconstruction path was exposed;
+        #   otherwise, fail the regression check.
+        bounds = NamedTupleRangeBounds(2000, 2002)
+        with self.assertRaisesMessage(
+            TypeError, "missing 1 required positional argument: 'upper'",
+        ):
+            type(bounds)(iter(bounds))
+
+    def test_range_009_positional_reconstruction_returns_inclusive_named_tuple_range_results(self):
+        """GUID: RANGE-009 - Positional reconstruction returns inclusive results."""
+        # RANGE-009 pseudocode:
+        # - Arrange named lower and upper bounds for the range lookup.
+        # - Resolve both fields in order and reconstruct their named 2-tuple
+        #   class by passing lower and upper as separate positional arguments.
+        # - Hand the reconstructed bounds to the range lookup, collect ordered
+        #   results, and require both endpoints and every value between them.
+        resolved_values = []
+        bounds = NamedTupleRangeBounds(
+            ResolvableLookupValue(2000, resolved_values),
+            ResolvableLookupValue(2002, resolved_values),
+        )
+
+        resolved = self.resolve(bounds)
+
+        self.assertIs(type(resolved), NamedTupleRangeBounds)
+        self.assertEqual(resolved, NamedTupleRangeBounds(2000, 2002))
+        self.assertEqual(resolved_values, [2000, 2002])
+        self.assertEqual(self.range_years(resolved), [2000, 2001, 2002])
+
+    def test_range_009_named_and_plain_tuple_range_cases_continue_to_pass(self):
+        """GUID: RANGE-009 - Named and plain tuple range cases remain passing."""
+        # RANGE-009 pseudocode:
+        # - Execute the same inclusive range once with named 2-tuple bounds and
+        #   once with plain-tuple bounds through their respective reconstruction
+        #   branches.
+        # - Require each result to equal the expected inclusive sequence; if
+        #   either branch differs, fail that compatibility case independently.
+        named_results = self.range_years(NamedTupleRangeBounds(2000, 2002))
+        plain_results = self.range_years((2000, 2002))
+
+        self.assertEqual(named_results, [2000, 2001, 2002])
+        self.assertEqual(plain_results, [2000, 2001, 2002])
 
 
 class LookupTests(TestCase):
