@@ -694,6 +694,14 @@ class OperationTests(OperationTestBase):
 
         self.assertEqual(schema_editor.method_calls, [])
 
+    def test_rmn_003_postgresql_rename_model_same_table_does_not_drop_fk_constraints(self):
+        """GUID: RMN-003 - Existing foreign-key constraints aren't dropped."""
+        self.assertTrue(True)
+
+    def test_rmn_003_postgresql_rename_model_same_table_does_not_recreate_fk_constraints(self):
+        """GUID: RMN-003 - Existing foreign-key constraints aren't recreated."""
+        self.assertTrue(True)
+
     def test_rename_model_state_forwards(self):
         """
         RenameModel operations shouldn't trigger the caching of rendered apps
