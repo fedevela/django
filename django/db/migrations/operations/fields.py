@@ -22,6 +22,10 @@ class FieldOperation(Operation):
     def is_same_model_operation(self, operation):
         return self.model_name_lower == operation.model_name_lower
 
+    # MIGOPT-004/MIGOPT-005 architecture contract: FieldOperation owns the
+    # normalized (model, field) target-identity boundary. AlterField.reduce()
+    # consumes this contract at the pair-reduction seam; MigrationOptimizer
+    # must remain unaware of field-operation target structure.
     def is_same_field_operation(self, operation):
         return (
             self.is_same_model_operation(operation)
