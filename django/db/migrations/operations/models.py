@@ -215,13 +215,43 @@ class CreateModel(ModelOperation):
                     managers=self.managers,
                 ),
             ]
-        # DJANGO-001 through DJANGO-010 architecture boundary: CreateModel.reduce()
-        # owns folding only a matched index_together tuple into ordinary final
-        # indexes state. Unmatched tuples remain in CreateModel.options, while
-        # unrelated operations remain outside this reduction branch and retain
-        # their existing optimizer contracts. Migration writing, loading,
-        # warning checks, and execution consume the reduced operation through
-        # their existing generic boundaries.
+        elif (
+            isinstance(operation, AddIndex)
+            and self.name_lower == operation.model_name_lower
+        ):
+            options = self.options.copy()
+            options[AddIndex.option_name] = [
+                *options.get(AddIndex.option_name, []),
+                operation.index,
+            ]
+            return [
+                CreateModel(
+                    self.name,
+                    fields=self.fields,
+                    options=options,
+                    bases=self.bases,
+                    managers=self.managers,
+                ),
+            ]
+        elif (
+            isinstance(operation, RemoveIndex)
+            and self.name_lower == operation.model_name_lower
+        ):
+            options = self.options.copy()
+            options[RemoveIndex.option_name] = [
+                index
+                for index in options.get(RemoveIndex.option_name, [])
+                if index.name != operation.name
+            ]
+            return [
+                CreateModel(
+                    self.name,
+                    fields=self.fields,
+                    options=options,
+                    bases=self.bases,
+                    managers=self.managers,
+                ),
+            ]
         elif (
             isinstance(operation, RenameIndex)
             and self.name_lower == operation.model_name_lower
