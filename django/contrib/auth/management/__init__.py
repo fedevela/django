@@ -86,6 +86,21 @@ def create_permissions(
     except LookupError:
         return
 
+    # Pseudocode [MIGDB-004]:
+    #   selected_alias := using
+    #   allowance := evaluate Permission migration rules for selected_alias
+    #   if allowance is rejected:
+    #       transition permission processing to terminated
+    #       test_MIGDB_004_rejection_creates_no_selected_database_permission_data:
+    #           create no Permission data on selected_alias
+    #       test_MIGDB_004_rejection_does_not_read_or_write_a_fallback_database:
+    #           perform no permission read or write through a fallback alias
+    #       return
+    #   otherwise:
+    #       test_MIGDB_004_allowed_selected_database_processing_is_not_redirected:
+    #           continue permission processing with selected_alias unchanged
+    #           bind every subsequent permission read and write to selected_alias
+    #           never redirect processing to another alias
     if not router.allow_migrate_model(using, Permission):
         return
 
