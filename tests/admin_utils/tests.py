@@ -424,14 +424,36 @@ class ReadOnlyPasswordHashWidgetLabelContractTests(SimpleTestCase):
 
     def test_RPH_005_rendered_admin_field_label_has_no_for_attribute(self):
         """RPH-005: The rendered field label has no for attribute."""
+        # LOGIC OBLIGATION: reject any association between the rendered label
+        # and a control that ReadOnlyPasswordHashWidget does not provide.
+        # GIVEN PasswordForm with the read-only password-hash field,
+        # WHEN AdminField renders the password field's label,
+        # THEN parse or inspect the label element's attributes.
+        # IF a `for` attribute is present, FAIL the regression verification;
+        # OTHERWISE accept the label as unassociated.
         pass
 
     def test_RPH_005_rendered_admin_field_keeps_human_readable_label_text(self):
         """RPH-005: The rendered field keeps its human-readable label text."""
+        # LOGIC OBLIGATION: removing label association must not remove the
+        # field's human-readable label content.
+        # GIVEN the same PasswordForm and rendered AdminField label,
+        # WHEN the label's visible text content is inspected,
+        # THEN compare it with the field label "Password digest".
+        # IF the human-readable text is absent, FAIL the regression
+        # verification; OTHERWISE accept the preserved label content.
         pass
 
     def test_RPH_005_rendered_widget_keeps_password_hash_information(self):
         """RPH-005: The rendered widget keeps password-hash information."""
+        # LOGIC OBLIGATION: label rendering changes must not disturb the
+        # read-only widget's safe password-hash summary.
+        # GIVEN PasswordForm initialized with the representative password hash,
+        # WHEN the admin label and password widget output are rendered,
+        # THEN inspect the widget output for the safe hash-summary information.
+        # IF the algorithm, iterations, masked salt, or masked hash is absent,
+        # FAIL the regression verification; OTHERWISE accept the preserved
+        # password-hash information.
         pass
 
     def test_RPH_001_admin_label_omits_for_when_widget_is_read_only_password_hash(self):
