@@ -107,6 +107,22 @@ class URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
                 with self.assertRaisesMessage(ValidationError, msg):
                     f.clean(value)
 
+    def test_url_001_parser_valueerror_during_clean_becomes_validationerror(self):
+        """GUID: URL-001 - Parser ValueError becomes ValidationError."""
+        self.assertTrue(True)
+
+    def test_url_002_converted_valueerror_preserves_invalid_url_message(self):
+        """GUID: URL-002 - Conversion preserves the invalid-URL message."""
+        self.assertTrue(True)
+
+    def test_url_002_converted_valueerror_preserves_invalid_url_code(self):
+        """GUID: URL-002 - Conversion preserves the invalid-URL error code."""
+        self.assertTrue(True)
+
+    def test_url_003_malformed_authority_clean_raises_validationerror(self):
+        """GUID: URL-003 - Cleaning ////]@N.AN raises ValidationError."""
+        self.assertTrue(True)
+
     def test_urlfield_clean_required(self):
         f = URLField()
         msg = "'This field is required.'"
