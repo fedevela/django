@@ -187,6 +187,11 @@ class MigrationAutodetector:
         # Generate field renaming operations.
         self.generate_renamed_fields()
         self.generate_renamed_indexes()
+        # Architecture boundary (GUID: MIG-001, MIG-002): _detect_changes()
+        # owns the integration order between option-operation producers and
+        # field-operation producers. Keep obsolete together-option removal in
+        # this boundary before concrete/M2M transition generation; downstream
+        # sorting and migration assembly consume one per-app operation stream.
         # Generate removal of foo together.
         # GUID: MIG-002 - Logic obligation and deterministic flow:
         # GIVEN an old concrete ForeignKey included in unique_together,
@@ -282,6 +287,10 @@ class MigrationAutodetector:
         dependency (which _should_ be impossible as the operations are
         all split at this point so they can't depend and be depended on).
         """
+        # Architecture ownership (GUID: MIG-001): this is the sole boundary
+        # that partitions each ordered per-app operation stream into migration
+        # instances. Transition producers must remain migration-agnostic and
+        # hand their related operations to this assembler through that stream.
         self.migrations = {}
         num_ops = sum(len(x) for x in self.generated_operations.values())
         chop_mode = False
@@ -1101,6 +1110,10 @@ class MigrationAutodetector:
                 model_name=model_name,
                 name=field_name,
             ),
+            # Dependency seam (GUID: MIG-002): RemoveField is the consumer of
+            # the symbolic "foo_together_change" contract. check_dependency()
+            # resolves its producer and _sort_migrations() enforces the edge;
+            # neither operation generator depends directly on the other.
             # We might need to depend on the removal of an
             # order_with_respect_to or index/unique_together operation;
             # this is safely ignored if there isn't one
