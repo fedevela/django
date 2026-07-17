@@ -4985,6 +4985,153 @@ class SeleniumTests(AdminSeleniumTestCase):
 
 
 @override_settings(ROOT_URLCONF='admin_views.urls')
+class ReadonlyForeignKeyAdminSiteContractTests(TestCase):
+    # DJA-007/DJA-008 architecture contract: this shared fixture is the
+    # equivalence boundary between the custom-site and default-site scenarios.
+    # Site selection, not model or ModelAdmin variation, is the only input
+    # allowed to differ.
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.superuser = User.objects.create_superuser(
+            username='super',
+            password='secret',
+            email='super@example.com',
+        )
+        cls.chapter = Chapter.objects.create(
+            title='Chapter 1',
+            content='content',
+            book=Book.objects.create(name='Book 1'),
+        )
+        cls.language = Language.objects.create(iso='_40', name='Test')
+        cls.obj = ReadOnlyRelatedField.objects.create(
+            chapter=cls.chapter,
+            language=cls.language,
+            user=cls.superuser,
+        )
+
+    def setUp(self):
+        self.client.force_login(self.superuser)
+
+    def get_change_response(self, admin_site):
+        # DJA-007/DJA-008 integration seam: the supplied AdminSite owns URL
+        # namespace selection; the configured URLconf owns the resulting
+        # prefix. Regression assertions remain in their requirement-named
+        # tests so this helper does not encode either expected prefix.
+        url = reverse(
+            'admin:admin_views_readonlyrelatedfield_change',
+            args=(self.obj.pk,),
+            current_app=admin_site.name,
+        )
+        return self.client.get(url)
+
+    def test_dja_001_custom_site_readonly_foreignkey_links_to_custom_change_url(self):
+        """DJA-001: A custom-site link keeps its namespace and URL prefix."""
+        response = self.get_change_response(site2)
+        user_url = reverse(
+            'admin:auth_user_change',
+            args=(self.superuser.pk,),
+            current_app=site2.name,
+        )
+        self.assertContains(
+            response,
+            '<div class="readonly"><a href="%s">super</a></div>' % user_url,
+            html=True,
+        )
+        self.assertTrue(user_url.startswith('/test_admin/admin5/'))
+
+    def test_dja_002_active_modeladmin_site_namespace_is_used_for_url_reversal(self):
+        """DJA-002: URL reversal uses the active ModelAdmin site's namespace."""
+        response = self.get_change_response(site2)
+        default_url = reverse(
+            'admin:auth_user_change',
+            args=(self.superuser.pk,),
+            current_app=site.name,
+        )
+        self.assertNotContains(response, 'href="%s"' % default_url)
+
+    def test_dja_003_default_site_readonly_foreignkey_change_url_is_unchanged(self):
+        """DJA-003: The default AdminSite change URL remains unchanged."""
+        response = self.get_change_response(site)
+        user_url = reverse(
+            'admin:auth_user_change',
+            args=(self.superuser.pk,),
+            current_app=site.name,
+        )
+        self.assertContains(response, 'href="%s"' % user_url)
+        self.assertEqual(user_url, '/test_admin/admin/auth/user/%s/change/' % self.superuser.pk)
+
+    def test_dja_004_readonly_foreignkey_change_url_keeps_quoted_primary_key(self):
+        """DJA-004: Related primary keys retain Django admin URL quoting."""
+        response = self.get_change_response(site2)
+        language_url = reverse(
+            'admin:admin_views_language_change',
+            args=(quote(self.language.pk),),
+            current_app=site2.name,
+        )
+        self.assertContains(response, 'href="%s"' % language_url)
+        self.assertIn(quote(self.language.pk), language_url)
+
+    def test_dja_005_currently_nonlinked_readonly_related_field_remains_nonlinked(self):
+        """DJA-005: A related field without a link remains non-linked."""
+        topping = Topping.objects.create(name='Salami')
+        pizza = Pizza.objects.create(name='Americano')
+        pizza.toppings.add(topping)
+        response = self.client.get(
+            reverse('admin:admin_views_pizza_change', args=(pizza.pk,)),
+        )
+        self.assertContains(
+            response,
+            '<div class="readonly">Salami</div>',
+            html=True,
+        )
+
+    def test_dja_006_unreversible_change_url_uses_fallback_without_link_or_error(self):
+        """DJA-006: Reversal failure keeps the unlinked fallback without error."""
+        response = self.get_change_response(site2)
+        self.assertContains(
+            response,
+            '<div class="readonly">Chapter 1</div>',
+            html=True,
+        )
+
+    def test_dja_007_custom_site_readonly_foreignkey_link_uses_custom_prefix_not_admin(self):
+        """DJA-007: The custom-site readonly link uses its prefix, not /admin/."""
+        response = self.get_change_response(site2)
+        user_url = reverse(
+            'admin:auth_user_change',
+            args=(self.superuser.pk,),
+            current_app=site2.name,
+        )
+        self.assertContains(
+            response,
+            '<div class="readonly"><a href="%s">super</a></div>' % user_url,
+            html=True,
+        )
+        self.assertTrue(user_url.startswith('/test_admin/admin5/'))
+        self.assertFalse(user_url.startswith('/test_admin/admin/'))
+
+    def test_dja_008_default_site_readonly_foreignkey_link_remains_unchanged(self):
+        """DJA-008: The default-site readonly link keeps its existing URL."""
+        response = self.get_change_response(site)
+        user_url = reverse(
+            'admin:auth_user_change',
+            args=(self.superuser.pk,),
+            current_app=site.name,
+        )
+        self.assertContains(
+            response,
+            '<div class="readonly"><a href="%s">super</a></div>' % user_url,
+            html=True,
+        )
+        self.assertEqual(
+            user_url,
+            '/test_admin/admin/auth/user/%s/change/' % self.superuser.pk,
+        )
+        self.assertFalse(user_url.startswith('/test_admin/admin5/'))
+
+
+@override_settings(ROOT_URLCONF='admin_views.urls')
 class ReadonlyTest(AdminFieldExtractionMixin, TestCase):
 
     @classmethod
