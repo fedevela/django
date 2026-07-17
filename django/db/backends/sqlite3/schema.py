@@ -181,6 +181,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             f.name: f.clone() if is_self_referential(f) else f
             for f in model._meta.local_concrete_fields
         }
+        # Architecture data-transfer boundary — SQLITE-004: mapping is the
+        # column-correspondence contract between the source table and its
+        # replacement; the single INSERT ... SELECT below owns row transfer.
         # Since mapping might mix column names and default values,
         # its values must be already quoted.
         mapping = {f.column: self.quote_name(f.column) for f in model._meta.local_concrete_fields}
@@ -256,6 +259,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
         # SQLITE-008: _remake_table owns the temporary model's final field and
         # constraint topology. Constraint expression internals remain owned by
         # ddl_references.Expressions when their deferred DDL is retargeted.
+        # Constraint contract — SQLITE-006, SQLITE-007: new_model metadata owns
+        # the retained uniqueness definition; enforcement remains a database
+        # concern reached through the deferred-DDL seam after table replacement.
         constraints = list(model._meta.constraints)
 
         # Provide isolated instances of the fields to the new model body so
@@ -344,6 +350,9 @@ class DatabaseSchemaEditor(BaseDatabaseSchemaEditor):
             disable_constraints=False,
         )
 
+        # Constraint integration seam — SQLITE-006, SQLITE-007: deferred
+        # constraint DDL crosses into SQLite only after alter_db_table() has
+        # restored the stable table identity used by subsequent inserts.
         # Run deferred SQL on correct table
         for sql in self.deferred_sql:
             self.execute(sql)
