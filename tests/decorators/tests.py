@@ -674,13 +674,68 @@ class MethodDecoratorTests(SimpleTestCase):
         """
         GUID: MDP-010 - Apply every decorator using existing tuple behavior.
         """
-        pass
+        calls = []
+
+        def record_call(name):
+            def decorator(func):
+                def _wrapper(*args, **kwargs):
+                    calls.append('%s before' % name)
+                    result = func(*args, **kwargs)
+                    calls.append('%s after' % name)
+                    return result
+                return _wrapper
+            return decorator
+
+        decorators = (record_call('first'), record_call('second'))
+
+        class Test:
+            @method_decorator(decorators)
+            def method(self):
+                calls.append('method')
+
+        Test().method()
+
+        self.assertEqual(calls, [
+            'first before',
+            'second before',
+            'method',
+            'second after',
+            'first after',
+        ])
 
     def test_mdp_010_tuple_decorated_method_preserves_call_semantics(self):
         """
         GUID: MDP-010 - Preserve positional arguments, keyword arguments, and return value.
         """
-        pass
+        calls = []
+        result = object()
+
+        def record_call(name):
+            def decorator(func):
+                def _wrapper(*args, **kwargs):
+                    calls.append((name, args, kwargs))
+                    return func(*args, **kwargs)
+                return _wrapper
+            return decorator
+
+        positional = object()
+        keyword = object()
+
+        class Test:
+            @method_decorator((record_call('first'), record_call('second')))
+            def method(self, arg, *, option):
+                calls.append(('method', (arg,), {'option': option}))
+                return result
+
+        actual_result = Test().method(positional, option=keyword)
+
+        self.assertIs(actual_result, result)
+        self.assertEqual([name for name, args, kwargs in calls], [
+            'first', 'second', 'method',
+        ])
+        for name, args, kwargs in calls:
+            self.assertIs(args[0], positional)
+            self.assertIs(kwargs['option'], keyword)
 
     def test_invalid_non_callable_attribute_decoration(self):
         """
