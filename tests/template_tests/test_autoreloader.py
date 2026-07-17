@@ -4,6 +4,7 @@ from unittest import mock
 from django.template import autoreload
 from django.test import SimpleTestCase, override_settings
 from django.test.utils import require_jinja2
+from django.utils import autoreload as utils_autoreload
 
 ROOT = Path(__file__).parent.absolute()
 EXTRA_TEMPLATES_DIR = ROOT / "templates_extra"
@@ -85,18 +86,45 @@ class TemplateReloadTests(SimpleTestCase):
         )
 
 
-class EncompassingTemplateDirectoryContractTests(SimpleTestCase):
-    def test_arld_001_saving_monitored_non_template_file_in_base_dir_triggers_autoreload(self):
+@override_settings(
+    TEMPLATES=[{
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [ROOT],
+    }],
+)
+class EncompassingTemplateDirectoryTests(SimpleTestCase):
+    @mock.patch('django.utils.autoreload.trigger_reload')
+    def test_arld_001_saving_monitored_non_template_file_in_base_dir_triggers_autoreload(self, mock_trigger_reload):
         """ARLD-001: Saving a monitored non-template file triggers autoreload."""
-        self.assertTrue(True)
+        project_file = ROOT / 'project_file.py'
 
-    def test_arld_003_encompassing_template_dir_preserves_overlapping_project_file_monitoring(self):
+        utils_autoreload.BaseReloader().notify_file_changed(project_file)
+
+        mock_trigger_reload.assert_called_once_with(project_file)
+
+    @mock.patch('django.template.autoreload.reset_loaders')
+    def test_arld_003_encompassing_template_dir_preserves_overlapping_project_file_monitoring(
+        self, mock_reset_loaders,
+    ):
         """ARLD-003: An encompassing template dir preserves project monitoring."""
-        self.assertTrue(True)
+        project_file = ROOT / 'project_file.py'
 
-    def test_arld_004_valid_accessible_base_dir_remains_supported_while_autoreload_is_active(self):
+        self.assertIsNone(autoreload.template_changed(None, project_file))
+
+        mock_reset_loaders.assert_not_called()
+
+    @mock.patch('django.utils.autoreload.trigger_reload')
+    def test_arld_004_valid_accessible_base_dir_remains_supported_while_autoreload_is_active(
+        self, mock_trigger_reload,
+    ):
         """ARLD-004: An accessible BASE_DIR remains supported during autoreload."""
-        self.assertTrue(True)
+        reloader = utils_autoreload.BaseReloader()
+        autoreload.watch_for_template_changes(reloader)
+
+        self.assertEqual(reloader.directory_globs[ROOT], {'**/*'})
+        project_file = ROOT / 'project_file.py'
+        reloader.notify_file_changed(project_file)
+        mock_trigger_reload.assert_called_once_with(project_file)
 
 
 @require_jinja2
