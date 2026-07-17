@@ -2524,6 +2524,16 @@ class AutoFieldMeta(type):
         return isinstance(instance, self._subclasses) or super().__instancecheck__(instance)
 
     def __subclasscheck__(self, subclass):
+        # AUTOPK-001 pseudocode -- descendant-aware AutoField recognition:
+        # INPUT: subclass, the candidate class evaluated against AutoField.
+        # FOR each supported automatic-field root in (BigAutoField, SmallAutoField):
+        #     IF subclass is the root OR directly or indirectly descends from it:
+        #         RETURN true.
+        #         This covers direct and indirect descendants of both roots.
+        # IF no supported-root relationship exists:
+        #     DELEGATE to the ordinary AutoField subclass check.
+        #     RETURN its result so unrelated fields remain unaffected and any
+        #     invalid-candidate failure follows the standard metaclass path.
         return subclass in self._subclasses or super().__subclasscheck__(subclass)
 
 
