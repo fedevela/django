@@ -157,6 +157,9 @@ class Signal:
     def has_listeners(self, sender=None):
         return bool(self._live_receivers(sender))
 
+    # GUID: SIGROB-009 - Signal.send owns the non-robust dispatch contract.
+    # Its only dispatch seam is receiver resolution through _live_receivers();
+    # send_robust is a sibling boundary, never a dependency of this path.
     def send(self, sender, **named):
         """
         Send signal from sender to all connected receivers.
