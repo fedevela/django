@@ -29,6 +29,18 @@ class AutocompleteJsonView(BaseListView):
         """
         self.term, self.model_admin, self.source_field, to_field_name = self.process_request(request)
 
+        # Authentication and authorization preservation pseudocode (GUID: ACJ-008):
+        # Ask the resolved related-model admin to evaluate its existing view
+        # permission for the request; do not involve result serialization in
+        # this decision.
+        # If the request is unauthenticated and that existing permission check
+        # rejects it, transition to the existing PermissionDenied failure path.
+        # If the request is authenticated but lacks the required related-model
+        # permission, transition to the same PermissionDenied failure path.
+        # If the existing permission check allows the request, transition to
+        # queryset evaluation and only then to result serialization.
+        # If permission evaluation itself fails, propagate that failure without
+        # querying or serializing results and without replacing its response.
         if not self.has_perm(request):
             raise PermissionDenied
 
