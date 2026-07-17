@@ -266,6 +266,10 @@ class Command(BaseCommand):
                     if self.scriptable:
                         self.stdout.write(migration_string)
                 if not self.dry_run:
+                    # Architecture file boundary (GUID: MIG-006): this command
+                    # owns persistence of MigrationWriter's newly allocated
+                    # output path only. Loaded migration modules are dependency
+                    # inputs; they are not writable outputs of this boundary.
                     # GUID: MIG-006 - Preserve historical migration files:
                     # INPUT: the loader's existing migration history plus each
                     # newly detected migration and its newly allocated path.

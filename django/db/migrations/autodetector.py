@@ -1212,6 +1212,10 @@ class MigrationAutodetector:
                 both_m2m = old_field.many_to_many and new_field.many_to_many
                 neither_m2m = not old_field.many_to_many and not new_field.many_to_many
                 if both_m2m or neither_m2m:
+                    # Architecture branch boundary (GUID: MIG-009): the
+                    # established AlterField producer continues to own
+                    # same-kind field changes. Cross-boundary remove/add
+                    # generation must not become a dependency of this branch.
                     # Either both fields are m2m or neither is
                     # GUID: MIG-009 - Preserve other supported alterations:
                     # IF both definitions remain on the same side of the
@@ -1537,6 +1541,10 @@ class MigrationAutodetector:
                 )
 
     def _generate_removed_altered_foo_together(self, operation):
+        # Architecture option boundary (GUID: MIG-009): this shared producer
+        # remains the owner of independent together-option removals. Combined
+        # field transitions consume its ordinary operation/dependency output;
+        # they do not introduce a second option-generation interface.
         # GUID: MIG-009 - Preserve independent unique_together changes:
         # FOR each model whose old and target together values differ, compute
         # only their intersection needed before field operations and enqueue

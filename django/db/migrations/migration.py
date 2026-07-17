@@ -111,6 +111,21 @@ class Migration:
         # old concrete field boundary and AddField owns the ManyToManyField
         # state/storage boundary. Migration.apply() composes these operations
         # but does not absorb their field or backend-specific responsibilities.
+        #
+        # Compatibility boundary (GUID: MIG-006, MIG-010): this method accepts
+        # one migration plus the preceding ProjectState and returns the state
+        # consumed by the executor. It neither reads nor rewrites historical
+        # migration definitions, and it has no adjacency contract with the
+        # migration that produced its input state.
+        #
+        # Isolation boundary (GUID: MIG-007): Migration.apply() owns only
+        # orchestration. Each operation owns its declared state/schema target,
+        # so unrelated schema and data remain outside this composition seam.
+        #
+        # Backend port (GUID: MIG-008): operation database contracts depend on
+        # the supplied schema-editor interface and its atomicity capability;
+        # this migration layer has no dependency on concrete backend repair
+        # paths.
         # GUID: MIG-003 - Combined relationship transition application:
         # INPUT: the project/database state immediately preceding an ordered
         # AlterUniqueTogether, RemoveField, AddField(ManyToManyField) sequence.
