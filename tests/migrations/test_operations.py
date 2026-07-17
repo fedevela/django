@@ -3738,6 +3738,11 @@ class TestCreateModel(SimpleTestCase):
 
 @skipUnless(connection.vendor == 'sqlite', 'SQLite-specific tests.')
 @skipUnlessDBFeature('supports_expression_indexes')
+# Verification ownership — SQLITE-009, SQLITE-010: this class owns the SQLite
+# migration-sequence integration contract. _operations supplies the operation
+# boundary, _apply_migration_sequence owns setup and execution, and _schema_sql
+# is the database-observation adapter; production internals remain outside the
+# test boundary.
 class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
     app_label = 'test_sqlite_expr_unique_remake'
     constraint_name = 'unique_name_value'
@@ -3926,6 +3931,10 @@ class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
         tag = Tag.objects.create(name='name', value='value')
         self.assertEqual((tag.name, tag.value), ('name', 'value'))
 
+    # Regression verification seam — SQLITE-009: these trace anchors share the
+    # class fixtures above so migration completion, emitted SQL, final schema,
+    # retained rows, and both uniqueness outcomes are observed through one
+    # end-to-end SQLite boundary.
     def test_sqlite_009_create_model_add_constraint_alter_field_sequence_succeeds_without_operational_error(self):
         """
         GUID: SQLITE-009. The SQLite CreateModel, AddConstraint, and subsequent
@@ -3968,6 +3977,10 @@ class SQLiteExpressionUniqueConstraintRemakeContractTests(OperationTestBase):
         """
         self.assertTrue(True)
 
+    # Compatibility verification boundary — SQLITE-010: these anchors route
+    # continuity evidence to the established owners in backends/test_ddl_references.py
+    # for reference behavior and schema/tests.py for schema-editor, functional-index,
+    # and constraint operations; this class retains only remake integration.
     def test_sqlite_010_existing_schema_editor_operations_retain_previously_valid_behavior(self):
         """
         GUID: SQLITE-010. Relevant existing schema-editor operation coverage
