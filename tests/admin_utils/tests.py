@@ -10,6 +10,7 @@ from django.contrib.admin.utils import (
     flatten_fieldsets, help_text_for_field, label_for_field, lookup_field,
     quote,
 )
+from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.db import DEFAULT_DB_ALIAS, models
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils.formats import localize
@@ -413,18 +414,50 @@ class UtilsTests(SimpleTestCase):
 
 
 class ReadOnlyPasswordHashWidgetLabelContractTests(SimpleTestCase):
+    password = (
+        'pbkdf2_sha256$100000$a6Pucb1qSFcD$'
+        'WmCkn9Hqidj48NVe5x0FEM6A9YiOqQcl/83m2Z5udm0='
+    )
+
+    class PasswordForm(forms.Form):
+        password = ReadOnlyPasswordHashField(label='Password digest')
+
     def test_RPH_001_admin_label_omits_for_when_widget_is_read_only_password_hash(self):
         """RPH-001: The admin label omits for for ReadOnlyPasswordHashWidget."""
-        self.assertTrue(True)
+        form = self.PasswordForm()
+        label = helpers.AdminField(form, 'password', is_first=True).label_tag()
+        self.assertHTMLEqual(label, '<label>Password digest:</label>')
 
     def test_RPH_002_admin_field_keeps_human_readable_label_text(self):
         """RPH-002: The admin field keeps its human-readable label text."""
-        self.assertTrue(True)
+        form = self.PasswordForm()
+        label = helpers.AdminField(form, 'password', is_first=True).label_tag()
+        self.assertIn('Password digest', label)
 
     def test_RPH_003_password_hash_information_remains_after_label_association_removal(self):
         """RPH-003: Removing label association preserves password-hash details."""
-        self.assertTrue(True)
+        form = self.PasswordForm(initial={'password': self.password})
+        helpers.AdminField(form, 'password', is_first=True).label_tag()
+        self.assertHTMLEqual(
+            str(form['password']),
+            """
+            <div id="id_password">
+                <strong>algorithm</strong>: pbkdf2_sha256
+                <strong>iterations</strong>: 100000
+                <strong>salt</strong>: a6Pucb******
+                <strong>hash</strong>: WmCkn9**************************************
+            </div>
+            """,
+        )
 
     def test_RPH_004_admin_label_keeps_for_when_widget_control_is_labelable(self):
         """RPH-004: A labelable widget control keeps its admin label association."""
-        self.assertTrue(True)
+        class LabelableForm(forms.Form):
+            username = forms.CharField(label='Username')
+
+        form = LabelableForm()
+        label = helpers.AdminField(form, 'username', is_first=True).label_tag()
+        self.assertHTMLEqual(
+            label,
+            '<label for="id_username" class="required">Username:</label>',
+        )
