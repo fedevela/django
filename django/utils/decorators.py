@@ -134,6 +134,13 @@ def method_decorator(decorator, name=''):
     # is passed to _dec,  it will eventually be a method of the class it is
     # defined on. If 'obj' is a class, the 'name' is required to be the name
     # of the method that will be decorated.
+    # Architecture contract (GUID: MDP-011, GUID: MDP-012): `_dec()` owns the
+    # class-target adapter boundary. Name lookup and callable validation remain
+    # upstream gates at this boundary, so their established errors leave
+    # `method_decorator()` without crossing the metadata-preserving decoration
+    # seam. Valid named callables alone flow into `_multi_decorate()`, which
+    # owns wrapping and metadata integration; rebinding remains downstream of
+    # that dependency and is the sole class-mutation seam.
     def _dec(obj):
         if not isinstance(obj, type):
             # Integration seam (GUID: MDP-010): tuple handling belongs to
