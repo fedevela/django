@@ -3012,27 +3012,76 @@ Password: <input type="password" name="password" required>
 
     def test_mwlabel_001_unbound_multiwidget_render_omits_label_for_attribute(self):
         """GUID: MWLABEL-001 - Unbound MultiWidget labels omit `for`."""
-        self.assertTrue(True)
+        class SomeForm(Form):
+            field = CharField(widget=MultiWidget([TextInput, TextInput]))
+
+        self.assertHTMLEqual(SomeForm()['field'].label_tag(), '<label>Field:</label>')
 
     def test_mwlabel_001_bound_multiwidget_redisplay_omits_all_label_targets(self):
         """GUID: MWLABEL-001 - Bound labels target no MultiWidget subwidget."""
-        self.assertTrue(True)
+        class SomeForm(Form):
+            field = CharField(widget=MultiWidget([TextInput, TextInput]))
+
+        form = SomeForm({'field_0': 'first', 'field_1': 'second'})
+        self.assertHTMLEqual(form['field'].label_tag(), '<label>Field:</label>')
+        self.assertNotIn('for="id_field_0"', form.as_p())
+        self.assertNotIn('for="id_field_1"', form.as_p())
 
     def test_mwlabel_003_multiwidget_label_target_omission_preserves_visible_text(self):
         """GUID: MWLABEL-003 - Target omission leaves visible label text unchanged."""
-        self.assertTrue(True)
+        class SomeForm(Form):
+            field = CharField(
+                label='Parts & pieces',
+                widget=MultiWidget([TextInput, TextInput]),
+            )
+
+        self.assertHTMLEqual(
+            SomeForm()['field'].label_tag(),
+            '<label>Parts &amp; pieces:</label>',
+        )
 
     def test_mwlabel_004_multiwidget_label_target_omission_preserves_surrounding_markup(self):
         """GUID: MWLABEL-004 - Only the label's `for` attribute is omitted."""
-        self.assertTrue(True)
+        class SomeForm(Form):
+            field = CharField(
+                initial=[None, None],
+                widget=MultiWidget([TextInput, TextInput]),
+            )
+
+        self.assertHTMLEqual(
+            SomeForm().as_p(),
+            '''
+            <p>
+              <label>Field:</label>
+              <input type="text" name="field_0" required id="id_field_0">
+              <input type="text" name="field_1" required id="id_field_1">
+            </p>
+            ''',
+        )
 
     def test_mwlabel_007_multiwidget_subclass_inherits_label_without_for(self):
         """GUID: MWLABEL-007 - A non-overriding subclass inherits target omission."""
-        self.assertTrue(True)
+        class InheritedMultiWidget(MultiWidget):
+            pass
+
+        class SomeForm(Form):
+            field = CharField(widget=InheritedMultiWidget([TextInput, TextInput]))
+
+        self.assertHTMLEqual(SomeForm()['field'].label_tag(), '<label>Field:</label>')
 
     def test_mwlabel_007_multiwidget_subclass_explicit_label_target_override_is_preserved(self):
         """GUID: MWLABEL-007 - An explicit subclass target override remains responsible."""
-        self.assertTrue(True)
+        class CustomMultiWidget(MultiWidget):
+            def id_for_label(self, id_):
+                return '%s_1' % id_
+
+        class SomeForm(Form):
+            field = CharField(widget=CustomMultiWidget([TextInput, TextInput]))
+
+        self.assertHTMLEqual(
+            SomeForm()['field'].label_tag(),
+            '<label for="id_field_1">Field:</label>',
+        )
 
     def test_boundfield_empty_label(self):
         class SomeForm(Form):

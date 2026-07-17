@@ -849,34 +849,7 @@ class MultiWidget(Widget):
         return context
 
     def id_for_label(self, id_):
-        # ARCHITECTURE — MWLABEL-001, MWLABEL-003, MWLABEL-004, MWLABEL-007:
-        # MultiWidget owns only label-target resolution through Widget's
-        # id_for_label() hook. BoundField.label_tag() remains the presentation
-        # owner and consumes this result without depending on MultiWidget.
-        # Normal method inheritance is the extension seam: subclasses inherit
-        # this contract or replace it by overriding this method.
-        # PSEUDOCODE — MultiWidget label-target contract.
-        #
-        # PROCEDURE resolve_label_target(candidate_id):
-        #   MWLABEL-007: IF the concrete subclass overrides this procedure,
-        #       dispatch to that override and use the target it returns.
-        #   OTHERWISE continue with this inherited MultiWidget procedure.
-        #
-        #   MWLABEL-001: FOR either an unbound field render or a bound field
-        #       redisplay, return an empty label target; do not select the first
-        #       component ID or any other component ID.
-        #
-        #   MWLABEL-003 / MWLABEL-004 handoff to BoundField.label_tag():
-        #       receive the empty target, retain the already-computed visible
-        #       label contents and suffix, omit only the label's `for` attribute,
-        #       and render through the existing label/form markup path.
-        #
-        #   FAILURE / SCOPE GUARD: do not mutate candidate_id, component IDs,
-        #       widget values, field processing, or attributes unrelated to the
-        #       label target; target resolution must have no other side effects.
-        if id_:
-            id_ += '_0'
-        return id_
+        return ''
 
     def value_from_datadict(self, data, files, name):
         return [
