@@ -823,6 +823,10 @@ class SQLCompiler:
         # PROXYONLY-007]: SQLCompiler owns construction-column availability.
         # RelatedPopulator consumes this method's select metadata and must not
         # compensate for a construction-required column omitted here.
+        # ARCHITECTURE [PROXYONLY-008, PROXYONLY-009]: This method remains the
+        # common column-selection policy boundary for concrete and proxy
+        # relations. Backend compilers consume its column expressions; vendor
+        # distinctions must not enter the relation or deferred-field policy.
         # PSEUDOCODE [PROXYONLY-001, PROXYONLY-003, PROXYONLY-004,
         # PROXYONLY-007]:
         # INPUT: the model options, the only()/defer() field mask, and the

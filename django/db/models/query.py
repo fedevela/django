@@ -2577,6 +2577,10 @@ class RelatedPopulator:
         # boundary consumes SQLCompiler's ordered select metadata, owns proxy
         # instantiation and relation-cache population, and must not widen the
         # compiler's field-selection policy.
+        # ARCHITECTURE [PROXYONLY-008, PROXYONLY-009]: Concrete and proxy
+        # relations cross the same population boundary. It owns model
+        # construction, primary-key null detection, deferred-field state, and
+        # relation caching without depending on a database backend.
         # PSEUDOCODE [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
         # PROXYONLY-004, PROXYONLY-007]:
         # INPUT: related-model metadata and the compiler's selected columns.

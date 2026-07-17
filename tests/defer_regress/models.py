@@ -26,6 +26,10 @@ class Child(models.Model):
     value = models.IntegerField()
 
 
+# Concrete-target test seam [PROXYONLY-008, PROXYONLY-009]: both relations
+# use Child's concrete metadata; child supplies the non-null path and
+# second_child supplies the nullable path. Backend coverage remains owned by
+# Django's existing test-runner database matrix rather than a model adapter.
 class Leaf(models.Model):
     name = models.CharField(max_length=10)
     child = models.ForeignKey(Child, models.CASCADE)
