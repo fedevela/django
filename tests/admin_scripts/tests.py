@@ -2215,11 +2215,31 @@ class StartApp(AdminScriptTestCase):
 
     def test_django_003_invalid_target_without_trailing_separator_keeps_invalid_app_directory_error(self):
         """GUID: DJANGO-003: An invalid target without a separator is rejected."""
-        self.assertTrue(True)
+        invalid_directory = 'invalid.directory'
+        target = os.path.join(self.test_dir, invalid_directory)
+
+        _, err = self.run_django_admin(['startapp', 'app', target])
+
+        self.assertOutput(
+            err,
+            "CommandError: '%s' is not a valid app directory. Please make "
+            "sure the directory is a valid identifier." % invalid_directory,
+        )
 
     def test_django_003_invalid_target_with_trailing_native_separator_keeps_invalid_app_directory_error(self):
         """GUID: DJANGO-003: A trailing separator preserves invalid-target rejection."""
-        self.assertTrue(True)
+        invalid_directory = 'invalid.directory'
+        target = os.path.join(self.test_dir, invalid_directory)
+
+        _, err = self.run_django_admin([
+            'startapp', 'app', target + os.sep,
+        ])
+
+        self.assertOutput(
+            err,
+            "CommandError: '%s' is not a valid app directory. Please make "
+            "sure the directory is a valid identifier." % invalid_directory,
+        )
 
     def test_django_001_existing_valid_target_with_trailing_native_separator_succeeds(self):
         """GUID: DJANGO-001: A valid target with a trailing native separator succeeds."""

@@ -73,12 +73,6 @@ class TemplateCommand(BaseCommand):
             except OSError as e:
                 raise CommandError(e)
         else:
-            # DJANGO-003 pseudocode: IF the app target has no trailing native
-            # separator, DERIVE its actual final component; ELSE ignore its
-            # trailing native separators and DERIVE that same component.
-            # VALIDATE the derived component as an identifier. IF validation
-            # fails, RAISE the established invalid app-directory error before
-            # resolving the destination or generating output.
             if app_or_project == 'app':
                 self.validate_name(
                     os.path.basename(target.rstrip(os.sep)), 'directory'
