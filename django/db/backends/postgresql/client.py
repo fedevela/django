@@ -32,6 +32,20 @@ class DatabaseClient(BaseDatabaseClient):
             args += ["-h", host]
         if port:
             args += ["-p", str(port)]
+        # Pseudocode for GUIDs PGSQL-001, PGSQL-002, PGSQL-003, PGSQL-004:
+        # - INPUT: the ordered ``parameters`` sequence and optional ``dbname``.
+        # - FOR EACH parameter, in its original order:
+        #     - append that parameter as one unchanged argument; do not split, join,
+        #       normalize, or otherwise reinterpret its content. [PGSQL-001/002]
+        # - IF ``dbname`` is present:
+        #     - append it after every parameter, making it the final
+        #       database-specific positional argument. [PGSQL-001/003]
+        # - ELSE:
+        #     - add no database-name positional argument.
+        # - HAND OFF the resulting argument list unchanged to ``psql``; therefore,
+        #   parameters (``-c``, ``select * from some_table;``) remain two ordered
+        #   arguments before ``dbname``, so neither becomes an ignored extra
+        #   argument and ``psql`` can execute the command. [PGSQL-002/004]
         if dbname:
             args += [dbname]
         args.extend(parameters)
