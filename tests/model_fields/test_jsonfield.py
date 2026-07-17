@@ -580,6 +580,18 @@ class TestQuerying(TestCase):
         query = NullableJSONModel.objects.distinct('value__k__l').values_list('value__k__l')
         self.assertSequenceEqual(query, [('m',), (None,)])
 
+    def test_jsonnull_001_sqlite_oracle_isnull_true_includes_record_when_key_absent(self):
+        """JSONNULL-001: An absent key is included by key__isnull=True."""
+        pass
+
+    def test_jsonnull_002_sqlite_oracle_isnull_true_excludes_existing_json_null(self):
+        """JSONNULL-002: An existing JSON null is excluded by key__isnull=True."""
+        pass
+
+    def test_jsonnull_003_sqlite_oracle_isnull_false_includes_existing_json_null(self):
+        """JSONNULL-003: An existing JSON null is included by key__isnull=False."""
+        pass
+
     def test_isnull_key(self):
         # key__isnull=False works the same as has_key='key'.
         self.assertSequenceEqual(
