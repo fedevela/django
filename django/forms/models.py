@@ -1187,8 +1187,17 @@ class ModelChoiceField(ChoiceField):
     """A ChoiceField whose choices are a model QuerySet."""
     # This class is a subclass of ChoiceField for purity, but it doesn't
     # actually use any of ChoiceField's implementation.
+    # Architecture — GUID: MCF-011
+    # This message catalog remains the localization boundary; gettext_lazy and
+    # ValidationError's named parameters own translation and interpolation.
+    # Pseudocode — GUID: MCF-011
+    # DEFINE the default invalid_choice message with Django's existing lazy
+    # translation mechanism and retain the named ``value`` interpolation slot.
+    # WHEN an invalid_choice failure is rendered, RESOLVE that lazy message in
+    # the active locale, THEN interpolate the submitted value supplied by the
+    # existing ValidationError parameter flow; REQUIRE no new localization API.
     default_error_messages = {
-        'invalid_choice': _('Select a valid choice. That choice is not one of'
+        'invalid_choice': _('Select a valid choice. %(value)s is not one of'
                             ' the available choices.'),
     }
     iterator = ModelChoiceIterator
@@ -1276,18 +1285,54 @@ class ModelChoiceField(ChoiceField):
         return super().prepare_value(value)
 
     def to_python(self, value):
+        # Architecture — GUID: MCF-006, MCF-009
+        # This conversion boundary owns model resolution. Its field-scoped
+        # queryset is the sole lookup dependency and containment authority.
+        # Pseudocode — GUID: MCF-006, MCF-009
+        # INPUT submitted value and this field's queryset boundary.
+        # IF the value is empty, RETURN the empty sentinel for validation.
+        # OTHERWISE derive the configured lookup key; for a model instance,
+        # replace the lookup value with that instance's key.
+        # LOOK UP the value through this field's queryset only.
+        # IF the lookup succeeds, RETURN that same resolved model object.
+        # IF conversion fails or no object exists inside the queryset, RAISE
+        # invalid_choice; never resolve or return an object outside the queryset.
         if value in self.empty_values:
             return None
+        submitted_value = value
         try:
             key = self.to_field_name or 'pk'
             if isinstance(value, self.queryset.model):
                 value = getattr(value, key)
             value = self.queryset.get(**{key: value})
         except (ValueError, TypeError, self.queryset.model.DoesNotExist):
-            raise ValidationError(self.error_messages['invalid_choice'], code='invalid_choice')
+            raise ValidationError(
+                self.error_messages['invalid_choice'],
+                code='invalid_choice',
+                params={'value': submitted_value},
+            )
         return value
 
     def validate(self, value):
+        # Architecture — GUID: MCF-007, MCF-008
+        # Empty-value policy remains owned by Field.validate(); this model-field
+        # boundary only delegates to that contract and adds no competing policy.
+        # Architecture — GUID: MCF-010
+        # Unrelated diagnostics remain owned by Field.validate(); delegation is
+        # the integration seam and preserves its message, code, and parameters.
+        # Pseudocode — GUID: MCF-007, MCF-008
+        # RECEIVE the value produced by to_python() in the normal clean flow.
+        # DELEGATE empty-value policy unchanged to Field.validate():
+        # IF empty and required, PROPAGATE the existing required ValidationError
+        # (message, code, and parameters); IF empty and optional, ALLOW it.
+        # OTHERWISE continue without altering the resolved model object.
+        # Pseudocode — GUID: MCF-010
+        # DELEGATE non-invalid_choice validation to the inherited validation
+        # pipeline without intercepting or rewriting its diagnostics.
+        # IF an inherited validation step raises a ValidationError whose code is
+        # not invalid_choice, PROPAGATE the same message, code, and parameters.
+        # OTHERWISE RETURN control unchanged so subsequent inherited validation
+        # steps retain the same diagnostic success and failure paths.
         return Field.validate(self, value)
 
     def has_changed(self, initial, data):

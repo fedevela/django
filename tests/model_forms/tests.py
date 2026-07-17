@@ -1675,7 +1675,9 @@ class ModelFormBasicTests(TestCase):
         self.assertIs(form.is_valid(), False)
         self.assertEqual(
             form.errors,
-            {'writer': ['Select a valid choice. That choice is not one of the available choices.']},
+            {'writer': [
+                'Select a valid choice. %s is not one of the available choices.' % w.pk,
+            ]},
         )
 
     def test_validate_foreign_key_to_model_with_overridden_manager(self):

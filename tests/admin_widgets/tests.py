@@ -20,6 +20,7 @@ from django.db.models import (
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from django.utils import translation
+from django.utils.html import escape
 
 from .models import (
     Advisor, Album, Band, Bee, Car, Company, Event, Honeycomb, Individual,
@@ -243,7 +244,10 @@ class AdminForeignKeyRawIdWidget(TestDataMixin, TestCase):
         # Try posting with a nonexistent pk in a raw id field: this
         # should result in an error message, not a server exception.
         response = self.client.post(reverse('admin:admin_widgets_event_add'), post_data)
-        self.assertContains(response, 'Select a valid choice. That choice is not one of the available choices.')
+        self.assertContains(
+            response,
+            'Select a valid choice. %s is not one of the available choices.' % pk,
+        )
 
     def test_invalid_target_id(self):
 
@@ -251,7 +255,10 @@ class AdminForeignKeyRawIdWidget(TestDataMixin, TestCase):
             # This should result in an error message, not a server exception.
             response = self.client.post(reverse('admin:admin_widgets_event_add'), {"main_band": test_str})
 
-            self.assertContains(response, 'Select a valid choice. That choice is not one of the available choices.')
+            self.assertContains(
+                response,
+                'Select a valid choice. %s is not one of the available choices.' % escape(test_str),
+            )
 
     def test_url_params_from_lookup_dict_any_iterable(self):
         lookup1 = widgets.url_params_from_lookup_dict({'color__in': ('red', 'blue')})

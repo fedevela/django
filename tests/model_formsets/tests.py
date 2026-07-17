@@ -1748,7 +1748,7 @@ class ModelFormsetTest(TestCase):
         formset = AuthorFormSet(data)
         self.assertEqual(
             formset.errors,
-            [{'id': ['Select a valid choice. That choice is not one of the available choices.']}],
+            [{'id': ['Select a valid choice. abc is not one of the available choices.']}],
         )
 
     def test_validation_with_nonexistent_id(self):
@@ -1763,7 +1763,7 @@ class ModelFormsetTest(TestCase):
         formset = AuthorFormSet(data)
         self.assertEqual(
             formset.errors,
-            [{'id': ['Select a valid choice. That choice is not one of the available choices.']}],
+            [{'id': ['Select a valid choice. 12345 is not one of the available choices.']}],
         )
 
     def test_initial_form_count_empty_data(self):
