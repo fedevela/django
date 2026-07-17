@@ -566,27 +566,102 @@ class CommandHelpCompletenessAndDefaultFormattingContractTests(SimpleTestCase):
 
 
 class CommandHelpSemanticsAndBehaviorContractTests(SimpleTestCase):
-    """Placeholder verification obligations for MCFMT-007 and MCFMT-008."""
+    """Verification obligations for MCFMT-007 and MCFMT-008."""
+
+    help_text = (
+        "Synchronize the selected contract without changing its stored metadata."
+    )
+    command_arguments = [
+        "KT1-contract",
+        "--count",
+        "3",
+        "--mode",
+        "replace",
+        "--enabled",
+    ]
+
+    def setUp(self):
+        class Command(BaseCommand):
+            help = self.help_text
+            requires_system_checks = []
+
+            def add_arguments(command_self, parser):
+                parser.add_argument("contract")
+                parser.add_argument("--count", type=int, default=1)
+                parser.add_argument("--mode", choices=("merge", "replace"))
+                parser.add_argument("--enabled", action="store_true")
+
+            def handle(command_self, *args, **options):
+                command_self.execution = {
+                    "args": args,
+                    "contract": options["contract"],
+                    "count": options["count"],
+                    "mode": options["mode"],
+                    "enabled": options["enabled"],
+                }
+                message = (
+                    "Synchronized %(count)d copy of %(contract)s in %(mode)s mode."
+                )
+                return message % {
+                    "count": options["count"],
+                    "contract": options["contract"],
+                    "mode": options["mode"],
+                }
+
+        class CustomizedCommand(Command):
+            def create_parser(command_self, *args, **kwargs):
+                return super().create_parser(
+                    *args, formatter_class=RawTextHelpFormatter, **kwargs
+                )
+
+        self.command_class = Command
+        self.customized_command_class = CustomizedCommand
+        self.customized_parser = CustomizedCommand().create_parser(
+            "manage.py", "synchronize_contract"
+        )
+        self.formatted_description = self.customized_parser.format_help().split(
+            "\n\n", 2
+        )[1]
 
     def test_mcfmt_007_displaying_customized_help_preserves_help_text_words(self):
         """GUID: MCFMT-007 - Formatting preserves every help-text word."""
-        pass
+        self.assertCountEqual(
+            self.formatted_description.split(), self.help_text.split()
+        )
 
     def test_mcfmt_007_displaying_customized_help_preserves_help_text_word_order(self):
         """GUID: MCFMT-007 - Formatting preserves help-text word ordering."""
-        pass
+        self.assertEqual(
+            self.formatted_description.split(), self.help_text.split()
+        )
 
     def test_mcfmt_007_displaying_customized_help_preserves_semantic_content(self):
         """GUID: MCFMT-007 - Formatting preserves help-text semantics."""
-        pass
+        self.assertEqual(self.formatted_description, self.help_text)
 
     def test_mcfmt_008_customized_help_parses_defined_arguments_the_same_way(self):
         """GUID: MCFMT-008 - Defined arguments retain their parsing behavior."""
-        pass
+        default_options = self.command_class().create_parser(
+            "manage.py", "synchronize_contract"
+        ).parse_args(self.command_arguments)
+        customized_options = self.customized_parser.parse_args(self.command_arguments)
+
+        self.assertEqual(vars(customized_options), vars(default_options))
 
     def test_mcfmt_008_customized_help_executes_same_inputs_the_same_way(self):
         """GUID: MCFMT-008 - The same inputs retain their execution behavior."""
-        pass
+        commands = []
+        outputs = []
+        argv = ["manage.py", "synchronize_contract", *self.command_arguments]
+        for command_class in (self.command_class, self.customized_command_class):
+            output = StringIO()
+            command = command_class(stdout=output)
+            command.run_from_argv(argv)
+            commands.append(command)
+            outputs.append(output.getvalue())
+
+        self.assertEqual(commands[1].execution, commands[0].execution)
+        self.assertEqual(outputs[1], outputs[0])
 
 
 class CommandRunTests(AdminScriptTestCase):
