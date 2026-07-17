@@ -398,6 +398,8 @@ def help_text_for_field(name, model):
     return help_text
 
 
+# GUID: NFMT-002 -- Field-aware null display belongs at this boundary between
+# admin list-display value resolution and downstream type-specific formatters.
 def display_for_field(value, field, empty_value_display):
     from django.contrib.admin.templatetags.admin_list import _boolean_icon
 
