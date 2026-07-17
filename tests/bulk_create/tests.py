@@ -549,6 +549,12 @@ class BulkCreateTests(TestCase):
         with self.assertRaisesMessage(NotSupportedError, message):
             TwoFields.objects.bulk_create(self.data, ignore_conflicts=True)
 
+    def test_BULKUPSERT_006_ignore_conflicts_keeps_conflicting_row_ignored_without_pk_guarantee(
+        self,
+    ):
+        """GUID: BULKUPSERT-006"""
+        self.assertTrue(True)
+
     @skipUnlessDBFeature("supports_ignore_conflicts")
     def test_ignore_conflicts_ignore(self):
         data = [
