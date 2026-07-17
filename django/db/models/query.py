@@ -892,6 +892,26 @@ class QuerySet(AltersData):
                     obj_with_pk._state.db = self.db
             if objs_without_pk:
                 fields = [f for f in fields if not isinstance(f, AutoField)]
+                # GUID: BULKUPSERT-011 -- ordinary bulk-create primary-key
+                # population preservation.
+                # INPUT: ordered objects without primary keys, no selected
+                # conflict mode, the backend's existing bulk-row-return
+                # capability, and the model-governed db_returning_fields.
+                # EXECUTE the ordinary batched insert with conflict handling
+                # absent and preserve the returned rows in input order.
+                # IF the backend can return rows for bulk inserts:
+                #   REQUIRE one returned row per input object before assignment.
+                #   FOR EACH positional object/row pair, ASSIGN each governed
+                #   returned value, including the generated primary key.
+                # ELSE assign no synthetic primary key and retain the backend's
+                # existing non-returning behavior.
+                # AFTER each available row is processed, TRANSITION its object
+                # to the existing saved state for this database.
+                # FAILURE PATH: propagate existing insert or correspondence
+                # failures through the enclosing transaction without changing
+                # ordinary insertion semantics or enabling conflict handling.
+                # OUTPUT: ordinary bulk_create() retains its established
+                # backend-dependent primary-key population behavior.
                 # BULKUPSERT-001, BULKUPSERT-002, BULKUPSERT-003 pseudocode:
                 # INPUT: objects without assigned primary keys, conflict mode, and
                 # backend row-return capability.
