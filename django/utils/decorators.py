@@ -38,6 +38,15 @@ def _multi_decorate(decorators, method):
         decorators = [decorators]
 
     def _wrapper(self, *args, **kwargs):
+        # Architecture contract (GUID: MDP-005, GUID: MDP-006,
+        # GUID: MDP-007, GUID: MDP-008): `_wrapper` owns the invocation-adapter
+        # boundary. It depends on `method` only through normal descriptor
+        # binding and exposes the resulting function-shaped callable to the
+        # supplied decorators; the decorators never own or receive `self`
+        # separately. Positional and keyword arguments remain opaque across
+        # this boundary. The decorator chain is invocation-local, while the
+        # terminal direct call is the sole caller-facing seam for both the
+        # method's return value and any exception the chain leaves unhandled.
         # Runtime invocation pseudocode:
         # - GUID: MDP-005 /
         #   test_mdp_005_bound_instance_and_supplied_arguments_are_delivered_unchanged
