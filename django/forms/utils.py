@@ -81,18 +81,6 @@ class ErrorList(UserList, list):
     """
     A collection of errors that knows how to display itself in various formats.
     """
-    # Architecture [GUID: NONFORM-009]: ErrorList.error_class is the existing
-    # renderer-facing classification contract and the documentation seam for
-    # custom ErrorList consumers. BaseFormSet owns producing ``nonform``;
-    # renderers own interpreting it alongside ``nonfield`` and field metadata.
-    # Pseudocode [GUID: NONFORM-009; renderer documentation contract]:
-    # WHEN describing ErrorList classification metadata to a custom renderer,
-    # IDENTIFY the exact token ``nonform`` as FormSet non-form errors.
-    # IF the metadata contains ``nonform``, CLASSIFY the source as FormSet-wide;
-    # ELSE IF it contains ``nonfield``, CLASSIFY the source as Form non-field;
-    # ELSE CLASSIFY the source as field-specific.
-    # ALLOW the renderer to branch on that source classification while retaining
-    # ownership of its markup; DO NOT prescribe styling or introduce a category.
     def __init__(self, initlist=None, error_class=None):
         # Architecture [GUID: NONFORM-001, NONFORM-002, NONFORM-007,
         # NONFORM-008, NONFORM-011]: producers own the optional category token;

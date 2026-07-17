@@ -1424,11 +1424,37 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
 
     def test_nonform_009_documentation_identifies_nonform_as_formset_non_form_error_class(self):
         """GUID: NONFORM-009; exact FormSet non-form error class."""
-        pass
+        errors = self.custom_clean_formset().non_form_errors()
+        self.assertEqual(errors.error_class.split(), ['errorlist', 'nonform'])
 
     def test_nonform_009_documentation_explains_custom_errorlist_can_distinguish_error_sources(self):
         """GUID: NONFORM-009; custom ErrorList classification metadata."""
-        pass
+        class CustomErrorList(ErrorList):
+            @property
+            def error_source(self):
+                classes = self.error_class.split()
+                if 'nonform' in classes:
+                    return 'formset'
+                if 'nonfield' in classes:
+                    return 'form'
+                return 'field'
+
+        class InvalidForm(Form):
+            name = CharField()
+
+            def clean(self):
+                raise ValidationError('Non-field error.')
+
+        form = InvalidForm({}, error_class=CustomErrorList)
+        errors = [
+            form.errors['name'],
+            form.non_field_errors(),
+            self.custom_clean_formset(CustomErrorList).non_form_errors(),
+        ]
+        self.assertEqual(
+            [error.error_source for error in errors],
+            ['field', 'form', 'formset'],
+        )
 
     def test_nonform_011_default_markup_only_adds_nonform_class(self):
         """GUID: NONFORM-011"""
