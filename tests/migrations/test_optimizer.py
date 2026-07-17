@@ -1,5 +1,6 @@
 from django.db import migrations, models
 from django.db.migrations import operations
+from django.db.migrations.autodetector import MigrationAutodetector
 from django.db.migrations.optimizer import MigrationOptimizer
 from django.db.migrations.serializer import serializer_factory
 from django.test import SimpleTestCase
@@ -798,21 +799,61 @@ class OptimizerTests(SimpleTestCase):
         MIGOPT-006: An intermediate AlterField remains present when removing it
         would change the resulting migration state.
         """
-        pass
+        alter_field = migrations.AlterField(
+            "Book",
+            "title",
+            models.CharField(max_length=128, db_column="renamed_title"),
+        )
+        rename_field = migrations.RenameField("Book", "title", "name")
+
+        result, _ = self.optimize([alter_field, rename_field], "migrations")
+
+        self.assertEqual(result, [alter_field, rename_field])
+        self.assertIs(result[0], alter_field)
 
     def test_MIGOPT_007_intervening_operation_prevents_alter_field_reduction(self):
         """
         MIGOPT-007: Same-field AlterField operations remain separate when an
         intervening operation prevents valid reduction.
         """
-        pass
+        first_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=255)
+        )
+        boundary = migrations.RunSQL("SELECT 1")
+        final_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=128)
+        )
+
+        result, _ = self.optimize(
+            [first_alter, boundary, final_alter], "migrations"
+        )
+
+        self.assertEqual(result, [first_alter, boundary, final_alter])
 
     def test_MIGOPT_007_migration_boundary_prevents_alter_field_reduction(self):
         """
         MIGOPT-007: Same-field AlterField operations in independently
         optimizable regions remain separate across a migration boundary.
         """
-        pass
+        first_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=255)
+        )
+        final_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=128)
+        )
+        first_migration = migrations.Migration("0001_initial", "migrations")
+        first_migration.operations = [first_alter]
+        second_migration = migrations.Migration("0002_alter_book_title", "migrations")
+        second_migration.operations = [final_alter]
+        autodetector = MigrationAutodetector.__new__(MigrationAutodetector)
+        autodetector.migrations = {
+            "migrations": [first_migration, second_migration],
+        }
+
+        autodetector._optimize_migrations()
+
+        self.assertEqual(first_migration.operations, [first_alter])
+        self.assertEqual(second_migration.operations, [final_alter])
 
     def test_create_model_rename_field(self):
         """
