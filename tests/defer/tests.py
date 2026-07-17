@@ -18,6 +18,12 @@ class AssertionMixin:
         self.assertEqual(count, num)
 
 
+# Architecture contract [GUID: DEFER-008, DEFER-009, DEFER-010]:
+# This test case owns the compatibility boundary around only()/defer() chaining.
+# TestCase supplies the query-observation seam for construction-time laziness;
+# Primary model metadata and instance deferred-field state supply the portable
+# selected-column seam. Keep SQL compilation and backend identifier quoting
+# outside this boundary so the regression contract remains backend-independent.
 class OnlyThenDeferContractTests(TestCase):
     @classmethod
     def setUpTestData(cls):
