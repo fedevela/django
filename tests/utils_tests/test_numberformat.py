@@ -6,31 +6,17 @@ from django.utils.numberformat import format as nformat
 
 
 class TestNumberFormat(SimpleTestCase):
-    # Architecture verification seam — GUID: NFMT-001, GUID: NFMT-003,
-    # GUID: NFMT-007. This existing owner-level test case receives the boundary
-    # regression; it depends only on the public numberformat entry point and does
-    # not expose sign detection as a new production API.
     def test_nfmt_001_empty_representation_sign_detection_avoids_index_error(self):
         """GUID: NFMT-001 - Empty sign detection avoids a missing first character."""
-        # GIVEN an empty number representation.
-        # WHEN number formatting reaches negative-sign detection.
-        # THEN determine negativity without reading a first character and complete
-        # without raising IndexError.
-        pass
+        self.assertEqual(nformat("", "."), "")
 
     def test_nfmt_003_null_or_empty_representation_preserves_empty_output(self):
         """GUID: NFMT-003 - Null or empty input retains the established output."""
-        # GIVEN a null or empty input whose normalized representation is empty.
-        # WHEN the representation passes through sign, decimal, and grouping flow.
-        # THEN retain the representation unchanged and return the established "".
-        pass
+        self.assertEqual(nformat("", "."), "")
 
     def test_nfmt_007_empty_sign_boundary_completes_with_empty_output(self):
         """GUID: NFMT-007 - The empty sign boundary completes with empty output."""
-        # ARRANGE an input that produces an empty representation at sign detection.
-        # ACT by invoking number formatting across that boundary.
-        # VERIFY the call completes without IndexError and its result equals "".
-        pass
+        self.assertEqual(nformat("", "."), "")
 
     def test_format_number(self):
         self.assertEqual(nformat(1234, "."), "1234")

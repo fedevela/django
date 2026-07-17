@@ -68,21 +68,7 @@ def format(
             str_number = "{:f}".format(number)
     else:
         str_number = str(number)
-    # Architecture boundary — GUID: NFMT-001, GUID: NFMT-003
-    # format() owns the normalized-representation-to-presentation transition:
-    # sign extraction consumes str_number and passes the remaining representation
-    # to the existing decimal/grouping pipeline. The boundary contract permits an
-    # empty representation and must preserve it; no separate null-handling layer
-    # or dependency is introduced.
-    # Pseudocode — GUID: NFMT-001, GUID: NFMT-003
-    # INPUT: str_number, the normalized representation produced above.
-    # IF str_number is nonempty AND its first character is the negative sign:
-    #     move that sign into sign and remove it from str_number.
-    # ELSE:
-    #     do not inspect a first character; leave sign and str_number unchanged.
-    # CONTINUE through decimal and grouping processing so an empty representation
-    # reaches the existing return path and produces the established empty output.
-    if str_number[0] == "-":
+    if str_number and str_number[0] == "-":
         sign = "-"
         str_number = str_number[1:]
     # decimal part
