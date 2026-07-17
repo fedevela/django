@@ -40,6 +40,17 @@ class SessionStore(SessionBase):
             self._session_key = None
 
     def load(self):
+        # Pseudocode [SES-007]:
+        #   INPUT the current database-backed session key.
+        #   FETCH its unexpired persisted session record.
+        #   IF no usable record exists, RETURN an empty mapping.
+        #   OTHERWISE, HAND OFF the persisted session data for decoding.
+        #   IF decoding rejects the data as malformed or cannot complete:
+        #       CONTAIN the malformed-data failure; do not propagate it.
+        #       TRANSITION the loaded session result to an empty mapping.
+        #   ELSE, TRANSITION the loaded session result to the decoded mapping.
+        #   RETURN the loaded mapping so consumers can read, write, delete,
+        #       and otherwise perform mapping operations on it.
         s = self._get_session_from_db()
         return self.decode(s.session_data) if s else {}
 
