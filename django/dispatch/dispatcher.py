@@ -175,6 +175,17 @@ class Signal:
 
         Return a list of tuple pairs [(receiver, response), ... ].
         """
+        # GUID: SIGROB-009 - Preserve non-robust signal dispatch behavior.
+        # LOGIC OBLIGATION:
+        #   INPUT sender and named receiver arguments.
+        #   IF no receiver can be dispatched for sender, RETURN an empty list.
+        #   OTHERWISE, FOR EACH live receiver in established dispatch order:
+        #     INVOKE receiver with this signal, sender, and named arguments.
+        #     IF invocation succeeds, APPEND (receiver, response) in that order.
+        #     IF invocation raises, PROPAGATE the exception immediately and STOP;
+        #       DO NOT catch or log it, convert it to a result, or continue dispatch.
+        #   RETURN the ordered successful receiver-response pairs.
+        #   KEEP Signal.send_robust() error handling isolated from this procedure.
         if not self.receivers or self.sender_receivers_cache.get(sender) is NO_RECEIVERS:
             return []
 
