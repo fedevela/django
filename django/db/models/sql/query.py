@@ -221,9 +221,14 @@ class Query(BaseExpression):
         self.extra_tables = ()
         self.extra_order_by = ()
 
-        # A tuple that is a set of model field names and either True, if these
-        # are the fields to defer, or False if these are the only fields to
-        # load.
+        # Deferred-loading state contract [GUID: DEFER-001, DEFER-002,
+        # DEFER-003, DEFER-004, DEFER-005, DEFER-006]: the first item is a set
+        # of model field names and the second selects its interpretation.
+        # True owns an exclusion set; False owns the complete immediate-loading
+        # set, including an empty set. Mutation belongs to add_deferred_loading()
+        # and add_immediate_loading(); deferred_to_data() is the boundary that
+        # translates this state, including required primary-key selection, for
+        # column-selection consumers.
         self.deferred_loading = (frozenset(), True)
 
         self._filtered_relations = {}
