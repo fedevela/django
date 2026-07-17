@@ -55,18 +55,28 @@ def check_for_template_tags_with_the_same_name(app_configs, **kwargs):
     # distinct-module collection; templates.E003 depends only on that normalized
     # collection, while discovery and template-tag loading remain outside this
     # module's ownership.
-    # PSEUDOCODE — GUID: TPL-001, TPL-002, TPL-003
+    # PSEUDOCODE — GUID: TPL-001, TPL-002, TPL-003, TPL-004, TPL-005
+    # LOGIC OBLIGATION — GUID: TPL-004
+    # A configured association remains an input to the conflict decision when
+    # the same library name has another, distinct configured or discovered path.
+    # LOGIC OBLIGATION — GUID: TPL-005
+    # A genuine-conflict diagnostic contains every distinct path once, even when
+    # one or more source associations repeat.
     # INPUT: configured and installed-app-discovered (library name, module path)
     # associations.
     # STATE: map each library name to a set of its distinct module paths.
-    # FOR each configured association, add its module path to the name's set.
+    # FOR each configured association, add its module path to the name's set and
+    # retain it for the same conflict decision used by discovered associations.
     # FOR each discovered association, add its module path to the name's set;
     # an identical configured or previously discovered path leaves the set unchanged.
     # FOR each library name:
     #   IF its set contains more than one distinct module path, emit templates.E003
-    #   with those distinct paths.
+    #   with a deterministic ordering of all distinct paths, each rendered once.
     #   ELSE emit no error, regardless of how often or from which sources the sole
     #   association was collected.
+    # ERROR PATH: a set with multiple paths is the genuine-conflict state and
+    # hands off its name and normalized paths to templates.E003 construction.
+    # NON-ERROR PATH: zero or one distinct path produces no diagnostic.
     # OUTPUT: all templates.E003 errors produced by the distinct-path decision.
     errors = []
     libraries = defaultdict(set)
