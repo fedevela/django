@@ -2572,6 +2572,29 @@ class RelatedPopulator:
         #  - local_setter, remote_setter: Methods to set cached values on
         #    the object being populated and on the remote object. Usually
         #    these are Field.set_cached_value() methods.
+        # ARCHITECTURE [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
+        # PROXYONLY-004, PROXYONLY-005, PROXYONLY-006, PROXYONLY-007]: This
+        # boundary consumes SQLCompiler's ordered select metadata, owns proxy
+        # instantiation and relation-cache population, and must not widen the
+        # compiler's field-selection policy.
+        # ARCHITECTURE [PROXYONLY-008, PROXYONLY-009]: Concrete and proxy
+        # relations cross the same population boundary. It owns model
+        # construction, primary-key null detection, deferred-field state, and
+        # relation caching without depending on a database backend.
+        # PSEUDOCODE [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
+        # PROXYONLY-004, PROXYONLY-007]:
+        # INPUT: related-model metadata and the compiler's selected columns.
+        # BUILD the initialization field list in concrete-field order while
+        # retaining only selected or construction-required fields.
+        # REQUIRE the related proxy's inherited concrete primary key in that
+        # list, even when only() did not explicitly name it.
+        # MAP the primary key to its position in the related row data.
+        # PRESERVE the proxy model class as the class to instantiate.
+        # LEAVE every other excluded field absent from the initialization
+        # list so Model.from_db() marks it deferred.
+        # FAILURE PATH: prevent execution until selection metadata supplies a
+        # missing construction-required key; do not attempt a partial proxy
+        # construction that can raise an object-construction error.
         select_fields = klass_info["select_fields"]
         from_parent = klass_info["from_parent"]
         if not from_parent:
@@ -2602,6 +2625,26 @@ class RelatedPopulator:
         self.remote_setter = klass_info["remote_setter"]
 
     def populate(self, row, from_obj):
+        # PSEUDOCODE [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
+        # PROXYONLY-004, PROXYONLY-005, PROXYONLY-006, PROXYONLY-007]:
+        # INPUT: one database row and its already-constructed originating
+        # object.
+        # EXTRACT related values in the initialization order established
+        # above.
+        # IF the related primary-key value is NULL:
+        #     set the originating object's relation cache to None;
+        #     do not instantiate a proxy or populate nested relations.
+        # ELSE:
+        #     instantiate the preserved proxy class from the selected values;
+        #     retain the inherited primary key and selected related value;
+        #     leave all non-required, non-selected values deferred;
+        #     populate any nested selected relations;
+        #     cache both sides of the relation handoff where applicable.
+        # OUTPUT: relation access returns the cached proxy (or None), and
+        # access to its selected field performs no additional database query.
+        # FAILURE PATH: database/conversion failures follow existing error
+        # propagation; valid construction metadata must not cause a proxy
+        # object-construction error.
         if self.reorder_for_init:
             obj_data = self.reorder_for_init(row)
         else:

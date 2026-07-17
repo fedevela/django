@@ -26,6 +26,10 @@ class Child(models.Model):
     value = models.IntegerField()
 
 
+# Concrete-target test seam [PROXYONLY-008, PROXYONLY-009]: both relations
+# use Child's concrete metadata; child supplies the non-null path and
+# second_child supplies the nullable path. Backend coverage remains owned by
+# Django's existing test-runner database matrix rather than a model adapter.
 class Leaf(models.Model):
     name = models.CharField(max_length=10)
     child = models.ForeignKey(Child, models.CASCADE)
@@ -43,6 +47,15 @@ class ResolveThis(models.Model):
 class Proxy(Item):
     class Meta:
         proxy = True
+
+
+# Test integration seam [PROXYONLY-001, PROXYONLY-002, PROXYONLY-003,
+# PROXYONLY-004, PROXYONLY-005, PROXYONLY-006, PROXYONLY-007]: the nullable
+# relation is declared against the proxy while Item supplies inherited concrete
+# fields and its primary key. Runtime behavior remains owned by the ORM.
+class ProxyItemRelation(models.Model):
+    item = models.ForeignKey(Proxy, models.SET_NULL, null=True)
+    value = models.IntegerField(default=0)
 
 
 class SimpleItem(models.Model):
