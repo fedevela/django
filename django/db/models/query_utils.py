@@ -40,6 +40,29 @@ class Q(tree.Node):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
+        # QEX-001 / QEX-002 pseudocode -- conditional AND normalization:
+        #
+        # INPUT: a non-empty Q node (self), another operand, and a connector.
+        # QEX-001:
+        #   IF the connector is AND and the other operand is a conditional
+        #   expression but is not already a Q node:
+        #       Wrap the expression as one Q child so both operand orders
+        #       continue through the common Q-combination flow.
+        #   ELSE IF the other operand is not a Q node:
+        #       Reject it with the existing invalid-operand error; do not
+        #       convert unrelated or non-conditional expressions.
+        #   Preserve the existing empty-node rules; empty Q operands are
+        #   outside QEX-001's obligation.
+        #   Build an AND-connected Q node containing both operands and hand it
+        #   to normal query resolution; propagate resolution failures.
+        # QEX-002:
+        #   For Exists(...) & Q(...), accept the Q-normalized operands handed
+        #   off by the conditional expression operator.
+        #   For Q(...) & Exists(...), perform the normalization above.
+        #   Resolve either normalized tree as the same logical conjunction;
+        #   operand sequence may differ, but the matching row set must not.
+        # OUTPUT: a query-usable Q conjunction with equivalent truth semantics
+        # for both operand orders, or the existing error for invalid operands.
         if not isinstance(other, Q):
             raise TypeError(other)
 
