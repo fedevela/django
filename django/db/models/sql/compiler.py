@@ -302,8 +302,10 @@ class SQLCompiler:
                     sql, params = '0', ()
                 else:
                     sql, params = self.compile(Value(empty_result_set_value))
-            else:
-                sql, params = col.select_format(self, sql, params)
+            if not sql:
+                # Select a predicate that's always True.
+                sql, params = '1', ()
+            sql, params = col.select_format(self, sql, params)
             ret.append((col, (sql, params), alias))
         return ret, klass_info, annotations
 

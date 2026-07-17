@@ -2,6 +2,7 @@ import datetime
 from decimal import Decimal
 
 from django.core.exceptions import FieldDoesNotExist, FieldError
+from django.db import connection
 from django.db.models import (
     BooleanField, Case, CharField, Count, DateTimeField, DecimalField, Exists,
     ExpressionWrapper, F, FloatField, Func, IntegerField, Max, OuterRef, Q,
@@ -200,50 +201,49 @@ class NonAggregateAnnotationTestCase(TestCase):
     # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-006
     # Architecture seam: direct empty-membership selection belongs beside the
     # existing database-backed empty-expression annotation coverage. These
-    # placeholders share this case's Book fixtures and exercise the public ORM
-    # boundary; compiler internals remain covered through generated SQL rather
-    # than a test-only dependency on SQLCompiler.
+    # tests share this case's Book fixtures and exercise the public ORM boundary;
+    # compiler internals remain covered through generated SQL rather than a
+    # test-only dependency on SQLCompiler.
     #
     # EMPTYIN-001, EMPTYIN-006: Negated empty membership selected directly as
     # an annotation compiles to a nonempty, syntactically valid SQL expression.
     def test_emptyin_001_006_negated_direct_annotation_compiles_to_valid_sql(self):
-        # PSEUDOCODE:
-        #   BUILD a queryset whose "foo" annotation wraps NOT (pk IN []).
-        #   SELECT only "foo" and COMPILE the query.
-        #   VERIFY compilation succeeds.
-        #   EXTRACT the SQL expression immediately before AS "foo".
-        #   VERIFY that expression is nonempty and syntactically valid.
-        self.assertTrue(True)
+        books = Book.objects.annotate(
+            foo=ExpressionWrapper(~Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        sql, _ = books.query.sql_with_params()
+        alias = ' AS %s' % connection.ops.quote_name('foo')
+        self.assertIn(alias, sql)
+        self.assertTrue(sql[len('SELECT '):sql.index(alias)].strip())
 
     # EMPTYIN-002, EMPTYIN-006: Negated empty membership selected directly as
     # an annotation evaluates to a database-compatible true value for each row.
     def test_emptyin_002_006_negated_direct_annotation_evaluates_true(self):
-        # PSEUDOCODE:
-        #   CREATE rows and annotate them as "foo" with NOT (pk IN []).
-        #   EVALUATE the direct "foo" values.
-        #   FOR EACH returned row:
-        #       VERIFY "foo" is the backend-compatible true value.
-        self.assertTrue(True)
+        values = Book.objects.annotate(
+            foo=ExpressionWrapper(~Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        self.assertEqual(len(values), Book.objects.count())
+        self.assertTrue(all(value['foo'] for value in values))
 
     # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
     # as an annotation compiles to a syntactically valid SQL expression.
     def test_emptyin_003_006_nonnegated_direct_annotation_compiles_to_valid_sql(self):
-        # PSEUDOCODE:
-        #   BUILD a queryset whose "foo" annotation wraps (pk IN []).
-        #   SELECT only "foo" and COMPILE the query.
-        #   VERIFY compilation succeeds and emits a nonempty valid expression
-        #   before AS "foo".
-        self.assertTrue(True)
+        books = Book.objects.annotate(
+            foo=ExpressionWrapper(Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        sql, _ = books.query.sql_with_params()
+        alias = ' AS %s' % connection.ops.quote_name('foo')
+        self.assertIn(alias, sql)
+        self.assertTrue(sql[len('SELECT '):sql.index(alias)].strip())
 
     # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
     # as an annotation evaluates to false for each row.
     def test_emptyin_003_006_nonnegated_direct_annotation_evaluates_false(self):
-        # PSEUDOCODE:
-        #   CREATE rows and annotate them as "foo" with (pk IN []).
-        #   EVALUATE the direct "foo" values.
-        #   FOR EACH returned row:
-        #       VERIFY "foo" is false.
-        self.assertTrue(True)
+        values = Book.objects.annotate(
+            foo=ExpressionWrapper(Q(pk__in=[]), output_field=BooleanField()),
+        ).values('foo')
+        self.assertEqual(len(values), Book.objects.count())
+        self.assertFalse(any(value['foo'] for value in values))
 
     def test_empty_expression_annotation(self):
         books = Book.objects.annotate(
