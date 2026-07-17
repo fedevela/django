@@ -49,6 +49,12 @@ def check_string_if_invalid_is_string(app_configs, **kwargs):
 
 @register(Tags.templates)
 def check_for_template_tags_with_the_same_name(app_configs, **kwargs):
+    # ARCHITECTURE — GUID: TPL-001, TPL-002, TPL-003
+    # This check owns the private association-normalization boundary shared by
+    # settings and installed-app discovery. Both sources feed one per-name,
+    # distinct-module collection; templates.E003 depends only on that normalized
+    # collection, while discovery and template-tag loading remain outside this
+    # module's ownership.
     # PSEUDOCODE — GUID: TPL-001, TPL-002, TPL-003
     # INPUT: configured and installed-app-discovered (library name, module path)
     # associations.
