@@ -21,7 +21,8 @@ except ImportError:
 
 import django.__main__
 from django.apps.registry import Apps
-from django.test import SimpleTestCase
+from django.template import autoreload as template_autoreload
+from django.test import SimpleTestCase, override_settings
 from django.test.utils import extend_sys_path
 from django.utils import autoreload
 from django.utils.autoreload import WatchmanUnavailable
@@ -558,17 +559,67 @@ class ReloaderTests(SimpleTestCase):
 
 
 class AutoreloadCompatibilityContractTests(SimpleTestCase):
-    def test_arld_005_empty_template_dirs_file_change_preserves_existing_autoreload(self):
+    @override_settings(TEMPLATES=[{
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [],
+    }])
+    @mock.patch('django.utils.autoreload.trigger_reload')
+    def test_arld_005_empty_template_dirs_file_change_preserves_existing_autoreload(
+        self, trigger_reload,
+    ):
         """GUID: ARLD-005 verification obligation for empty template DIRS."""
-        pass
+        reloader = autoreload.BaseReloader()
+        project_file = Path.cwd() / 'project_file.py'
 
-    def test_arld_005_template_dirs_exclude_base_dir_file_change_preserves_existing_autoreload(self):
+        template_autoreload.watch_for_template_changes(reloader)
+        reloader.notify_file_changed(project_file)
+
+        self.assertEqual(reloader.directory_globs, {})
+        trigger_reload.assert_called_once_with(project_file)
+
+    @override_settings(TEMPLATES=[{
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [Path.cwd().parent / 'templates'],
+    }])
+    @mock.patch('django.utils.autoreload.trigger_reload')
+    def test_arld_005_template_dirs_exclude_base_dir_file_change_preserves_existing_autoreload(
+        self, trigger_reload,
+    ):
         """GUID: ARLD-005 verification obligation when template DIRS exclude BASE_DIR."""
-        pass
+        base_dir = Path.cwd()
+        template_dir = base_dir.parent / 'templates'
+        reloader = autoreload.BaseReloader()
+        project_file = base_dir / 'project_file.py'
 
-    def test_arld_006_overlapping_template_and_project_watches_template_change_remains_detected(self):
+        template_autoreload.watch_for_template_changes(reloader)
+        reloader.notify_file_changed(project_file)
+
+        self.assertEqual(reloader.directory_globs, {template_dir: {'**/*'}})
+        trigger_reload.assert_called_once_with(project_file)
+
+    @override_settings(TEMPLATES=[{
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [Path.cwd() / 'templates'],
+    }])
+    @mock.patch('django.utils.autoreload.trigger_reload')
+    @mock.patch('django.template.autoreload.reset_loaders')
+    def test_arld_006_overlapping_template_and_project_watches_template_change_remains_detected(
+        self, reset_loaders, trigger_reload,
+    ):
         """GUID: ARLD-006 verification obligation for overlapping watches."""
-        pass
+        template_dir = Path.cwd() / 'templates'
+        template_file = template_dir / 'index.html'
+        reloader = autoreload.BaseReloader()
+        reloader.extra_files.add(template_file)
+
+        template_autoreload.watch_for_template_changes(reloader)
+        self.assertIn(template_file, reloader.extra_files)
+        self.assertEqual(reloader.directory_globs, {template_dir: {'**/*'}})
+
+        reloader.notify_file_changed(template_file)
+
+        reset_loaders.assert_called_once_with()
+        trigger_reload.assert_not_called()
 
 
 class IntegrationTests:
