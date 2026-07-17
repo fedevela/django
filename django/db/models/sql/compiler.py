@@ -251,6 +251,15 @@ class SQLCompiler:
                 'model': self.query.model,
                 'select_fields': select_list,
             }
+        # EMPTYIN-004, EMPTYIN-006 architecture seam: annotation_select is the
+        # query-owned registry entering the selected-column boundary. Wrapped
+        # Boolean predicates and aggregates remain peer expressions here; each
+        # alias receives an independent position and is compiled by the common
+        # per-expression boundary below. The annotations position map is the
+        # only handoff this layer exposes to queryset result materialization.
+        # Keep dependencies directed from the query expression registry,
+        # through SQLCompiler selection, to result mapping; neither aggregate
+        # nor predicate expressions may take ownership of their peer's slot.
         for alias, annotation in self.query.annotation_select.items():
             annotations[alias] = select_idx
             select.append((annotation, alias))
