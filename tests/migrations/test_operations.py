@@ -3175,9 +3175,33 @@ class OperationTests(OperationTestBase):
         RIX-005: An explicitly named index retains its complete forward and
         backward RenameIndex transitions without a database exception.
         """
-        self.assertTrue(True)
+        app_label = "test_rix005"
+        table_name = app_label + "_pony"
+        old_name = "rix005_pony_pink_idx"
+        new_name = "rix005_renamed_idx"
+        project_state = self.set_up_test_model(
+            app_label,
+            indexes=[models.Index(fields=["pink"], name=old_name)],
+        )
+        operation = migrations.RenameIndex(
+            "Pony", new_name=new_name, old_name=old_name
+        )
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
 
-    def test_rix_007_unrelated_indexes_and_constraints_survive_unnamed_index_rename_cycle(
+        with connection.schema_editor() as editor:
+            operation.database_forwards(app_label, editor, project_state, new_state)
+        self.assertIndexNameNotExists(table_name, old_name)
+        self.assertIndexNameExists(table_name, new_name)
+
+        with connection.schema_editor() as editor:
+            operation.database_backwards(app_label, editor, new_state, project_state)
+        self.assertIndexNameExists(table_name, old_name)
+        self.assertIndexNameNotExists(table_name, new_name)
+        self.assertEqual(operation.old_name, old_name)
+        self.assertEqual(operation.new_name, new_name)
+
+    def test_rix_007_unrelated_schema_objects_survive_unnamed_index_rename_cycle(
         self,
     ):
         """
@@ -3185,7 +3209,65 @@ class OperationTests(OperationTestBase):
         existence, and behavior across the affected index's forward,
         backward, and forward-again rename cycle.
         """
-        self.assertTrue(True)
+        app_label = "test_rix007"
+        table_name = app_label + "_pony"
+        unrelated_index_name = "rix007_pink_idx"
+        unrelated_constraint_name = "rix007_weight_uniq"
+        new_name = "rix007_renamed_idx"
+        project_state = self.set_up_test_model(
+            app_label,
+            index_together=True,
+            indexes=[
+                models.Index(fields=["pink"], name=unrelated_index_name),
+            ],
+            constraints=[
+                models.UniqueConstraint(
+                    fields=["weight"], name=unrelated_constraint_name
+                ),
+            ],
+        )
+        old_name = self._get_unnamed_index_name(
+            project_state, app_label, ("weight", "pink")
+        )
+        operation = migrations.RenameIndex(
+            "Pony", new_name=new_name, old_fields=("weight", "pink")
+        )
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+
+        def unrelated_schema_objects():
+            with connection.cursor() as cursor:
+                constraints = connection.introspection.get_constraints(
+                    cursor, table_name
+                )
+            return {
+                name: details
+                for name, details in constraints.items()
+                if name not in {old_name, new_name}
+            }
+
+        expected_unrelated_objects = unrelated_schema_objects()
+        self.assertIn(unrelated_index_name, expected_unrelated_objects)
+        self.assertIn(unrelated_constraint_name, expected_unrelated_objects)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(app_label, editor, project_state, new_state)
+        self.assertEqual(unrelated_schema_objects(), expected_unrelated_objects)
+
+        with connection.schema_editor() as editor:
+            operation.database_backwards(app_label, editor, new_state, project_state)
+        self.assertEqual(unrelated_schema_objects(), expected_unrelated_objects)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(app_label, editor, project_state, new_state)
+        self.assertEqual(unrelated_schema_objects(), expected_unrelated_objects)
+        self.assertIndexNameExists(table_name, unrelated_index_name)
+        self.assertUniqueConstraintExists(table_name, ["weight"])
+
+        Pony = new_state.apps.get_model(app_label, "Pony")
+        Pony.objects.create(pink=1, weight=1.0)
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Pony.objects.create(pink=2, weight=1.0)
 
     def test_rix_008_deconstructed_rename_index_reconstructs_with_unchanged_behavior(
         self,
@@ -3194,7 +3276,53 @@ class OperationTests(OperationTestBase):
         RIX-008: Deconstructing and reconstructing RenameIndex preserves its
         representation and behavior.
         """
-        self.assertTrue(True)
+        cases = (
+            (
+                "test_rix008_named",
+                {"index": True},
+                {
+                    "model_name": "Pony",
+                    "new_name": "rix008_named_idx",
+                    "old_name": "pony_pink_idx",
+                },
+            ),
+            (
+                "test_rix008_unnamed",
+                {"index_together": True},
+                {
+                    "model_name": "Pony",
+                    "new_name": "rix008_unnamed_idx",
+                    "old_fields": ("weight", "pink"),
+                },
+            ),
+        )
+        for app_label, setup_kwargs, operation_kwargs in cases:
+            with self.subTest(app_label=app_label):
+                project_state = self.set_up_test_model(app_label, **setup_kwargs)
+                operation = migrations.RenameIndex(**operation_kwargs)
+                definition = operation.deconstruct()
+                self.assertEqual(definition, ("RenameIndex", [], operation_kwargs))
+
+                operation_class = getattr(migrations, definition[0])
+                reconstructed = operation_class(*definition[1], **definition[2])
+                self.assertEqual(reconstructed.deconstruct(), definition)
+
+                new_state = project_state.clone()
+                reconstructed.state_forwards(app_label, new_state)
+                with connection.schema_editor() as editor:
+                    reconstructed.database_forwards(
+                        app_label, editor, project_state, new_state
+                    )
+                table_name = app_label + "_pony"
+                self.assertIndexNameExists(table_name, operation_kwargs["new_name"])
+
+                with connection.schema_editor() as editor:
+                    reconstructed.database_backwards(
+                        app_label, editor, new_state, project_state
+                    )
+                self.assertIndexNameNotExists(
+                    table_name, operation_kwargs["new_name"]
+                )
 
     def test_rename_index_unknown_unnamed_index(self):
         app_label = "test_rninuui"
