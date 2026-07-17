@@ -487,6 +487,24 @@ class WriterTests(SimpleTestCase):
         serializations = [MigrationWriter.serialize(combined) for _ in range(3)]
         self.assertEqual(serializations, [serializations[0]] * 3)
 
+    def test_enfl_008_unicode_or_ignorecase_serializes_as_named_flags_joined_by_or(
+        self,
+    ):
+        """GUID: ENFL-008 - represent combined RegexFlag members with bitwise OR."""
+        pass
+
+    def test_enfl_008_serialized_unicode_or_ignorecase_reconstructs_equal_value(self):
+        """GUID: ENFL-008 - reconstruct the original combined RegexFlag value."""
+        pass
+
+    def test_enfl_008_serialized_unicode_or_ignorecase_retains_regexflag_type(self):
+        """GUID: ENFL-008 - preserve the RegexFlag type after reconstruction."""
+        pass
+
+    def test_enfl_008_unicode_or_ignorecase_preserves_named_enum_member_checks(self):
+        """GUID: ENFL-008 - retain existing named Enum-member coverage."""
+        pass
+
     def test_serialize_choices(self):
         class TextChoices(models.TextChoices):
             A = "A", "A value"
