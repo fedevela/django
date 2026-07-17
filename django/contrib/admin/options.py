@@ -2037,6 +2037,24 @@ class InlineModelAdmin(BaseModelAdmin):
         self.opts = self.model._meta
         self.has_registered_model = admin_site.is_registered(self.model)
         super().__init__()
+        # INLINE-001, INLINE-002, INLINE-003, INLINE-004: Resolve Inline names.
+        #
+        # configured_singular = the Inline's verbose_name before fallback
+        # configured_plural = the Inline's verbose_name_plural before fallback
+        # IF configured_singular is present:
+        #     resolved_singular = configured_singular
+        # ELSE:
+        #     resolved_singular = the associated model's verbose_name
+        # IF configured_plural is present:
+        #     resolved_plural = configured_plural
+        # ELSE IF configured_singular is present:
+        #     resolved_plural = Django's established "{}s" lazy formatting of
+        #                       resolved_singular
+        # ELSE:
+        #     resolved_plural = the associated model's verbose_name_plural
+        # ASSIGN both resolved names to this Inline instance.
+        # This shared InlineModelAdmin transition applies unchanged to every
+        # supported subtype, including StackedInline and TabularInline.
         if self.verbose_name is None:
             self.verbose_name = self.model._meta.verbose_name
         if self.verbose_name_plural is None:
