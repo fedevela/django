@@ -432,6 +432,14 @@ class SimpleLazyObject(LazyObject):
             return result
         return copy.deepcopy(self._wrapped, memo)
 
+    # Reflected-addition lifecycle architecture (GUIDs: RADD-002, RADD-004,
+    # RADD-007): SimpleLazyObject owns the class-local __radd__ integration
+    # seam, while the inherited _wrapped/empty state and _setup() contract
+    # remain owned by LazyObject. The seam consumes that lifecycle contract
+    # only when addition reaches it and retains the resolved value in the
+    # existing _wrapped state; no eager hook, alternate initialization path,
+    # or broader proxy-operation dependency is introduced.
+    #
     # Reflected addition preserves the direct operation's operand order,
     # return value, and exceptions. (RADD-001, RADD-003, RADD-005, RADD-006)
     def __radd__(self, other):
