@@ -253,6 +253,10 @@ class BaseCommand:
     # boundary as opaque text. Preservation of its line breaks and indentation,
     # including the motivating three-line example, belongs to the selected
     # argparse formatter contract rather than to BaseCommand preprocessing.
+    #
+    # MCFMT-009 architecture: formatter selection is configuration metadata,
+    # separate from this opaque help payload. Neither BaseCommand nor
+    # CommandParser may infer the formatter contract by inspecting the payload.
     help = ""
 
     # Configuration shortcuts that alter various logic.
@@ -360,9 +364,15 @@ class BaseCommand:
         # substitute the default behavior and violate the command's selection;
         # likewise, do not infer a fallback or customized branch from help-text
         # line breaks, and do not return partially rendered argument sections.
-        # MCFMT-001 integration seam: parser construction receives the
-        # command-owned formatter selection here. The existing
-        # DjangoHelpFormatter argument is the default side of that contract.
+        # MCFMT-001, MCFMT-006, MCFMT-009 integration seam: parser construction
+        # receives an explicit command-owned formatter through kwargs; otherwise
+        # this boundary supplies DjangoHelpFormatter. Selection depends only on
+        # configuration, never on the content or line structure of self.help.
+        #
+        # MCFMT-005 ownership boundary: formatter_class controls presentation of
+        # the CommandParser model only. BaseCommand continues to populate that
+        # single model with base options and self.add_arguments() below, so a
+        # selected formatter cannot replace or bypass usage or argument metadata.
         kwargs.setdefault("formatter_class", DjangoHelpFormatter)
         parser = CommandParser(
             prog="%s %s" % (os.path.basename(prog_name), subcommand),
