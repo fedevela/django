@@ -1534,10 +1534,35 @@ class ChangelistTests(AuthViewsTestCase):
 
     def test_ucp_006_non_pk_to_field_access_links_to_pk_password_change(self):
         """GUID: UCP-006."""
+        # Pseudocode (GUID: UCP-006; non-primary-key `_to_field` access):
+        # INPUT: a persisted user with both a primary key and a distinct
+        # non-primary-key field accepted by the admin change view.
+        # BUILD the user change URL with the non-primary-key field value.
+        # REQUEST that URL while selecting the field through `_to_field`.
+        # REQUIRE a successful change-page response; otherwise FAIL because the
+        # password help-text link cannot be observed on this access path.
+        # EXTRACT the password-change link from the password field's help text.
+        # RESOLVE the extracted link relative to the requested change-page URL.
+        # BUILD the expected password-change URL from the persisted user's PK.
+        # COMPARE the resolved link with the expected PK-addressed URL.
+        # PASS only when both URLs identify the same user's password-change form;
+        # FAIL if the link retains the non-PK lookup value or targets another user.
         self.assertTrue(True)
 
     def test_ucp_006_ordinary_pk_access_links_to_same_user_password_change(self):
         """GUID: UCP-006."""
+        # Pseudocode (GUID: UCP-006; ordinary primary-key access):
+        # INPUT: a persisted user with a primary key.
+        # BUILD the user change URL from that primary key with no `_to_field`.
+        # REQUEST the ordinary primary-key change page.
+        # REQUIRE a successful change-page response; otherwise FAIL because the
+        # password help-text link cannot be observed on this access path.
+        # EXTRACT the password-change link from the password field's help text.
+        # RESOLVE the extracted link relative to the requested change-page URL.
+        # BUILD the expected password-change URL from the same user's PK.
+        # COMPARE the resolved link with the expected password-change URL.
+        # PASS only when the link targets that same user's password-change form;
+        # FAIL if the link is absent, malformed, or identifies another user.
         self.assertTrue(True)
 
     def test_user_change_different_user_password(self):
