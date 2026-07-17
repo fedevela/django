@@ -42,6 +42,9 @@ def create_permissions(
     apps=global_apps,
     **kwargs,
 ):
+    # Architecture boundary [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-006]:
+    # This post-migrate receiver owns permission database confinement. ``using``
+    # is its database dependency and must be preserved by downstream managers.
     # Pseudocode [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-006]:
     #   selected_alias := using supplied by the migration lifecycle
     #   if the application has no models: return without database access
@@ -92,8 +95,9 @@ def create_permissions(
     # The codenames and ctypes that should exist.
     ctypes = set()
     for klass in app_config.get_models():
-        # Force looking up the content types in the current database
-        # before creating foreign keys to them.
+        # Bound-manager seam [MIGDB-002, MIGDB-003, MIGDB-006]: ContentType
+        # lookup and foreign-key provenance remain owned by ``using``; router
+        # read/write selection isn't a dependency of this path.
         ctype = ContentType.objects.db_manager(using).get_for_model(
             klass, for_concrete_model=False
         )

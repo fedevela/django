@@ -386,8 +386,9 @@ class Command(BaseCommand):
             [ModelState.from_model(apps.get_model(*model)) for model in model_keys]
         )
 
-        # Send the post_migrate signal, so individual apps can do whatever they need
-        # to do at this point.
+        # Architecture seam [MIGDB-001]: The selected connection owns the
+        # migration lifecycle. Its alias is the database contract passed to
+        # every post-migrate receiver through the ``using`` signal argument.
         emit_post_migrate_signal(
             self.verbosity,
             self.interactive,
