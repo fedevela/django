@@ -14,6 +14,16 @@ from django.test import SimpleTestCase
 from django.test.utils import override_settings
 
 
+# ARCHITECTURE — GUID: TPL-006, TPL-007, TPL-008
+# This test module owns the regression boundary; no production interface or new
+# fixture package is required. TPL-006 remains at the existing E001/E002 test
+# classes below, where complete error-list assertions protect unrelated checks.
+# TPL-007 and TPL-008 belong to CheckTemplateTagLibrariesWithSameName: settings
+# enter through get_settings(), discovery enters through the existing
+# get_template_tag_modules patch seam, and the check's returned Error list is
+# the only output that crosses into the regression assertions. The placeholder
+# methods here retain requirement traceability until implementation is placed in
+# those owning loci.
 class TemplateCheckRegressionContractTests(SimpleTestCase):
     def test_tpl_006_unrelated_template_check_inputs_preserve_existing_outcomes(self):
         """
@@ -84,6 +94,9 @@ class TemplateCheckRegressionContractTests(SimpleTestCase):
         self.assertTrue(True)
 
 
+# OWNERSHIP — GUID: TPL-006
+# This class and CheckTemplateStringIfInvalidTest retain the established E001
+# and E002 outcome contracts independently of duplicate-library-name coverage.
 class CheckTemplateSettingsAppDirsTest(SimpleTestCase):
     TEMPLATES_APP_DIRS_AND_LOADERS = [
         {
@@ -175,6 +188,10 @@ class CheckTemplateStringIfInvalidTest(SimpleTestCase):
             self.assertEqual(check_string_if_invalid_is_string(None), [self.error1])
 
 
+# OWNERSHIP — GUID: TPL-007, TPL-008
+# This class owns both sides of the E003 regression boundary. Its existing
+# settings helper and discovery seam are shared test infrastructure, so the new
+# cases require no new dependency beyond the existing registered check callable.
 class CheckTemplateTagLibrariesWithSameName(SimpleTestCase):
     @classmethod
     def setUpClass(cls):
