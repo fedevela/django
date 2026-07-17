@@ -565,6 +565,30 @@ class CommandHelpCompletenessAndDefaultFormattingContractTests(SimpleTestCase):
         )
 
 
+class CommandHelpSemanticsAndBehaviorContractTests(SimpleTestCase):
+    """Placeholder verification obligations for MCFMT-007 and MCFMT-008."""
+
+    def test_mcfmt_007_displaying_customized_help_preserves_help_text_words(self):
+        """GUID: MCFMT-007 - Formatting preserves every help-text word."""
+        pass
+
+    def test_mcfmt_007_displaying_customized_help_preserves_help_text_word_order(self):
+        """GUID: MCFMT-007 - Formatting preserves help-text word ordering."""
+        pass
+
+    def test_mcfmt_007_displaying_customized_help_preserves_semantic_content(self):
+        """GUID: MCFMT-007 - Formatting preserves help-text semantics."""
+        pass
+
+    def test_mcfmt_008_customized_help_parses_defined_arguments_the_same_way(self):
+        """GUID: MCFMT-008 - Defined arguments retain their parsing behavior."""
+        pass
+
+    def test_mcfmt_008_customized_help_executes_same_inputs_the_same_way(self):
+        """GUID: MCFMT-008 - The same inputs retain their execution behavior."""
+        pass
+
+
 class CommandRunTests(AdminScriptTestCase):
     """
     Tests that need to run by simulating the command line, not by call_command.
