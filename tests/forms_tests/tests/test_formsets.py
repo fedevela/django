@@ -241,19 +241,47 @@ class FormsFormsetTestCase(SimpleTestCase):
 
     def test_eform_005_single_empty_form_access_preserves_supplied_form_kwargs(self):
         """GUID: EFORM-005; one empty_form access leaves form_kwargs unchanged."""
-        pass
+        FormSet = formset_factory(CustomKwargForm)
+        form_kwargs = {"custom_kwarg": "sentinel", "empty_permitted": False}
+        formset = FormSet(form_kwargs=form_kwargs)
+
+        formset.empty_form
+
+        self.assertEqual(
+            form_kwargs, {"custom_kwarg": "sentinel", "empty_permitted": False}
+        )
+        self.assertEqual(formset.form_kwargs, form_kwargs)
 
     def test_eform_005_repeated_empty_form_access_preserves_supplied_form_kwargs(
         self,
     ):
         """GUID: EFORM-005; repeated empty_form access leaves form_kwargs unchanged."""
-        pass
+        FormSet = formset_factory(CustomKwargForm)
+        form_kwargs = {"custom_kwarg": "sentinel", "empty_permitted": False}
+        formset = FormSet(form_kwargs=form_kwargs)
+
+        for _ in range(2):
+            formset.empty_form
+            self.assertEqual(
+                form_kwargs,
+                {"custom_kwarg": "sentinel", "empty_permitted": False},
+            )
+            self.assertEqual(formset.form_kwargs, form_kwargs)
 
     def test_eform_005_ordinary_forms_after_empty_form_access_receive_original_kwargs(
         self,
     ):
         """GUID: EFORM-005; later forms receive the original supplied kwargs."""
-        pass
+        FormSet = formset_factory(CustomKwargForm)
+        form_kwargs = {"custom_kwarg": "sentinel", "empty_permitted": False}
+        formset = FormSet(form_kwargs=form_kwargs)
+
+        formset.empty_form
+        formset.empty_form
+        form = formset.forms[0]
+
+        self.assertEqual(form.custom_kwarg, "sentinel")
+        self.assertIs(form.empty_permitted, False)
 
     def test_eform_007_omitted_empty_permitted_keeps_empty_form_access_and_rendering(
         self,

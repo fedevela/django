@@ -214,10 +214,6 @@ class BaseFormSet(RenderableFormMixin):
         index will be None if the form being constructed is a new empty
         form.
         """
-        # Architecture contract (GUID EFORM-005): This method is the snapshot
-        # boundary between stored caller input and per-form argument handling.
-        # Consumers own the returned mapping; self.form_kwargs remains the
-        # source for later empty and ordinary form construction.
         return self.form_kwargs.copy()
 
     def _construct_form(self, i, **kwargs):
@@ -261,24 +257,6 @@ class BaseFormSet(RenderableFormMixin):
 
     @property
     def empty_form(self):
-        # Integration seam (GUID EFORM-005): Empty-form-only argument
-        # normalization belongs after get_form_kwargs(None) and before the form
-        # constructor. Ordinary forms retain the independent forms ->
-        # get_form_kwargs(index) -> _construct_form() dependency path.
-        # Pseudocode obligation: GUID EFORM-005.
-        # ON each empty_form access:
-        #   obtain a distinct working copy of the caller-supplied form_kwargs;
-        #   remove empty_permitted only from that working copy;
-        #   construct and return the empty form from the remaining arguments;
-        #   leave the supplied form_kwargs unchanged.
-        # REPEAT the same copy-filter-construct flow independently on every
-        # access, without retaining or reusing a previously filtered mapping.
-        # WHEN ordinary forms are constructed after any empty_form access:
-        #   obtain their arguments from the unchanged supplied form_kwargs and
-        #   hand them to the ordinary-form construction path unchanged.
-        # Failure path: if argument handling or empty-form construction fails,
-        # discard the working copy and propagate the failure without changing
-        # the supplied form_kwargs used by later accesses or ordinary forms.
         form_kwargs = self.get_form_kwargs(None)
         # empty_permitted is an empty form invariant. (EFORM-001, EFORM-002)
         form_kwargs.pop("empty_permitted", None)
