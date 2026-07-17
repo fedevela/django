@@ -837,6 +837,10 @@ class Options:
             # from other models.
             all_fields = self._relation_tree
             for field in all_fields:
+                # Metadata visibility boundary (GUID M2M-007): relation fields
+                # establish hidden state; Options only filters that state for
+                # the default public metadata view. Validation must not enter
+                # this ownership path or invalidate its omission contract.
                 # If hidden fields should be included or the relation is not
                 # intentionally hidden, add to the fields dict.
                 if include_hidden or not field.remote_field.hidden:

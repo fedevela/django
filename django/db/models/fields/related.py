@@ -1208,10 +1208,10 @@ class ManyToManyField(RelatedField):
         self.swappable = swappable
 
     def check(self, **kwargs):
-        # Architecture boundary (GUIDs M2M-004, M2M-005, M2M-006):
-        # ManyToManyField owns symmetry validation. Keep its check isolated
-        # from reverse-relation contribution, which remains the responsibility
-        # of contribute_to_related_class().
+        # Architecture boundary (GUIDs M2M-004, M2M-005, M2M-006, M2M-007):
+        # ManyToManyField owns symmetry validation. Checks may inspect relation
+        # state, but relation visibility remains owned by class contribution
+        # and the model metadata boundary.
         return [
             *super().check(**kwargs),
             *self._check_unique(**kwargs),
@@ -1666,6 +1666,9 @@ class ManyToManyField(RelatedField):
         return getattr(self, cache_attr)
 
     def contribute_to_class(self, cls, name, **kwargs):
+        # Architecture ownership (GUID M2M-007): this hook owns the hidden
+        # relation state consumed by Options.get_fields(); validation must not
+        # rewrite that state or invoke either contribution hook.
         # Pseudocode trace: GUID M2M-007 (initial metadata state).
         # INPUT: a symmetrical many-to-many field targeting its owning model.
         # IF the target denotes that same model:
