@@ -23,21 +23,42 @@ class EmptyMembershipAnnotationContractTests(SimpleTestCase):
     # EMPTYIN-001, EMPTYIN-006: Negated empty membership selected directly as
     # an annotation compiles to a nonempty, syntactically valid SQL expression.
     def test_emptyin_001_006_negated_direct_annotation_compiles_to_valid_sql(self):
+        # PSEUDOCODE:
+        #   BUILD a queryset whose "foo" annotation wraps NOT (pk IN []).
+        #   SELECT only "foo" and COMPILE the query.
+        #   VERIFY compilation succeeds.
+        #   EXTRACT the SQL expression immediately before AS "foo".
+        #   VERIFY that expression is nonempty and syntactically valid.
         self.assertTrue(True)
 
     # EMPTYIN-002, EMPTYIN-006: Negated empty membership selected directly as
     # an annotation evaluates to a database-compatible true value for each row.
     def test_emptyin_002_006_negated_direct_annotation_evaluates_true(self):
+        # PSEUDOCODE:
+        #   CREATE rows and annotate them as "foo" with NOT (pk IN []).
+        #   EVALUATE the direct "foo" values.
+        #   FOR EACH returned row:
+        #       VERIFY "foo" is the backend-compatible true value.
         self.assertTrue(True)
 
     # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
     # as an annotation compiles to a syntactically valid SQL expression.
     def test_emptyin_003_006_nonnegated_direct_annotation_compiles_to_valid_sql(self):
+        # PSEUDOCODE:
+        #   BUILD a queryset whose "foo" annotation wraps (pk IN []).
+        #   SELECT only "foo" and COMPILE the query.
+        #   VERIFY compilation succeeds and emits a nonempty valid expression
+        #   before AS "foo".
         self.assertTrue(True)
 
     # EMPTYIN-003, EMPTYIN-006: Non-negated empty membership selected directly
     # as an annotation evaluates to false for each row.
     def test_emptyin_003_006_nonnegated_direct_annotation_evaluates_false(self):
+        # PSEUDOCODE:
+        #   CREATE rows and annotate them as "foo" with (pk IN []).
+        #   EVALUATE the direct "foo" values.
+        #   FOR EACH returned row:
+        #       VERIFY "foo" is false.
         self.assertTrue(True)
 
 

@@ -270,6 +270,21 @@ class SQLCompiler:
 
         ret = []
         for col, alias in select:
+            # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-006
+            # Logic obligation for a directly selected Boolean annotation:
+            #
+            # PSEUDOCODE:
+            #   COMPILE the selected annotation while preserving whether its
+            #   predicate reduces to an empty or universal result set.
+            #   IF empty membership reduces the predicate to always false:
+            #       RENDER a backend-compatible false expression.
+            #   ELSE IF negation reduces the predicate to always true:
+            #       RENDER a backend-compatible true expression.
+            #   ELSE:
+            #       RENDER the compiled predicate normally.
+            #   REQUIRE rendered SQL to be nonempty before appending its alias.
+            #   HAND OFF the rendered Boolean expression and parameters so
+            #   evaluation yields false or true for every selected row.
             try:
                 sql, params = self.compile(col)
             except EmptyResultSet:
