@@ -1741,15 +1741,90 @@ ArticleFormSet = formset_factory(ArticleForm)
 class TestIsBoundBehavior(SimpleTestCase):
     def test_mgmt_004_valid_management_data_validation_preserves_acceptance(self):
         """GUID: MGMT-004; valid management data remains accepted."""
-        self.assertTrue(True)
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-0-title": "Test",
+            "form-0-pub_date": "1904-06-16",
+        }
+        formset = ArticleFormSet(data)
+
+        self.assertIs(formset.management_form.is_valid(), True)
+        self.assertEqual(
+            formset.management_form.cleaned_data,
+            {
+                TOTAL_FORM_COUNT: 1,
+                INITIAL_FORM_COUNT: 0,
+                MIN_NUM_FORM_COUNT: None,
+                MAX_NUM_FORM_COUNT: None,
+            },
+        )
+        self.assertIs(formset.is_valid(), True)
+        self.assertEqual(formset.non_form_errors(), [])
+        self.assertEqual(
+            formset.cleaned_data,
+            [{"title": "Test", "pub_date": datetime.date(1904, 6, 16)}],
+        )
 
     def test_mgmt_004_invalid_management_data_validation_preserves_errors(self):
         """GUID: MGMT-004; invalid management data keeps its error outcome."""
-        self.assertTrue(True)
+        data = {
+            "form-TOTAL_FORMS": "two",
+            "form-INITIAL_FORMS": "one",
+        }
+        formset = ArticleFormSet(data)
+
+        self.assertIs(formset.is_valid(), False)
+        management_errors = formset.management_form.errors.as_data()
+        self.assertEqual(
+            {
+                field_name: [error.code for error in errors]
+                for field_name, errors in management_errors.items()
+            },
+            {TOTAL_FORM_COUNT: ["invalid"], INITIAL_FORM_COUNT: ["invalid"]},
+        )
+        self.assertEqual(
+            formset.management_form.cleaned_data,
+            {
+                TOTAL_FORM_COUNT: 0,
+                INITIAL_FORM_COUNT: 0,
+                MIN_NUM_FORM_COUNT: None,
+                MAX_NUM_FORM_COUNT: None,
+            },
+        )
+        self.assertEqual(
+            [error.code for error in formset.non_form_errors().as_data()],
+            ["missing_management_form"],
+        )
+        self.assertEqual(formset.errors, [])
 
     def test_mgmt_004_missing_management_data_validation_preserves_errors(self):
         """GUID: MGMT-004; missing management data keeps its error outcome."""
-        self.assertTrue(True)
+        formset = ArticleFormSet({})
+
+        self.assertIs(formset.is_valid(), False)
+        management_errors = formset.management_form.errors.as_data()
+        self.assertEqual(
+            {
+                field_name: [error.code for error in errors]
+                for field_name, errors in management_errors.items()
+            },
+            {TOTAL_FORM_COUNT: ["required"], INITIAL_FORM_COUNT: ["required"]},
+        )
+        self.assertEqual(
+            formset.management_form.cleaned_data,
+            {
+                TOTAL_FORM_COUNT: 0,
+                INITIAL_FORM_COUNT: 0,
+                MIN_NUM_FORM_COUNT: None,
+                MAX_NUM_FORM_COUNT: None,
+            },
+        )
+        self.assertEqual(
+            [error.code for error in formset.non_form_errors().as_data()],
+            ["missing_management_form"],
+        )
+        self.assertEqual(formset.errors, [])
 
     def test_no_data_error(self):
         formset = ArticleFormSet({})
