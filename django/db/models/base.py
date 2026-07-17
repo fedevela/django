@@ -1297,6 +1297,24 @@ class Model(metaclass=ModelBase):
 
     @classmethod
     def _check_default_pk(cls):
+        # Pseudocode -- GUID: PKW-001
+        # Verification:
+        # test_pkw_001_descendant_with_explicit_pk_from_supported_ancestor_does_not_produce_w042
+        # INPUT the checked model and its effective primary-key field.
+        # IF the effective primary key is auto-created, trace its origin through
+        # supported ancestor metadata.
+        # IF that origin is a user-declared ancestor field with primary_key=True,
+        # classify the descendant as explicitly keyed and RETURN no models.W042.
+        # OTHERWISE (including an unsupported or unresolvable origin), continue
+        # through the existing default-primary-key warning decisions below.
+        #
+        # Pseudocode -- GUID: PKW-002
+        # Verification:
+        # test_pkw_002_pkw_001_descendant_gets_no_default_auto_field_guidance
+        # IF the descendant was classified as explicitly keyed by PKW-001,
+        # short-circuit before constructing the warning and its hint, then hand
+        # an empty result to the model-check aggregator; ELSE preserve the
+        # existing DEFAULT_AUTO_FIELD guidance path for warning-eligible models.
         if (
             cls._meta.pk.auto_created and
             not settings.is_overridden('DEFAULT_AUTO_FIELD') and
