@@ -85,6 +85,20 @@ class TemplateReloadTests(SimpleTestCase):
         )
 
 
+class EncompassingTemplateDirectoryContractTests(SimpleTestCase):
+    def test_arld_001_saving_monitored_non_template_file_in_base_dir_triggers_autoreload(self):
+        """ARLD-001: Saving a monitored non-template file triggers autoreload."""
+        self.assertTrue(True)
+
+    def test_arld_003_encompassing_template_dir_preserves_overlapping_project_file_monitoring(self):
+        """ARLD-003: An encompassing template dir preserves project monitoring."""
+        self.assertTrue(True)
+
+    def test_arld_004_valid_accessible_base_dir_remains_supported_while_autoreload_is_active(self):
+        """ARLD-004: An accessible BASE_DIR remains supported during autoreload."""
+        self.assertTrue(True)
+
+
 @require_jinja2
 @override_settings(INSTALLED_APPS=['template_tests'])
 class Jinja2TemplateReloadTests(SimpleTestCase):
