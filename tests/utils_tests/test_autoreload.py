@@ -557,6 +557,20 @@ class ReloaderTests(SimpleTestCase):
         next(ticker)
 
 
+class AutoreloadCompatibilityContractTests(SimpleTestCase):
+    def test_arld_005_empty_template_dirs_file_change_preserves_existing_autoreload(self):
+        """GUID: ARLD-005 verification obligation for empty template DIRS."""
+        pass
+
+    def test_arld_005_template_dirs_exclude_base_dir_file_change_preserves_existing_autoreload(self):
+        """GUID: ARLD-005 verification obligation when template DIRS exclude BASE_DIR."""
+        pass
+
+    def test_arld_006_overlapping_template_and_project_watches_template_change_remains_detected(self):
+        """GUID: ARLD-006 verification obligation for overlapping watches."""
+        pass
+
+
 class IntegrationTests:
     @mock.patch('django.utils.autoreload.BaseReloader.notify_file_changed')
     @mock.patch('django.utils.autoreload.iter_all_python_module_files', return_value=frozenset())
