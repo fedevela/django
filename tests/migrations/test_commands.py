@@ -31,9 +31,34 @@ class MigrateTests(MigrationTestBase):
     """
     databases = {'default', 'other'}
 
+    @override_settings(MIGRATION_MODULES={'migrations': 'migrations.test_migrations'})
     def test_MIGREC_007_processing_completes_with_history_only_on_recorder_permitted_alias(self):
         """MIGREC-007: Processing persists history only on the permitted alias."""
-        pass
+        class RecorderRouter:
+            def allow_migrate(self, db, app_label, model_name=None, **hints):
+                if app_label == 'migrations' and model_name == 'migration':
+                    return db == 'default'
+                return False
+
+        migration = {'app': 'migrations', 'name': '0001_initial'}
+        recorders = {
+            alias: MigrationRecorder(connections[alias]) for alias in self.databases
+        }
+        for recorder in recorders.values():
+            recorder.migration_qs.filter(**migration).delete()
+
+        with self.settings(DATABASE_ROUTERS=[RecorderRouter()]):
+            call_command(
+                'migrate', 'migrations', '0001', database='default', fake=True,
+                verbosity=0,
+            )
+            call_command(
+                'migrate', 'migrations', '0001', database='other', fake=True,
+                verbosity=0,
+            )
+
+        self.assertTrue(recorders['default'].migration_qs.filter(**migration).exists())
+        self.assertFalse(recorders['other'].migration_qs.filter(**migration).exists())
 
     @override_settings(MIGRATION_MODULES={"migrations": "migrations.test_migrations"})
     def test_migrate(self):

@@ -107,19 +107,76 @@ class RecorderTests(TestCase):
 
     def test_MIGREC_006_ensure_schema_creates_table_when_recorder_migration_is_not_denied(self):
         """MIGREC-006: Permitted recorder schema creation retains behavior."""
-        pass
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        schema_editor = test_connection.schema_editor.return_value.__enter__.return_value
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'has_table', return_value=False,
+        ):
+            recorder.ensure_schema()
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
+        schema_editor.create_model.assert_called_once_with(recorder.Migration)
 
     def test_MIGREC_006_applied_migrations_reads_history_when_recorder_migration_is_not_denied(self):
         """MIGREC-006: Permitted recorder history reads retain behavior."""
-        pass
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        migration = mock.Mock(app='myapp', name='0001_initial')
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'has_table', return_value=True,
+        ), mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            return_value=[migration],
+        ):
+            applied_migrations = recorder.applied_migrations()
+        self.assertEqual(applied_migrations, {('myapp', '0001_initial'): migration})
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
 
     def test_MIGREC_006_record_applied_inserts_history_when_recorder_migration_is_not_denied(self):
         """MIGREC-006: Permitted recorder history inserts retain behavior."""
-        pass
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        migration_qs = mock.Mock()
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            return_value=migration_qs,
+        ):
+            recorder.record_applied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
+        ensure_schema.assert_called_once_with()
+        migration_qs.create.assert_called_once_with(app='myapp', name='0001_initial')
 
     def test_MIGREC_006_record_unapplied_deletes_history_when_recorder_migration_is_not_denied(self):
         """MIGREC-006: Permitted recorder history deletions retain behavior."""
-        pass
+        test_connection = mock.Mock(alias='allowed')
+        recorder = MigrationRecorder(test_connection)
+        migration_qs = mock.Mock()
+        filtered_qs = migration_qs.filter.return_value
+        with mock.patch(
+            'django.db.migrations.recorder.router.allow_migrate_model',
+            return_value=True,
+        ) as allow_migrate_model, mock.patch.object(
+            recorder, 'ensure_schema',
+        ) as ensure_schema, mock.patch.object(
+            MigrationRecorder, 'migration_qs', new_callable=mock.PropertyMock,
+            return_value=migration_qs,
+        ):
+            recorder.record_unapplied('myapp', '0001_initial')
+        allow_migrate_model.assert_called_once_with('allowed', recorder.Migration)
+        ensure_schema.assert_called_once_with()
+        migration_qs.filter.assert_called_once_with(app='myapp', name='0001_initial')
+        filtered_qs.delete.assert_called_once_with()
 
     def test_apply(self):
         """
