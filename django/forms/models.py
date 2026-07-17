@@ -1276,6 +1276,9 @@ class ModelChoiceField(ChoiceField):
         return super().prepare_value(value)
 
     def to_python(self, value):
+        # Architecture — GUID: MCF-006, MCF-009
+        # This conversion boundary owns model resolution. Its field-scoped
+        # queryset is the sole lookup dependency and containment authority.
         # Pseudocode — GUID: MCF-006, MCF-009
         # INPUT submitted value and this field's queryset boundary.
         # IF the value is empty, RETURN the empty sentinel for validation.
@@ -1302,6 +1305,9 @@ class ModelChoiceField(ChoiceField):
         return value
 
     def validate(self, value):
+        # Architecture — GUID: MCF-007, MCF-008
+        # Empty-value policy remains owned by Field.validate(); this model-field
+        # boundary only delegates to that contract and adds no competing policy.
         # Pseudocode — GUID: MCF-007, MCF-008
         # RECEIVE the value produced by to_python() in the normal clean flow.
         # DELEGATE empty-value policy unchanged to Field.validate():
