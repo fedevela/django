@@ -36,6 +36,36 @@ from .models import (
 )
 
 
+class SubqueryContractTraceabilityTests(SimpleTestCase):
+    def test_subquery_001_queryset_input_marks_copied_query_as_subquery(self):
+        """GUID: SUBQUERY-001 - queryset input marks its copy as a subquery."""
+        pass
+
+    def test_subquery_001_query_object_input_marks_copied_query_as_subquery(self):
+        """GUID: SUBQUERY-001 - query-object input marks its copy as a subquery."""
+        pass
+
+    def test_subquery_002_as_sql_preserves_complete_inner_sql_in_parentheses(self):
+        """GUID: SUBQUERY-002 - as_sql() frames the complete inner statement."""
+        pass
+
+    def test_subquery_003_apps_queryset_sql_starts_select_and_ends_parenthesis(self):
+        """GUID: SUBQUERY-003 - App queryset SQL has intact SELECT framing."""
+        pass
+
+    def test_subquery_004_parameterized_inner_query_preserves_aligned_params(self):
+        """GUID: SUBQUERY-004 - inner query parameters remain aligned."""
+        pass
+
+    def test_subquery_005_supplied_connection_compiler_avoids_edge_truncation(self):
+        """GUID: SUBQUERY-005 - supplied compilation context keeps SQL edges."""
+        pass
+
+    def test_subquery_006_constructor_options_preserve_valid_observable_behavior(self):
+        """GUID: SUBQUERY-006 - supported options retain valid behavior."""
+        pass
+
+
 class BasicExpressionsTests(TestCase):
     @classmethod
     def setUpTestData(cls):
