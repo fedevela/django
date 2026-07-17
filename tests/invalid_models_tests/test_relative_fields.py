@@ -180,23 +180,52 @@ class RelativeFieldTests(SimpleTestCase):
 
     def test_m2m_004_self_reference_with_explicit_non_symmetry_and_related_name_has_no_new_check_error(self):
         """GUID: M2M-004 -- The valid field produces no new check error."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=False, related_name='related_models'
+            )
+
+        self.assertEqual(Model.check(), [])
 
     def test_m2m_004_self_reference_with_explicit_non_symmetry_creates_named_reverse_relation(self):
         """GUID: M2M-004 -- The named reverse relation remains eligible."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                'self', symmetrical=False, related_name='related_models'
+            )
+
+        self.assertTrue(hasattr(Model, 'related_models'))
 
     def test_m2m_005_non_symmetrical_relationship_with_related_name_has_no_new_check_error(self):
         """GUID: M2M-005 -- The valid field produces no new check error."""
-        self.assertTrue(True)
+        class Target(models.Model):
+            pass
+
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                Target, related_name='related_models'
+            )
+
+        self.assertEqual(Model.check(), [])
 
     def test_m2m_005_non_symmetrical_relationship_creates_named_reverse_relation(self):
         """GUID: M2M-005 -- The named reverse relation remains eligible."""
-        self.assertTrue(True)
+        class Target(models.Model):
+            pass
+
+        class Model(models.Model):
+            relations = models.ManyToManyField(
+                Target, related_name='related_models'
+            )
+
+        self.assertTrue(hasattr(Target, 'related_models'))
 
     def test_m2m_006_symmetrical_relationship_without_related_name_has_no_new_check_error(self):
         """GUID: M2M-006 -- The valid field produces no new check error."""
-        self.assertTrue(True)
+        class Model(models.Model):
+            relations = models.ManyToManyField('self', symmetrical=True)
+
+        self.assertEqual(Model.check(), [])
 
     def test_m2m_008_construction_succeeds_then_model_checks_report_error(self):
         """GUID: M2M-008 -- Validation is deferred to model system checks."""
