@@ -283,7 +283,7 @@ class AlterField(FieldOperation):
         # OTHERWISE, compare normalized model names before normalized field names:
         #   IF the model names differ (MIGOPT-005), do not emit a replacement;
         #   hand off to the existing fallback so the optimizer retains both
-        #   AlterField operations and treats the pair as a reduction boundary.
+        #   AlterField operations.
         #   ELSE IF the field names differ (MIGOPT-004), do not emit a
         #   replacement; perform the same fallback handoff, retaining both
         #   AlterField operations as separate operations.
@@ -291,10 +291,10 @@ class AlterField(FieldOperation):
         #   may return the later AlterField.
         # OUTPUT for either distinct-target branch: no collapsed AlterField and
         # no target data transferred between operations.
-        if isinstance(operation, AlterField) and self.is_same_field_operation(
-            operation
-        ):
-            return [operation]
+        if isinstance(operation, AlterField):
+            if self.is_same_field_operation(operation):
+                return [operation]
+            return super().reduce(operation, app_label)
         elif isinstance(operation, RemoveField) and self.is_same_field_operation(
             operation
         ):

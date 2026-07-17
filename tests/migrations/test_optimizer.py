@@ -762,14 +762,36 @@ class OptimizerTests(SimpleTestCase):
         MIGOPT-004: Consecutive AlterField operations targeting different
         fields remain separate after optimization.
         """
-        pass
+        operations = [
+            migrations.AlterField(
+                "Book", "title", models.CharField(max_length=128)
+            ),
+            migrations.AlterField(
+                "book", "subtitle", models.CharField(max_length=128)
+            ),
+        ]
+        result, _ = self.optimize(operations, "migrations")
+        self.assertEqual(len(result), 2)
+        self.assertIs(result[0], operations[0])
+        self.assertIs(result[1], operations[1])
 
     def test_MIGOPT_005_consecutive_different_model_alter_fields_remain_separate(self):
         """
         MIGOPT-005: Consecutive AlterField operations targeting different
         models remain separate after optimization.
         """
-        pass
+        operations = [
+            migrations.AlterField(
+                "Book", "title", models.CharField(max_length=128)
+            ),
+            migrations.AlterField(
+                "Author", "title", models.CharField(max_length=128)
+            ),
+        ]
+        result, _ = self.optimize(operations, "migrations")
+        self.assertEqual(len(result), 2)
+        self.assertIs(result[0], operations[0])
+        self.assertIs(result[1], operations[1])
 
     def test_create_model_rename_field(self):
         """
