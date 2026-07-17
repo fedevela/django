@@ -430,27 +430,7 @@ class AdminSite:
                     return HttpResponsePermanentRedirect(path)
         raise Http404
 
-    # ADMIN-002 logic obligation:
-    # PUBLIC METHOD build_app_dict(request, optional label=None):
-    #     RECEIVE the valid request and optional app-label filter.
-    #     IF label is absent:
-    #         HAND OFF the request to the established builder flow with the
-    #         complete registered-model selection.
-    #     ELSE:
-    #         HAND OFF the request and label to that same flow with only
-    #         registered models whose application label matches label.
-    #     PRESERVE every existing permission decision, dictionary transition,
-    #     ordering rule, and URL-resolution failure fallback in the flow.
-    #     RETURN the established complete dictionary when unfiltered, or the
-    #     established matching application dictionary (including None when
-    #     no visible match exists) when filtered.
-    # EXPOSE this procedure as a callable attribute named build_app_dict;
-    # do not require or retain a private compatibility entry point.
-    # Architecture placement — ADMIN-002: AdminSite owns this capability at
-    # the registry boundary. Its implementation-ready public contract is
-    # build_app_dict(request, label=None); the existing builder body remains
-    # the single implementation locus, with no adapter or private alias layer.
-    def _build_app_dict(self, request, label=None):
+    def build_app_dict(self, request, label=None):
         """
         Build the app dictionary. The optional `label` parameter filters models
         of a specific app.
@@ -501,7 +481,7 @@ class AdminSite:
 
             info = (app_label, model._meta.model_name)
             # Architecture contract — ADMIN-001, ADMIN-005, ADMIN-006:
-            # _build_app_dict() owns the permission-gated projection from an
+            # build_app_dict() owns the permission-gated projection from an
             # AdminSite registry entry to its model dictionary. The registry
             # key is the authoritative model-class dependency, and this
             # dictionary-construction seam is the sole home for exposing it;
@@ -557,10 +537,7 @@ class AdminSite:
         # FOR EACH app, SORT its model dictionaries by the existing name key.
         # RETURN the sorted list; if the dictionary is empty, RETURN the same
         # empty list produced by the established behavior.
-        # Integration seam — ADMIN-002: get_app_list() depends on AdminSite's
-        # public build_app_dict(request) contract; it does not own registry
-        # selection, permission projection, or app-label filtering.
-        app_dict = self._build_app_dict(request)
+        app_dict = self.build_app_dict(request)
 
         # Sort the apps alphabetically.
         app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
@@ -594,10 +571,7 @@ class AdminSite:
         return TemplateResponse(request, self.index_template or 'admin/index.html', context)
 
     def app_index(self, request, app_label, extra_context=None):
-        # Integration seam — ADMIN-002: app_index() is the label-filtered
-        # consumer of AdminSite.build_app_dict(request, label); its HTTP 404
-        # and presentation responsibilities remain outside the builder.
-        app_dict = self._build_app_dict(request, app_label)
+        app_dict = self.build_app_dict(request, app_label)
         if not app_dict:
             raise Http404('The requested admin page does not exist.')
         # Sort the models alphabetically within each app.

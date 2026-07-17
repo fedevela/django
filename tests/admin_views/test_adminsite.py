@@ -105,12 +105,12 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
         """ADMIN-005: Permissions hide both the model and its class reference."""
         request = self.request_with_permissions(False)
 
-        self.assertEqual(site._build_app_dict(request), {})
+        self.assertEqual(site.build_app_dict(request), {})
         self.assertEqual(site.get_app_list(request), [])
 
     def test_admin_006_model_class_field_is_only_change_to_existing_model_dictionary_contract(self):
         """ADMIN-006: Existing model dictionary data remains unchanged."""
-        app = site._build_app_dict(
+        app = site.build_app_dict(
             self.request_with_permissions(True), label='admin_views',
         )
 
@@ -148,11 +148,11 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
             [app['app_label'] for app in app_list],
             ['admin_views', 'auth'],
         )
-        auth_app = site._build_app_dict(request, label='auth')
+        auth_app = site.build_app_dict(request, label='auth')
         self.assertEqual(auth_app['app_label'], 'auth')
         self.assertEqual(len(auth_app['models']), 1)
         self.assertIs(auth_app['models'][0]['model'], User)
-        self.assertIsNone(site._build_app_dict(request, label='sessions'))
+        self.assertIsNone(site.build_app_dict(request, label='sessions'))
 
     def test_admin_007_empty_app_list_result_preserves_empty_behavior(self):
         """ADMIN-007: An established empty app list remains empty."""
@@ -164,18 +164,40 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
         )
 
 
+@override_settings(ROOT_URLCONF='admin_views.test_adminsite')
 class SiteBuildAppDictPublicMethodContractTests(SimpleTestCase):
+    request_factory = RequestFactory()
+
+    def request_with_permissions(self):
+        request = self.request_factory.get('/test_admin/admin/')
+        request.user = Mock()
+        request.user.has_module_perms.return_value = True
+        request.user.has_perm.return_value = True
+        return request
+
     def test_admin_002_valid_request_without_app_label_returns_unfiltered_app_dictionary(self):
         """ADMIN-002: The public builder preserves unfiltered invocation."""
-        self.assertTrue(True)
+        app_dict = site.build_app_dict(self.request_with_permissions())
+
+        self.assertEqual(set(app_dict), {'admin_views', 'auth'})
+        self.assertEqual(app_dict['admin_views']['app_label'], 'admin_views')
+        self.assertEqual(app_dict['auth']['app_label'], 'auth')
 
     def test_admin_002_valid_request_with_app_label_returns_filtered_app_dictionary(self):
         """ADMIN-002: The public builder preserves app-label filtering."""
-        self.assertTrue(True)
+        app = site.build_app_dict(
+            self.request_with_permissions(), label='admin_views',
+        )
+
+        self.assertEqual(app['app_label'], 'admin_views')
+        self.assertEqual(
+            [model['object_name'] for model in app['models']],
+            ['Article'],
+        )
 
     def test_admin_002_admin_site_exposes_callable_public_app_dictionary_builder(self):
         """ADMIN-002: The app-dictionary builder has a callable public name."""
-        self.assertTrue(True)
+        self.assertTrue(callable(site.build_app_dict))
 
 
 class SiteActionsTests(SimpleTestCase):
