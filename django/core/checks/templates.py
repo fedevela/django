@@ -49,12 +49,18 @@ def check_string_if_invalid_is_string(app_configs, **kwargs):
 
 @register(Tags.templates)
 def check_for_template_tags_with_the_same_name(app_configs, **kwargs):
-    # ARCHITECTURE — GUID: TPL-001, TPL-002, TPL-003
+    # ARCHITECTURE — GUID: TPL-001, TPL-002, TPL-003, TPL-004, TPL-005
     # This check owns the private association-normalization boundary shared by
     # settings and installed-app discovery. Both sources feed one per-name,
     # distinct-module collection; templates.E003 depends only on that normalized
     # collection, while discovery and template-tag loading remain outside this
     # module's ownership.
+    # CONTRACT — GUID: TPL-004, TPL-005
+    # Configured associations cross the same normalization boundary as discovered
+    # associations and remain represented by their module paths. The normalized
+    # collection is the sole input to both genuine-conflict classification and
+    # E003 path rendering, so repeated associations cannot become duplicate
+    # diagnostic entries.
     # PSEUDOCODE — GUID: TPL-001, TPL-002, TPL-003, TPL-004, TPL-005
     # LOGIC OBLIGATION — GUID: TPL-004
     # A configured association remains an input to the conflict decision when
