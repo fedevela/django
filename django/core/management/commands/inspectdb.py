@@ -1,6 +1,5 @@
 import keyword
 import re
-from collections import Counter
 
 from django.core.management.base import BaseCommand, CommandError
 from django.db import DEFAULT_DB_ALIAS, connections
@@ -130,39 +129,12 @@ class Command(BaseCommand):
 
                 yield ""
                 yield ""
-                yield "class %s(models.Model):" % table2model(table_name)
-                known_models.append(table2model(table_name))
-                # Architecture boundary (GUID: INSP-003): This table-scoped
-                # classification owns repeated-target detection. Per-column
-                # relation construction consumes it but doesn't depend on the
-                # model-check framework that ultimately validates the output.
-                # Ownership contract (GUID: INSP-006, INSP-007): `relations`
-                # remains the authoritative source for recognized columns and
-                # inspected targets. This model-local classifier may expose only
-                # repeated-group membership; it must not rename, remove, retarget,
-                # or share classification state across generated models.
-                # GUID: INSP-001 - Track relation targets within this model so all
-                # members of a repeated-target group can receive a reverse name.
-                # GUID: INSP-007 - Logic obligations for
-                # test_insp_007_singleton_target_relation_has_no_disambiguating_related_name,
-                # test_insp_007_only_repeated_target_group_gains_related_names, and
-                # test_insp_007_shared_target_across_models_does_not_gain_related_names:
-                # INPUT only this generated model's inspected relation mapping;
-                # COUNT occurrences of each target within that mapping;
-                # MARK a relation column only when its target count exceeds one;
-                # LEAVE singleton-target columns unmarked, even when another model
-                # independently refers to the same target; OUTPUT the marked columns
-                # to the per-relation decision below, with no cross-model state.
-                relation_target_counts = Counter(
-                    ref_db_table for _, ref_db_table in relations.values()
-                )
-                repeated_relation_columns = {
-                    column_name
-                    for column_name, (_, ref_db_table) in relations.items()
-                    if relation_target_counts[ref_db_table] > 1
-                }
+                model_name = table2model(table_name)
+                yield "class %s(models.Model):" % model_name
+                known_models.append(model_name)
                 used_column_names = []  # Holds column names used in the table so far
                 column_to_field_name = {}  # Maps column names to names of model fields
+                used_relations = set()  # Holds foreign relations used in the table.
                 for row in table_description:
                     comment_notes = (
                         []
@@ -193,52 +165,7 @@ class Command(BaseCommand):
                         extra_params["unique"] = True
 
                     if is_relation:
-                        # Integration boundary (GUID: INSP-006, INSP-007): The
-                        # common relation-construction path below owns the field's
-                        # normalized attribute name, inspected target, and relation
-                        # type. Repeated-group membership may contribute only the
-                        # optional `related_name` parameter at its guarded seam.
-                        # GUID: INSP-006 - Logic obligation for
-                        # test_insp_006_repeated_target_relations_preserve_field_names_and_targets:
-                        # FOR EACH recognized relation, retain the normalized att_name
-                        # and read its inspected target tuple unchanged; IF the column
-                        # belongs to a repeated-target group, add only its disambiguating
-                        # related_name; THEN continue through the common relation-type
-                        # and rel_to flow so the field, generated name, and target are
-                        # emitted. An invalid derived reverse name follows CommandError;
-                        # disambiguation never drops or retargets the relation.
                         ref_db_column, ref_db_table = relations[column_name]
-                        # GUID: INSP-007 - IF this column is marked repeated, add a
-                        # related_name; ELSE add no disambiguating related_name and
-                        # preserve the existing singleton relation-generation path.
-                        # In a mixed model this branch changes only marked group members.
-                        if column_name in repeated_relation_columns:
-                            # Integration seam (GUID: INSP-003, INSP-005): The
-                            # normalized model attribute is the source contract;
-                            # extra_params carries the derived reverse namespace
-                            # into the shared field-constructor serializer below.
-                            # GUID: INSP-003 - Logic obligation for a repeated target:
-                            # FOR EACH relation, derive its reverse accessor from the
-                            # already-unique normalized field name; reject an invalid
-                            # name before emission; hand the accepted name to the field
-                            # parameters so loaded relations expose distinct accessors
-                            # and system checks produce no fields.E304 for the group.
-                            # GUID: INSP-002 - Derive the reverse name from the final,
-                            # normalized attribute name, without traversal counters.
-                            related_name = "%s_set" % att_name
-                            # GUID: INSP-004 - Never emit a reverse query name that
-                            # Django's relation checks will reject.
-                            if (
-                                keyword.iskeyword(related_name)
-                                or not related_name.isidentifier()
-                                or related_name.endswith("_")
-                                or LOOKUP_SEP in related_name
-                            ):
-                                raise CommandError(
-                                    "Unable to generate a valid related_name for %r."
-                                    % att_name
-                                )
-                            extra_params["related_name"] = related_name
                         if extra_params.pop("unique", False) or extra_params.get(
                             "primary_key"
                         ):
@@ -261,6 +188,12 @@ class Command(BaseCommand):
                             field_type = "%s(%s" % (rel_type, rel_to)
                         else:
                             field_type = "%s('%s'" % (rel_type, rel_to)
+                        if rel_to in used_relations:
+                            extra_params["related_name"] = "%s_%s_set" % (
+                                model_name.lower(),
+                                att_name,
+                            )
+                        used_relations.add(rel_to)
                     else:
                         # Calling `get_field_type` to get the field type string and any
                         # additional parameters and notes.
@@ -296,17 +229,6 @@ class Command(BaseCommand):
                         "" if "." in field_type else "models.",
                         field_type,
                     )
-                    # Emission boundary (GUID: INSP-005): field_desc and
-                    # extra_params are the complete inputs to source assembly;
-                    # relation-specific code must communicate through these
-                    # values rather than writing partial model source directly.
-                    # GUID: INSP-005 - Logic obligation for loadable output:
-                    # BEGIN with the normalized attribute and field constructor;
-                    # IF relational, append the required deletion argument;
-                    # serialize every parameter as a Python literal, including the
-                    # validated repeated-target related_name; CLOSE the constructor;
-                    # THEN emit the complete assignment. Invalid reverse names have
-                    # already followed the CommandError path instead of reaching here.
                     if field_type.startswith(("ForeignKey(", "OneToOneField(")):
                         field_desc += ", models.DO_NOTHING"
 
