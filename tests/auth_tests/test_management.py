@@ -1668,10 +1668,38 @@ class MigrationDatabaseTraceabilityTests(TestCase):
 
     def test_MIGDB_005_implicit_alias_is_preserved_through_post_migrate(self):
         """GUID: MIGDB-005 — implicit alias survives migrate and post-migrate."""
+        # Pseudocode [MIGDB-005]:
+        #   input := migrate invocation with no explicit database alias
+        #   implicit_alias := the command's established default database selection
+        #   invoke migrate while omitting the database option
+        #   when migration execution begins:
+        #       observe that its connection belongs to implicit_alias
+        #   when migration hands off to post_migrate processing:
+        #       observe that the handed-off alias remains implicit_alias
+        #   if either observation uses a different alias:
+        #       fail this verification as an implicit-selection regression
+        #   if migration or post-migration processing raises an error:
+        #       propagate the error without selecting a fallback alias
+        #   output := one unchanged alias across migration and post_migrate
         pass
 
     def test_MIGDB_005_implicit_migrate_keeps_permission_results_unchanged(self):
         """GUID: MIGDB-005 — implicit migrate keeps permission results stable."""
+        # Pseudocode [MIGDB-005]:
+        #   input := existing permission state for the implicit database alias
+        #   expected_results := snapshot the established permission outcome
+        #   invoke migrate while omitting the database option
+        #   allow post_migrate permission creation to complete with the alias it
+        #       receives from the migration lifecycle
+        #   actual_results := read the observable permission outcome from the
+        #       implicit database alias
+        #   if actual_results differs from expected_results:
+        #       fail this verification as a permission-result regression
+        #   if permission processing accesses or writes another alias:
+        #       fail this verification as an implicit-selection regression
+        #   if processing raises an error:
+        #       propagate the error without defining a new selection rule
+        #   output := unchanged permission results on the implicit alias
         pass
 
     def test_MIGDB_006_prior_behavior_detects_wrong_content_type_database(self):
