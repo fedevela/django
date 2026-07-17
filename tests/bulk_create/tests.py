@@ -1,5 +1,6 @@
 from math import ceil
 from operator import attrgetter
+from unittest import mock
 
 from django.core.exceptions import FieldDoesNotExist
 from django.db import (
@@ -17,6 +18,7 @@ from django.test import (
     skipIfDBFeature,
     skipUnlessDBFeature,
 )
+from django.test.utils import CaptureQueriesContext
 
 from .models import (
     BigAutoFieldModel,
@@ -35,6 +37,7 @@ from .models import (
     State,
     TwoFields,
     UpsertConflict,
+    UpsertReturningModel,
 )
 
 
@@ -47,6 +50,17 @@ class BulkCreateUpdateConflictsContractTests(TestCase):
             objs,
             update_conflicts=True,
             update_fields=["description"],
+            unique_fields=unique_fields,
+        )
+
+    def bulk_create_with_returning_fields(self, objs):
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["number"]
+        return UpsertReturningModel.objects.bulk_create(
+            objs,
+            update_conflicts=True,
+            update_fields=["name"],
             unique_fields=unique_fields,
         )
 
@@ -107,21 +121,89 @@ class BulkCreateUpdateConflictsContractTests(TestCase):
             ),
         )
 
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_004_conflict_update_preserves_existing_returning_fields(self):
         """GUID: BULKUPSERT-004"""
-        self.assertTrue(True)
+        UpsertReturningModel.objects.create(number=1, name="old")
+        returning_fields = UpsertReturningModel._meta.db_returning_fields
+        with mock.patch.object(
+            connection.ops,
+            "return_insert_columns",
+            wraps=connection.ops.return_insert_columns,
+        ) as return_insert_columns:
+            self.bulk_create_with_returning_fields(
+                [UpsertReturningModel(number=1, name="updated")]
+            )
 
+        return_insert_columns.assert_called_once_with(returning_fields)
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_005_conflict_update_emits_valid_returning_clause(self):
         """GUID: BULKUPSERT-005"""
-        self.assertTrue(True)
+        UpsertReturningModel.objects.create(number=1, name="old")
+        returning_fields = UpsertReturningModel._meta.db_returning_fields
+        returning_sql, _ = connection.ops.return_insert_columns(returning_fields)
+        with CaptureQueriesContext(connection) as captured_queries:
+            self.bulk_create_with_returning_fields(
+                [UpsertReturningModel(number=1, name="updated")]
+            )
+        insert_sql = next(
+            query["sql"]
+            for query in captured_queries
+            if query["sql"].lstrip().upper().startswith("INSERT")
+        )
 
+        self.assertIn(returning_sql, insert_sql)
+        self.assertLess(insert_sql.index("DO UPDATE"), insert_sql.index(returning_sql))
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_012_conflict_update_assigns_all_governed_returning_fields(self):
         """GUID: BULKUPSERT-012"""
-        self.assertTrue(True)
+        existing = UpsertReturningModel.objects.create(number=1, name="old")
+        inserted = UpsertReturningModel(number=2, name="inserted")
+        conflicting = UpsertReturningModel(number=1, name="updated")
 
+        self.bulk_create_with_returning_fields([inserted, conflicting])
+
+        self.assertEqual(inserted.pk, UpsertReturningModel.objects.get(number=2).pk)
+        self.assertEqual(
+            inserted.created,
+            UpsertReturningModel.objects.get(number=2).created,
+        )
+        self.assertEqual(conflicting.pk, existing.pk)
+        self.assertEqual(conflicting.created, existing.created)
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_013_conflict_update_excludes_ungoverned_field_categories(self):
         """GUID: BULKUPSERT-013"""
-        self.assertTrue(True)
+        UpsertReturningModel.objects.create(number=1, name="old")
+        returning_fields = UpsertReturningModel._meta.db_returning_fields
+        returning_sql, _ = connection.ops.return_insert_columns(returning_fields)
+        with CaptureQueriesContext(connection) as captured_queries:
+            self.bulk_create_with_returning_fields(
+                [UpsertReturningModel(number=1, name="updated")]
+            )
+        insert_sql = next(
+            query["sql"]
+            for query in captured_queries
+            if query["sql"].lstrip().upper().startswith("INSERT")
+        )
+        returning_clause = insert_sql[insert_sql.index(returning_sql) :]
+
+        self.assertEqual(
+            [field.name for field in returning_fields],
+            ["id", "created"],
+        )
+        self.assertNotIn(connection.ops.quote_name("number"), returning_clause)
+        self.assertNotIn(connection.ops.quote_name("name"), returning_clause)
 
 
 class BulkCreateTests(TestCase):
