@@ -200,6 +200,11 @@ class ForwardManyToOneDescriptor:
         else:
             return rel_obj
 
+    # GUID: FKPK-005 architecture boundary. ForeignObject.related_fields owns
+    # the local-to-target field mapping; this descriptor owns relation
+    # assignment across that mapping. The local field attname is the handoff
+    # to persistence and query layers, keeping those layers independent of
+    # the related object's in-memory lifecycle after assignment.
     def __set__(self, instance, value):
         """
         Set the related instance through the forward relation.
