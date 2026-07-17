@@ -97,21 +97,6 @@ class URLValidator(RegexValidator):
         if schemes is not None:
             self.schemes = schemes
 
-    # GUID: URL-001, URL-002 - URL parser exception boundary.
-    # PSEUDOCODE:
-    #   INPUT value submitted to URL validation.
-    #   RUN the existing scheme, regular-expression, IDN, IPv6, and host-length
-    #   validation flow without changing which URLs it accepts.
-    #   WHEN any urlsplit operation in that flow raises ValueError:
-    #       DISCARD the parser exception as a public validation result.
-    #       RAISE ValidationError using self.message, self.code, and value params.
-    #   OTHERWISE preserve every existing validation branch and result.
-    #   OUTPUT either successful validation or the established invalid-URL
-    #   ValidationError; never expose the parser-originated ValueError.
-    # ARCHITECTURE (GUID: URL-001, URL-002): URLValidator owns translation of
-    # parser failures from every urlsplit() in this method. URLField reaches
-    # this boundary through default_validators; translation must reuse this
-    # validator's message and code rather than introduce a field-level contract.
     def __call__(self, value):
         if not isinstance(value, str):
             raise ValidationError(self.message, code=self.code, params={'value': value})
@@ -122,16 +107,19 @@ class URLValidator(RegexValidator):
         if scheme not in self.schemes:
             raise ValidationError(self.message, code=self.code, params={'value': value})
 
+        # URL-001, URL-002: Don't expose urlsplit()'s ValueError to callers.
+        try:
+            splitted_url = urlsplit(value)
+        except ValueError:
+            raise ValidationError(self.message, code=self.code, params={'value': value})
+
         # Then check full URL
         try:
             super().__call__(value)
         except ValidationError as e:
             # Trivial case failed. Try for possible IDN domain
             if value:
-                try:
-                    scheme, netloc, path, query, fragment = urlsplit(value)
-                except ValueError:  # for example, "Invalid IPv6 URL"
-                    raise ValidationError(self.message, code=self.code, params={'value': value})
+                scheme, netloc, path, query, fragment = splitted_url
                 try:
                     netloc = punycode(netloc)  # IDN -> ACE
                 except UnicodeError:  # invalid domain part
@@ -142,7 +130,7 @@ class URLValidator(RegexValidator):
                 raise
         else:
             # Now verify IPv6 in the netloc part
-            host_match = re.search(r'^\[(.+)\](?::\d{1,5})?$', urlsplit(value).netloc)
+            host_match = re.search(r'^\[(.+)\](?::\d{1,5})?$', splitted_url.netloc)
             if host_match:
                 potential_ip = host_match[1]
                 try:
@@ -154,7 +142,7 @@ class URLValidator(RegexValidator):
         # section 3.1. It's defined to be 255 bytes or less, but this includes
         # one byte for the length of the name and one byte for the trailing dot
         # that's used to indicate absolute names in DNS.
-        if len(urlsplit(value).hostname) > 253:
+        if len(splitted_url.hostname) > 253:
             raise ValidationError(self.message, code=self.code, params={'value': value})
 
 

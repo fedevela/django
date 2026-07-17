@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.core.exceptions import ValidationError
 from django.forms import URLField
 from django.test import SimpleTestCase
@@ -107,30 +109,30 @@ class URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
                 with self.assertRaisesMessage(ValidationError, msg):
                     f.clean(value)
 
-    # ARCHITECTURE (GUID: URL-001, URL-002, URL-003): These placeholders are
-    # the public URLField.clean() integration seam for the URLValidator
-    # boundary. Later phases should replace them in place, keeping parser
-    # mechanics owned by validator tests rather than duplicating them here.
     def test_url_001_parser_valueerror_during_clean_becomes_validationerror(self):
         """GUID: URL-001 - Parser ValueError becomes ValidationError."""
-        self.assertTrue(True)
+        with mock.patch('django.core.validators.urlsplit', side_effect=ValueError):
+            with self.assertRaises(ValidationError):
+                URLField().clean('http://example.com')
 
     def test_url_002_converted_valueerror_preserves_invalid_url_message(self):
         """GUID: URL-002 - Conversion preserves the invalid-URL message."""
-        self.assertTrue(True)
+        with mock.patch('django.core.validators.urlsplit', side_effect=ValueError):
+            with self.assertRaises(ValidationError) as cm:
+                URLField().clean('http://example.com')
+        self.assertEqual(cm.exception.messages, ['Enter a valid URL.'])
 
     def test_url_002_converted_valueerror_preserves_invalid_url_code(self):
         """GUID: URL-002 - Conversion preserves the invalid-URL error code."""
-        self.assertTrue(True)
+        with mock.patch('django.core.validators.urlsplit', side_effect=ValueError):
+            with self.assertRaises(ValidationError) as cm:
+                URLField().clean('http://example.com')
+        self.assertEqual(cm.exception.error_list[0].code, 'invalid')
 
     def test_url_003_malformed_authority_clean_raises_validationerror(self):
         """GUID: URL-003 - Cleaning ////]@N.AN raises ValidationError."""
-        # PSEUDOCODE:
-        #   ARRANGE a forms.URLField and the malformed value "////]@N.AN".
-        #   ACT by passing the value to the field's public clean operation.
-        #   ASSERT that clean raises ValidationError.
-        #   FAIL the regression if ValueError escapes instead.
-        self.assertTrue(True)
+        with self.assertRaises(ValidationError):
+            URLField().clean('////]@N.AN')
 
     def test_urlfield_clean_required(self):
         f = URLField()
