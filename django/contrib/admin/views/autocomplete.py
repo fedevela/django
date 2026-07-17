@@ -9,6 +9,16 @@ class AutocompleteJsonView(BaseListView):
     paginate_by = 20
     admin_site = None
 
+    def serialize_result(self, obj, to_field_name):
+        """Convert the provided model object to a dictionary."""
+        return {'id': str(getattr(obj, to_field_name)), 'text': str(obj)}
+
+    # Successful-response boundary (GUID: ACJ-006, ACJ-007): get() alone owns
+    # the top-level results/pagination envelope. Per-result mappings enter that
+    # boundary through serialize_result(), while next-page state enters through
+    # BaseListView's page_obj; neither dependency owns or may replace the
+    # response shape or the pagination.more integration contract.
+
     def get(self, request, *args, **kwargs):
         """
         Return a JsonResponse with search results of the form:
@@ -19,14 +29,36 @@ class AutocompleteJsonView(BaseListView):
         """
         self.term, self.model_admin, self.source_field, to_field_name = self.process_request(request)
 
+        # Authentication and authorization preservation pseudocode (GUID: ACJ-008):
+        # Ask the resolved related-model admin to evaluate its existing view
+        # permission for the request; do not involve result serialization in
+        # this decision.
+        # If the request is unauthenticated and that existing permission check
+        # rejects it, transition to the existing PermissionDenied failure path.
+        # If the request is authenticated but lacks the required related-model
+        # permission, transition to the same PermissionDenied failure path.
+        # If the existing permission check allows the request, transition to
+        # queryset evaluation and only then to result serialization.
+        # If permission evaluation itself fails, propagate that failure without
+        # querying or serializing results and without replacing its response.
         if not self.has_perm(request):
             raise PermissionDenied
 
         self.object_list = self.get_queryset()
         context = self.get_context_data()
+        # Successful response envelope pseudocode (GUID: ACJ-006, ACJ-007):
+        # Receive the serialized current-page results and current page object.
+        # Construct one top-level mapping containing both `results` and
+        # `pagination`; routing entries through serialize_result must not
+        # remove, rename, or replace either member.
+        # If the current page has a next page, set pagination.more to true.
+        # Otherwise, set pagination.more to false.
+        # Return the mapping as the successful JSON response. If page-state
+        # inspection or result serialization fails, propagate that failure;
+        # do not emit a partial or altered successful-response envelope.
         return JsonResponse({
             'results': [
-                {'id': str(getattr(obj, to_field_name)), 'text': str(obj)}
+                self.serialize_result(obj, to_field_name)
                 for obj in context['object_list']
             ],
             'pagination': {'more': context['page_obj'].has_next()},
@@ -36,14 +68,47 @@ class AutocompleteJsonView(BaseListView):
         """Use the ModelAdmin's paginator."""
         return self.model_admin.get_paginator(self.request, *args, **kwargs)
 
+    # Queryset-selection boundary (GUID: ACJ-010): get_queryset() owns the
+    # composition of the related ModelAdmin's base queryset, the source
+    # field's relation constraint, search, and duplicate elimination. The
+    # ModelAdmin and source field remain the authorities for those inputs;
+    # pagination and serialize_result() are downstream consumers and must not
+    # broaden, narrow, or otherwise reconstruct the selected membership.
+
     def get_queryset(self):
         """Return queryset based on ModelAdmin.get_search_results()."""
+        # Queryset-membership preservation pseudocode (GUID: ACJ-010):
+        # Receive the resolved ModelAdmin, source relation field, request, and
+        # search term before any selected object is serialized.
+        # Ask the ModelAdmin for its existing request-scoped base queryset.
+        # Apply the source field's existing limit_choices_to expression to that
+        # queryset so only the same relation-eligible objects proceed.
+        # Pass that constrained queryset and the unchanged search term to the
+        # ModelAdmin's existing search procedure; preserve both its resulting
+        # queryset and its indication that relation traversal may duplicate
+        # objects.
+        # If search indicates duplicates may exist, eliminate duplicates from
+        # that result exactly once before returning it.
+        # Otherwise, return the search result without adding distinct handling.
+        # If any queryset, constraint, or search operation fails, propagate the
+        # existing failure without serializing a partial selection or replacing
+        # it with a differently filtered queryset.
+        # Hand the final queryset to pagination and serialization without
+        # independently changing its object membership.
         qs = self.model_admin.get_queryset(self.request)
         qs = qs.complex_filter(self.source_field.get_limit_choices_to())
         qs, search_use_distinct = self.model_admin.get_search_results(self.request, qs, self.term)
         if search_use_distinct:
             qs = qs.distinct()
         return qs
+
+    # Target-field resolution boundary (GUID: ACJ-009): process_request() owns
+    # source-field lookup, relation traversal, target-field normalization, and
+    # the related ModelAdmin policy check. Model metadata is its resolution
+    # dependency and ModelAdmin.to_field_allowed() is its policy authority.
+    # get() may consume only the validated source_field and to_field_name
+    # returned across this seam; querying and serialize_result() remain
+    # downstream and must not re-resolve, broaden, or translate that decision.
 
     def process_request(self, request):
         """
@@ -70,6 +135,23 @@ class AutocompleteJsonView(BaseListView):
         except LookupError as e:
             raise PermissionDenied from e
 
+        # Target-field validation preservation pseudocode (GUID: ACJ-009):
+        # Resolve field_name from the source model before any result is
+        # serialized; if no such field exists, propagate the existing
+        # PermissionDenied rejection and stop processing.
+        # From the resolved source field, resolve its related model; if the
+        # field has no usable relation, propagate the existing PermissionDenied
+        # rejection and stop processing.
+        # Resolve the relation's configured target field, falling back to the
+        # related model primary-key field exactly as before, and normalize that
+        # resolved field to its attribute name.
+        # Ask the related ModelAdmin whether that normalized target attribute is
+        # allowed. If it is not allowed, propagate the existing PermissionDenied
+        # rejection; do not query or serialize results.
+        # Otherwise, return the unchanged resolved source field and normalized
+        # target attribute to the caller so later serialization uses the same
+        # identifier. Propagate resolution failures without introducing a new
+        # permitted field, fallback, or error translation.
         try:
             source_field = source_model._meta.get_field(field_name)
         except FieldDoesNotExist as e:
@@ -96,6 +178,12 @@ class AutocompleteJsonView(BaseListView):
             raise PermissionDenied
 
         return term, model_admin, source_field, to_field_name
+
+    # Authorization adapter boundary (GUID: ACJ-008): AutocompleteJsonView
+    # owns permission-check sequencing, while the resolved related ModelAdmin
+    # remains the sole permission authority through has_view_permission().
+    # Queryset and serialization dependencies stay downstream of this adapter
+    # and must not participate in, bypass, or translate its decision.
 
     def has_perm(self, request, obj=None):
         """Check if user has permission to access the related model."""
