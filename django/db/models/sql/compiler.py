@@ -819,6 +819,22 @@ class SQLCompiler:
         # be used by local fields.
         seen_models = {None: start_alias}
 
+        # PSEUDOCODE [PROXYONLY-001, PROXYONLY-003, PROXYONLY-004,
+        # PROXYONLY-007]:
+        # INPUT: the model options, the only()/defer() field mask, and the
+        # table alias from which this model will be constructed.
+        # FOR EACH concrete field needed by the originating or related model:
+        #     IF the field is explicitly selected, append its column.
+        #     ELSE IF the field is the inherited concrete primary key of a
+        #     selected proxy model, append its column as construction data.
+        #     ELSE IF the field is required to construct the originating
+        #     object or preserve the selected relation handoff, append it.
+        #     ELSE omit the column so the field remains deferred.
+        # OUTPUT: selected columns containing the related value and every
+        # construction-required key, including the proxy's inherited key.
+        # INVARIANT: valid select_related()+only() input reaches object
+        # construction with the proxy primary key present; field-mask
+        # conflicts continue through the existing query validation errors.
         for field in opts.concrete_fields:
             model = field.model._meta.concrete_model
             # A proxy model will have a different model and concrete_model. We
