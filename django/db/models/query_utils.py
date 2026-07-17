@@ -60,19 +60,21 @@ class Q(tree.Node):
         # - Otherwise create a Q node with the requested connector, add left
         #   then right in operand order, and return the composed condition.
         if not isinstance(other, Q):
-            if conn in (self.AND, self.OR) and self and getattr(other, 'conditional', False):
+            if conn in (self.AND, self.OR) and getattr(other, 'conditional', False):
                 other = Q(other)
             else:
                 raise TypeError(other)
 
         # If the other Q() is empty, ignore it and just use `self`.
         if not other:
-            _, args, kwargs = self.deconstruct()
-            return type(self)(*args, **kwargs)
+            return type(self)._new_instance(
+                self.children, self.connector, self.negated,
+            )
         # Or if this Q is empty, ignore it and just use `other`.
         elif not self:
-            _, args, kwargs = other.deconstruct()
-            return type(other)(*args, **kwargs)
+            return type(other)._new_instance(
+                other.children, other.connector, other.negated,
+            )
 
         obj = type(self)()
         obj.connector = conn

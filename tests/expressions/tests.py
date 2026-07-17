@@ -874,19 +874,35 @@ class BasicExpressionsTests(TestCase):
 
     def test_qex_005_empty_q_and_exists_conjunction_is_usable_and_returns_expected_results(self):
         """QEX-005: Q() & Exists(...) is usable and has conjunction semantics."""
-        self.assertTrue(True)
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() & Exists(is_ceo)),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
 
     def test_qex_005_exists_and_empty_q_conjunction_is_usable_and_returns_expected_results(self):
         """QEX-005: Exists(...) & Q() is usable and has conjunction semantics."""
-        self.assertTrue(True)
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_ceo) & Q()),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
 
     def test_qex_006_empty_q_or_exists_disjunction_is_usable_and_returns_expected_results(self):
         """QEX-006: Q() | Exists(...) is usable and has disjunction semantics."""
-        self.assertTrue(True)
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Q() | Exists(is_ceo)),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
 
     def test_qex_006_exists_or_empty_q_disjunction_is_usable_and_returns_expected_results(self):
         """QEX-006: Exists(...) | Q() is usable and has disjunction semantics."""
-        self.assertTrue(True)
+        is_ceo = Company.objects.filter(ceo=OuterRef('pk'))
+        self.assertCountEqual(
+            Employee.objects.filter(Exists(is_ceo) | Q()),
+            [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
+        )
 
 
 class IterableLookupInnerExpressionsTests(TestCase):

@@ -104,7 +104,7 @@ class Combinable:
         #   query-usable clone of the Exists condition; otherwise follow the
         #   existing unsupported-operation failure path.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
-            return Q(self) & Q(other)
+            return Q(self) & other
         raise NotImplementedError(
             "Use .bitand() and .bitor() for bitwise logical operations."
         )
@@ -132,7 +132,7 @@ class Combinable:
         #   query-usable clone of the Exists condition; otherwise follow the
         #   existing unsupported-operation failure path.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
-            return Q(self) | Q(other)
+            return Q(self) | other
         raise NotImplementedError(
             "Use .bitand() and .bitor() for bitwise logical operations."
         )
