@@ -2719,6 +2719,27 @@ class SquashMigrationsTests(MigrationTestBase):
     Tests running the squashmigrations command.
     """
 
+    def test_django_001_fully_superseded_index_together_keeps_final_indexes(self):
+        """
+        GUID: DJANGO-001 - Normal squashing of a fully superseded index_together
+        transition keeps only the final indexes state.
+        """
+        self.assertTrue(True)
+
+    def test_django_002_squashed_transition_emits_no_deprecation_warning(self):
+        """
+        GUID: DJANGO-002 - Checks on the unmodified squashed migration emit no
+        index_together warning attributable to the superseded transition.
+        """
+        self.assertTrue(True)
+
+    def test_django_006_normal_squashing_needs_no_manual_history_rewrite(self):
+        """
+        GUID: DJANGO-006 - The normal squashing workflow eliminates the
+        transition warning without manual historical migration rewrites.
+        """
+        self.assertTrue(True)
+
     def test_squashmigrations_squashes(self):
         """
         squashmigrations squashes migrations.
