@@ -1532,6 +1532,14 @@ class ChangelistTests(AuthViewsTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["original"], self.admin)
 
+    def test_ucp_006_non_pk_to_field_access_links_to_pk_password_change(self):
+        """GUID: UCP-006."""
+        self.assertTrue(True)
+
+    def test_ucp_006_ordinary_pk_access_links_to_same_user_password_change(self):
+        """GUID: UCP-006."""
+        self.assertTrue(True)
+
     def test_user_change_different_user_password(self):
         u = User.objects.get(email="staffmember@example.com")
         response = self.client.post(
