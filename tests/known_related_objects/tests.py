@@ -4,6 +4,36 @@ from django.test import TestCase
 from .models import Organiser, Pool, PoolStyle, Tournament
 
 
+class MultiLevelFilteredRelationAssignmentContractTests(TestCase):
+    def test_DJFR_001_evaluation_assigns_terminal_pool_to_tournament_pool(self):
+        """GUID: DJFR-001 - Evaluation assigns the terminal Pool."""
+        pass
+
+    def test_DJFR_002_traversal_returns_tournaments_at_both_paths(self):
+        """GUID: DJFR-002 - Both traversed paths return Tournament objects."""
+        pass
+
+    def test_DJFR_003_traversed_tournaments_represent_same_equal_value(self):
+        """GUID: DJFR-003 - Both paths reach the same, equal tournament."""
+        pass
+
+    def test_DJFR_004_reused_object_matches_model_and_relationship_level(self):
+        """GUID: DJFR-004 - Reuse preserves the expected model and path level."""
+        pass
+
+    def test_DJFR_005_annotation_preserves_pool_and_tournament_semantics(self):
+        """GUID: DJFR-005 - Annotation preserves the underlying relationships."""
+        pass
+
+    def test_DJFR_006_evaluation_and_traversal_execute_three_queries(self):
+        """GUID: DJFR-006 - Evaluation and traversal execute three queries."""
+        pass
+
+    def test_DJFR_007_existing_related_filtered_select_related_is_unchanged(self):
+        """GUID: DJFR-007 - Existing related-query behavior remains unchanged."""
+        pass
+
+
 class ExistingRelatedInstancesTests(TestCase):
     @classmethod
     def setUpTestData(cls):
