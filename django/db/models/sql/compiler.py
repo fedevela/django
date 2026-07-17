@@ -1269,6 +1269,34 @@ class SQLCompiler:
                 )
                 get_related_klass_infos(klass_info, next_klass_infos)
 
+            # Multi-level filtered-relation assignment contract:
+            #
+            # DJFR-001, DJFR-004
+            # INPUT: the resolved filtered path, its terminal related object,
+            # and the root result object being populated from the selected row.
+            # FOR each relationship level in the resolved path:
+            #     reuse a known object only when its model and path position
+            #     match the object required at that relationship level.
+            # ASSIGN the terminal object to the filtered annotation on the root
+            # result; do not assign it through an intermediate path field.
+            #
+            # DJFR-002, DJFR-003, DJFR-005
+            # PRESERVE the root object's ordinary relationship caches and each
+            # intermediate object's relationships while assigning the alias.
+            # AFTER assignment, traversal through both the ordinary path and
+            # the annotated terminal object must reach equal Tournament objects.
+            #
+            # DJFR-006, DJFR-007
+            # MATERIALIZE every assigned object from the existing selected row
+            # so assignment adds no query; retain the existing single-level
+            # setter flow for all other known-related/select-related cases.
+            #
+            # FAILURE PATHS
+            # IF the terminal row is absent: assign None to the annotation and
+            # leave ordinary relationships unchanged.
+            # IF a reusable object has the wrong model or relationship level:
+            # do not reuse or cache it at that position; continue with the
+            # correctly materialized object from the selected row.
             def local_setter(final_field, obj, from_obj):
                 # Set a reverse fk object when relation is non-empty.
                 if from_obj:
