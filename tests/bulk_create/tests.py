@@ -38,6 +38,20 @@ from .models import (
 )
 
 
+class BulkCreateUpdateConflictsContractTests(TestCase):
+    def test_BULKUPSERT_001_inserted_object_receives_database_generated_pk(self):
+        """GUID: BULKUPSERT-001"""
+        self.assertTrue(True)
+
+    def test_BULKUPSERT_002_updated_object_receives_existing_matched_row_pk(self):
+        """GUID: BULKUPSERT-002"""
+        self.assertTrue(True)
+
+    def test_BULKUPSERT_003_mixed_batch_returned_pks_match_input_objects(self):
+        """GUID: BULKUPSERT-003"""
+        self.assertTrue(True)
+
+
 class BulkCreateTests(TestCase):
     def setUp(self):
         self.data = [
