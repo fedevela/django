@@ -62,6 +62,24 @@ class Q(tree.Node):
         #     operand's child container, or any contained value.  [QCOMB-003/005]
         # OTHERWISE continue through the established non-empty combination
         # flow; failures from that flow are outside this empty-OR obligation.
+        # QCOMB-004/QCOMB-007 pseudocode:
+        # INPUT: two Q operands and the OR connector supplied by Q.__or__().
+        # IF either operand is empty:
+        #     RETURN the established structural result selected above: a copy
+        #     of the non-empty operand, or the established left-operand result
+        #     when both operands are empty.  [QCOMB-007]
+        # ELSE both operands are non-empty:
+        #     CREATE a fresh Q combination node and set its connector to OR.
+        #     ADD the left condition tree, then the right condition tree, using
+        #     the established node-combination rules so both distinct
+        #     conditions remain represented as logical alternatives.
+        #     PRESERVE accepted condition values, including pickleable values,
+        #     and preserve the established connector and condition structure;
+        #     do not introduce serialization or value transformation.
+        #     RETURN the OR node for the existing query-evaluation handoff.
+        #     [QCOMB-004/QCOMB-007]
+        # FAILURE: reject a non-Q operand through the established TypeError
+        # path before either empty or non-empty combination processing.
         if not isinstance(other, Q):
             raise TypeError(other)
 
