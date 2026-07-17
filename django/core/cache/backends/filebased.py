@@ -108,10 +108,12 @@ class FileBasedCache(BaseCache):
         # FBC-006: Do not absorb any exception other than the missing-file outcome
         # from the open attempt; propagate every unrelated failure to the caller.
         fname = self._key_to_file(key, version)
-        if os.path.exists(fname):
-            with open(fname, "rb") as f:
-                return not self._is_expired(f)
-        return False
+        try:
+            f = open(fname, "rb")
+        except FileNotFoundError:
+            return False
+        with f:
+            return not self._is_expired(f)
 
     def _cull(self):
         """

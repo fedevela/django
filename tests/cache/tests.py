@@ -1762,35 +1762,57 @@ class FileBasedCacheTests(BaseCacheTests, TestCase):
         with open(cache_file, "rb") as fh:
             self.assertIs(cache._is_expired(fh), True)
 
-
-class FileBasedCacheHasKeyContractTests(SimpleTestCase):
     def test_fbc_001_existing_file_removed_before_open_returns_false(self):
         """FBC-001: A cache file removed before open makes has_key() false."""
-        pass
+        cache.set("race", "value")
+        cache_file = cache._key_to_file("race")
+        self.assertIs(os.path.exists(cache_file), True)
+        builtin_open = open
+
+        def remove_then_open(*args, **kwargs):
+            os.remove(cache_file)
+            return builtin_open(*args, **kwargs)
+
+        with mock.patch("builtins.open", side_effect=remove_then_open):
+            self.assertIs(cache.has_key("race"), False)
 
     def test_fbc_002_already_absent_file_returns_false(self):
         """FBC-002: An already absent cache file makes has_key() false."""
-        pass
+        self.assertIs(cache.has_key("absent"), False)
 
     def test_fbc_003_accessible_unexpired_entry_returns_true(self):
         """FBC-003: An accessible, unexpired entry makes has_key() true."""
-        pass
+        cache.set("unexpired", "value")
+        self.assertIs(cache.has_key("unexpired"), True)
 
     def test_fbc_004_expired_entry_returns_false(self):
         """FBC-004: An expired entry makes has_key() false."""
-        pass
+        cache.set("expired", "value", timeout=-1)
+        self.assertIs(cache.has_key("expired"), False)
 
     def test_fbc_005_expired_entry_removes_its_cache_file(self):
         """FBC-005: Detecting expiration removes the expired cache file."""
-        pass
+        cache.set("expired", "value", timeout=-1)
+        cache_file = cache._key_to_file("expired")
+        self.assertIs(os.path.exists(cache_file), True)
+        cache.has_key("expired")
+        self.assertIs(os.path.exists(cache_file), False)
 
     def test_fbc_006_non_missing_file_exception_remains_observable(self):
         """FBC-006: Non-FileNotFoundError failures remain observable."""
-        pass
+        cache.set("error", "value")
+        with mock.patch.object(cache, "_is_expired", side_effect=OSError):
+            with self.assertRaises(OSError):
+                cache.has_key("error")
 
     def test_fbc_007_key_and_version_preserve_existing_file_mapping(self):
         """FBC-007: A key and version retain their existing cache file mapping."""
-        pass
+        cache.set("versioned", "value", version=7)
+        with mock.patch.object(
+            cache, "_key_to_file", wraps=cache._key_to_file
+        ) as key_to_file:
+            self.assertIs(cache.has_key("versioned", version=7), True)
+        key_to_file.assert_called_once_with("versioned", 7)
 
 
 @unittest.skipUnless(RedisCache_params, "Redis backend not configured")
