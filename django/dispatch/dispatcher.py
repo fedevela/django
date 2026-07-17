@@ -198,6 +198,28 @@ class Signal:
         If any receiver raises an error (specifically any subclass of
         Exception), return the error instance as the result for that receiver.
         """
+        # Receiver-failure logging pseudocode contract:
+        #
+        # SIGROB-008:
+        #   INPUT sender and named arguments.
+        #   RESOLVE the applicable live receivers without changing their order.
+        #   IF resolution produces no receivers, THEN return the existing empty
+        #   response list and emit no receiver-failure exception log.
+        #
+        # FOR EACH applicable receiver:
+        #   TRY to invoke the receiver with this signal, sender, and named data.
+        #   IF invocation exposes an Exception to this method, THEN:
+        #     SIGROB-001: WHILE that exception is active, emit one exception-level
+        #     log carrying its exception information and traceback.
+        #     SIGROB-004: INCLUDE the failing receiver's diagnostic identity in
+        #     that same log record.
+        #     SIGROB-005: EMIT inside this exception branch exactly once, so every
+        #     separately handled receiver failure creates its own record.
+        #     APPEND the unchanged (receiver, exception) response and CONTINUE.
+        #   ELSE:
+        #     SIGROB-007: EMIT no receiver-failure exception log for the receiver.
+        #     APPEND the unchanged (receiver, response) pair.
+        # RETURN all response pairs in receiver invocation order.
         if not self.receivers or self.sender_receivers_cache.get(sender) is NO_RECEIVERS:
             return []
 
