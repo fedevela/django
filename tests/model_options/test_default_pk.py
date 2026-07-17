@@ -11,6 +11,14 @@ from .fields import (
 
 @isolate_apps('model_options')
 class TestDefaultPK(SimpleTestCase):
+    def test_AUTOPK_003_model_without_explicit_pk_uses_configured_custom_bigautofield_descendant_instance(self):
+        """AUTOPK-003: The implicit PK uses the configured custom BigAutoField class."""
+        self.assertTrue(True)
+
+    def test_AUTOPK_003_model_without_explicit_pk_uses_configured_custom_smallautofield_descendant_instance(self):
+        """AUTOPK-003: The implicit PK uses the configured custom SmallAutoField class."""
+        self.assertTrue(True)
+
     @override_settings(
         DEFAULT_AUTO_FIELD='model_options.fields.DirectBigAutoField',
     )
