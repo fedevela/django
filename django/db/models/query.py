@@ -782,6 +782,19 @@ class QuerySet(AltersData):
         objs = list(objs)
         self._prepare_for_bulk_create(objs)
         with transaction.atomic(using=self.db, savepoint=False):
+            # BULKUPSERT-012, BULKUPSERT-013 pseudocode assignment contract:
+            # INPUT: ordered returned rows and opts.db_returning_fields, the
+            # model-governed returned-field sequence.
+            # FOR EACH positional (object, returned row) pair:
+            #   PAIR returned values only with fields in db_returning_fields.
+            #   IF the object already has a primary key, retain that governed
+            #   value and assign every other paired governed value.
+            #   ELSE assign every paired governed value, including a returned
+            #   primary key.
+            # DO NOT infer, append, or assign any field category absent from
+            # db_returning_fields.
+            # OUTPUT: each object contains all applicable governed values and
+            # no newly introduced returned-field category.
             objs_with_pk, objs_without_pk = partition(lambda o: o.pk is None, objs)
             if objs_with_pk:
                 returned_columns = self._batched_insert(
@@ -1854,6 +1867,17 @@ class QuerySet(AltersData):
         batch_size = min(batch_size, max_batch_size) if batch_size else max_batch_size
         inserted_rows = []
         bulk_return = connection.features.can_return_rows_from_bulk_insert
+        # BULKUPSERT-004, BULKUPSERT-013 pseudocode return-set contract:
+        # INPUT: conflict mode, backend bulk-row-return capability, and the
+        # model's existing db_returning_fields sequence.
+        # FOR EACH batch:
+        #   IF bulk rows can be returned and conflict mode is absent or UPDATE:
+        #     PASS the existing db_returning_fields sequence unchanged to the
+        #     insert compiler.
+        #     DO NOT add fields based on update_fields, unique_fields, conflict
+        #     targets, or any other ungoverned category.
+        #   ELSE execute without requesting returned fields.
+        # OUTPUT: conflict updates preserve exactly the governed return set.
         # BULKUPSERT-001, BULKUPSERT-002, BULKUPSERT-003 pseudocode handoff:
         # FOR EACH batch, preserving the original object order:
         #   IF bulk row return is supported AND conflict mode is either absent or

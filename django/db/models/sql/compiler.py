@@ -1775,6 +1775,19 @@ class SQLInsertCompiler(SQLCompiler):
             (f.column for f in self.query.update_fields),
             (f.column for f in self.query.unique_fields),
         )
+        # BULKUPSERT-005 pseudocode returning-clause flow:
+        # INPUT: requested returning_fields, backend return capabilities, the
+        # backend-produced conflict suffix, and insert values.
+        # IF returned columns are requested and supported:
+        #   BUILD the backend-valid insert/value form.
+        #   APPEND the conflict-update suffix when present.
+        #   ASK backend operations to render the returning clause for exactly
+        #   the requested fields, preserving its returned parameters.
+        #   APPEND a nonempty returning clause after the conflict suffix.
+        #   RETURN the single composed statement and parameters in clause order.
+        # ELSE continue through the existing non-returning SQL paths.
+        # FAILURE PATH: rely on backend capability gates and backend operations;
+        # do not synthesize a generic returning clause for an unsupported form.
         if (
             self.returning_fields
             and self.connection.features.can_return_columns_from_insert
