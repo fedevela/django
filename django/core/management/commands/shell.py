@@ -81,6 +81,10 @@ class Command(BaseCommand):
 
         code.interact(local=imported_objects)
 
+    # GUID: SHELL-005 - This command boundary owns both non-interactive
+    # execution paths. Keep their user-code execution seams in handle(),
+    # outside the interactive-shell adapters and without an intervening
+    # exception-translation boundary.
     def handle(self, **options):
         if options['command']:
             # GUID: SHELL-001 - Use a single namespace for the entire snippet.
