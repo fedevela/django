@@ -12,7 +12,7 @@ from django.db.models.expressions import RawSQL
 from django.db.models.functions import (
     Coalesce, ExtractYear, Floor, Length, Lower, Trim,
 )
-from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+from django.test import TestCase, skipUnlessDBFeature
 from django.test.utils import register_lookup
 
 from .models import (
@@ -20,16 +20,28 @@ from .models import (
 )
 
 
-class EmptyMembershipAnnotationAggregationContractTests(SimpleTestCase):
+class EmptyMembershipAnnotationAggregationContractTests(TestCase):
     # EMPTYIN-004, EMPTYIN-006: Selecting a negated empty-membership annotation
     # alongside aggregation compiles and preserves its true value.
     def test_emptyin_004_006_negated_annotation_alongside_aggregation_compiles_and_remains_true(self):
-        self.assertTrue(True)
+        company = Company.objects.create(name='Django')
+        companies = Company.objects.annotate(
+            foo=ExpressionWrapper(~Q(pk__in=[]), output_field=BooleanField()),
+            count=Count('pk'),
+        ).values('foo', 'count')
+        companies.query.sql_with_params()
+        self.assertEqual(companies.get(pk=company.pk), {'foo': True, 'count': 1})
 
     # EMPTYIN-004, EMPTYIN-006: Selecting a non-negated empty-membership
     # annotation alongside aggregation compiles and preserves its false value.
     def test_emptyin_004_006_nonnegated_annotation_alongside_aggregation_compiles_and_remains_false(self):
-        self.assertTrue(True)
+        company = Company.objects.create(name='Django')
+        companies = Company.objects.annotate(
+            foo=ExpressionWrapper(Q(pk__in=[]), output_field=BooleanField()),
+            count=Count('pk'),
+        ).values('foo', 'count')
+        companies.query.sql_with_params()
+        self.assertEqual(companies.get(pk=company.pk), {'foo': False, 'count': 1})
 
 
 class NonAggregateAnnotationTestCase(TestCase):

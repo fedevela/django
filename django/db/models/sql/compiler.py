@@ -150,7 +150,14 @@ class SQLCompiler:
         expressions = self.collapse_group_by(expressions, having_group_by)
 
         for expr in expressions:
-            sql, params = self.compile(expr)
+            try:
+                sql, params = self.compile(expr)
+            except EmptyResultSet:
+                # An expression that matches no rows doesn't affect grouping.
+                continue
+            if not sql:
+                # An expression that matches all rows doesn't affect grouping.
+                continue
             sql, params = expr.select_format(self, sql, params)
             params_hash = make_hashable(params)
             if (sql, params_hash) not in seen:
