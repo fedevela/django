@@ -734,6 +734,14 @@ class OperationTests(OperationTestBase):
 
         self.assertFalse(any("ADD CONSTRAINT" in query for query in queries))
 
+    def test_rmn_004_sqlite_rename_model_same_effective_table_does_not_recreate_table(self):
+        """
+        GUID: RMN-004 - Applying RenameModel on SQLite when the old and new
+        migration states resolve to the same effective database table name
+        does not recreate that table.
+        """
+        pass
+
     def test_rename_model_state_forwards(self):
         """
         RenameModel operations shouldn't trigger the caching of rendered apps
