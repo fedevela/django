@@ -86,7 +86,14 @@ class OnlyThenDeferContractTests(TestCase):
 
     def test_defer_007_only_defer_excluded_field_attribute_access_loads_field(self):
         """GUID: DEFER-007"""
-        self.assertTrue(True)
+        obj = Primary.objects.only("name").defer("name").get(pk=self.primary.pk)
+
+        self.assertIn("name", obj.get_deferred_fields())
+        with self.assertNumQueries(1):
+            self.assertEqual(obj.name, "p1")
+        self.assertNotIn("name", obj.get_deferred_fields())
+        with self.assertNumQueries(0):
+            self.assertEqual(obj.name, "p1")
 
 
 class DeferTests(AssertionMixin, TestCase):
