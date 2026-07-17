@@ -12,11 +12,24 @@ class ShellCommandTestCase(SimpleTestCase):
 
     def test_shell_005_command_user_code_exception_remains_visible_to_invoking_context(self):
         """GUID: SHELL-005 - A command exception remains visible to its invoker."""
-        self.assertTrue(True)
+        with self.assertRaisesMessage(RuntimeError, 'command exception'):
+            call_command(
+                'shell',
+                command='raise RuntimeError("command exception")',
+            )
 
+    @unittest.skipIf(sys.platform == 'win32', "Windows select() doesn't support file descriptors.")
     def test_shell_005_noninteractive_stdin_user_code_exception_remains_visible_to_invoking_context(self):
         """GUID: SHELL-005 - A stdin exception remains visible to its invoker."""
-        self.assertTrue(True)
+        with captured_stdin() as stdin:
+            stdin.write('raise RuntimeError("stdin exception")')
+            stdin.seek(0)
+            with mock.patch(
+                'django.core.management.commands.shell.select.select',
+                return_value=([stdin], [], []),
+            ):
+                with self.assertRaisesMessage(RuntimeError, 'stdin exception'):
+                    call_command('shell')
 
     @unittest.skipIf(sys.platform == 'win32', "Windows select() doesn't support file descriptors.")
     def test_shell_002_noninteractive_stdin_function_resolves_imported_global_name(self):
