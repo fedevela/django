@@ -86,6 +86,11 @@ def create_permissions(
     except LookupError:
         return
 
+    # Allowance boundary [MIGDB-004]: this receiver owns enforcement of the
+    # Permission migration decision. The router receives ``using`` as the sole
+    # database dependency; rejection terminates before Permission manager
+    # access, while allowance leaves that dependency unchanged for every
+    # downstream permission operation.
     # Pseudocode [MIGDB-004]:
     #   selected_alias := using
     #   allowance := evaluate Permission migration rules for selected_alias

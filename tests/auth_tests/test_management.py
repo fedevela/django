@@ -1490,7 +1490,8 @@ class CreatePermissionsTests(TestCase):
 class MigrationDatabaseTraceabilityTests(TestCase):
     """Architecture locus for the MIGDB selected-database regression path."""
 
-    # Structural fixture boundary [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-006]:
+    # Structural fixture boundary
+    # [MIGDB-001, MIGDB-002, MIGDB-003, MIGDB-004, MIGDB-006]:
     # later behavioral coverage may observe alias confinement and FK provenance
     # across distinct databases without relocating these existing obligations.
     databases = {"default", "other"}
