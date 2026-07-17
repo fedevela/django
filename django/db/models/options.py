@@ -218,6 +218,11 @@ class Options:
             new_objs.append(obj)
         return new_objs
 
+    # AUTOPK-002 architecture: Options owns default-primary-key resolution and
+    # admission, but delegates automatic-field hierarchy recognition to the
+    # AutoField subclass contract. This method is the boundary adapter between
+    # the configured dotted path and _prepare(), which alone owns instantiating
+    # and attaching the admitted field to a model without an explicit key.
     def _get_default_pk_class(self):
         # AUTOPK-002 pseudocode -- prepare a model with a configured automatic
         # field descendant:
