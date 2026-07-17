@@ -221,9 +221,6 @@ class Query(BaseExpression):
         self.extra_tables = ()
         self.extra_order_by = ()
 
-        # A tuple that is a set of model field names and either True, if these
-        # are the fields to defer, or False if these are the only fields to
-        # load.
         self.deferred_loading = (frozenset(), True)
 
         self._filtered_relations = {}
@@ -2086,7 +2083,11 @@ class Query(BaseExpression):
             self.deferred_loading = existing.union(field_names), True
         else:
             # Remove names from the set of any existing "immediate load" names.
-            self.deferred_loading = existing.difference(field_names), False
+            new_only = existing.difference(field_names)
+            if new_only:
+                self.deferred_loading = new_only, False
+            else:
+                self.deferred_loading = frozenset(field_names).difference(existing), True
 
     def add_immediate_loading(self, field_names):
         """

@@ -18,6 +18,192 @@ class AssertionMixin:
         self.assertEqual(count, num)
 
 
+# Architecture contract [GUID: DEFER-008, DEFER-009, DEFER-010]:
+# This test case owns the compatibility boundary around only()/defer() chaining.
+# TestCase supplies the query-observation seam for construction-time laziness;
+# Primary model metadata and instance deferred-field state supply the portable
+# selected-column seam. Keep SQL compilation and backend identifier quoting
+# outside this boundary so the regression contract remains backend-independent.
+class OnlyThenDeferContractTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        secondary = Secondary.objects.create(first="x1", second="y1")
+        cls.primary = Primary.objects.create(
+            name="p1", value="v1", related=secondary,
+        )
+
+    def assert_initially_loaded_fields(self, obj, expected):
+        concrete_fields = {field.attname for field in obj._meta.concrete_fields}
+        with self.assertNumQueries(0):
+            loaded_fields = concrete_fields - obj.get_deferred_fields()
+        self.assertEqual(loaded_fields, expected)
+
+    def test_defer_001_only_name_then_defer_name_selects_only_primary_key(self):
+        """GUID: DEFER-001"""
+        obj = Primary.objects.only("name").defer("name").get(pk=self.primary.pk)
+
+        self.assertEqual(obj.get_deferred_fields(), {"name", "value", "related_id"})
+
+    def test_defer_002_only_name_then_defer_name_country_selects_only_primary_key(self):
+        """GUID: DEFER-002"""
+        obj = (
+            Primary.objects.only("name")
+            .defer("name")
+            .defer("value")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.get_deferred_fields(), {"name", "value", "related_id"})
+
+    def test_defer_003_only_name_country_then_defer_name_selects_primary_key_country(self):
+        """GUID: DEFER-003"""
+        obj = (
+            Primary.objects.only("name", "value")
+            .defer("name")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.get_deferred_fields(), {"name", "related_id"})
+        self.assertEqual(obj.value, "v1")
+
+    def test_defer_004_defer_all_only_fields_preserves_primary_key_selection(self):
+        """GUID: DEFER-004"""
+        obj = (
+            Primary.objects.only("name", "value")
+            .defer("name")
+            .defer("value")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.pk, self.primary.pk)
+        self.assertEqual(obj.get_deferred_fields(), {"name", "value", "related_id"})
+
+    def test_defer_005_defer_field_excluded_by_only_leaves_selected_set_unchanged(self):
+        """GUID: DEFER-005"""
+        obj = Primary.objects.only("name").defer("value").get(pk=self.primary.pk)
+
+        self.assertEqual(obj.name, "p1")
+        self.assertEqual(obj.get_deferred_fields(), {"value", "related_id"})
+
+    def test_defer_006_defer_selected_only_field_preserves_unrelated_field_states(self):
+        """GUID: DEFER-006"""
+        obj = (
+            Primary.objects.only("name", "value")
+            .defer("name")
+            .get(pk=self.primary.pk)
+        )
+
+        self.assertEqual(obj.value, "v1")
+        self.assertEqual(obj.get_deferred_fields(), {"name", "related_id"})
+
+    def test_defer_007_only_defer_excluded_field_attribute_access_loads_field(self):
+        """GUID: DEFER-007"""
+        obj = Primary.objects.only("name").defer("name").get(pk=self.primary.pk)
+
+        self.assertIn("name", obj.get_deferred_fields())
+        with self.assertNumQueries(1):
+            self.assertEqual(obj.name, "p1")
+        self.assertNotIn("name", obj.get_deferred_fields())
+        with self.assertNumQueries(0):
+            self.assertEqual(obj.name, "p1")
+
+    def test_defer_008_valid_only_outside_affected_chain_preserves_selected_fields(self):
+        """GUID: DEFER-008"""
+        # Pseudocode [GUID: DEFER-008]:
+        #   INPUT a valid only("name") queryset with no following defer() call.
+        #   EVALUATE exactly one Primary row.
+        #   DERIVE the initially loaded concrete fields from the model field set
+        #       minus the instance's deferred-field set.
+        #   VERIFY the loaded set is {primary key, "name"}; all other concrete
+        #       fields remain deferred, preserving established only() behavior.
+        #   FAILURE PATH: fail if evaluation changes the selected-field boundary
+        #       or if inspecting deferred state triggers an additional query.
+        with self.assertNumQueries(1):
+            obj = Primary.objects.only("name").get(pk=self.primary.pk)
+
+        self.assert_initially_loaded_fields(obj, {"id", "name"})
+
+    def test_defer_008_valid_defer_outside_affected_chain_preserves_selected_fields(self):
+        """GUID: DEFER-008"""
+        # Pseudocode [GUID: DEFER-008]:
+        #   INPUT a valid defer("name") queryset with no preceding only() call.
+        #   EVALUATE exactly one Primary row.
+        #   DERIVE the initially loaded concrete fields from the model field set
+        #       minus the instance's deferred-field set.
+        #   VERIFY only "name" is deferred and every other concrete field,
+        #       including the primary key, remains initially loaded.
+        #   FAILURE PATH: fail if unrelated fields change loading state or if
+        #       inspecting deferred state triggers an additional query.
+        with self.assertNumQueries(1):
+            obj = Primary.objects.defer("name").get(pk=self.primary.pk)
+
+        self.assert_initially_loaded_fields(
+            obj, {"id", "value", "related_id"},
+        )
+
+    def test_defer_009_unevaluated_only_defer_chain_executes_no_queries(self):
+        """GUID: DEFER-009"""
+        # Pseudocode [GUID: DEFER-009]:
+        #   ENTER a zero-query observation boundary.
+        #   CONSTRUCT Primary.objects.only("name").defer("name").
+        #   RETAIN the queryset without iterating, indexing, counting, coercing,
+        #       or otherwise requesting results.
+        #   EXIT the observation boundary and VERIFY zero queries were recorded.
+        #   VERIFY the queryset remains unevaluated so later use controls the
+        #       transition from construction state to execution state.
+        #   FAILURE PATH: any query during chaining, or premature result-cache
+        #       population, violates laziness and fails the regression case.
+        with self.assertNumQueries(0):
+            queryset = Primary.objects.only("name").defer("name")
+            self.assertIsNone(queryset._result_cache)
+
+    def test_defer_010_affected_chain_initial_columns_ignore_backend_quoting(self):
+        """GUID: DEFER-010"""
+        # Pseudocode [GUID: DEFER-010]:
+        #   DEFINE affected chains and expected initially loaded field-name sets:
+        #       only("name").defer("name") -> {primary key};
+        #       only("name").defer("name").defer("value") -> {primary key};
+        #       only("name", "value").defer("name") -> {primary key, "value"};
+        #       only("name", "value").defer("name").defer("value")
+        #           -> {primary key}.
+        #   FOR EACH chain:
+        #       EVALUATE one row without reading any deferred attribute.
+        #       DERIVE initially loaded concrete field names from model metadata
+        #           and the instance's deferred-field set.
+        #       COMPARE field-name sets, never rendered SQL or quoted identifiers.
+        #   FAILURE PATH: fail on any missing or extra selected field; do not
+        #       normalize, strip, or assume a database backend's quoting syntax.
+        primary_key = Primary._meta.pk.attname
+        cases = (
+            (
+                "only name then defer name",
+                Primary.objects.only("name").defer("name"),
+                {primary_key},
+            ),
+            (
+                "only name then defer name and value",
+                Primary.objects.only("name").defer("name").defer("value"),
+                {primary_key},
+            ),
+            (
+                "only name and value then defer name",
+                Primary.objects.only("name", "value").defer("name"),
+                {primary_key, "value"},
+            ),
+            (
+                "only name and value then defer both",
+                Primary.objects.only("name", "value").defer("name").defer("value"),
+                {primary_key},
+            ),
+        )
+
+        for description, queryset, expected in cases:
+            with self.subTest(description):
+                with self.assertNumQueries(1):
+                    obj = queryset.get(pk=self.primary.pk)
+                self.assert_initially_loaded_fields(obj, expected)
+
+
 class DeferTests(AssertionMixin, TestCase):
     @classmethod
     def setUpTestData(cls):
