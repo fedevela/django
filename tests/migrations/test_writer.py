@@ -487,6 +487,12 @@ class WriterTests(SimpleTestCase):
         serializations = [MigrationWriter.serialize(combined) for _ in range(3)]
         self.assertEqual(serializations, [serializations[0]] * 3)
 
+    # Architecture contract (GUID: ENFL-008): WriterTests owns the concrete
+    # RegexFlag regression at MigrationWriter.serialize(), preserving the public
+    # ``(expression, imports)`` boundary. Expression/import coverage enters that
+    # boundary directly; reconstruction and type coverage use serialize_round_trip()
+    # as the shared evaluation seam. Named-member protection remains in this group
+    # so combined-value coverage cannot bypass the established Enum branch.
     def test_enfl_008_unicode_or_ignorecase_serializes_as_named_flags_joined_by_or(
         self,
     ):

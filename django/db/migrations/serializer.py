@@ -122,12 +122,14 @@ class DictionarySerializer(BaseSerializer):
 
 
 # Architecture contract (ENFL-001, ENFL-002, ENFL-003, ENFL-004, ENFL-005,
-# ENFL-006, ENFL-007): EnumSerializer owns both named-member and decomposable
-# unnamed flag serialization. It must keep the BaseSerializer output boundary of
-# ``(Python expression, required imports)`` so MigrationWriter remains a consumer
-# rather than acquiring Enum-specific behavior. Flag decomposition belongs inside
-# this serializer and depends only on the Enum class/member protocol; model fields
-# and migration writing must not become dependencies of this boundary.
+# ENFL-006, ENFL-007, ENFL-008): EnumSerializer owns both named-member and
+# decomposable unnamed flag serialization. It must keep the BaseSerializer output
+# boundary of ``(Python expression, required imports)`` so MigrationWriter remains
+# a consumer rather than acquiring Enum-specific behavior. Flag decomposition
+# belongs inside this serializer and depends only on the Enum class/member protocol;
+# model fields and migration writing must not become dependencies of this boundary.
+# Concrete RegexFlag regression coverage belongs at MigrationWriter's public test
+# boundary.
 class EnumSerializer(BaseSerializer):
     def serialize(self):
         enum_class = self.value.__class__
