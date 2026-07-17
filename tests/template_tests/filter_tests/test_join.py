@@ -157,6 +157,7 @@ class JoinContractTraceabilityTests(SimpleTestCase):
         value = object()
         self.assertIs(join(value, "<&>", autoescape=True), value)
 
+    @setup({"join_006_autoescape_on": "{{ values|join:separator }}"})
     def test_join_006_autoescape_on_escapes_html_values_and_br_separator(self):
         """JOIN-006: Escape the same HTML-sensitive values and <br/> separator."""
         # GIVEN values = ["<a>", "<img>", "</a>"] and separator = "<br/>".
@@ -167,6 +168,13 @@ class JoinContractTraceabilityTests(SimpleTestCase):
         # AND fail this JOIN-006 regression check if either an HTML-sensitive
         # value or the separator remains unescaped, or their order changes.
 
+    @setup(
+        {
+            "join_006_autoescape_off": (
+                "{% autoescape off %}{{ values|join:separator }}{% endautoescape %}"
+            )
+        }
+    )
     def test_join_006_autoescape_off_joins_html_values_and_br_separator_directly(self):
         """JOIN-006: Directly join the same values with a literal <br/> separator."""
         # GIVEN the same values = ["<a>", "<img>", "</a>"] and separator =
