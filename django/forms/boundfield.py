@@ -96,9 +96,29 @@ class BoundField:
             attrs.setdefault(
                 "id", self.html_initial_id if only_initial else self.auto_id
             )
+        # Architecture seam (DJANGO-004): BoundField owns hidden-initial
+        # transport across bound redisplay. Form and formset rendering consume
+        # this value; they must not reconstruct it from visible bound data or
+        # by resolving the callable default again.
+        # Pseudocode (DJANGO-004) -- preserve validation state across submits:
+        # INPUT: the requested visible-or-hidden widget, form binding state,
+        # submitted visible value, and submitted hidden initial baseline.
+        # IF rendering a hidden initial for a bound form:
+        #     carry forward the submitted hidden baseline unchanged.
+        # ELSE:
+        #     render the field's visible submitted value or resolved initial.
+        # OUTPUT: redisplay retains both the invalid submitted value and the
+        # baseline needed to make every unchanged resubmission validate again.
+        if only_initial and self.form.is_bound:
+            value = self.form._widget_data_value(
+                self.field.hidden_widget(),
+                self.html_initial_name,
+            )
+        else:
+            value = self.value()
         return widget.render(
             name=self.html_initial_name if only_initial else self.html_name,
-            value=self.value(),
+            value=value,
             attrs=attrs,
             renderer=self.form.renderer,
         )
@@ -137,6 +157,44 @@ class BoundField:
         return self.field.prepare_value(data)
 
     def _has_changed(self):
+        # Architecture contract (DJANGO-003, DJANGO-004): BoundField owns
+        # baseline decoding and field-level change classification. BaseForm
+        # aggregates that result and BaseFormSet only consumes it for extra-form
+        # handling, keeping inline and ArrayField concerns out of this boundary.
+        # Architecture compatibility boundary (DJANGO-006, DJANGO-007): this
+        # same generic comparison seam serves ModelForms and inline forms.
+        # Model-specific validation consumes its result downstream and must not
+        # introduce callable-default or non-callable-default comparison forks.
+        # Pseudocode (DJANGO-003, DJANGO-004) -- classify the extra inline:
+        # INPUT: visible submitted data and the callable-default field's hidden
+        # initial data when hidden-initial comparison is enabled.
+        # IF hidden-initial comparison is enabled:
+        #     decode the submitted hidden value as the comparison baseline.
+        #     IF decoding fails, report changed so validation cannot be skipped.
+        # ELSE:
+        #     use the resolved field initial as the comparison baseline.
+        # Compare visible submitted data with the selected baseline using the
+        # field's change rule.
+        # IF changed, keep the extra form active and allow its normal validation
+        # path to report the error; ELSE permit normal empty-form handling.
+        # On each unchanged resubmission, repeat this comparison against the
+        # carried baseline so the same invalid inline remains active.
+        # Pseudocode (DJANGO-006, DJANGO-007) -- preserve compatibility paths:
+        # INPUT: generated field metadata, resolved initial, visible submitted
+        # data, and any submitted hidden initial.
+        # IF hidden-initial comparison is enabled for a callable default:
+        #     decode the submitted hidden baseline without resolving the
+        #     callable again.
+        #     IF decoding fails, classify the field as changed so ordinary
+        #     validation handles the malformed submission.
+        # ELSE:
+        #     compare against the field's established resolved initial and do
+        #     not introduce hidden-initial transport for non-callable fields.
+        # Apply the field's existing change rule to the chosen baseline and
+        # visible data, then hand the unchanged changed-data result to the
+        # normal ModelForm or inline-form validation path.
+        # OUTPUT: valid submissions keep their established changed-data state;
+        # non-callable fields keep their established comparison behavior.
         field = self.field
         if field.show_hidden_initial:
             hidden_widget = field.hidden_widget()

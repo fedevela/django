@@ -460,6 +460,27 @@ class BaseModelForm(BaseForm, AltersData):
         self.add_error(None, errors)
 
     def _post_clean(self):
+        # Architecture integration seam (DJANGO-006): BaseModelForm owns the
+        # handoff from form cleaning to model construction and validation.
+        # Inline formsets compose this contract through their forms; they do
+        # not own a callable-default-specific validation path.
+        # Pseudocode (DJANGO-006) -- preserve valid ModelForm and inline-form
+        # submission and validation outcomes:
+        # INPUT: field-cleaned submission data, the target model instance, and
+        # the unchanged changed-data classification from BoundField.
+        # Derive the established model-validation exclusion set.
+        # Exclude inline foreign-key fields from basic value validation while
+        # retaining them for the existing uniqueness-validation handoff.
+        # Construct the model instance from cleaned data using the normal field
+        # assignment rules.
+        # IF construction fails, map its validation error onto the form.
+        # Validate the constructed instance with the derived exclusions.
+        # IF model validation fails, map its errors onto the form.
+        # IF uniqueness validation is enabled, execute the existing uniqueness
+        # path and map any failure onto the form.
+        # OUTPUT: when none of those paths reports an error, preserve the valid
+        # form state and constructed instance for the established save path;
+        # inline formsets consume that same ModelForm result unchanged.
         opts = self._meta
 
         exclude = self._get_validation_exclusions()

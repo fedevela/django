@@ -22,6 +22,7 @@ from django.forms.models import (
 )
 from django.template import Context, Template
 from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
+from django.test.html import parse_html
 from django.test.utils import isolate_apps
 
 from .models import (
@@ -3095,6 +3096,172 @@ class OtherModelFormTests(TestCase):
         }
         bound_form = PublicationDefaultsForm(empty_data)
         self.assertFalse(bound_form.has_changed())
+
+    def test_django_005_callable_default_supplies_initial_without_submitted_value(self):
+        """
+        DJANGO-005: A generated ModelForm field backed by a callable model
+        default retains its established initial value when no submitted value
+        supersedes it.
+        """
+        calls = []
+
+        def default():
+            calls.append(True)
+            return datetime.date(2000, 1, 1)
+
+        model_field = PublicationDefaults._meta.get_field("date_published")
+        with mock.patch.object(model_field, "default", default):
+            class PublicationDefaultsForm(forms.ModelForm):
+                class Meta:
+                    model = PublicationDefaults
+                    fields = ("date_published",)
+
+            form = PublicationDefaultsForm()
+            self.assertEqual(form["date_published"].initial, datetime.date(2000, 1, 1))
+            self.assertEqual(form["date_published"].value(), datetime.date(2000, 1, 1))
+            self.assertEqual(calls, [True])
+
+    def test_django_006_valid_callable_default_modelform_retains_outcomes(self):
+        """
+        DJANGO-006: A valid submitted ModelForm containing a callable-default
+        field retains its established submission, changed-data, and validation
+        outcomes.
+        """
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        form = PublicationDefaultsForm(
+            {
+                "title": "Django",
+                "date_published": "2000-01-02",
+                "initial-date_published": "2000-01-01",
+            }
+        )
+
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.changed_data, ["title", "date_published"])
+        self.assertEqual(form.cleaned_data["date_published"], datetime.date(2000, 1, 2))
+        self.assertEqual(form.instance.date_published, datetime.date(2000, 1, 2))
+
+    def test_django_007_noncallable_default_modelform_retains_hidden_initial(self):
+        """
+        DJANGO-007: A rendered and bound ModelForm field without a callable
+        model default retains its established hidden-initial and changed-data
+        behavior.
+        """
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("active",)
+
+        form = PublicationDefaultsForm()
+        self.assertFalse(form.fields["active"].show_hidden_initial)
+        self.assertNotIn("initial-active", str(form["active"]))
+
+        bound_form = PublicationDefaultsForm({"active": "on"})
+        self.assertTrue(bound_form.is_valid())
+        self.assertEqual(bound_form.changed_data, [])
+
+    def test_django_001_invalid_callable_default_form_redisplays_submitted_value(self):
+        """
+        DJANGO-001: A bound generated ModelForm that fails validation redisplays
+        the submitted callable-default field value.
+        """
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        initial_date = str(datetime.date.today())
+        submitted_date = "2000-01-01"
+        form = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": submitted_date,
+                "initial-date_published": initial_date,
+            }
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertEqual(form["date_published"].value(), submitted_date)
+        self.assertHTMLEqual(
+            form["date_published"].as_widget(),
+            '<input type="text" name="date_published" value="2000-01-01" '
+            'required id="id_date_published">',
+        )
+
+    def test_django_002_rebound_hidden_initial_preserves_change_baseline(self):
+        """
+        DJANGO-002: Rendering and rebinding a callable-default field keeps the
+        original changed-data comparison baseline despite its hidden initial.
+        """
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        initial_date = str(datetime.date.today())
+        submitted_date = "2000-01-01"
+        form = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": submitted_date,
+                "initial-date_published": initial_date,
+            }
+        )
+        self.assertFalse(form.is_valid())
+        hidden = parse_html(
+            form["date_published"].as_hidden(only_initial=True)
+        )
+        hidden_value = dict(hidden.attributes)["value"]
+        self.assertEqual(hidden_value, initial_date)
+
+        rebound = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": form["date_published"].value(),
+                "initial-date_published": hidden_value,
+            }
+        )
+        self.assertIn("date_published", rebound.changed_data)
+
+    def test_django_008_hidden_initial_does_not_neutralize_submitted_value(self):
+        """
+        DJANGO-008: Regression coverage binds, renders, and rebinds a generated
+        callable-default ModelForm without its hidden initial replacing or
+        neutralizing the submitted value.
+        """
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        initial_date = str(datetime.date.today())
+        submitted_date = "2000-01-01"
+        form = PublicationDefaultsForm(
+            {
+                "title": "",
+                "date_published": submitted_date,
+                "initial-date_published": initial_date,
+            }
+        )
+        self.assertFalse(form.is_valid())
+
+        rendered = parse_html(str(form["date_published"]))
+        rendered_data = {
+            dict(element.attributes)["name"]: dict(element.attributes).get("value", "")
+            for element in rendered.children
+        }
+        self.assertEqual(rendered_data["date_published"], submitted_date)
+        self.assertEqual(rendered_data["initial-date_published"], initial_date)
+
+        rendered_data["title"] = ""
+        rebound = PublicationDefaultsForm(rendered_data)
+        self.assertFalse(rebound.is_valid())
+        self.assertEqual(rebound["date_published"].value(), submitted_date)
+        self.assertIn("date_published", rebound.changed_data)
 
 
 class ModelFormCustomErrorTests(SimpleTestCase):

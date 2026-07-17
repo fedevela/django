@@ -15,6 +15,7 @@ from django.forms.models import (
 )
 from django.http import QueryDict
 from django.test import TestCase, skipUnlessDBFeature
+from django.test.html import parse_html
 
 from .models import (
     AlternateBook,
@@ -160,6 +161,63 @@ class DeletionTests(TestCase):
 
 
 class ModelFormsetTest(TestCase):
+    def make_invalid_callable_default_inline_formset(self, data=None):
+        class SimpleArrayField(forms.CharField):
+            def prepare_value(self, value):
+                if isinstance(value, list):
+                    return ",".join(value)
+                return value
+
+            def to_python(self, value):
+                value = super().to_python(value)
+                return value.split(",") if value else []
+
+        class BookForm(forms.ModelForm):
+            title = SimpleArrayField(
+                initial=list,
+                required=False,
+                show_hidden_initial=True,
+            )
+
+            class Meta:
+                model = Book
+                fields = ("title",)
+
+            def clean_title(self):
+                raise forms.ValidationError("Invalid title.")
+
+        FormSet = inlineformset_factory(
+            Author,
+            Book,
+            form=BookForm,
+            can_delete=False,
+            extra=1,
+            fields=("title",),
+        )
+        author = Author(name="Charles Dickens")
+        if data is None:
+            data = {
+                "book_set-TOTAL_FORMS": "1",
+                "book_set-INITIAL_FORMS": "0",
+                "book_set-MAX_NUM_FORMS": "",
+                "book_set-0-title": "invalid",
+                "initial-book_set-0-title": "",
+            }
+        return FormSet(data, instance=author)
+
+    def resubmit_invalid_callable_default_inline(self, formset):
+        form = formset.forms[0]
+        hidden = parse_html(form["title"].as_hidden(only_initial=True))
+        hidden_value = dict(hidden.attributes).get("value", "")
+        data = {
+            "book_set-TOTAL_FORMS": "1",
+            "book_set-INITIAL_FORMS": "0",
+            "book_set-MAX_NUM_FORMS": "",
+            "book_set-0-title": form["title"].value(),
+            "initial-book_set-0-title": hidden_value,
+        }
+        return self.make_invalid_callable_default_inline_formset(data)
+
     def test_modelformset_factory_without_fields(self):
         """Regression for #19733"""
         message = (
@@ -1651,6 +1709,116 @@ class ModelFormsetTest(TestCase):
         }
         formset = FormSet(data, instance=person)
         self.assertTrue(formset.is_valid())
+
+    def test_django_003_nonempty_extra_callable_default_inline_stays_active(self):
+        """
+        DJANGO-003: Binding hidden-initial data for a nonempty extra inline
+        containing a callable-default field keeps the inline classified as
+        active rather than empty or unused.
+        """
+        formset = self.make_invalid_callable_default_inline_formset()
+
+        self.assertTrue(formset.forms[0].has_changed())
+        self.assertIn("title", formset.forms[0].changed_data)
+        self.assertFalse(formset.is_valid())
+
+    def test_django_004_first_invalid_array_default_inline_submission(self):
+        """
+        DJANGO-004: The first submission of an invalid extra inline containing
+        ArrayField(default=list) reports its validation error and retains the
+        inline with its submitted value.
+        """
+        formset = self.make_invalid_callable_default_inline_formset()
+
+        self.assertFalse(formset.is_valid())
+        self.assertEqual(formset.forms[0].errors["title"], ["Invalid title."])
+        self.assertEqual(formset.forms[0]["title"].value(), "invalid")
+
+    def test_django_004_second_unchanged_submission_repeats_error(self):
+        """
+        DJANGO-004: Redisplaying and resubmitting the invalid extra inline
+        unchanged reports the same validation error and does not dismiss the
+        inline.
+        """
+        first_formset = self.make_invalid_callable_default_inline_formset()
+        self.assertFalse(first_formset.is_valid())
+
+        second_formset = self.resubmit_invalid_callable_default_inline(first_formset)
+
+        self.assertFalse(second_formset.is_valid())
+        self.assertTrue(second_formset.forms[0].has_changed())
+        self.assertEqual(second_formset.forms[0].errors["title"], ["Invalid title."])
+        self.assertEqual(second_formset.forms[0]["title"].value(), "invalid")
+
+    def test_django_004_later_unchanged_submissions_retain_nonempty_inline(self):
+        """
+        DJANGO-004: Repeating the unchanged invalid inline submission more than
+        twice reports the same validation error on every submission and retains
+        the inline as nonempty.
+        """
+        formset = self.make_invalid_callable_default_inline_formset()
+
+        for _ in range(4):
+            self.assertFalse(formset.is_valid())
+            self.assertTrue(formset.forms[0].has_changed())
+            self.assertEqual(formset.forms[0].errors["title"], ["Invalid title."])
+            self.assertEqual(formset.forms[0]["title"].value(), "invalid")
+            formset = self.resubmit_invalid_callable_default_inline(formset)
+
+    def test_django_006_valid_callable_default_inline_retains_outcomes(self):
+        """
+        DJANGO-006: A valid submitted admin inline containing a
+        callable-default field retains its established submission,
+        changed-data, and validation outcomes.
+        """
+        person = Person.objects.create(name="Ringo")
+        FormSet = inlineformset_factory(
+            Person, Membership, can_delete=False, extra=1, fields="__all__"
+        )
+        initial_date = datetime.datetime.now().replace(microsecond=0)
+        initial_date_string = initial_date.strftime("%Y-%m-%d %H:%M:%S")
+        formset = FormSet(
+            {
+                "membership_set-TOTAL_FORMS": "1",
+                "membership_set-INITIAL_FORMS": "0",
+                "membership_set-MAX_NUM_FORMS": "",
+                "membership_set-0-date_joined": initial_date_string,
+                "initial-membership_set-0-date_joined": initial_date_string,
+                "membership_set-0-karma": "5",
+            },
+            instance=person,
+        )
+
+        self.assertTrue(formset.is_valid())
+        self.assertEqual(formset.forms[0].changed_data, ["karma"])
+        self.assertEqual(formset.forms[0].cleaned_data["karma"], 5)
+        self.assertNotIn("date_joined", formset.forms[0].changed_data)
+
+    def test_django_007_noncallable_default_inline_retains_hidden_initial(self):
+        """
+        DJANGO-007: A rendered and bound admin-inline field without a callable
+        model default retains its established hidden-initial and changed-data
+        behavior.
+        """
+        author = Author.objects.create(name="Charles Dickens")
+        FormSet = inlineformset_factory(
+            Author, Book, can_delete=False, extra=1, fields=("title",)
+        )
+        formset = FormSet(instance=author)
+        self.assertFalse(formset.forms[0].fields["title"].show_hidden_initial)
+        self.assertNotIn("initial-book_set-0-title", str(formset.forms[0]["title"]))
+
+        bound_formset = FormSet(
+            {
+                "book_set-TOTAL_FORMS": "1",
+                "book_set-INITIAL_FORMS": "0",
+                "book_set-MAX_NUM_FORMS": "",
+                "book_set-0-title": "Great Expectations",
+            },
+            instance=author,
+        )
+        self.assertTrue(bound_formset.is_valid())
+        self.assertEqual(bound_formset.forms[0].changed_data, ["title"])
 
     def test_inlineformset_factory_with_null_fk(self):
         # inlineformset_factory tests with fk having null=True. see #9462.
