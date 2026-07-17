@@ -224,6 +224,23 @@ class Options:
     # the configured dotted path and _prepare(), which alone owns instantiating
     # and attaching the admitted field to a model without an explicit key.
     def _get_default_pk_class(self):
+        # AUTOPK-004 pseudocode -- reject an unrelated default automatic field:
+        # PRECONDITION: model preparation needs an implicit primary key because
+        # the model declares no explicit primary key.
+        # INPUT: the effective DEFAULT_AUTO_FIELD path and its configuration
+        # source.
+        # RESOLVE the path to its configured class using the existing empty-
+        # path and import-error flows.
+        # ASK whether the resolved class subclasses AutoField, including its
+        # supported automatic-field hierarchy.
+        # IF the resolved class is unrelated to that hierarchy:
+        #     FAIL with the existing error naming the path and source and
+        #     stating that the configured primary-key class must subclass
+        #     AutoField.
+        #     HALT resolution without returning a class to _prepare().
+        #     THEREFORE do not instantiate or attach an implicit primary key.
+        # ELSE:
+        #     RETURN the supported class for the existing _prepare() handoff.
         # AUTOPK-002 pseudocode -- prepare a model with a configured automatic
         # field descendant:
         # INPUT: a model without an explicit primary key and the configured
