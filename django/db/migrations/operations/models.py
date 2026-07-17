@@ -333,6 +333,17 @@ class RenameModel(ModelOperation):
         )
 
     def state_forwards(self, app_label, state):
+        # GUID: RMN-009
+        # LOGIC OBLIGATION
+        # (test_rmn_009_rename_model_different_effective_table_exposes_new_state_name):
+        # - INPUT: app_label, old_name, new_name, and the current migration
+        #   state for a rename whose effective database table names differ.
+        # - TRANSITION: rename the model identity in state from old_name to
+        #   new_name independently of the later physical-table transition.
+        # - OUTPUT: the resulting state resolves the model by new_name and no
+        #   longer exposes it by old_name.
+        # - FAILURE: propagate a missing or invalid old state identity; do not
+        #   report a successful state transition when the rename cannot occur.
         # GUID: RMN-001
         # LOGIC OBLIGATION:
         # - INPUT: app_label, old_name, new_name, and the current migration
@@ -346,6 +357,26 @@ class RenameModel(ModelOperation):
         state.rename_model(app_label, self.old_name, self.new_name)
 
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        # GUID: RMN-009
+        # LOGIC OBLIGATION
+        # (test_rmn_009_rename_model_different_effective_table_renames_physical_table):
+        # - INPUT: resolve old_model from from_state and new_model from
+        #   to_state after state_forwards() has established the new identity.
+        # - DECISION: compare old_model._meta.db_table with
+        #   new_model._meta.db_table to determine physical table identity.
+        # - IF equal: follow the separately specified database-no-op path;
+        #   this branch is outside RMN-009.
+        # - ELSE IF migration is disallowed for new_model on this connection:
+        #   terminate without issuing schema changes.
+        # - ELSE: hand the old and new effective table names to
+        #   schema_editor.alter_db_table(), then update dependent related
+        #   fields and eligible auto-created M2M tables and columns in their
+        #   existing deterministic iteration order.
+        # - OUTPUT: the physical table bears the new effective table name and
+        #   the already-transitioned migration state exposes new_name.
+        # - FAILURE: propagate model-resolution or schema-editor failure at
+        #   its point of occurrence; do not claim completion of later related
+        #   or M2M handoffs after an earlier transition fails.
         # GUID: RMN-002
         # LOGIC OBLIGATION:
         # - INPUT: resolve the old model from from_state and the renamed model
