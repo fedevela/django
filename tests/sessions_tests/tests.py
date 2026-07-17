@@ -40,6 +40,72 @@ from django.utils.deprecation import RemovedInDjango40Warning
 from .models import SessionStore as CustomDatabaseSession
 
 
+class SafeSessionDecodingContractTests(SimpleTestCase):
+    """Issue #508 safe session decoding regression coverage."""
+
+    def setUp(self):
+        self.session = CookieSession()
+
+    def incorrectly_padded_legacy_data(self):
+        encoded = self.session._legacy_encode({'secret': 'value'})
+        encoded = encoded.rstrip('=')
+        return encoded if len(encoded) % 4 else encoded[:-1]
+
+    def test_SES_001_incorrectly_padded_legacy_base64_decode_contains_exception(self):
+        """SES-001: malformed Base64 decoding transitions to no exception."""
+        self.assertEqual(
+            self.session._legacy_decode(self.incorrectly_padded_legacy_data()),
+            {},
+        )
+
+    def test_SES_002_malformed_legacy_decode_contains_exception_and_values(self):
+        """SES-002: malformed legacy input transitions to contained failure."""
+        self.assertEqual(self.session._legacy_decode('\xe9:secret'), {})
+
+    def test_SES_003_current_and_legacy_decode_failure_returns_empty_mapping(self):
+        """SES-003: failure of both formats transitions to an empty mapping."""
+        decoded = self.session.decode('not-a-valid-session')
+        self.assertEqual(decoded, {})
+        self.assertIsInstance(decoded, dict)
+
+    def test_SES_004_invalid_signature_decode_rejects_stored_values(self):
+        """SES-004: invalidly signed data transitions to no exposed values."""
+        encoded = self.session._legacy_encode({'secret': 'value'})
+        decoded = self.session.decode(base64.b64encode(
+            b'invalid-signature:' + base64.b64decode(encoded).split(b':', 1)[1]
+        ).decode('ascii'))
+        self.assertEqual(decoded, {})
+        self.assertNotIn('secret', decoded)
+
+    def test_SES_005_valid_current_format_decode_preserves_values(self):
+        """SES-005: valid current-format data retains its existing values."""
+        values = {'key': 'value', 'number': 42}
+        self.assertEqual(self.session.decode(self.session.encode(values)), values)
+
+    def test_SES_006_valid_legacy_format_decode_preserves_values(self):
+        """SES-006: valid legacy-format data retains its existing values."""
+        values = {'key': 'value', 'number': 42}
+        self.assertEqual(
+            self.session.decode(self.session._legacy_encode(values)),
+            values,
+        )
+
+    def test_SES_009_incorrectly_padded_legacy_regression_returns_empty_mapping(self):
+        """SES-009: the reported malformed Base64 case fails gracefully."""
+        decoded = self.session.decode(self.incorrectly_padded_legacy_data())
+        self.assertEqual(decoded, {})
+        self.assertIsInstance(decoded, dict)
+
+    def test_SES_010_suspicious_session_decode_preserves_security_reporting(self):
+        """SES-010: applicable suspicious data retains security reporting."""
+        encoded = base64.b64encode(b'invalid-signature:{"secret":"value"}')
+        with self.assertLogs(
+            'django.security.SuspiciousSession', 'WARNING'
+        ) as captured:
+            self.assertEqual(self.session.decode(encoded.decode('ascii')), {})
+        self.assertIn('Session data corrupted', captured.output[0])
+
+
 class SessionTestsMixin:
     # This does not inherit from TestCase to avoid any tests being run with this
     # class, which wouldn't work, and to allow different TestCase subclasses to
@@ -395,6 +461,45 @@ class SessionTestsMixin:
             s1.save()
 
         self.assertEqual(s1.load(), {})
+
+
+class DatabaseSessionLoadingContractTests(TestCase):
+    """SES-007 database-backed malformed session loading contract."""
+
+    session_key = 'malformed-session-key'
+
+    @classmethod
+    def setUpTestData(cls):
+        Session.objects.create(
+            session_key=cls.session_key,
+            session_data='not-a-valid-session',
+            expire_date=timezone.now() + timedelta(days=1),
+        )
+
+    def test_SES_007_malformed_persisted_data_load_contains_decode_exception(self):
+        """SES-007: malformed persisted data loads without an exception."""
+        session = DatabaseSession(self.session_key)
+
+        self.assertEqual(session.load(), {})
+
+    def test_SES_007_malformed_persisted_data_load_returns_empty_mapping(self):
+        """SES-007: malformed persisted data loads as an empty mapping."""
+        session = DatabaseSession(self.session_key)
+
+        loaded = session.load()
+
+        self.assertEqual(loaded, {})
+        self.assertIsInstance(loaded, dict)
+
+    def test_SES_007_malformed_persisted_data_load_supports_mapping_operations(self):
+        """SES-007: the loaded empty session remains mapping-compatible."""
+        session = DatabaseSession(self.session_key)
+
+        self.assertNotIn('key', session)
+        session['key'] = 'value'
+        self.assertEqual(session['key'], 'value')
+        del session['key']
+        self.assertNotIn('key', session)
 
 
 class DatabaseSessionTests(SessionTestsMixin, TestCase):
