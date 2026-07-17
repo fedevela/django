@@ -342,6 +342,15 @@ class BaseFormSet:
         Clean all of self.data and populate self._errors and
         self._non_form_errors.
         """
+        # Pseudocode [GUID: NONFORM-003; validation-preservation contract]:
+        # INPUT the bound state, management data, member forms, count limits,
+        # and custom FormSet cleaning procedure without modifying any of them.
+        # RESET the same validation caches, then FOLLOW the existing early-return,
+        # management-form, member-form, deletion, count, and custom-clean branches
+        # in their established order.
+        # DERIVE validity from the same field and non-form errors as before.
+        # TREAT ``nonform`` only as metadata on the non-form ErrorList; do not use
+        # it as a validation decision, alter an error, or replace message text.
         self._errors = []
         # Architecture [GUID: NONFORM-001, NONFORM-004, NONFORM-007]: this is
         # the owning construction seam for the non-form error cache. Both the
@@ -408,6 +417,12 @@ class BaseFormSet:
             # Give self.clean() a chance to do cross-form validation.
             self.clean()
         except ValidationError as e:
+            # Pseudocode [GUID: NONFORM-003; error-preservation handoff]:
+            # RECEIVE the ValidationError list produced by the unchanged rule.
+            # COPY its existing errors, parameters, codes, ordering, and messages
+            # into the classified container without transforming their contents.
+            # RETURN control with the same validity outcome; classification is the
+            # only additional observable metadata at this handoff.
             # Pseudocode [GUID: NONFORM-001, NONFORM-002, NONFORM-007,
             # GUID: NONFORM-008, NONFORM-011]:
             # NORMALIZE the captured validation errors into their error list.

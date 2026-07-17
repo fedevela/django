@@ -314,6 +314,12 @@ class BaseForm:
         field -- i.e., from Form.clean(). Return an empty ErrorList if there
         are none.
         """
+        # Pseudocode [GUID: NONFORM-005]:
+        # LOOK UP the Form-level non-field error entry.
+        # IF it exists, RETURN that existing ErrorList unchanged.
+        # OTHERWISE CREATE the empty fallback with classification ``nonfield``.
+        # NEVER add, substitute, or merge the FormSet-only ``nonform`` category.
+        # HAND OFF the ``nonfield`` list and its messages unchanged to rendering.
         return self.errors.get(NON_FIELD_ERRORS, self.error_class(error_class='nonfield'))
 
     def add_error(self, field, error):
@@ -355,6 +361,13 @@ class BaseForm:
                 if field != NON_FIELD_ERRORS and field not in self.fields:
                     raise ValueError(
                         "'%s' has no field named '%s'." % (self.__class__.__name__, field))
+                # Pseudocode [GUID: NONFORM-005, NONFORM-006]:
+                # IF the destination is the Form non-field key,
+                #     CREATE its ErrorList with classification ``nonfield`` only.
+                # ELSE the destination is an ordinary Form field,
+                #     CREATE its ErrorList with no category classification.
+                # IN EITHER BRANCH, NEVER assign the FormSet-only ``nonform``
+                # classification; then APPEND the original errors unchanged.
                 if field == NON_FIELD_ERRORS:
                     self._errors[field] = self.error_class(error_class='nonfield')
                 else:
