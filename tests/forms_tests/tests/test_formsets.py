@@ -1422,6 +1422,14 @@ class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
             ['errorlist', 'errorlist nonfield', 'errorlist nonform'],
         )
 
+    def test_nonform_009_documentation_identifies_nonform_as_formset_non_form_error_class(self):
+        """GUID: NONFORM-009; exact FormSet non-form error class."""
+        pass
+
+    def test_nonform_009_documentation_explains_custom_errorlist_can_distinguish_error_sources(self):
+        """GUID: NONFORM-009; custom ErrorList classification metadata."""
+        pass
+
     def test_nonform_011_default_markup_only_adds_nonform_class(self):
         """GUID: NONFORM-011"""
         errors = self.custom_clean_formset().non_form_errors()
