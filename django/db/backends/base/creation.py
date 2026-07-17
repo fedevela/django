@@ -58,6 +58,16 @@ class BaseDatabaseCreation:
         settings.DATABASES[self.connection.alias]["NAME"] = test_database_name
         self.connection.settings_dict["NAME"] = test_database_name
 
+        # Pseudocode -- GUID: DJANGO-006
+        # Verification:
+        # test_django_006_migrations_enabled_creation_behavior_remains_unchanged
+        # INPUT TEST.MIGRATE and the configured test-database connection.
+        # IF migrations are enabled:
+        #     preserve the configured migration modules without substitution.
+        # INVOKE the existing migrate command with the test database alias,
+        # reduced verbosity, noninteractive operation, and syncdb enabled.
+        # IF migration raises an error, propagate it and stop creation.
+        # OTHERWISE continue to the existing optional serialization handoff.
         # GUID: DJANGO-001, DJANGO-002, DJANGO-007. Use migrate's syncdb path
         # to create the model-defined schema without loading migration history.
         try:
@@ -110,6 +120,17 @@ class BaseDatabaseCreation:
         Designed only for test runner usage; will not handle large
         amounts of data.
         """
+        # Pseudocode -- GUID: DJANGO-006
+        # Verification:
+        # test_django_006_migrations_enabled_serialization_behavior_remains_unchanged
+        # PRECONDITION the migration-enabled test database has been created.
+        # DISCOVER its existing tables and migration-enabled application set.
+        # FOR EACH eligible model in each migrated, serializable application:
+        #     IF migration policy permits the model and its table exists:
+        #         read objects from the test-database alias in primary-key order.
+        # SERIALIZE the ordered object stream to JSON and return the string.
+        # IF discovery, object reading, or serialization fails, propagate the
+        # error without producing replacement serialized contents.
         # GUID: DJANGO-003, DJANGO-005. Restrict serialization to models whose
         # tables were created, using backend-independent introspection.
         table_names = set(self.connection.introspection.table_names())
