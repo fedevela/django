@@ -243,6 +243,16 @@ class BaseCommand:
     """
 
     # Metadata about this command.
+    #
+    # MCFMT-001 architecture: command-specific help-formatting selection belongs
+    # beside this help metadata. BaseCommand owns the selection; create_parser()
+    # is its sole consumer, and formatter implementations must not depend on the
+    # command.
+    #
+    # MCFMT-002, MCFMT-003, MCFMT-004 architecture: help crosses the parser
+    # boundary as opaque text. Preservation of its line breaks and indentation,
+    # including the motivating three-line example, belongs to the selected
+    # argparse formatter contract rather than to BaseCommand preprocessing.
     help = ""
 
     # Configuration shortcuts that alter various logic.
@@ -322,6 +332,9 @@ class BaseCommand:
         # FAILURE: if a selected behavior cannot format the help text, surface
         # that failure through the parser help-formatting path; do not silently
         # substitute the default behavior and violate the command's selection.
+        # MCFMT-001 integration seam: parser construction receives the
+        # command-owned formatter selection here. The existing
+        # DjangoHelpFormatter argument is the default side of that contract.
         parser = CommandParser(
             prog="%s %s" % (os.path.basename(prog_name), subcommand),
             description=self.help or None,

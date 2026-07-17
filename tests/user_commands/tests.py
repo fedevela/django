@@ -420,6 +420,14 @@ class CommandTests(SimpleTestCase):
 
 
 class CommandHelpFormattingContractTests(SimpleTestCase):
+    """
+    Architecture locus for MCFMT-001 through MCFMT-004.
+
+    Command fixtures own formatter selection; BaseCommand.create_parser() adapts
+    that selection to CommandParser; the selected formatter owns whitespace
+    rendering. Behavioral assertions replace these placeholders in Malkhut.
+    """
+
     def test_mcfmt_001_opted_in_command_uses_command_specific_help_formatting(self):
         """GUID: MCFMT-001 - An opted-in command uses its selected formatting."""
         pass
