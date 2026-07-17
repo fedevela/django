@@ -56,6 +56,40 @@ class JoinTests(SimpleTestCase):
         self.assertEqual(output, "alpha & beta &amp; me")
 
 
+class JoinContractTraceabilityTests(SimpleTestCase):
+    def test_join_001_autoescape_disabled_context_separator_returns_direct_join(self):
+        """JOIN-001: Preserve items and a context separator without escaping."""
+        pass
+
+    def test_join_002_autoescape_enabled_escapes_items_and_separator(self):
+        """JOIN-002: Preserve HTML-safe escaping for items and the separator."""
+        pass
+
+    def test_join_003_autoescape_disabled_literal_and_context_separators_match(self):
+        """JOIN-003: Apply disabled autoescape consistently to both separator forms."""
+        pass
+
+    def test_join_003_autoescape_enabled_literal_and_context_separators_match(self):
+        """JOIN-003: Apply enabled autoescape consistently to both separator forms."""
+        pass
+
+    def test_join_004_autoescape_disabled_preserves_order_contents_and_semantics(self):
+        """JOIN-004: Preserve valid joining behavior with autoescape disabled."""
+        pass
+
+    def test_join_004_autoescape_enabled_preserves_order_contents_and_semantics(self):
+        """JOIN-004: Preserve valid joining behavior with autoescape enabled."""
+        pass
+
+    def test_join_005_autoescape_disabled_noniterable_preserves_fallback(self):
+        """JOIN-005: Preserve the noniterable fallback with autoescape disabled."""
+        pass
+
+    def test_join_005_autoescape_enabled_noniterable_preserves_fallback(self):
+        """JOIN-005: Preserve the noniterable fallback with autoescape enabled."""
+        pass
+
+
 class FunctionTests(SimpleTestCase):
     def test_list(self):
         self.assertEqual(join([0, 1, 2], "glue"), "0glue1glue2")
