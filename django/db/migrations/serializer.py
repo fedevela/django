@@ -161,6 +161,12 @@ class FrozensetSerializer(BaseUnorderedSequenceSerializer):
         return "frozenset([%s])"
 
 
+# MIGSER-001, MIGSER-002, MIGSER-004 architecture boundary:
+# FunctionTypeSerializer owns the complete import path for callable values. Bound
+# class methods stay within its existing (serialized reference, module imports)
+# contract; MigrationWriter remains the consumer and Python's dotted attribute
+# lookup remains the resolution boundary. No model- or field-specific adapter is
+# required for Profile.Capability.default.
 class FunctionTypeSerializer(BaseSerializer):
     def serialize(self):
         # MIGSER-001, MIGSER-002, MIGSER-004 — nested class-method reference flow:
@@ -364,6 +370,8 @@ class Serializer:
             types.FunctionType,
             types.BuiltinFunctionType,
             types.MethodType,
+            # MIGSER-001, MIGSER-002, MIGSER-004: MethodType is the registry seam
+            # that assigns nested bound class methods to FunctionTypeSerializer.
         ): FunctionTypeSerializer,
         collections.abc.Iterable: IterableSerializer,
         (COMPILED_REGEX_TYPE, RegexObject): RegexSerializer,
