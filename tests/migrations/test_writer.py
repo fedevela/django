@@ -645,6 +645,11 @@ class WriterTests(SimpleTestCase):
         self.assertIs(resolved.__self__, field.default.__self__)
         self.assertIs(resolved.__func__, field.default.__func__)
 
+    # MIGSER-005, MIGSER-006 architecture seam: these existing placeholders own
+    # callable regression coverage at the MigrationWriter boundary. Module-level
+    # fixtures supply stable import paths; serialize_round_trip() supplies the
+    # shared serialize/import/resolve adapter. Implementation belongs in these
+    # loci without adding a parallel helper, serializer, or test module.
     def test_migser_005_migser_006_top_level_function_reference_resolves(self):
         """
         MIGSER-005, MIGSER-006: A serialized supported top-level function

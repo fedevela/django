@@ -161,10 +161,12 @@ class FrozensetSerializer(BaseUnorderedSequenceSerializer):
         return "frozenset([%s])"
 
 
-# MIGSER-003 architecture contract: FunctionTypeSerializer owns the complete
-# importable reference for class-bound callables. Its serialized value and
-# module-import set form one indivisible handoff to MigrationWriter; generated
-# migration import and execution remain downstream consumers of that handoff.
+# MIGSER-003, MIGSER-005, MIGSER-006 architecture contract:
+# FunctionTypeSerializer owns stable importable references for every supported
+# callable shape routed here by Serializer._registry. Class-bound callables use
+# their owning class boundary; top-level functions and unbound methods use their
+# callable boundary. Both paths expose the same (reference, module imports)
+# contract to MigrationWriter, which remains the downstream consumer.
 # Dependency direction: callable metadata -> serializer -> generated migration.
 class FunctionTypeSerializer(BaseSerializer):
     def serialize(self):
@@ -368,6 +370,9 @@ class Serializer:
             types.FunctionType,
             types.BuiltinFunctionType,
             types.MethodType,
+            # MIGSER-005, MIGSER-006: Keep all supported callable forms behind
+            # the FunctionTypeSerializer boundary; MigrationWriter depends on
+            # its common serialized-reference contract, not callable subtype.
         ): FunctionTypeSerializer,
         collections.abc.Iterable: IterableSerializer,
         (COMPILED_REGEX_TYPE, RegexObject): RegexSerializer,
