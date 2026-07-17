@@ -43,6 +43,15 @@ class ManagementForm(Form):
     # output. If ordinary field or template rendering fails, propagate that
     # failure unchanged rather than altering validation or warning behavior.
 
+    # Architecture — management-form rendering boundary:
+    # MGMT-001: ManagementForm owns the specialized template-selection
+    # contract. Keep that choice local to this class so RenderableMixin retains
+    # responsibility for warning about deprecated defaults used elsewhere.
+    # MGMT-002, MGMT-003: The integration seam remains Form's inherited context
+    # and rendering pipeline. It owns field ordering, BoundField naming and
+    # values, and HiddenInput rendering; ManagementForm must not duplicate or
+    # bypass those responsibilities.
+
     TOTAL_FORMS = IntegerField(widget=HiddenInput)
     INITIAL_FORMS = IntegerField(widget=HiddenInput)
     # MIN_NUM_FORM_COUNT and MAX_NUM_FORM_COUNT are output with the rest of the
