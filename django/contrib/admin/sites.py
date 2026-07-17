@@ -480,13 +480,16 @@ class AdminSite:
                 continue
 
             info = (app_label, model._meta.model_name)
-            # Architecture contract — ADMIN-001, ADMIN-005, ADMIN-006:
+            # Architecture contract — ADMIN-001, ADMIN-005, ADMIN-006,
+            # ADMIN-008:
             # build_app_dict() owns the permission-gated projection from an
             # AdminSite registry entry to its model dictionary. The registry
             # key is the authoritative model-class dependency, and this
             # dictionary-construction seam is the sole home for exposing it;
             # the surrounding permission boundary and existing fields remain
-            # owned by this method.
+            # owned by this method. Both the unfiltered get_app_list() path and
+            # the label-filtered build_app_dict() path consume this same
+            # projection, so exact class identity has one structural owner.
             model_dict = {
                 'model': model,
                 'name': capfirst(model._meta.verbose_name_plural),

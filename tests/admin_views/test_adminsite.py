@@ -80,6 +80,11 @@ class SiteEachContextTest(TestCase):
 
 @override_settings(ROOT_URLCONF='admin_views.test_adminsite')
 class SiteAppListModelClassContractTests(SimpleTestCase):
+    # Architecture contract — ADMIN-008: this class owns verification at the
+    # two public app-list integration seams. Full-list identity belongs at
+    # get_app_list(); label-filtered identity belongs at build_app_dict(). The
+    # existing ADMIN-001/005/006/007 tests remain the behavioral-preservation
+    # boundary, sharing this fixture rather than introducing another test seam.
     request_factory = RequestFactory()
 
     def request_with_permissions(self, has_permissions):
