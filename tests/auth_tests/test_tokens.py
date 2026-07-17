@@ -7,6 +7,9 @@ from django.test import TestCase
 from django.test.utils import ignore_warnings
 from django.utils.deprecation import RemovedInDjango40Warning
 
+from .models import UserWithDisabledLastLoginField
+from .models.with_custom_email_field import CustomEmailField
+
 
 class MockedPasswordResetTokenGenerator(PasswordResetTokenGenerator):
     def __init__(self, now):
@@ -21,19 +24,51 @@ class PasswordResetTokenEmailBindingContractTests(TestCase):
 
     def test_PRT_001_token_before_persisted_effective_email_change_is_rejected(self):
         """GUID: PRT-001 - A persisted effective email change rejects the prior token."""
-        self.assertTrue(True)
+        user = User.objects.create_user('emailuser', 'before@example.com', 'testpw')
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.email = 'after@example.com'
+        user.save(update_fields=['email'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
 
     def test_PRT_002_configured_nonstandard_email_change_rejects_prior_token(self):
         """GUID: PRT-002 - Token binding follows the configured user email field."""
-        self.assertTrue(True)
+        user = CustomEmailField.objects.create_user(
+            'emailuser', 'testpw', 'before@example.com',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.email_address = 'after@example.com'
+        user.save(update_fields=['email_address'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
 
     def test_PRT_003_absent_configured_email_repeats_generation_and_validation_successfully(self):
         """GUID: PRT-003 - An absent configured email permits deterministic token use."""
-        self.assertTrue(True)
+        user = UserWithDisabledLastLoginField(pk=1, password='testpw')
+        generator = MockedPasswordResetTokenGenerator(datetime(2021, 1, 1))
+        tokens = [generator.make_token(user) for _ in range(2)]
+
+        self.assertEqual(tokens[0], tokens[1])
+        self.assertTrue(all(generator.check_token(user, token) for token in tokens))
 
     def test_PRT_003_empty_or_unpopulated_email_repeats_generation_and_validation_successfully(self):
         """GUID: PRT-003 - Empty or unpopulated email permits deterministic token use."""
-        self.assertTrue(True)
+        generator = MockedPasswordResetTokenGenerator(datetime(2021, 1, 1))
+        tokens = []
+        for email in ('', None):
+            with self.subTest(email=email):
+                user = User(pk=1, password='testpw', email=email)
+                token = generator.make_token(user)
+                tokens.append(token)
+                self.assertEqual(generator.make_token(user), token)
+                self.assertIs(generator.check_token(user, token), True)
+        self.assertEqual(tokens[0], tokens[1])
 
 
 class TokenGeneratorTest(TestCase):

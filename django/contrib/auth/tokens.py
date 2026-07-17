@@ -92,36 +92,20 @@ class PasswordResetTokenGenerator:
            same password is chosen, due to password salting).
         2. The last_login field will usually be updated very shortly after
            a password reset.
+        3. The email address will change if a user requests a password reset
+           for another address.
         Failing those things, settings.PASSWORD_RESET_TIMEOUT eventually
         invalidates the token.
 
         Running this data through salted_hmac() prevents password cracking
         attempts using the reset token, provided the secret isn't compromised.
         """
-        # Password-reset email-binding pseudocode:
-        #
-        # PRT-001 / PRT-002:
-        #   email_field_name <- user.get_email_field_name()
-        #   effective_email <- READ_ATTRIBUTE(
-        #       user, email_field_name, default=''
-        #   )
-        #   INCLUDE effective_email in the token hash input together with the
-        #   existing token-relevant user state and timestamp.
-        #   Therefore, when a persisted configured-field value changes, the
-        #   recomputed hash differs and validation follows its existing token
-        #   mismatch failure path.
-        #
-        # PRT-003:
-        #   IF the configured attribute is absent OR its value is unpopulated:
-        #       effective_email <- ''
-        #   ELSE:
-        #       effective_email <- configured attribute value
-        #   Use the same normalized value during generation and validation so
-        #   unchanged absent, empty, or unpopulated states remain deterministic.
         # Truncate microseconds so that tokens are consistent even if the
         # database doesn't support microseconds.
         login_timestamp = '' if user.last_login is None else user.last_login.replace(microsecond=0, tzinfo=None)
-        return str(user.pk) + user.password + str(login_timestamp) + str(timestamp)
+        email_field = user.get_email_field_name()
+        email = getattr(user, email_field, '') or ''
+        return '%s%s%s%s%s' % (user.pk, user.password, login_timestamp, timestamp, email)
 
     def _num_seconds(self, dt):
         return int((dt - datetime(2001, 1, 1)).total_seconds())
