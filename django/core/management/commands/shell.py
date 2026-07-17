@@ -82,6 +82,18 @@ class Command(BaseCommand):
         code.interact(local=imported_objects)
 
     def handle(self, **options):
+        # Pseudocode — GUID: SHELL-001, GUID: SHELL-003
+        # INPUT: the code supplied through the command option.
+        # IF command code is supplied:
+        #     CREATE one namespace for the complete snippet.
+        #     EXECUTE the snippet with that namespace as both globals and locals,
+        #         so functions resolve imports and top-level names established
+        #         earlier in the same snippet.
+        #     IF execution raises an exception:
+        #         PROPAGATE the exception without entering an interactive shell.
+        #     OTHERWISE:
+        #         PRESERVE every requested observable effect.
+        #         RETURN immediately, skipping stdin and interactive-shell paths.
         # Execute the command and exit.
         if options['command']:
             exec(options['command'])
