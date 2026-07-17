@@ -1818,31 +1818,20 @@ class FileBasedCacheTests(BaseCacheTests, TestCase):
         self,
     ):
         """FBC-008: Deletion before open makes has_key() false without an error."""
-        # FBC-008 architecture contract:
-        # - FileBasedCacheTests owns the shared regression scenario; its existing
-        #   FileBasedCachePathLibTests subclass is the location-type coverage
-        #   boundary, so the scenario must not be duplicated or overridden.
-        # - cache._key_to_file() supplies the target identity without changing
-        #   the backend's key-to-path ownership.
-        # - builtins.open is the test-only integration seam. A method-local
-        #   interceptor owns delete-then-delegate sequencing and must restore
-        #   the real opener through the existing mock.patch() boundary.
-        # - Dependencies point from this test to the public has_key() operation
-        #   and existing private path mapper; production code gains no test port.
-        # FBC-008 logic obligation and deterministic regression flow:
-        # 1. Store a file-based cache entry and resolve its target file path.
-        # 2. Confirm the target exists before has_key() begins its read attempt.
-        # 3. Preserve the normal file opener, then install an open interceptor
-        #    whose transition for the target path is EXISTS -> DELETED.
-        # 4. In that interceptor, remove the target immediately before handing
-        #    the same open request to the normal opener. The handoff must observe
-        #    the missing target, deterministically placing deletion between path
-        #    resolution and opening rather than relying on concurrent timing.
-        # 5. Call has_key() while the interceptor is active and capture its result.
-        # 6. If FileNotFoundError escapes has_key(), fail the regression scenario;
-        #    otherwise verify that the captured result is exactly False.
-        # 7. This inherited procedure must run unchanged for FileBasedCacheTests
-        #    and FileBasedCachePathLibTests, covering string and Path locations.
+        cache.set("race", "value")
+        cache_file = cache._key_to_file("race")
+        self.assertIs(os.path.exists(cache_file), True)
+        builtin_open = open
+
+        def remove_then_open(*args, **kwargs):
+            self.assertEqual(args[0], cache_file)
+            os.remove(cache_file)
+            return builtin_open(*args, **kwargs)
+
+        with mock.patch("builtins.open", side_effect=remove_then_open):
+            result = cache.has_key("race")
+
+        self.assertIs(result, False)
 
 
 @unittest.skipUnless(RedisCache_params, "Redis backend not configured")
