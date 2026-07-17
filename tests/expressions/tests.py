@@ -37,33 +37,90 @@ from .models import (
 
 
 class SubqueryContractTraceabilityTests(SimpleTestCase):
+    def compile(self, expression):
+        compiler = Company.objects.all().query.get_compiler(connection=connection)
+        return expression.as_sql(compiler, connection)
+
     def test_subquery_001_queryset_input_marks_copied_query_as_subquery(self):
         """GUID: SUBQUERY-001 - queryset input marks its copy as a subquery."""
-        pass
+        queryset = Company.objects.all()
+
+        subquery = Subquery(queryset)
+
+        self.assertIsNot(subquery.query, queryset.query)
+        self.assertIs(subquery.query.subquery, True)
+        self.assertIs(queryset.query.subquery, False)
 
     def test_subquery_001_query_object_input_marks_copied_query_as_subquery(self):
         """GUID: SUBQUERY-001 - query-object input marks its copy as a subquery."""
-        pass
+        query = Company.objects.all().query
+
+        subquery = Subquery(query)
+
+        self.assertIsNot(subquery.query, query)
+        self.assertIs(subquery.query.subquery, True)
+        self.assertIs(query.subquery, False)
 
     def test_subquery_002_as_sql_preserves_complete_inner_sql_in_parentheses(self):
         """GUID: SUBQUERY-002 - as_sql() frames the complete inner statement."""
-        pass
+        subquery = Subquery(Company.objects.values('name'))
+        compiler = Company.objects.all().query.get_compiler(connection=connection)
+        inner_sql, inner_params = subquery.query.as_sql(compiler, connection)
+
+        sql, params = subquery.as_sql(compiler, connection)
+
+        self.assertEqual(sql, inner_sql)
+        self.assertEqual(params, inner_params)
 
     def test_subquery_003_apps_queryset_sql_starts_select_and_ends_parenthesis(self):
         """GUID: SUBQUERY-003 - App queryset SQL has intact SELECT framing."""
-        pass
+        sql, params = self.compile(Subquery(Company.objects.all()))
+
+        self.assertTrue(sql.startswith('(SELECT'))
+        self.assertTrue(sql.endswith(')'))
+        self.assertEqual(params, ())
 
     def test_subquery_004_parameterized_inner_query_preserves_aligned_params(self):
         """GUID: SUBQUERY-004 - inner query parameters remain aligned."""
-        pass
+        subquery = Subquery(Company.objects.filter(name='Example Inc.'))
+        compiler = Company.objects.all().query.get_compiler(connection=connection)
+        _, inner_params = subquery.query.as_sql(compiler, connection)
+
+        sql, params = subquery.as_sql(compiler, connection)
+
+        self.assertIn('%s', sql)
+        self.assertEqual(params, inner_params)
+        self.assertEqual(params, ('Example Inc.',))
 
     def test_subquery_005_supplied_connection_compiler_avoids_edge_truncation(self):
         """GUID: SUBQUERY-005 - supplied compilation context keeps SQL edges."""
-        pass
+        subquery = Subquery(Company.objects.values('name'))
+        compiler = Company.objects.all().query.get_compiler(connection=connection)
+        original_as_sql = subquery.query.as_sql
+        with mock.patch.object(
+            subquery.query, 'as_sql', wraps=original_as_sql,
+        ) as query_as_sql:
+            sql, _ = subquery.as_sql(compiler, connection)
+
+        query_as_sql.assert_called_once_with(compiler, connection)
+        self.assertTrue(sql.startswith('(SELECT'))
+        self.assertTrue(sql.endswith(')'))
 
     def test_subquery_006_constructor_options_preserve_valid_observable_behavior(self):
         """GUID: SUBQUERY-006 - supported options retain valid behavior."""
-        pass
+        output_field = CharField()
+        subquery = Subquery(
+            Company.objects.filter(name='Example Inc.').values('name'),
+            output_field=output_field,
+            template='CUSTOM(%(subquery)s)',
+        )
+
+        sql, params = self.compile(subquery)
+
+        self.assertIs(subquery.output_field, output_field)
+        self.assertTrue(sql.startswith('CUSTOM(SELECT'))
+        self.assertTrue(sql.endswith(')'))
+        self.assertEqual(params, ('Example Inc.',))
 
 
 class BasicExpressionsTests(TestCase):

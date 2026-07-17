@@ -1143,32 +1143,14 @@ class Subquery(BaseExpression, Combinable):
     An explicit subquery. It may contain OuterRef() references to the outer
     query which will be resolved when it is applied to that query.
     """
-    # Architecture contract — GUID: SUBQUERY-001, SUBQUERY-002, SUBQUERY-003,
-    # SUBQUERY-004, SUBQUERY-005, SUBQUERY-006
-    #
-    # Subquery is the expression-layer adapter between QuerySet/Query inputs and
-    # the sql.Query compilation boundary. It owns a detached, subquery-marked
-    # Query and the outer expression template. sql.Query remains responsible for
-    # backend-aware compilation and its canonical subquery framing. Consequently,
-    # this adapter may remove and replace only that framing; it must treat the
-    # inner SQL and parameter sequence as an opaque compiler result. The supplied
-    # compiler/connection pair flows toward sql.Query and no dependency from the
-    # SQL layer back to this expression adapter is introduced.
     template = '(%(subquery)s)'
     contains_aggregate = False
     empty_result_set_value = None
 
     def __init__(self, queryset, output_field=None, **extra):
-        # Pseudocode — GUID: SUBQUERY-001, SUBQUERY-006
-        # INPUT queryset_or_query, optional output_field, supported extra options
-        # source_query := queryset_or_query.query IF that attribute exists
-        #                 ELSE queryset_or_query
-        # copied_query := CLONE source_query
-        # copied_query.subquery := TRUE
-        # STORE copied_query without mutating the caller's queryset or Query
-        # PRESERVE output_field and extra-option initialization unchanged
         # Allow the usage of both QuerySet and sql.Query objects.
-        self.query = getattr(queryset, 'query', queryset)
+        self.query = getattr(queryset, 'query', queryset).clone()
+        self.query.subquery = True
         self.extra = extra
         super().__init__(output_field)
 
@@ -1194,22 +1176,6 @@ class Subquery(BaseExpression, Combinable):
         return self.query.get_external_cols()
 
     def as_sql(self, compiler, connection, template=None, query=None, **extra_context):
-        # Pseudocode — GUID: SUBQUERY-002, SUBQUERY-003, SUBQUERY-004,
-        #                         SUBQUERY-005, SUBQUERY-006
-        # INPUT supplied compiler, its connection, optional query/template/context
-        # CHECK expression support on the supplied connection; PROPAGATE failure
-        # template_context := MERGE stored constructor options WITH call context
-        # inner_query := optional query IF supplied ELSE the stored copied query
-        # (framed_inner_sql, params) := COMPILE inner_query WITH the supplied
-        #                               compiler and connection
-        # REQUIRE framed_inner_sql to be the complete "(SELECT ... )" result
-        #         produced for a query whose subquery state is TRUE
-        # inner_sql := REMOVE only that verified outer subquery-parenthesis pair
-        # rendered_sql := APPLY the selected template to inner_sql so the result
-        #                 begins "(SELECT" and ends with its closing parenthesis
-        # RETURN (rendered_sql, params) without reordering or replacing params
-        # ON compilation/template failure, PROPAGATE the failure without returning
-        # partial SQL; otherwise preserve all supported options and SQL contents
         connection.ops.check_expression_support(self)
         template_params = {**self.extra, **extra_context}
         query = query or self.query
