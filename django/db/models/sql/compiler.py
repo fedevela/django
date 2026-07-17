@@ -1621,6 +1621,13 @@ class SQLCompiler:
 
 
 class SQLInsertCompiler(SQLCompiler):
+    # Insert-return boundary for BULKUPSERT-001, BULKUPSERT-002, and
+    # BULKUPSERT-003. The compiler materializes backend-returned fields in
+    # statement row order; QuerySet owns their interpretation and assignment.
+    # For BULKUPSERT-005, this boundary owns backend-specific returning-clause
+    # rendering and placement after the conflict clause. QuerySet remains the
+    # owner of return-set selection (BULKUPSERT-004, BULKUPSERT-013) and result
+    # assignment (BULKUPSERT-012, BULKUPSERT-013).
     returning_fields = None
     returning_params = ()
 
@@ -1772,6 +1779,19 @@ class SQLInsertCompiler(SQLCompiler):
             (f.column for f in self.query.update_fields),
             (f.column for f in self.query.unique_fields),
         )
+        # BULKUPSERT-005 pseudocode returning-clause flow:
+        # INPUT: requested returning_fields, backend return capabilities, the
+        # backend-produced conflict suffix, and insert values.
+        # IF returned columns are requested and supported:
+        #   BUILD the backend-valid insert/value form.
+        #   APPEND the conflict-update suffix when present.
+        #   ASK backend operations to render the returning clause for exactly
+        #   the requested fields, preserving its returned parameters.
+        #   APPEND a nonempty returning clause after the conflict suffix.
+        #   RETURN the single composed statement and parameters in clause order.
+        # ELSE continue through the existing non-returning SQL paths.
+        # FAILURE PATH: rely on backend capability gates and backend operations;
+        # do not synthesize a generic returning clause for an unsupported form.
         if (
             self.returning_fields
             and self.connection.features.can_return_columns_from_insert

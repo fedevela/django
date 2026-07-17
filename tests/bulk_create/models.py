@@ -3,6 +3,7 @@ import uuid
 from decimal import Decimal
 
 from django.db import models
+from django.db.models.functions import Now
 from django.utils import timezone
 
 try:
@@ -78,6 +79,20 @@ class UpsertConflict(models.Model):
     number = models.IntegerField(unique=True)
     rank = models.IntegerField()
     name = models.CharField(max_length=15)
+
+
+class CreatedField(models.DateTimeField):
+    db_returning = True
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("default", Now)
+        super().__init__(*args, **kwargs)
+
+
+class UpsertReturningModel(models.Model):
+    number = models.IntegerField(unique=True)
+    name = models.CharField(max_length=15)
+    created = CreatedField(editable=False)
 
 
 class NoFields(models.Model):

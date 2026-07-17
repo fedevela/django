@@ -672,17 +672,78 @@ class QuerySet(AltersData):
     def _check_bulk_create_options(
         self, ignore_conflicts, update_conflicts, update_fields, unique_fields
     ):
+        """
+        Resolve bulk-create options into the conflict mode owned by the insert
+        pipeline.
+
+        Conflict-mode contract (BULKUPSERT-006): this boundary owns selection
+        of OnConflict.IGNORE; returned-field and primary-key assignment remain
+        downstream responsibilities.
+
+        Validation ownership contract (BULKUPSERT-008): bulk_create() owns
+        model-field name resolution and passes resolved fields inward; this
+        boundary owns conflict-flag compatibility, backend feature gating, and
+        resolved-field shape validation. OnConflict is the only successful
+        handoff to the insert pipeline, so validation dependencies point from
+        bulk_create() through this boundary and never into backend operations.
+        """
+        # GUID: BULKUPSERT-008 -- conflict-option validation preservation.
+        # INPUT: conflict flags, resolved update_fields and unique_fields, and
+        # the selected database backend's existing conflict capabilities.
+        # VALIDATE IN THE ESTABLISHED ORDER:
+        #   IF ignore_conflicts and update_conflicts are both requested,
+        #     REJECT the mutually exclusive modes before selecting a backend
+        #     conflict mode.
+        #   IF ignore_conflicts is requested:
+        #     IF the backend does not support it, PROPAGATE the established
+        #       unsupported-option failure;
+        #     ELSE HAND OFF IGNORE as the selected conflict mode.
+        #   ELSE IF update_conflicts is requested:
+        #     IF the backend does not support it, PROPAGATE the established
+        #       unsupported-option failure.
+        #     REQUIRE a nonempty update_fields selection.
+        #     IF unique_fields is supplied but targeted conflict updates are
+        #       unsupported, REJECT the unsupported target option.
+        #     IF unique_fields is absent but the backend requires a target,
+        #       REJECT the incomplete conflict-update request.
+        #     FOR EACH update field, REJECT non-concrete or many-to-many fields,
+        #       then REJECT primary-key fields.
+        #     FOR EACH unique field, REJECT non-concrete or many-to-many fields.
+        #     ONLY AFTER every check succeeds, HAND OFF UPDATE as the selected
+        #       conflict mode.
+        #   ELSE HAND OFF no conflict mode.
+        # FAILURE PATH: preserve each existing exception type and message and
+        # stop before insert execution; do not add or relax validation rules.
         if ignore_conflicts and update_conflicts:
             raise ValueError(
                 "ignore_conflicts and update_conflicts are mutually exclusive."
             )
         db_features = connections[self.db].features
+        # BULKUPSERT-006 pseudocode option contract:
+        # INPUT: ignore-conflicts request and backend conflict capabilities.
+        # IF ignore conflicts is requested:
+        #   IF the backend cannot ignore conflicts, fail with the established
+        #   unsupported-operation error before any insert is attempted.
+        #   ELSE select the existing IGNORE conflict mode for the insert handoff.
+        # DO NOT reinterpret IGNORE as UPDATE or add any returned-primary-key
+        # guarantee.
         if ignore_conflicts:
             if not db_features.supports_ignore_conflicts:
                 raise NotSupportedError(
                     "This database backend does not support ignoring conflicts."
                 )
             return OnConflict.IGNORE
+        # GUID: BULKUPSERT-009 -- unsupported conflict-update preservation.
+        # INPUT: the update-conflicts request and the selected backend's
+        # existing supports_update_conflicts capability.
+        # IF conflict updates are requested:
+        #   IF the capability is false, REJECT with the established
+        #   unsupported-operation failure before validating update fields,
+        #   selecting UPDATE, or executing an insert.
+        #   ELSE continue through the existing field and target validation;
+        #   ONLY after it succeeds, HAND OFF UPDATE to the insert pipeline.
+        # FAILURE PATH: do not infer support, bypass the capability check, or
+        # alter its exception type or message.
         elif update_conflicts:
             if not db_features.supports_update_conflicts:
                 raise NotSupportedError(
@@ -738,6 +799,11 @@ class QuerySet(AltersData):
         signals, and do not set the primary key attribute if it is an
         autoincrement field (except if features.can_return_rows_from_bulk_insert=True).
         Multi-table models are not supported.
+
+        Architecture contract (BULKUPSERT-012, BULKUPSERT-013): bulk_create()
+        owns assignment of compiler-returned rows to model instances, while
+        the model's db_returning_fields remains the authority for which values
+        may be assigned.
         """
         # When you bulk insert you don't get the primary keys back (if it's an
         # autoincrement, except if can_return_rows_from_bulk_insert=True), so
@@ -763,6 +829,18 @@ class QuerySet(AltersData):
         if not objs:
             return objs
         opts = self.model._meta
+        # GUID: BULKUPSERT-008 -- conflict-field resolution preservation.
+        # INPUT: caller-provided update_fields and unique_fields names.
+        # IF unique_fields is nonempty, map the "pk" alias to the model's
+        # primary-key name and resolve every name through the model metadata.
+        # IF update_fields is nonempty, resolve every name through the same
+        # model metadata.
+        # FAILURE PATH: if any name cannot be resolved, propagate the existing
+        # field-resolution error and do not enter conflict-option validation or
+        # execute an insert.
+        # HANDOFF: pass only the resolved field objects to
+        # _check_bulk_create_options(), which applies capability and field-shape
+        # validation before a conflict mode can be selected.
         if unique_fields:
             # Primary key is allowed in unique_fields.
             unique_fields = [
@@ -782,6 +860,19 @@ class QuerySet(AltersData):
         objs = list(objs)
         self._prepare_for_bulk_create(objs)
         with transaction.atomic(using=self.db, savepoint=False):
+            # BULKUPSERT-012, BULKUPSERT-013 pseudocode assignment contract:
+            # INPUT: ordered returned rows and opts.db_returning_fields, the
+            # model-governed returned-field sequence.
+            # FOR EACH positional (object, returned row) pair:
+            #   PAIR returned values only with fields in db_returning_fields.
+            #   IF the object already has a primary key, retain that governed
+            #   value and assign every other paired governed value.
+            #   ELSE assign every paired governed value, including a returned
+            #   primary key.
+            # DO NOT infer, append, or assign any field category absent from
+            # db_returning_fields.
+            # OUTPUT: each object contains all applicable governed values and
+            # no newly introduced returned-field category.
             objs_with_pk, objs_without_pk = partition(lambda o: o.pk is None, objs)
             if objs_with_pk:
                 returned_columns = self._batched_insert(
@@ -801,6 +892,45 @@ class QuerySet(AltersData):
                     obj_with_pk._state.db = self.db
             if objs_without_pk:
                 fields = [f for f in fields if not isinstance(f, AutoField)]
+                # BULKUPSERT-011 architecture: QuerySet owns hydration and
+                # saved-state transitions for ordinary inserts; _batched_insert()
+                # remains the persistence seam, while the backend return
+                # capability and opts.db_returning_fields remain its contracts.
+                # The on_conflict=None boundary keeps this responsibility
+                # independent from conflict-handling modes.
+                # GUID: BULKUPSERT-011 -- ordinary bulk-create primary-key
+                # population preservation.
+                # INPUT: ordered objects without primary keys, no selected
+                # conflict mode, the backend's existing bulk-row-return
+                # capability, and the model-governed db_returning_fields.
+                # EXECUTE the ordinary batched insert with conflict handling
+                # absent and preserve the returned rows in input order.
+                # IF the backend can return rows for bulk inserts:
+                #   REQUIRE one returned row per input object before assignment.
+                #   FOR EACH positional object/row pair, ASSIGN each governed
+                #   returned value, including the generated primary key.
+                # ELSE assign no synthetic primary key and retain the backend's
+                # existing non-returning behavior.
+                # AFTER each available row is processed, TRANSITION its object
+                # to the existing saved state for this database.
+                # FAILURE PATH: propagate existing insert or correspondence
+                # failures through the enclosing transaction without changing
+                # ordinary insertion semantics or enabling conflict handling.
+                # OUTPUT: ordinary bulk_create() retains its established
+                # backend-dependent primary-key population behavior.
+                # BULKUPSERT-001, BULKUPSERT-002, BULKUPSERT-003 pseudocode:
+                # INPUT: objects without assigned primary keys, conflict mode, and
+                # backend row-return capability.
+                # IF conflict mode is UPDATE and the backend can return bulk rows:
+                #   RECEIVE one database row per input object, in input order.
+                #   REQUIRE returned-row count == input-object count; otherwise
+                #   fail the correspondence invariant before partial assignment.
+                #   FOR EACH positional (object, returned row) pair:
+                #     ASSIGN every database-returning field to the object.
+                #     Thus an inserted object receives its generated primary key,
+                #     while an updated object receives the matched row's primary key.
+                # ELSE preserve the existing behavior for non-returning backends and
+                # non-UPDATE conflict modes, including IGNORE.
                 returned_columns = self._batched_insert(
                     objs_without_pk,
                     fields,
@@ -812,7 +942,7 @@ class QuerySet(AltersData):
                 connection = connections[self.db]
                 if (
                     connection.features.can_return_rows_from_bulk_insert
-                    and on_conflict is None
+                    and (on_conflict is None or on_conflict == OnConflict.UPDATE)
                 ):
                     assert len(returned_columns) == len(objs_without_pk)
                 for obj_without_pk, results in zip(objs_without_pk, returned_columns):
@@ -1803,6 +1933,10 @@ class QuerySet(AltersData):
         Insert a new record for the given model. This provides an interface to
         the InsertQuery class and is how Model.save() is implemented.
         """
+        # Architecture contract (BULKUPSERT-007): update_fields and
+        # unique_fields belong to InsertQuery's conflict contract, while
+        # returning_fields belongs to compiler result handling. Callers must
+        # preserve these as independent inputs at this adapter seam.
         self._for_write = True
         if using is None:
             using = self.db
@@ -1829,6 +1963,20 @@ class QuerySet(AltersData):
     ):
         """
         Helper method for bulk_create() to insert objs one batch at a time.
+
+        Architecture contract (BULKUPSERT-001, BULKUPSERT-002,
+        BULKUPSERT-003): this boundary owns ordered aggregation of rows returned
+        by the insert compiler. Assignment of those rows to model instances
+        remains the responsibility of bulk_create().
+
+        Return-set contract (BULKUPSERT-004, BULKUPSERT-013): this boundary
+        passes the model-governed db_returning_fields to the insert compiler;
+        it does not derive returned fields from conflict-update inputs.
+
+        Ignore-conflicts contract (BULKUPSERT-006): OnConflict.IGNORE crosses
+        this insert boundary without a returning-fields request. Consequently,
+        bulk_create() receives no positional result set from which to assign
+        primary keys to ignored inputs.
         """
         connection = connections[self.db]
         ops = connection.ops
@@ -1836,14 +1984,78 @@ class QuerySet(AltersData):
         batch_size = min(batch_size, max_batch_size) if batch_size else max_batch_size
         inserted_rows = []
         bulk_return = connection.features.can_return_rows_from_bulk_insert
+        # BULKUPSERT-007 pseudocode conflict-semantics preservation:
+        # INPUT: the validated conflict mode, selected unique_fields used for
+        # conflict matching, selected update_fields, and returned-field capability.
+        # FOR EACH batch:
+        #   RETAIN unique_fields and update_fields as independent conflict inputs.
+        #   IF returned fields are enabled for UPDATE conflict mode:
+        #     REQUEST the model-governed returned fields without adding, removing,
+        #     replacing, or reordering either conflict-field selection.
+        #   HAND OFF the retained unique_fields as the conflict target and the
+        #   retained update_fields as the complete update assignment selection.
+        #   IF either selection was invalid, propagate the validation failure from
+        #   bulk_create() before executing a batch; do not reinterpret the fields.
+        # OUTPUT: enabling returned fields changes only the result-row handoff;
+        # conflict matching and the set of updated columns remain unchanged.
+        # BULKUPSERT-004, BULKUPSERT-013 pseudocode return-set contract:
+        # INPUT: conflict mode, backend bulk-row-return capability, and the
+        # model's existing db_returning_fields sequence.
+        # FOR EACH batch:
+        #   IF bulk rows can be returned and conflict mode is absent or UPDATE:
+        #     PASS the existing db_returning_fields sequence unchanged to the
+        #     insert compiler.
+        #     DO NOT add fields based on update_fields, unique_fields, conflict
+        #     targets, or any other ungoverned category.
+        #   ELSE execute without requesting returned fields.
+        # OUTPUT: conflict updates preserve exactly the governed return set.
+        # BULKUPSERT-001, BULKUPSERT-002, BULKUPSERT-003 pseudocode handoff:
+        # FOR EACH batch, preserving the original object order:
+        #   IF bulk row return is supported AND conflict mode is either absent or
+        #   UPDATE, execute the insert with database-returning fields and all
+        #   requested conflict-update options.
+        #   APPEND returned rows in database/input order so bulk_create() can pair
+        #   each row with its corresponding object across all batches.
+        #   OTHERWISE execute without requesting returned rows.
+        # OUTPUT: the ordered concatenation of all rows returned by all batches.
+        # GUID: BULKUPSERT-010 -- non-returning conflict-update preservation.
+        # INPUT: validated UPDATE conflict mode, conflict fields, batches, and
+        # the selected backend's existing bulk-row-return capability.
+        # IF conflict mode is UPDATE and bulk rows cannot be returned:
+        #   FOR EACH batch, EXECUTE the existing conflict-update insert with
+        #   update_fields and unique_fields unchanged.
+        #   REQUEST no returning fields and COLLECT no positional result rows.
+        #   HAND OFF an empty returned-row sequence to bulk_create(), so its
+        #   positional assignment loop assigns no database-generated values.
+        # OUTPUT: the backend retains its existing insert/update effects, while
+        # objects without preassigned primary keys receive no populated-primary-
+        # key guarantee from this operation.
+        # FAILURE PATH: propagate the backend's existing execution failure; do
+        # not synthesize returned rows, primary keys, or new backend support.
+        # BULKUPSERT-006 pseudocode IGNORE preservation flow:
+        # FOR EACH batch in IGNORE conflict mode:
+        #   EXECUTE the insert with IGNORE passed through to the backend.
+        #   IF an input row conflicts, let the backend ignore that row and
+        #   continue processing the operation under its existing semantics.
+        #   REQUEST no returned fields because ignored and inserted inputs do
+        #   not have a guaranteed one-to-one returned-row correspondence.
+        #   THEREFORE perform no returned-primary-key handoff for the batch and
+        #   leave each object's primary-key value without a new guarantee.
+        # OUTPUT: ignored rows remain ignored; no primary key is promised for an
+        # ignored object, and conflict-update behavior remains outside this flow.
         for item in [objs[i : i + batch_size] for i in range(0, len(objs), batch_size)]:
-            if bulk_return and on_conflict is None:
+            if bulk_return and (
+                on_conflict is None or on_conflict == OnConflict.UPDATE
+            ):
                 inserted_rows.extend(
                     self._insert(
                         item,
                         fields=fields,
                         using=self.db,
                         returning_fields=self.model._meta.db_returning_fields,
+                        on_conflict=on_conflict,
+                        update_fields=update_fields,
+                        unique_fields=unique_fields,
                     )
                 )
             else:

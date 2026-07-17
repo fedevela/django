@@ -32,6 +32,10 @@ class BaseDatabaseFeatures:
 
     can_use_chunked_reads = True
     can_return_columns_from_insert = False
+    # Architecture contract (GUID: BULKUPSERT-010): backend feature classes
+    # own this capability declaration. QuerySet's bulk-insert boundary may
+    # consume it to request and assign returned rows, but conflict-update
+    # support remains independent and must not imply a primary-key guarantee.
     can_return_rows_from_bulk_insert = False
     has_bulk_insert = True
     uses_savepoints = True
@@ -293,6 +297,10 @@ class BaseDatabaseFeatures:
     supports_ignore_conflicts = True
     # Does the backend support updating rows on constraint or uniqueness errors
     # during INSERT?
+    # Architecture contract (GUID: BULKUPSERT-009): backend feature classes
+    # own this capability declaration. QuerySet option validation consumes it
+    # before the insert/compiler boundary; the default remains unsupported and
+    # only a backend-specific feature override may opt in.
     supports_update_conflicts = False
     supports_update_conflicts_with_target = False
 

@@ -1,5 +1,6 @@
 from math import ceil
 from operator import attrgetter
+from unittest import mock
 
 from django.core.exceptions import FieldDoesNotExist
 from django.db import (
@@ -17,6 +18,7 @@ from django.test import (
     skipIfDBFeature,
     skipUnlessDBFeature,
 )
+from django.test.utils import CaptureQueriesContext
 
 from .models import (
     BigAutoFieldModel,
@@ -35,7 +37,270 @@ from .models import (
     State,
     TwoFields,
     UpsertConflict,
+    UpsertReturningModel,
 )
+
+
+class BulkCreateUpdateConflictsContractTests(TestCase):
+    def bulk_create(self, objs):
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["iso_two_letter", "name"]
+        return Country.objects.bulk_create(
+            objs,
+            update_conflicts=True,
+            update_fields=["description"],
+            unique_fields=unique_fields,
+        )
+
+    def bulk_create_with_returning_fields(self, objs):
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["number"]
+        return UpsertReturningModel.objects.bulk_create(
+            objs,
+            update_conflicts=True,
+            update_fields=["name"],
+            unique_fields=unique_fields,
+        )
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_001_inserted_object_receives_database_generated_pk(self):
+        """GUID: BULKUPSERT-001"""
+        country = Country(name="Germany", iso_two_letter="DE")
+
+        self.bulk_create([country])
+
+        self.assertEqual(country.pk, Country.objects.get().pk)
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_002_updated_object_receives_existing_matched_row_pk(self):
+        """GUID: BULKUPSERT-002"""
+        existing = Country.objects.create(
+            name="Germany", iso_two_letter="DE", description="old"
+        )
+        conflicting = Country(
+            name="Germany", iso_two_letter="DE", description="new"
+        )
+
+        self.bulk_create([conflicting])
+
+        self.assertEqual(conflicting.pk, existing.pk)
+        existing.refresh_from_db()
+        self.assertEqual(existing.description, "new")
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_003_mixed_batch_returned_pks_match_input_objects(self):
+        """GUID: BULKUPSERT-003"""
+        existing = Country.objects.create(
+            name="Germany", iso_two_letter="DE", description="old"
+        )
+        countries = [
+            Country(name="Australia", iso_two_letter="AU"),
+            Country(name="Germany", iso_two_letter="DE", description="new"),
+            Country(name="Japan", iso_two_letter="JP"),
+        ]
+
+        self.bulk_create(countries)
+
+        self.assertEqual(countries[1].pk, existing.pk)
+        self.assertEqual(
+            [country.pk for country in countries],
+            list(
+                Country.objects.filter(
+                    iso_two_letter__in=["AU", "DE", "JP"]
+                )
+                .order_by("iso_two_letter")
+                .values_list("pk", flat=True)
+            ),
+        )
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_004_conflict_update_preserves_existing_returning_fields(self):
+        """GUID: BULKUPSERT-004"""
+        UpsertReturningModel.objects.create(number=1, name="old")
+        returning_fields = UpsertReturningModel._meta.db_returning_fields
+        with mock.patch.object(
+            connection.ops,
+            "return_insert_columns",
+            wraps=connection.ops.return_insert_columns,
+        ) as return_insert_columns:
+            self.bulk_create_with_returning_fields(
+                [UpsertReturningModel(number=1, name="updated")]
+            )
+
+        return_insert_columns.assert_called_once_with(returning_fields)
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_005_conflict_update_emits_valid_returning_clause(self):
+        """GUID: BULKUPSERT-005"""
+        UpsertReturningModel.objects.create(number=1, name="old")
+        returning_fields = UpsertReturningModel._meta.db_returning_fields
+        returning_sql, _ = connection.ops.return_insert_columns(returning_fields)
+        with CaptureQueriesContext(connection) as captured_queries:
+            self.bulk_create_with_returning_fields(
+                [UpsertReturningModel(number=1, name="updated")]
+            )
+        insert_sql = next(
+            query["sql"]
+            for query in captured_queries
+            if query["sql"].lstrip().upper().startswith("INSERT")
+        )
+
+        self.assertIn(returning_sql, insert_sql)
+        self.assertLess(insert_sql.index("DO UPDATE"), insert_sql.index(returning_sql))
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts",
+        "supports_update_conflicts_with_target",
+        "can_return_rows_from_bulk_insert",
+    )
+    def test_BULKUPSERT_007_enabling_returned_fields_preserves_selected_conflict_matching_fields(
+        self,
+    ):
+        """GUID: BULKUPSERT-007"""
+        existing = Country.objects.create(
+            name="Germany", iso_two_letter="DE", description="old"
+        )
+        same_code = Country(
+            name="Denmark", iso_two_letter="DE", description="inserted"
+        )
+        conflicting = Country(
+            name="Germany", iso_two_letter="DE", description="updated"
+        )
+
+        self.bulk_create([same_code, conflicting])
+
+        self.assertEqual(
+            Country.objects.filter(iso_two_letter="DE").count(),
+            2,
+        )
+        self.assertEqual(same_code.pk, Country.objects.get(name="Denmark").pk)
+        self.assertEqual(conflicting.pk, existing.pk)
+        existing.refresh_from_db()
+        self.assertEqual(existing.description, "updated")
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_007_conflict_updates_only_selected_update_fields_when_returned_fields_enabled(
+        self,
+    ):
+        """GUID: BULKUPSERT-007"""
+        existing = UpsertConflict.objects.create(number=1, rank=1, name="original")
+        conflicting = UpsertConflict(number=1, rank=2, name="updated")
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["number"]
+
+        UpsertConflict.objects.bulk_create(
+            [conflicting],
+            update_conflicts=True,
+            update_fields=["name"],
+            unique_fields=unique_fields,
+        )
+
+        existing.refresh_from_db()
+        self.assertEqual(conflicting.pk, existing.pk)
+        self.assertEqual(existing.name, "updated")
+        self.assertEqual(existing.rank, 1)
+
+    def test_BULKUPSERT_009_backend_without_conflict_update_support_rejects_update_conflicts(
+        self,
+    ):
+        """GUID: BULKUPSERT-009"""
+        msg = "This database backend does not support updating conflicts."
+        with mock.patch.object(
+            connection.features, "supports_update_conflicts", False
+        ), self.assertNumQueries(0), self.assertRaisesMessage(NotSupportedError, msg):
+            Country.objects.bulk_create(
+                [Country(name="Germany", iso_two_letter="DE")],
+                update_conflicts=True,
+                update_fields=["description"],
+            )
+
+    @skipUnlessDBFeature("supports_update_conflicts")
+    def test_BULKUPSERT_010_backend_without_row_returning_retains_conflict_update_without_pk_guarantee(
+        self,
+    ):
+        """GUID: BULKUPSERT-010"""
+        existing = UpsertConflict.objects.create(number=1, rank=1, name="original")
+        conflicting = UpsertConflict(number=1, rank=2, name="updated")
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["number"]
+
+        with mock.patch.object(
+            connection.features.__class__,
+            "can_return_rows_from_bulk_insert",
+            False,
+        ):
+            UpsertConflict.objects.bulk_create(
+                [conflicting],
+                update_conflicts=True,
+                update_fields=["rank", "name"],
+                unique_fields=unique_fields,
+            )
+
+        self.assertIsNone(conflicting.pk)
+        existing.refresh_from_db()
+        self.assertEqual(existing.rank, 2)
+        self.assertEqual(existing.name, "updated")
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_012_conflict_update_assigns_all_governed_returning_fields(self):
+        """GUID: BULKUPSERT-012"""
+        existing = UpsertReturningModel.objects.create(number=1, name="old")
+        inserted = UpsertReturningModel(number=2, name="inserted")
+        conflicting = UpsertReturningModel(number=1, name="updated")
+
+        self.bulk_create_with_returning_fields([inserted, conflicting])
+
+        self.assertEqual(inserted.pk, UpsertReturningModel.objects.get(number=2).pk)
+        self.assertEqual(
+            inserted.created,
+            UpsertReturningModel.objects.get(number=2).created,
+        )
+        self.assertEqual(conflicting.pk, existing.pk)
+        self.assertEqual(conflicting.created, existing.created)
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
+    def test_BULKUPSERT_013_conflict_update_excludes_ungoverned_field_categories(self):
+        """GUID: BULKUPSERT-013"""
+        UpsertReturningModel.objects.create(number=1, name="old")
+        returning_fields = UpsertReturningModel._meta.db_returning_fields
+        returning_sql, _ = connection.ops.return_insert_columns(returning_fields)
+        with CaptureQueriesContext(connection) as captured_queries:
+            self.bulk_create_with_returning_fields(
+                [UpsertReturningModel(number=1, name="updated")]
+            )
+        insert_sql = next(
+            query["sql"]
+            for query in captured_queries
+            if query["sql"].lstrip().upper().startswith("INSERT")
+        )
+        returning_clause = insert_sql[insert_sql.index(returning_sql) :]
+
+        self.assertEqual(
+            [field.name for field in returning_fields],
+            ["id", "created"],
+        )
+        self.assertNotIn(connection.ops.quote_name("number"), returning_clause)
+        self.assertNotIn(connection.ops.quote_name("name"), returning_clause)
 
 
 class BulkCreateTests(TestCase):
@@ -46,6 +311,20 @@ class BulkCreateTests(TestCase):
             Country(name="Germany", iso_two_letter="DE"),
             Country(name="Czech Republic", iso_two_letter="CZ"),
         ]
+
+    @skipUnlessDBFeature("can_return_rows_from_bulk_insert")
+    def test_BULKUPSERT_011_ordinary_bulk_create_without_conflict_handling_preserves_existing_pk_population(
+        self,
+    ):
+        """GUID: BULKUPSERT-011"""
+        created = Country.objects.bulk_create(self.data)
+
+        self.assertEqual(created, self.data)
+        self.assertTrue(all(country.pk is not None for country in created))
+        self.assertEqual(
+            {country.iso_two_letter: country.pk for country in created},
+            dict(Country.objects.values_list("iso_two_letter", "pk")),
+        )
 
     def test_simple(self):
         created = Country.objects.bulk_create(self.data)
@@ -382,6 +661,22 @@ class BulkCreateTests(TestCase):
             TwoFields.objects.bulk_create(self.data, ignore_conflicts=True)
 
     @skipUnlessDBFeature("supports_ignore_conflicts")
+    def test_BULKUPSERT_006_ignore_conflicts_keeps_conflicting_row_ignored_without_pk_guarantee(
+        self,
+    ):
+        """GUID: BULKUPSERT-006"""
+        existing = TwoFields.objects.create(f1=1, f2=1, name="existing")
+        conflicting = TwoFields(f1=1, f2=2, name="conflicting")
+
+        TwoFields.objects.bulk_create([conflicting], ignore_conflicts=True)
+
+        self.assertEqual(TwoFields.objects.count(), 1)
+        stored = TwoFields.objects.get()
+        self.assertEqual(stored.pk, existing.pk)
+        self.assertEqual((stored.f1, stored.f2, stored.name), (1, 1, "existing"))
+        self.assertIsNone(conflicting.pk)
+
+    @skipUnlessDBFeature("supports_ignore_conflicts")
     def test_ignore_conflicts_ignore(self):
         data = [
             TwoFields(f1=1, f2=1),
@@ -441,6 +736,91 @@ class BulkCreateTests(TestCase):
         msg = "Batch size must be a positive integer."
         with self.assertRaisesMessage(ValueError, msg):
             Country.objects.bulk_create([], batch_size=-1)
+
+    def test_BULKUPSERT_008_invalid_update_fields_remain_rejected_for_conflict_update(
+        self,
+    ):
+        """GUID: BULKUPSERT-008"""
+        msg = "Country has no field named 'nonexistent'"
+        with self.assertNumQueries(0), self.assertRaisesMessage(
+            FieldDoesNotExist, msg
+        ):
+            Country.objects.bulk_create(
+                self.data,
+                update_conflicts=True,
+                update_fields=["nonexistent"],
+            )
+
+    def test_BULKUPSERT_008_invalid_unique_fields_remain_rejected_for_conflict_update(
+        self,
+    ):
+        """GUID: BULKUPSERT-008"""
+        msg = "Country has no field named 'nonexistent'"
+        with self.assertNumQueries(0), self.assertRaisesMessage(
+            FieldDoesNotExist, msg
+        ):
+            Country.objects.bulk_create(
+                self.data,
+                update_conflicts=True,
+                update_fields=["description"],
+                unique_fields=["nonexistent"],
+            )
+
+    def test_BULKUPSERT_008_ignore_and_update_conflict_flags_remain_mutually_exclusive(
+        self,
+    ):
+        """GUID: BULKUPSERT-008"""
+        msg = "ignore_conflicts and update_conflicts are mutually exclusive."
+        with self.assertNumQueries(0), self.assertRaisesMessage(ValueError, msg):
+            Country.objects.bulk_create(
+                self.data,
+                ignore_conflicts=True,
+                update_conflicts=True,
+                update_fields=["description"],
+            )
+
+    def test_BULKUPSERT_008_unsupported_conflict_options_remain_rejected(self):
+        """GUID: BULKUPSERT-008"""
+        options = [
+            (
+                "ignore_conflicts",
+                {"supports_ignore_conflicts": False},
+                {"ignore_conflicts": True},
+                "This database backend does not support ignoring conflicts.",
+            ),
+            (
+                "update_conflicts",
+                {"supports_update_conflicts": False},
+                {
+                    "update_conflicts": True,
+                    "update_fields": ["description"],
+                },
+                "This database backend does not support updating conflicts.",
+            ),
+            (
+                "unique_fields",
+                {
+                    "supports_update_conflicts": True,
+                    "supports_update_conflicts_with_target": False,
+                },
+                {
+                    "update_conflicts": True,
+                    "update_fields": ["description"],
+                    "unique_fields": ["name"],
+                },
+                (
+                    "This database backend does not support updating conflicts "
+                    "with specifying unique fields that can trigger the upsert."
+                ),
+            ),
+        ]
+        for option, feature_values, kwargs, msg in options:
+            with self.subTest(option=option):
+                with self.assertNumQueries(0), mock.patch.multiple(
+                    connection.features, **feature_values
+                ):
+                    with self.assertRaisesMessage(NotSupportedError, msg):
+                        Country.objects.bulk_create(self.data, **kwargs)
 
     @skipIfDBFeature("supports_update_conflicts")
     def test_update_conflicts_unsupported(self):
