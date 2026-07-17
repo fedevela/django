@@ -41,6 +41,13 @@ class Q(tree.Node):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
+        # QCOMB-001/QCOMB-002/QCOMB-003/QCOMB-005/QCOMB-006 architecture:
+        # This method owns the empty-operand identity seam. Its structural-copy
+        # boundary is the inherited Node._new_instance() factory, supplied with
+        # the surviving Q's children, connector, and negated state. Node owns
+        # allocating an independent children container; Q owns selecting the
+        # survivor. Leaf lookup values remain opaque references across this
+        # boundary, so the seam must not depend on deepcopy or serialization.
         # QCOMB-001/QCOMB-002/QCOMB-003/QCOMB-005/QCOMB-006 pseudocode:
         # INPUT: the left Q (`self`), the proposed right operand, and connector.
         # IF the right operand is not a Q, follow the existing type-error path
