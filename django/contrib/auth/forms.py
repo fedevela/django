@@ -34,7 +34,25 @@ class ReadOnlyPasswordHashWidget(forms.Widget):
     template_name = 'auth/widgets/read_only_password_hash.html'
     read_only = True
 
+    # RPH-001, RPH-002, RPH-004 -- label-association protocol:
+    # PROCEDURE id_for_label(generated_field_id):
+    #     IGNORE generated_field_id because this widget renders password-hash
+    #     information rather than a labelable control.
+    #     RETURN no association target.
+    # HANDOFF BoundField.label_tag() receives the absent target, keeps the
+    # human-readable label contents, and emits the label without a `for`
+    # attribute. Other widgets continue through Widget.id_for_label() (or
+    # their own override) and therefore retain their labelable control target.
+
     def get_context(self, name, value, attrs):
+        # RPH-003 -- password-hash rendering remains independent of labels:
+        # INPUT the stored password value and widget attributes.
+        # BUILD the normal widget context and password-hash summary.
+        # IF the value is absent or unusable, expose the no-password state.
+        # ELSE IF its hasher cannot be identified, expose the invalid-format
+        # state without changing label-association handling.
+        # ELSE expose every safe-summary item produced by the hasher.
+        # OUTPUT the unchanged read-only password-hash context for rendering.
         context = super().get_context(name, value, attrs)
         summary = []
         if not value or value.startswith(UNUSABLE_PASSWORD_PREFIX):
