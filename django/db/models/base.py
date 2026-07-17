@@ -1299,6 +1299,50 @@ class Model(metaclass=ModelBase):
 
     @classmethod
     def _check_default_pk(cls):
+        # Pseudocode -- GUID: PKW-004
+        # Verification:
+        # test_pkw_004_genuinely_auto_created_pk_continues_to_produce_w042_
+        # under_existing_conditions
+        # INPUT the checked model, its effective primary-key field, and the
+        # existing project and application default-auto-field configuration.
+        # CLASSIFY a primary key as genuinely auto-created only when model
+        # construction supplied it and it is not an inherited parent link.
+        # IF that classification and every existing warning condition hold,
+        # RETURN the existing models.W042 warning, message, hint, and model;
+        # ELSE RETURN no default-primary-key warning.
+        # PROPAGATE metadata and configuration failures through their existing
+        # paths without translating them into models.W042.
+        #
+        # Pseudocode -- GUID: PKW-005
+        # Verification:
+        # test_pkw_005_regression_distinguishes_inherited_explicit_pk_from_
+        # genuinely_auto_created_pk
+        # INPUT two independently isolated models: one whose effective primary
+        # key comes from an explicit supported ancestor declaration and one
+        # whose primary key is genuinely auto-created.
+        # RUN the same model-check aggregation for both models and PARTITION its
+        # results by warning identifier and owning model.
+        # FOR the inherited-explicit model, follow the inherited-primary-key
+        # exclusion and OBSERVE no models.W042 owned by the descendant.
+        # FOR the genuinely-auto-created model, follow PKW-004 and OBSERVE its
+        # models.W042 whenever the existing warning conditions hold.
+        # KEEP each model's classification and result independent of the other.
+        #
+        # Pseudocode -- GUID: PKW-006
+        # Verification:
+        # test_pkw_006_correction_leaves_unrelated_system_checks_unchanged
+        # test_pkw_006_correction_leaves_supported_model_inheritance_behavior_
+        # unchanged
+        # test_pkw_006_correction_leaves_migration_behavior_unchanged
+        # LIMIT the correction to deciding whether this check emits W042 for
+        # the checked model; DO NOT mutate model or field metadata.
+        # HAND the result back to the existing check aggregator without
+        # reordering, filtering, or translating results from other checks.
+        # PRESERVE supported inheritance binding, effective-primary-key
+        # identity and semantics, and all existing inheritance failure paths.
+        # PRESERVE the model state consumed by migration serialization and
+        # autodetection, so equivalent before/after states yield the same
+        # migration operations and migration failures remain unchanged.
         if (
             cls._meta.pk.auto_created and
             # Inherited PKs are checked in parent models. GUIDs: PKW-001,
