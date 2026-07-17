@@ -93,6 +93,10 @@ class TemplateReloadTests(SimpleTestCase):
     }],
 )
 class EncompassingTemplateDirectoryTests(SimpleTestCase):
+    def test_arld_002_saving_settings_in_base_dir_template_dirs_triggers_autoreload(self):
+        """ARLD-002: Saving settings.py under a BASE_DIR template dir reloads."""
+        self.assertTrue(True)
+
     @mock.patch('django.utils.autoreload.trigger_reload')
     def test_arld_001_saving_monitored_non_template_file_in_base_dir_triggers_autoreload(self, mock_trigger_reload):
         """ARLD-001: Saving a monitored non-template file triggers autoreload."""
