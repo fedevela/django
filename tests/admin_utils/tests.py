@@ -423,46 +423,35 @@ class ReadOnlyPasswordHashWidgetLabelContractTests(SimpleTestCase):
         password = ReadOnlyPasswordHashField(label='Password digest')
 
     def _render_password_hash_admin_field(self, initial=None):
-        """RPH-005 architecture seam for the label and widget renderings."""
-        # Own construction of PasswordForm and helpers.AdminField here so all
-        # RPH-005 checks observe one bound field. The implementation phase will
-        # return the rendered label and widget output through this test-only
-        # seam; verification remains owned by the individual test methods.
-        pass
+        """Render the RPH-005 label and widget from the same admin field."""
+        form = self.PasswordForm(initial={'password': initial})
+        admin_field = helpers.AdminField(form, 'password', is_first=True)
+        return admin_field.label_tag(), str(admin_field.field)
 
     def test_RPH_005_rendered_admin_field_label_has_no_for_attribute(self):
         """RPH-005: The rendered field label has no for attribute."""
-        # LOGIC OBLIGATION: reject any association between the rendered label
-        # and a control that ReadOnlyPasswordHashWidget does not provide.
-        # GIVEN PasswordForm with the read-only password-hash field,
-        # WHEN AdminField renders the password field's label,
-        # THEN parse or inspect the label element's attributes.
-        # IF a `for` attribute is present, FAIL the regression verification;
-        # OTHERWISE accept the label as unassociated.
-        pass
+        label, _ = self._render_password_hash_admin_field()
+        self.assertHTMLEqual(label, '<label>Password digest:</label>')
 
     def test_RPH_005_rendered_admin_field_keeps_human_readable_label_text(self):
         """RPH-005: The rendered field keeps its human-readable label text."""
-        # LOGIC OBLIGATION: removing label association must not remove the
-        # field's human-readable label content.
-        # GIVEN the same PasswordForm and rendered AdminField label,
-        # WHEN the label's visible text content is inspected,
-        # THEN compare it with the field label "Password digest".
-        # IF the human-readable text is absent, FAIL the regression
-        # verification; OTHERWISE accept the preserved label content.
-        pass
+        label, _ = self._render_password_hash_admin_field()
+        self.assertIn('Password digest', label)
 
     def test_RPH_005_rendered_widget_keeps_password_hash_information(self):
         """RPH-005: The rendered widget keeps password-hash information."""
-        # LOGIC OBLIGATION: label rendering changes must not disturb the
-        # read-only widget's safe password-hash summary.
-        # GIVEN PasswordForm initialized with the representative password hash,
-        # WHEN the admin label and password widget output are rendered,
-        # THEN inspect the widget output for the safe hash-summary information.
-        # IF the algorithm, iterations, masked salt, or masked hash is absent,
-        # FAIL the regression verification; OTHERWISE accept the preserved
-        # password-hash information.
-        pass
+        _, widget = self._render_password_hash_admin_field(self.password)
+        self.assertHTMLEqual(
+            widget,
+            """
+            <div id="id_password">
+                <strong>algorithm</strong>: pbkdf2_sha256
+                <strong>iterations</strong>: 100000
+                <strong>salt</strong>: a6Pucb******
+                <strong>hash</strong>: WmCkn9**************************************
+            </div>
+            """,
+        )
 
     def test_RPH_001_admin_label_omits_for_when_widget_is_read_only_password_hash(self):
         """RPH-001: The admin label omits for for ReadOnlyPasswordHashWidget."""
