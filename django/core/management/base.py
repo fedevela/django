@@ -286,6 +286,42 @@ class BaseCommand:
         Create and return the ``ArgumentParser`` which will be used to
         parse the arguments to this command.
         """
+        # Pseudocode — command help formatting obligations:
+        #
+        # INPUTS: this command's help text, any command-selected help-formatting
+        # behavior, and the parser construction arguments.
+        #
+        # MCFMT-001:
+        #   IF the command has selected command-specific help formatting:
+        #       use that selected behavior when formatting this command's help
+        #       text.
+        #   ELSE:
+        #       use the default management-command help formatting behavior.
+        #
+        # MCFMT-002:
+        #   IF the selected behavior preserves newlines:
+        #       read the help text as ordered line content plus newline
+        #       delimiters;
+        #       emit every intentional delimiter unchanged, including those
+        #       that delimit blank lines, without joining or rewrapping lines.
+        #
+        # MCFMT-003:
+        #   IF the selected behavior preserves indentation:
+        #       FOR EACH help-text line in source order:
+        #           copy its intentional leading whitespace unchanged before
+        #           emitting its remaining content.
+        #
+        # MCFMT-004:
+        #   GIVEN source lines [introductory text, "Example usage:",
+        #   indented invocation]:
+        #       emit them in the same order as three separate output lines;
+        #       retain the invocation's leading indentation.
+        #
+        # OUTPUT: a parser whose command description follows the selected
+        # formatting behavior when help is rendered.
+        # FAILURE: if a selected behavior cannot format the help text, surface
+        # that failure through the parser help-formatting path; do not silently
+        # substitute the default behavior and violate the command's selection.
         parser = CommandParser(
             prog="%s %s" % (os.path.basename(prog_name), subcommand),
             description=self.help or None,
