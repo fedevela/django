@@ -1147,6 +1147,12 @@ class Subquery(BaseExpression, Combinable):
     contains_aggregate = False
     empty_result_set_value = None
 
+    # GUID: SUBQUERY-007 - construction and compilation logic obligation.
+    # PROCEDURE construct_subquery(queryset, output_field, extra):
+    #   INPUT a QuerySet or Query without caller-side query.subquery mutation.
+    #   CLONE the supplied Query so construction cannot mutate caller state.
+    #   TRANSITION the cloned Query to subquery state before any compilation.
+    #   RETAIN output-field and template context for the compilation handoff.
     def __init__(self, queryset, output_field=None, **extra):
         # Allow the usage of both QuerySet and sql.Query objects.
         self.query = getattr(queryset, 'query', queryset).clone()
@@ -1175,6 +1181,18 @@ class Subquery(BaseExpression, Combinable):
     def get_external_cols(self):
         return self.query.get_external_cols()
 
+    # GUID: SUBQUERY-007 - intact SQL edges and parameter-preservation logic.
+    # GUID: SUBQUERY-008 - established expression/subquery non-regression logic.
+    # PROCEDURE compile_subquery(compiler, connection, template, query, context):
+    #   VERIFY the backend supports this expression; PROPAGATE rejection errors.
+    #   SELECT the explicit query when supplied, otherwise the constructed clone.
+    #   COMPILE the selected query and receive its complete SQL and parameters.
+    #   REQUIRE the inner SQL to retain its first token and final delimiter.
+    #   REMOVE only the inner query's own outer parentheses for interpolation.
+    #   SELECT the explicit template, then contextual template, then default.
+    #   INTERPOLATE the complete inner statement into exactly one template frame.
+    #   RETURN framed SQL and the compiler-produced parameters unchanged.
+    #   PRESERVE custom-template and existing expression compilation branches.
     def as_sql(self, compiler, connection, template=None, query=None, **extra_context):
         connection.ops.check_expression_support(self)
         template_params = {**self.extra, **extra_context}
