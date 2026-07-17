@@ -314,11 +314,22 @@ class SimpleLazyObjectTestCase(LazyObjectTestCase):
 
     def test_radd_007_support_does_not_resolve_before_addition(self):
         """GUID: RADD-007 - Support leaves an unused lazy operand unresolved."""
-        pass
+        setup_calls = []
+        lazy = SimpleLazyObject(lambda: setup_calls.append(None) or ("right",))
+
+        self.assertTrue(callable(lazy.__radd__))
+        self.assertIs(lazy._wrapped, empty)
+        self.assertEqual(setup_calls, [])
 
     def test_radd_002_unresolved_right_operand_resolves_before_use(self):
         """GUID: RADD-002 - Addition resolves its lazy right operand before use."""
-        pass
+        setup_calls = []
+        wrapped = ("right",)
+        lazy = SimpleLazyObject(lambda: setup_calls.append(None) or wrapped)
+
+        self.assertEqual(("left",) + lazy, ("left", "right"))
+        self.assertEqual(setup_calls, [None])
+        self.assertIs(lazy._wrapped, wrapped)
 
     def test_radd_003_addition_without_wrapped_radd_uses_direct_operation(self):
         """GUID: RADD-003 - Addition doesn't require wrapped __radd__."""
@@ -338,11 +349,26 @@ class SimpleLazyObjectTestCase(LazyObjectTestCase):
 
     def test_radd_004_resolved_right_operand_reuses_value_without_setup(self):
         """GUID: RADD-004 - Addition reuses a resolved value without setup."""
-        pass
+        setup_calls = []
+        wrapped = ("right",)
+        lazy = SimpleLazyObject(lambda: setup_calls.append(None) or wrapped)
+        lazy._setup()
+
+        self.assertEqual(setup_calls, [None])
+        self.assertEqual(("left",) + lazy, ("left", "right"))
+        self.assertEqual(setup_calls, [None])
+        self.assertIs(lazy._wrapped, wrapped)
 
     def test_radd_002_radd_004_repeated_addition_resolves_once_then_reuses_value(self):
         """GUID: RADD-002, RADD-004 - Repeated addition reuses first resolution."""
-        pass
+        setup_calls = []
+        wrapped = ("right",)
+        lazy = SimpleLazyObject(lambda: setup_calls.append(None) or wrapped)
+
+        self.assertEqual(("first",) + lazy, ("first", "right"))
+        self.assertEqual(("second",) + lazy, ("second", "right"))
+        self.assertEqual(setup_calls, [None])
+        self.assertIs(lazy._wrapped, wrapped)
 
     def test_radd_005_unresolved_right_operand_preserves_direct_return_value(self):
         """GUID: RADD-005 - Addition preserves the direct return value."""
