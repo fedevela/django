@@ -70,6 +70,24 @@ class AutocompleteJsonView(BaseListView):
 
     def get_queryset(self):
         """Return queryset based on ModelAdmin.get_search_results()."""
+        # Queryset-membership preservation pseudocode (GUID: ACJ-010):
+        # Receive the resolved ModelAdmin, source relation field, request, and
+        # search term before any selected object is serialized.
+        # Ask the ModelAdmin for its existing request-scoped base queryset.
+        # Apply the source field's existing limit_choices_to expression to that
+        # queryset so only the same relation-eligible objects proceed.
+        # Pass that constrained queryset and the unchanged search term to the
+        # ModelAdmin's existing search procedure; preserve both its resulting
+        # queryset and its indication that relation traversal may duplicate
+        # objects.
+        # If search indicates duplicates may exist, eliminate duplicates from
+        # that result exactly once before returning it.
+        # Otherwise, return the search result without adding distinct handling.
+        # If any queryset, constraint, or search operation fails, propagate the
+        # existing failure without serializing a partial selection or replacing
+        # it with a differently filtered queryset.
+        # Hand the final queryset to pagination and serialization without
+        # independently changing its object membership.
         qs = self.model_admin.get_queryset(self.request)
         qs = qs.complex_filter(self.source_field.get_limit_choices_to())
         qs, search_use_distinct = self.model_admin.get_search_results(self.request, qs, self.term)
