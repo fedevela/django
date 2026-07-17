@@ -1,4 +1,5 @@
 import datetime
+import warnings
 from collections import Counter
 from unittest import mock
 
@@ -1217,17 +1218,48 @@ class FormsFormsetTestCase(SimpleTestCase):
 
     def test_mgmt_001_rendered_management_form_omits_default_template_warning(self):
         """GUID: MGMT-001."""
-        self.assertTrue(True)
+        formset = FavoriteDrinksFormSet()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", RemovedInDjango50Warning)
+            str(formset.management_form)
 
     def test_mgmt_002_rendered_management_form_contains_all_fields_as_hidden_inputs(
         self,
     ):
         """GUID: MGMT-002."""
-        self.assertTrue(True)
+        formset = FavoriteDrinksFormSet(prefix="drinks")
+        self.assertHTMLEqual(
+            str(formset.management_form),
+            """
+            <input type="hidden" name="drinks-TOTAL_FORMS" value="3"
+                id="id_drinks-TOTAL_FORMS">
+            <input type="hidden" name="drinks-INITIAL_FORMS" value="0"
+                id="id_drinks-INITIAL_FORMS">
+            <input type="hidden" name="drinks-MIN_NUM_FORMS" value="0"
+                id="id_drinks-MIN_NUM_FORMS">
+            <input type="hidden" name="drinks-MAX_NUM_FORMS" value="1000"
+                id="id_drinks-MAX_NUM_FORMS">
+            """,
+        )
 
     def test_mgmt_003_rendering_preserves_management_field_output_except_warning(self):
         """GUID: MGMT-003."""
-        self.assertTrue(True)
+        data = {
+            "inventory-TOTAL_FORMS": "2",
+            "inventory-INITIAL_FORMS": "1",
+            "inventory-MIN_NUM_FORMS": "1",
+            "inventory-MAX_NUM_FORMS": "5",
+        }
+        formset = FavoriteDrinksFormSet(
+            data=data,
+            prefix="inventory",
+            auto_id="mgmt_%s",
+        )
+        management_form = formset.management_form
+        self.assertEqual(
+            str(management_form),
+            management_form.render(management_form.template_name_table),
+        )
 
     def test_non_form_errors(self):
         data = {
