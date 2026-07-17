@@ -2797,6 +2797,16 @@ class SquashMigrationsTests(MigrationTestBase):
         GUID: DJANGO-003 - Applying the original sequence and its squashed
         replacement to equivalent databases produces equivalent final indexes.
         """
+        # Pseudocode (DJANGO-003):
+        # GIVEN two isolated databases at the same valid pre-migration state
+        # AND the original migration sequence and its generated replacement
+        # WHEN the original sequence is applied to the first database
+        # AND the replacement is applied to the second database
+        # THEN fail immediately if either migration path cannot be applied
+        # AND introspect the indexes on the transitioned model in each database
+        # AND normalize backend-specific index metadata into comparable
+        #     definitions (name, ordered fields, and all defining attributes)
+        # AND assert that both collections of final definitions are equal.
         self.assertTrue(True)
 
     def test_django_004_squash_retains_every_final_index_definition(self):
@@ -2804,6 +2814,18 @@ class SquashMigrationsTests(MigrationTestBase):
         GUID: DJANGO-004 - Every final Meta.indexes entry retains its fields
         and definition after squashing.
         """
+        # Pseudocode (DJANGO-004):
+        # GIVEN the final project state produced by the original migration
+        #     sequence and the generated squashed replacement
+        # WHEN final Meta.indexes entries are read from the original state
+        # AND the replacement is applied to an equivalent starting database
+        # AND its resulting indexes are introspected from that database
+        # THEN for each expected Meta.indexes entry:
+        #     derive its complete normalized definition and ordered fields;
+        #     locate the resulting index by its stable identity;
+        #     fail if the index is absent;
+        #     fail if its fields or any defining attribute differs;
+        # AND succeed only after every expected final index has been matched.
         self.assertTrue(True)
 
     def test_django_005_generated_squashed_migration_loads_and_applies(self):
@@ -2811,6 +2833,15 @@ class SquashMigrationsTests(MigrationTestBase):
         GUID: DJANGO-005 - The generated squashed migration remains valid,
         loadable, and executable.
         """
+        # Pseudocode (DJANGO-005):
+        # GIVEN a generated squashed migration in an isolated migration module
+        # WHEN migration caches are refreshed and the module is loaded
+        # THEN fail if import, deserialization, graph construction, replacement
+        #     metadata, dependencies, or operation definitions are invalid
+        # WHEN an executor applies the loaded replacement from a valid starting
+        #     database state to its declared target state
+        # THEN fail on any planning, state-transition, schema, or execution error
+        # AND confirm that the replacement target is recorded as applied.
         self.assertTrue(True)
 
     def test_django_006_normal_squashing_needs_no_manual_history_rewrite(self):
