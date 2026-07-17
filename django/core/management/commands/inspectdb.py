@@ -136,6 +136,11 @@ class Command(BaseCommand):
                 # classification owns repeated-target detection. Per-column
                 # relation construction consumes it but doesn't depend on the
                 # model-check framework that ultimately validates the output.
+                # Ownership contract (GUID: INSP-006, INSP-007): `relations`
+                # remains the authoritative source for recognized columns and
+                # inspected targets. This model-local classifier may expose only
+                # repeated-group membership; it must not rename, remove, retarget,
+                # or share classification state across generated models.
                 # GUID: INSP-001 - Track relation targets within this model so all
                 # members of a repeated-target group can receive a reverse name.
                 # GUID: INSP-007 - Logic obligations for
@@ -188,6 +193,11 @@ class Command(BaseCommand):
                         extra_params["unique"] = True
 
                     if is_relation:
+                        # Integration boundary (GUID: INSP-006, INSP-007): The
+                        # common relation-construction path below owns the field's
+                        # normalized attribute name, inspected target, and relation
+                        # type. Repeated-group membership may contribute only the
+                        # optional `related_name` parameter at its guarded seam.
                         # GUID: INSP-006 - Logic obligation for
                         # test_insp_006_repeated_target_relations_preserve_field_names_and_targets:
                         # FOR EACH recognized relation, retain the normalized att_name
