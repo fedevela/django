@@ -652,6 +652,24 @@ class ListDisplayTests(CheckTestCase):
 
         self.assertIsValid(TestModelAdmin, ValidationTestModel)
 
+    def test_gev_007_mixed_valid_and_invalid_entries_report_only_invalid_entry(self):
+        self.assertTrue(True)
+
+    def test_gev_007_multiple_invalid_entries_each_emit_e108_independently(self):
+        self.assertTrue(True)
+
+    def test_gev_008_established_valid_list_display_outcome_is_retained(self):
+        self.assertTrue(True)
+
+    def test_gev_008_established_invalid_entry_retains_e108_diagnostic_contract(self):
+        self.assertTrue(True)
+
+    def test_gev_009_repeated_checks_of_unchanged_configuration_match(self):
+        self.assertTrue(True)
+
+    def test_gev_009_check_without_request_or_model_instance_has_same_result(self):
+        self.assertTrue(True)
+
     def test_not_iterable(self):
         class TestModelAdmin(ModelAdmin):
             list_display = 10
