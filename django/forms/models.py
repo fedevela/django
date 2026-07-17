@@ -1159,6 +1159,12 @@ class InlineForeignKeyField(Field):
 
 
 class ModelChoiceIteratorValue:
+    # Architecture contract (MCI-001--MCI-008): this value object owns the
+    # raw-value compatibility boundary. Hashing, equality, and string
+    # conversion belong here; ModelChoiceIterator only constructs it, while
+    # generic choice widgets consume it without depending on model forms.
+    # Keep dependencies directed ModelChoiceIterator -> this adapter -> raw
+    # value, with widget integration limited to the existing value protocol.
     # MCI-001, MCI-002, MCI-003, MCI-008 -- hash contract pseudocode:
     #
     # def __hash__(self):
@@ -1223,6 +1229,7 @@ class ModelChoiceIterator:
         return self.field.empty_label is not None or self.queryset.exists()
 
     def choice(self, obj):
+        # MCI-006, MCI-007: sole model-choice-to-widget value adapter seam.
         return (
             ModelChoiceIteratorValue(self.field.prepare_value(obj), obj),
             self.field.label_from_instance(obj),
