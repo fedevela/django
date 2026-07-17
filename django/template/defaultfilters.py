@@ -581,6 +581,13 @@ def first(value):
         return ""
 
 
+# JOIN-001/JOIN-002/JOIN-003 architecture boundary: filter registration is the
+# integration seam that supplies the active autoescape state to this sole owner;
+# the already-resolved separator enters through ``arg`` independent of whether it
+# originated as a literal or a context value.
+# JOIN-004/JOIN-005 ownership boundary: this filter retains responsibility for
+# valid join semantics and its established noniterable fallback. No adapter or
+# dependency outside this module is required for the correction.
 @register.filter(is_safe=True, needs_autoescape=True)
 def join(value, arg, autoescape=True):
     """Join a list with a string, like Python's ``str.join(list)``."""
