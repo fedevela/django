@@ -186,6 +186,8 @@ class ManagementUtility:
     Encapsulate the logic of the django-admin and manage.py utilities.
     """
     def __init__(self, argv=None):
+        # DJANGO-008 architecture: ManagementUtility owns the argv-to-program
+        # name boundary; parser construction consumes only the stored result.
         # DJANGO-008 pseudocode:
         # INPUT: the valid supplied argument vector and its first element.
         # DERIVE: take the basename of argv[0] as the computed program name.
@@ -350,6 +352,9 @@ class ManagementUtility:
         # Preprocess options to extract --settings and --pythonpath.
         # These options could affect the commands that are available, so they
         # must be processed early.
+        # DJANGO-003 / DJANGO-008 architecture: CommandParser is the rendering
+        # boundary and receives ManagementUtility.prog_name through ``prog``;
+        # process-global argument state remains outside this integration seam.
         # DJANGO-003 / DJANGO-008 pseudocode:
         # INPUT: self.prog_name computed from the valid supplied argv, including
         # the "python -m django" normalization required by DJANGO-008.
