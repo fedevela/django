@@ -27,6 +27,14 @@ class PasswordResetTokenGenerator:
         """
         return self._make_token_with_timestamp(user, self._num_seconds(self._now()))
 
+    # Architecture contract (GUID: PRT-004, PRT-005):
+    # check_token() owns the token-validity lifecycle boundary. Generation and
+    # signature validation share _make_token_with_timestamp(), whose private
+    # _make_hash_value() dependency remains the single owner of all
+    # token-relevant user state. Expiration remains a separate policy boundary
+    # owned here through settings.PASSWORD_RESET_TIMEOUT. Email binding must
+    # extend the hash-state seam without replacing established state inputs or
+    # bypassing this timeout boundary.
     def check_token(self, user, token):
         """
         Check that a password reset token is correct for a given user.
