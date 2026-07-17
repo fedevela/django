@@ -2516,6 +2516,11 @@ class AutoFieldMeta(type):
     for detecting automatically-generated fields.
     """
 
+    # AUTOPK-001 architecture: AutoFieldMeta owns the virtual-inheritance
+    # compatibility boundary. _subclasses defines its closed set of supported
+    # automatic-field roots, and __subclasscheck__ is the integration seam for
+    # recognizing their descendants without coupling the concrete field classes
+    # back to AutoField.
     @property
     def _subclasses(self):
         return (BigAutoField, SmallAutoField)
@@ -2524,7 +2529,17 @@ class AutoFieldMeta(type):
         return isinstance(instance, self._subclasses) or super().__instancecheck__(instance)
 
     def __subclasscheck__(self, subclass):
-        return subclass in self._subclasses or super().__subclasscheck__(subclass)
+        # AUTOPK-001 pseudocode -- descendant-aware AutoField recognition:
+        # INPUT: subclass, the candidate class evaluated against AutoField.
+        # FOR each supported automatic-field root in (BigAutoField, SmallAutoField):
+        #     IF subclass is the root OR directly or indirectly descends from it:
+        #         RETURN true.
+        #         This covers direct and indirect descendants of both roots.
+        # IF no supported-root relationship exists:
+        #     DELEGATE to the ordinary AutoField subclass check.
+        #     RETURN its result so unrelated fields remain unaffected and any
+        #     invalid-candidate failure follows the standard metaclass path.
+        return issubclass(subclass, self._subclasses) or super().__subclasscheck__(subclass)
 
 
 class AutoField(AutoFieldMixin, IntegerField, metaclass=AutoFieldMeta):

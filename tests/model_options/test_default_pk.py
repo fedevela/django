@@ -3,9 +3,111 @@ from django.db import models
 from django.test import SimpleTestCase, override_settings
 from django.test.utils import isolate_apps
 
+from .fields import (
+    DirectBigAutoField, DirectSmallAutoField, IndirectBigAutoField,
+    IndirectSmallAutoField,
+)
+
 
 @isolate_apps('model_options')
 class TestDefaultPK(SimpleTestCase):
+    @override_settings(DEFAULT_AUTO_FIELD='django.db.models.AutoField')
+    def test_AUTOPK_005_configured_autofield_prepares_model_with_implicit_autofield_pk(self):
+        """AUTOPK-005: Direct AutoField configuration is preserved."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, models.AutoField)
+
+    @override_settings(DEFAULT_AUTO_FIELD='django.db.models.BigAutoField')
+    def test_AUTOPK_005_configured_bigautofield_prepares_model_with_implicit_bigautofield_pk(self):
+        """AUTOPK-005: Direct BigAutoField configuration is preserved."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, models.BigAutoField)
+
+    @override_settings(DEFAULT_AUTO_FIELD='django.db.models.SmallAutoField')
+    def test_AUTOPK_005_configured_smallautofield_prepares_model_with_implicit_smallautofield_pk(self):
+        """AUTOPK-005: Direct SmallAutoField configuration is preserved."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, models.SmallAutoField)
+
+    @override_settings(DEFAULT_AUTO_FIELD='django.db.models.TextField')
+    def test_AUTOPK_004_preparation_without_explicit_pk_rejects_unrelated_default_auto_field_with_subclass_error(
+        self,
+    ):
+        """AUTOPK-004: An unrelated default PK class must subclass AutoField."""
+        msg = (
+            "Primary key 'django.db.models.TextField' referred by "
+            "DEFAULT_AUTO_FIELD must subclass AutoField."
+        )
+        with self.assertRaisesMessage(ValueError, msg):
+            class Model(models.Model):
+                pass
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectBigAutoField',
+    )
+    def test_AUTOPK_003_model_without_explicit_pk_uses_configured_custom_bigautofield_descendant_instance(self):
+        """AUTOPK-003: The implicit PK uses the configured custom BigAutoField class."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, DirectBigAutoField)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectSmallAutoField',
+    )
+    def test_AUTOPK_003_model_without_explicit_pk_uses_configured_custom_smallautofield_descendant_instance(self):
+        """AUTOPK-003: The implicit PK uses the configured custom SmallAutoField class."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, DirectSmallAutoField)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectBigAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_direct_bigautofield_descendant(self):
+        """AUTOPK-002: An importable direct BigAutoField descendant is accepted."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, DirectBigAutoField)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.IndirectBigAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_indirect_bigautofield_descendant(self):
+        """AUTOPK-002: An importable indirect BigAutoField descendant is accepted."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, IndirectBigAutoField)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectSmallAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_direct_smallautofield_descendant(self):
+        """AUTOPK-002: An importable direct SmallAutoField descendant is accepted."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, DirectSmallAutoField)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.IndirectSmallAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_indirect_smallautofield_descendant(self):
+        """AUTOPK-002: An importable indirect SmallAutoField descendant is accepted."""
+        class Model(models.Model):
+            pass
+
+        self.assertIsInstance(Model._meta.pk, IndirectSmallAutoField)
+
     @override_settings(DEFAULT_AUTO_FIELD='django.db.models.NonexistentAutoField')
     def test_default_auto_field_setting_nonexistent(self):
         msg = (
@@ -16,6 +118,41 @@ class TestDefaultPK(SimpleTestCase):
         with self.assertRaisesMessage(ImproperlyConfigured, msg):
             class Model(models.Model):
                 pass
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='django.db.models.NonexistentAutoField',
+    )
+    def test_AUTOPK_006_model_without_explicit_pk_and_nonexistent_default_auto_field_preserves_import_path_configuration_error(
+        self,
+    ):
+        """AUTOPK-006: Preserve the nonexistent-path configuration error."""
+        msg = (
+            "DEFAULT_AUTO_FIELD refers to the module "
+            "'django.db.models.NonexistentAutoField' that could not be "
+            "imported."
+        )
+        with self.assertRaisesMessage(ImproperlyConfigured, msg) as cm:
+            class Model(models.Model):
+                pass
+
+        self.assertIsInstance(cm.exception.__cause__, ImportError)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.nonexistent.AutoField',
+    )
+    def test_AUTOPK_006_model_without_explicit_pk_and_nonimportable_default_auto_field_raises_import_path_error_before_subclass_validation(
+        self,
+    ):
+        """AUTOPK-006: Import errors continue to precede subclass validation."""
+        msg = (
+            "DEFAULT_AUTO_FIELD refers to the module "
+            "'model_options.nonexistent.AutoField' that could not be imported."
+        )
+        with self.assertRaisesMessage(ImproperlyConfigured, msg) as cm:
+            class Model(models.Model):
+                pass
+
+        self.assertIsInstance(cm.exception.__cause__, ImportError)
 
     @isolate_apps('model_options.apps.ModelPKNonexistentConfig')
     def test_app_default_auto_field_nonexistent(self):

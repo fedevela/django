@@ -218,7 +218,70 @@ class Options:
             new_objs.append(obj)
         return new_objs
 
+    # AUTOPK-002, AUTOPK-004, AUTOPK-006 architecture: Options owns the
+    # default-primary-key resolution pipeline. Dotted-path import is its first
+    # boundary; an import failure terminates there as a configuration error and
+    # cannot reach the subsequent AutoField subclass-admission boundary. This
+    # method adapts the configured path for _prepare(): only imported, admitted
+    # classes cross that seam, and _prepare() alone owns instantiating and
+    # attaching one to a model without an explicit key.
     def _get_default_pk_class(self):
+        # AUTOPK-006 pseudocode -- preserve invalid import-path errors:
+        # PRECONDITION: model preparation needs an implicit primary key because
+        # the model declares no explicit primary key.
+        # INPUT: the effective DEFAULT_AUTO_FIELD dotted path and the source
+        # that supplied it.
+        # ATTEMPT to import the object identified by the dotted path.
+        # IF the target does not exist OR its dotted path cannot be imported:
+        #     BUILD the existing configuration error naming the source and the
+        #     invalid dotted path.
+        #     RAISE that import-path configuration error, preserving the
+        #     original import failure as its cause.
+        #     HALT resolution before asking whether the target subclasses
+        #     AutoField; do not emit a subclass-validation error and do not
+        #     return a class to model preparation.
+        # ELSE:
+        #     HAND OFF the imported object to the existing AutoField subclass
+        #     validation flow.
+        # AUTOPK-004 pseudocode -- reject an unrelated default automatic field:
+        # PRECONDITION: model preparation needs an implicit primary key because
+        # the model declares no explicit primary key.
+        # INPUT: the effective DEFAULT_AUTO_FIELD path and its configuration
+        # source.
+        # RESOLVE the path to its configured class using the existing empty-
+        # path and import-error flows.
+        # ASK whether the resolved class subclasses AutoField, including its
+        # supported automatic-field hierarchy.
+        # IF the resolved class is unrelated to that hierarchy:
+        #     FAIL with the existing error naming the path and source and
+        #     stating that the configured primary-key class must subclass
+        #     AutoField.
+        #     HALT resolution without returning a class to _prepare().
+        #     THEREFORE do not instantiate or attach an implicit primary key.
+        # ELSE:
+        #     RETURN the supported class for the existing _prepare() handoff.
+        # AUTOPK-002 pseudocode -- prepare a model with a configured automatic
+        # field descendant:
+        # INPUT: a model without an explicit primary key and the configured
+        # DEFAULT_AUTO_FIELD dotted path.
+        # RESOLVE the effective dotted path from the app configuration or the
+        # global setting.
+        # IF the path is empty:
+        #     FAIL with the existing empty-configuration error.
+        # IMPORT the class identified by the path.
+        # IF the path isn't importable:
+        #     FAIL with the existing import error.
+        # ASK the AutoField subclass boundary whether the imported class is a
+        # supported automatic field.
+        # SUCCESS BRANCHES (all remain AUTOPK-002 traceable):
+        #     - direct BigAutoField descendant -> accept the class;
+        #     - indirect BigAutoField descendant -> accept the class;
+        #     - direct SmallAutoField descendant -> accept the class;
+        #     - indirect SmallAutoField descendant -> accept the class.
+        # IF the class is outside the supported AutoField hierarchy:
+        #     FAIL with the existing "must subclass AutoField" error.
+        # RETURN the accepted class to _prepare(), which instantiates it as the
+        # model's implicit primary key and completes model preparation.
         pk_class_path = getattr(
             self.app_config,
             'default_auto_field',
@@ -282,6 +345,62 @@ class Options:
                 field.primary_key = True
                 self.setup_pk(field)
             else:
+                # AUTOPK-003, AUTOPK-005 architecture: _prepare() owns
+                # implicit-primary-key construction. _get_default_pk_class()
+                # supplies the admitted concrete class across this seam
+                # without normalization to a built-in superclass;
+                # model.add_to_class() owns registration of the resulting
+                # instance. Directly configured AutoField, BigAutoField, and
+                # SmallAutoField classes and supported custom descendants all
+                # use this same dependency path.
+                # AUTOPK-003 pseudocode -- instantiate the configured custom
+                # implicit primary-key class:
+                # PRECONDITION: the model has no primary key and no parent
+                # link is eligible for promotion.
+                # RESOLVE and validate the effective DEFAULT_AUTO_FIELD class.
+                # IF resolution or validation fails:
+                #     PROPAGATE the existing error without attaching a field.
+                # PRESERVE the resolved class without replacing it with a
+                # built-in automatic-field superclass.
+                # IF it is a valid custom BigAutoField descendant:
+                #     INSTANTIATE that configured custom class.
+                # ELSE IF it is a valid custom SmallAutoField descendant:
+                #     INSTANTIATE that configured custom class.
+                # CONFIGURE the instance as the auto-created primary-key ID.
+                # HAND OFF the instance to model field registration.
+                # TRANSITION model state from "implicit primary key absent" to
+                # "implicit primary key is an instance of the configured
+                # custom field class".
+                # IF instantiation or registration fails:
+                #     PROPAGATE the existing error; do not substitute another
+                #     automatic-field class.
+                # AUTOPK-005 pseudocode -- preserve a directly configured
+                # built-in automatic field class:
+                # PRECONDITION: the model has neither an explicit primary key
+                # nor a parent link eligible for promotion.
+                # INPUT: DEFAULT_AUTO_FIELD directly names AutoField,
+                # BigAutoField, or SmallAutoField.
+                # RESOLVE and validate the configured class through the
+                # existing default-primary-key-class handoff.
+                # IF resolution or validation fails:
+                #     PROPAGATE the existing error without attaching a field.
+                # IF the resolved class is AutoField:
+                #     PRESERVE AutoField as the implicit-key class.
+                # ELSE IF the resolved class is BigAutoField:
+                #     PRESERVE BigAutoField as the implicit-key class.
+                # ELSE IF the resolved class is SmallAutoField:
+                #     PRESERVE SmallAutoField as the implicit-key class.
+                # DO NOT normalize or substitute any accepted configured
+                # class before construction.
+                # INSTANTIATE the preserved class as the auto-created
+                # primary-key ID.
+                # HAND OFF that instance to model field registration.
+                # TRANSITION model state from "implicit primary key absent"
+                # to "implicit primary key is an instance of the directly
+                # configured class".
+                # IF construction or registration fails:
+                #     PROPAGATE the existing error without creating a fallback
+                #     automatic field.
                 pk_class = self._get_default_pk_class()
                 auto = pk_class(verbose_name='ID', primary_key=True, auto_created=True)
                 model.add_to_class('id', auto)
