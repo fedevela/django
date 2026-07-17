@@ -29,6 +29,24 @@ def _multi_decorate(decorators, method):
     Decorate `method` with one or more function decorators. `decorators` can be
     a single decorator or an iterable of decorators.
     """
+    # Pseudocode contract (GUID: MDP-010):
+    # VERIFIES: test_mdp_010_tuple_decorators_apply_with_existing_tuple_behavior
+    # VERIFIES: test_mdp_010_tuple_decorated_method_preserves_call_semantics
+    # INPUT: the supported tuple of function decorators and an instance method.
+    # IF the decorator input is iterable:
+    #     REVERSE its traversal order so sequential wrapping reproduces Python's
+    #     existing stacked-decorator application and invocation behavior.
+    # ELSE:
+    #     TREAT the single decorator as a one-element application sequence.
+    # WHEN the resulting method wrapper is invoked with positional and keyword
+    # arguments:
+    #     BIND the original method to the current instance.
+    #     FOR EACH decorator in the normalized application sequence:
+    #         REPLACE the current callable with that decorator's result.
+    #     INVOKE the final callable with the original positional and keyword
+    #     arguments, and RETURN its result without transformation.
+    # IF binding, decoration, or invocation raises:
+    #     PROPAGATE the exception through the existing call path unchanged.
     if hasattr(decorators, '__iter__'):
         # Apply a list/tuple of decorators if 'decorators' is one. Decorator
         # functions are applied so that the call order is the same as the
