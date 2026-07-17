@@ -6,6 +6,13 @@ from django.utils.timezone import now
 from .exceptions import MigrationSchemaMissing
 
 
+# MIGREC-003, MIGREC-004, MIGREC-005 architecture boundary:
+# MigrationRecorder owns the routing decision for every recorder-table operation.
+# Keep the router dependency behind one private recorder-level permission seam,
+# using this recorder's connection alias and Migration model. The applied,
+# unapplied, and read entry points must cross that seam before depending on
+# has_table(), ensure_schema(), or migration_qs; their loader and executor
+# callers remain unaware of recorder storage permission.
 class MigrationRecorder:
     """
     Deal with storing migration records in the database.
