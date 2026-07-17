@@ -22,6 +22,10 @@ class FieldOperation(Operation):
     def is_same_model_operation(self, operation):
         return self.model_name_lower == operation.model_name_lower
 
+    # MIGOPT-004/MIGOPT-005/MIGOPT-008 architecture contract: FieldOperation
+    # owns the normalized (model, field) target-identity boundary. Concrete
+    # field-operation reducers consume this contract at the pair-reduction seam;
+    # MigrationOptimizer must remain unaware of field-operation target structure.
     def is_same_field_operation(self, operation):
         return (
             self.is_same_model_operation(operation)
@@ -127,6 +131,26 @@ class AddField(FieldOperation):
         return "%s_%s" % (self.model_name_lower, self.name_lower)
 
     def reduce(self, operation, app_label):
+        # MIGOPT-008 architecture contract: AddField owns the reduction seam for
+        # folding a later same-target AlterField into the added field. The later
+        # operation supplies the complete replacement field definition through
+        # this operation-level contract; no optimizer-level field merging exists.
+        # MIGOPT-008 -- AddField-to-AlterField reduction:
+        # INPUT: this AddField and the later operation selected by the optimizer.
+        # IF the later operation targets a different normalized model or field,
+        # skip this reduction and hand the pair to the existing fallback; do not
+        # transfer a field definition between distinct targets.
+        # ELSE IF the later same-target operation is an AlterField, RETURN one
+        # AddField for that target whose field is the AlterField field object.
+        # This replacement preserves the complete effective field definition
+        # supplied by the later operation rather than merging field attributes.
+        # The optimizer repeats this transition for each applicable same-target
+        # AlterField, so the surviving AddField contains the field definition
+        # from the final AlterField in the sequence.
+        # ELSE continue through the existing same-target RemoveField or
+        # RenameField branches; if no branch applies, use the fallback result.
+        # OUTPUT: either the final-definition AddField replacement or a fallback
+        # that leaves this optimization inapplicable without changing targets.
         if isinstance(operation, FieldOperation) and self.is_same_field_operation(
             operation
         ):
@@ -247,7 +271,69 @@ class AlterField(FieldOperation):
         return "alter_%s_%s" % (self.model_name_lower, self.name_lower)
 
     def reduce(self, operation, app_label):
-        if isinstance(operation, RemoveField) and self.is_same_field_operation(
+        # MIGOPT-001/MIGOPT-002/MIGOPT-003 architecture contract:
+        # AlterField owns same-target pair reduction at the Operation.reduce()
+        # seam. FieldOperation owns normalized target identity, while
+        # MigrationOptimizer remains responsible only for traversal and repeated
+        # application. The replacement contract may retain the later operation
+        # instance; field-definition copying or reconstruction does not belong at
+        # either side of this boundary.
+        # MIGOPT-006 architecture contract: AlterField also owns the semantic
+        # eligibility of that replacement. It may expose a replacement through
+        # Operation.reduce() only when dropping this operation preserves the
+        # resulting migration state; MigrationOptimizer must remain state-agnostic.
+        # MIGOPT-001/MIGOPT-002 -- same-field AlterField reduction:
+        # INPUT: this AlterField and the later operation selected by the optimizer.
+        # IF the later operation is an AlterField for the same normalized model
+        # and field, RETURN a one-item replacement containing that later operation.
+        # Retain the later operation object itself so its complete field definition
+        # and operation options remain exact; do not reconstruct or merge it.
+        # The optimizer repeats this transition to fold an uninterrupted sequence
+        # of two or more matching AlterField operations down to its final member.
+        # OTHERWISE, continue to the existing reduction branches below; a
+        # non-reducible intervening operation remains an optimizer boundary.
+        #
+        # MIGOPT-003 -- concrete book.title state transition:
+        # AlterField(book.title, definition_1)
+        #   -> AlterField(book.title, definition_2)
+        #   -> AlterField(book.title, final_definition)
+        # becomes [the final AlterField], whose field has max_length=128,
+        # null=True, help_text="help", and default=None.
+        #
+        # MIGOPT-004/MIGOPT-005 -- distinct-target non-reduction:
+        # INPUT: this AlterField and the later operation selected by the optimizer.
+        # IF the later operation is not an AlterField, leave target-identity
+        # handling to the existing operation-specific branches below.
+        # OTHERWISE, compare normalized model names before normalized field names:
+        #   IF the model names differ (MIGOPT-005), do not emit a replacement;
+        #   hand off to the existing fallback so the optimizer retains both
+        #   AlterField operations.
+        #   ELSE IF the field names differ (MIGOPT-004), do not emit a
+        #   replacement; perform the same fallback handoff, retaining both
+        #   AlterField operations as separate operations.
+        #   ELSE the targets are identical and the same-target reduction above
+        #   may return the later AlterField.
+        # OUTPUT for either distinct-target branch: no collapsed AlterField and
+        # no target data transferred between operations.
+        #
+        # MIGOPT-006 -- semantic-state preservation gate:
+        # INPUT: the candidate replacement for this intermediate AlterField and
+        # the migration state entering the candidate reduction region.
+        # DERIVE expected_state by applying every operation in the unreduced
+        # region in order; derive reduced_state by applying the candidate
+        # replacement sequence to an equivalent entering state.
+        # IF expected_state and reduced_state differ, reject the candidate and
+        # return no replacement so this AlterField remains in the operation
+        # sequence; this is the preservation/failure path.
+        # ELSE the state-equivalence obligation is satisfied and the existing
+        # same-target replacement branch may return the later AlterField.
+        # OUTPUT: either a state-equivalent replacement or a non-reduction
+        # handoff that preserves the intermediate AlterField unchanged.
+        if isinstance(operation, AlterField):
+            if self.is_same_field_operation(operation):
+                return [operation]
+            return super().reduce(operation, app_label)
+        elif isinstance(operation, RemoveField) and self.is_same_field_operation(
             operation
         ):
             return [operation]

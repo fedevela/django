@@ -1,5 +1,6 @@
 from django.db import migrations, models
 from django.db.migrations import operations
+from django.db.migrations.autodetector import MigrationAutodetector
 from django.db.migrations.optimizer import MigrationOptimizer
 from django.db.migrations.serializer import serializer_factory
 from django.test import SimpleTestCase
@@ -671,6 +672,189 @@ class OptimizerTests(SimpleTestCase):
             ],
         )
 
+    def test_MIGOPT_001_consecutive_same_field_alter_fields_collapse_to_final(self):
+        """
+        MIGOPT-001: An uninterrupted same-model, same-field AlterField sequence
+        collapses to its final operation.
+        """
+        final_operation = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=128)
+        )
+        self.assertOptimizesTo(
+            [
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                migrations.AlterField(
+                    "book", "Title", models.CharField(max_length=191)
+                ),
+                final_operation,
+            ],
+            [final_operation],
+        )
+
+    def test_MIGOPT_002_retained_alter_field_preserves_final_definition_exactly(self):
+        """
+        MIGOPT-002: The AlterField retained from a same-field sequence preserves
+        the final operation's field definition exactly.
+        """
+        final_field = models.CharField(
+            max_length=128,
+            null=True,
+            help_text="help",
+            default=None,
+        )
+        final_operation = migrations.AlterField(
+            "Book",
+            "title",
+            final_field,
+            preserve_default=False,
+        )
+        result, _ = self.optimize(
+            [
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                final_operation,
+            ],
+            "migrations",
+        )
+        self.assertEqual(len(result), 1)
+        self.assertIs(result[0], final_operation)
+        self.assertIs(result[0].field, final_field)
+        self.assertIs(result[0].preserve_default, False)
+
+    def test_MIGOPT_003_book_title_sequence_retains_final_field_definition(self):
+        """
+        MIGOPT-003: The standalone book.title sequence collapses to one
+        AlterField with max_length=128, null=True, help_text="help", and
+        default=None.
+        """
+        operations = [
+            migrations.AlterField(
+                "book", "title", models.CharField(max_length=255)
+            ),
+            migrations.AlterField(
+                "book", "title", models.CharField(max_length=128, null=True)
+            ),
+            migrations.AlterField(
+                "book",
+                "title",
+                models.CharField(
+                    max_length=128,
+                    null=True,
+                    help_text="help",
+                    default=None,
+                ),
+            ),
+        ]
+        result, _ = self.optimize(operations, "migrations")
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], migrations.AlterField)
+        self.assertEqual(result[0].model_name, "book")
+        self.assertEqual(result[0].name, "title")
+        self.assertEqual(result[0].field.max_length, 128)
+        self.assertIs(result[0].field.null, True)
+        self.assertEqual(result[0].field.help_text, "help")
+        self.assertIsNone(result[0].field.default)
+
+    def test_MIGOPT_004_consecutive_different_field_alter_fields_remain_separate(self):
+        """
+        MIGOPT-004: Consecutive AlterField operations targeting different
+        fields remain separate after optimization.
+        """
+        operations = [
+            migrations.AlterField(
+                "Book", "title", models.CharField(max_length=128)
+            ),
+            migrations.AlterField(
+                "book", "subtitle", models.CharField(max_length=128)
+            ),
+        ]
+        result, _ = self.optimize(operations, "migrations")
+        self.assertEqual(len(result), 2)
+        self.assertIs(result[0], operations[0])
+        self.assertIs(result[1], operations[1])
+
+    def test_MIGOPT_005_consecutive_different_model_alter_fields_remain_separate(self):
+        """
+        MIGOPT-005: Consecutive AlterField operations targeting different
+        models remain separate after optimization.
+        """
+        operations = [
+            migrations.AlterField(
+                "Book", "title", models.CharField(max_length=128)
+            ),
+            migrations.AlterField(
+                "Author", "title", models.CharField(max_length=128)
+            ),
+        ]
+        result, _ = self.optimize(operations, "migrations")
+        self.assertEqual(len(result), 2)
+        self.assertIs(result[0], operations[0])
+        self.assertIs(result[1], operations[1])
+
+    def test_MIGOPT_006_state_changing_intermediate_alter_field_remains_present(self):
+        """
+        MIGOPT-006: An intermediate AlterField remains present when removing it
+        would change the resulting migration state.
+        """
+        alter_field = migrations.AlterField(
+            "Book",
+            "title",
+            models.CharField(max_length=128, db_column="renamed_title"),
+        )
+        rename_field = migrations.RenameField("Book", "title", "name")
+
+        result, _ = self.optimize([alter_field, rename_field], "migrations")
+
+        self.assertEqual(result, [alter_field, rename_field])
+        self.assertIs(result[0], alter_field)
+
+    def test_MIGOPT_007_intervening_operation_prevents_alter_field_reduction(self):
+        """
+        MIGOPT-007: Same-field AlterField operations remain separate when an
+        intervening operation prevents valid reduction.
+        """
+        first_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=255)
+        )
+        boundary = migrations.RunSQL("SELECT 1")
+        final_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=128)
+        )
+
+        result, _ = self.optimize(
+            [first_alter, boundary, final_alter], "migrations"
+        )
+
+        self.assertEqual(result, [first_alter, boundary, final_alter])
+
+    def test_MIGOPT_007_migration_boundary_prevents_alter_field_reduction(self):
+        """
+        MIGOPT-007: Same-field AlterField operations in independently
+        optimizable regions remain separate across a migration boundary.
+        """
+        first_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=255)
+        )
+        final_alter = migrations.AlterField(
+            "Book", "title", models.CharField(max_length=128)
+        )
+        first_migration = migrations.Migration("0001_initial", "migrations")
+        first_migration.operations = [first_alter]
+        second_migration = migrations.Migration("0002_alter_book_title", "migrations")
+        second_migration.operations = [final_alter]
+        autodetector = MigrationAutodetector.__new__(MigrationAutodetector)
+        autodetector.migrations = {
+            "migrations": [first_migration, second_migration],
+        }
+
+        autodetector._optimize_migrations()
+
+        self.assertEqual(first_migration.operations, [first_alter])
+        self.assertEqual(second_migration.operations, [final_alter])
+
     def test_create_model_rename_field(self):
         """
         RenameField should optimize into CreateModel.
@@ -795,6 +979,56 @@ class OptimizerTests(SimpleTestCase):
                 ),
             ],
         )
+
+    def test_MIGOPT_008_same_field_alter_fields_remain_reducible_to_add_field(self):
+        """
+        MIGOPT-008: Given an AddField followed by applicable same-model,
+        same-field AlterField operations, optimization remains applicable and
+        produces an AddField operation.
+        """
+        self.assertOptimizesTo(
+            [
+                migrations.AddField("Book", "title", models.TextField()),
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=128)
+                ),
+            ],
+            [
+                migrations.AddField(
+                    "Book", "title", models.CharField(max_length=128)
+                ),
+            ],
+        )
+
+    def test_MIGOPT_008_reduced_add_field_preserves_final_effective_definition(self):
+        """
+        MIGOPT-008: When applicable same-model, same-field AlterField
+        operations are reduced into an AddField, its field definition matches
+        the final effective definition represented by the sequence.
+        """
+        final_field = models.CharField(
+            max_length=128,
+            null=True,
+            help_text="Book title",
+            default=None,
+        )
+        result, _ = self.optimize(
+            [
+                migrations.AddField("Book", "title", models.TextField()),
+                migrations.AlterField(
+                    "Book", "title", models.CharField(max_length=255)
+                ),
+                migrations.AlterField("Book", "title", final_field),
+            ],
+            "migrations",
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertIsInstance(result[0], migrations.AddField)
+        self.assertIs(result[0].field, final_field)
 
     def test_add_field_delete_field(self):
         """
