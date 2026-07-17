@@ -162,6 +162,23 @@ class UserChangeForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         password = self.fields.get("password")
+        # Pseudocode (GUID: UCP-001, UCP-002, UCP-003):
+        # INPUT: the password field and this form's persisted user instance.
+        # IF the password field exists:
+        #     UCP-001 DECISION: READ the user's primary key from the instance,
+        #     independently of the identifier or `_to_field` used to reach the
+        #     admin change page.
+        #     BUILD a relative password-change path that first leaves the current
+        #     change-page object path, then selects the user by that primary key.
+        #     FORMAT the password help text with that primary-key-based path.
+        #     UCP-002 TRANSITION: from a non-PK change-page entry path, following
+        #     the link hands that same user's PK to the password-change endpoint.
+        #     UCP-003 TRANSITION: from a PK change-page entry path, following the
+        #     link hands that same user's PK to the password-change endpoint.
+        # ELSE:
+        #     LEAVE password help text unchanged and continue form initialization.
+        # FAILURE PATH: never substitute the incoming change-page identifier for
+        # the persisted primary key, because the password endpoint resolves by PK.
         if password:
             password.help_text = password.help_text.format("../password/")
         user_permissions = self.fields.get("user_permissions")
