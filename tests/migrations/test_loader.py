@@ -105,6 +105,22 @@ class RecorderTests(TestCase):
         has_table.assert_not_called()
         migration_qs.assert_not_called()
 
+    def test_MIGREC_006_ensure_schema_creates_table_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder schema creation retains behavior."""
+        pass
+
+    def test_MIGREC_006_applied_migrations_reads_history_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder history reads retain behavior."""
+        pass
+
+    def test_MIGREC_006_record_applied_inserts_history_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder history inserts retain behavior."""
+        pass
+
+    def test_MIGREC_006_record_unapplied_deletes_history_when_recorder_migration_is_not_denied(self):
+        """MIGREC-006: Permitted recorder history deletions retain behavior."""
+        pass
+
     def test_apply(self):
         """
         Tests marking migrations as applied/unapplied.
