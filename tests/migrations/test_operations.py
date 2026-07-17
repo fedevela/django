@@ -919,14 +919,50 @@ class OperationTests(OperationTestBase):
         GUID: RMN-009 - Given different old and new effective table names,
         applying RenameModel renames the physical table to the new name.
         """
-        self.assertTrue(True)
+        app_label = "test_rmn_009_table"
+        project_state = self.set_up_test_model(app_label)
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        old_table = project_state.apps.get_model(
+            app_label, "Pony",
+        )._meta.db_table
+        new_table = new_state.apps.get_model(
+            app_label, "Horse",
+        )._meta.db_table
+        self.assertNotEqual(old_table, new_table)
+        self.assertTableExists(old_table)
+        self.assertTableNotExists(new_table)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        self.assertTableNotExists(old_table)
+        self.assertTableExists(new_table)
 
     def test_rmn_009_rename_model_different_effective_table_exposes_new_state_name(self):
         """
         GUID: RMN-009 - Given different old and new effective table names,
         applying RenameModel makes the model available under its new state name.
         """
-        self.assertTrue(True)
+        app_label = "test_rmn_009_state"
+        project_state = ProjectState()
+        project_state.add_model(ModelState(app_label, "Pony", []))
+        operation = migrations.RenameModel("Pony", "Horse")
+        old_table = project_state.apps.get_model(
+            app_label, "Pony",
+        )._meta.db_table
+
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+
+        Horse = new_state.apps.get_model(app_label, "Horse")
+        self.assertNotEqual(Horse._meta.db_table, old_table)
+        self.assertEqual(Horse._meta.model_name, "horse")
+        self.assertNotIn((app_label, "pony"), new_state.models)
+        self.assertIn((app_label, "horse"), new_state.models)
 
     def test_rename_model_state_forwards(self):
         """
