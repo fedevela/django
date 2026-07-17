@@ -152,6 +152,10 @@ class StaticTests(SimpleTestCase):
 class IfModifiedSinceContractTests(SimpleTestCase):
     """Traceability placeholders for the If-Modified-Since contracts."""
 
+    # ARCHITECTURE VERIFICATION LOCUS (IMS-001, IMS-002, IMS-003, IMS-004,
+    # IMS-005, IMS-006): this existing static-view test module owns both the
+    # ``serve()`` integration seam and direct ``was_modified_since()`` contract.
+    # Later behavioral coverage belongs here without a test-only production API.
     # PSEUDOCODE VERIFICATION MATRIX: IMS-006
     # ARRANGE otherwise-equivalent static-file requests for these header classes:
     #     absent; empty; valid older; valid newer; malformed nonempty.

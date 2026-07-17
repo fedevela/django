@@ -39,6 +39,10 @@ def serve(request, path, document_root=None, show_indexes=False):
         raise Http404(_("Directory indexes are not allowed here."))
     if not fullpath.exists():
         raise Http404(_("“%(path)s” does not exist") % {"path": fullpath})
+    # ARCHITECTURE SEAM (IMS-001, IMS-003, IMS-004, IMS-005): ``serve()`` owns
+    # request-header extraction and response selection; ``was_modified_since()``
+    # owns interpretation of the optional header value. Keep date parsing behind
+    # that helper boundary so transport concerns don't acquire parsing policy.
     # Respect the If-Modified-Since header.
     statobj = fullpath.stat()
     if not was_modified_since(
@@ -125,6 +129,10 @@ def was_modified_since(header=None, mtime=0, size=0):
     size
       This is the size of the item we're talking about.
     """
+    # ARCHITECTURE OWNER (IMS-001, IMS-002, IMS-003, IMS-004, IMS-005): this
+    # existing private helper is the conditional-modification policy boundary.
+    # Its only date-decoding dependency is ``parse_http_date``; callers consume
+    # the boolean contract and must not depend on an intermediate timestamp.
     # PSEUDOCODE CONTRACT: IMS-001, IMS-002, IMS-003, IMS-004, IMS-005
     # INPUT: header value, resource modification time, and resource size.
     # IF header is absent OR empty:
