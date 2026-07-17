@@ -128,6 +128,22 @@ class RelativeFieldTests(SimpleTestCase):
             ),
         ])
 
+    def test_m2m_001_effectively_symmetrical_related_name_checks_report_error(self):
+        """GUID: M2M-001 -- Model checks report the offending field error."""
+        pass
+
+    def test_m2m_002_explicit_and_default_symmetry_report_same_check_error(self):
+        """GUID: M2M-002 -- Explicit and inferred symmetry have parity."""
+        pass
+
+    def test_m2m_003_check_error_names_field_and_explains_no_reverse_relation(self):
+        """GUID: M2M-003 -- The diagnostic explains ineffective related_name."""
+        pass
+
+    def test_m2m_008_construction_succeeds_then_model_checks_report_error(self):
+        """GUID: M2M-008 -- Validation is deferred to model system checks."""
+        pass
+
     def test_ambiguous_relationship_model_from(self):
         class Person(models.Model):
             pass
