@@ -1143,6 +1143,17 @@ class Subquery(BaseExpression, Combinable):
     An explicit subquery. It may contain OuterRef() references to the outer
     query which will be resolved when it is applied to that query.
     """
+    # Architecture contract — GUID: SUBQUERY-001, SUBQUERY-002, SUBQUERY-003,
+    # SUBQUERY-004, SUBQUERY-005, SUBQUERY-006
+    #
+    # Subquery is the expression-layer adapter between QuerySet/Query inputs and
+    # the sql.Query compilation boundary. It owns a detached, subquery-marked
+    # Query and the outer expression template. sql.Query remains responsible for
+    # backend-aware compilation and its canonical subquery framing. Consequently,
+    # this adapter may remove and replace only that framing; it must treat the
+    # inner SQL and parameter sequence as an opaque compiler result. The supplied
+    # compiler/connection pair flows toward sql.Query and no dependency from the
+    # SQL layer back to this expression adapter is introduced.
     template = '(%(subquery)s)'
     contains_aggregate = False
     empty_result_set_value = None
