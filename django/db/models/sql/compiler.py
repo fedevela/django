@@ -271,6 +271,14 @@ class SQLCompiler:
         ret = []
         for col, alias in select:
             # EMPTYIN-001, EMPTYIN-002, EMPTYIN-003, EMPTYIN-006
+            # Architecture contract: predicate reduction remains owned by the
+            # expression tree and ExpressionWrapper remains transparent. This
+            # selected-column boundary owns materializing reduction outcomes as
+            # nonempty SQL and then delegates backend-specific Boolean SELECT
+            # formatting to the selected expression. Keep the dependency
+            # direction expression tree -> selected-column compiler -> backend
+            # formatting; lookup-specific handling doesn't belong here.
+            #
             # Logic obligation for a directly selected Boolean annotation:
             #
             # PSEUDOCODE:
