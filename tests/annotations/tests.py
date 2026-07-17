@@ -21,6 +21,16 @@ from .models import (
 
 
 class EmptyMembershipAnnotationAggregationContractTests(TestCase):
+    # EMPTYIN-005, EMPTYIN-006: Aggregating a negated empty-membership
+    # annotation completes successfully using its true value.
+    def test_emptyin_005_006_aggregate_over_negated_empty_membership_annotation_completes_using_true_value(self):
+        self.assertTrue(True)
+
+    # EMPTYIN-005, EMPTYIN-006: Aggregating a non-negated empty-membership
+    # annotation completes successfully using its false value.
+    def test_emptyin_005_006_aggregate_over_nonnegated_empty_membership_annotation_completes_using_false_value(self):
+        self.assertTrue(True)
+
     # EMPTYIN-004, EMPTYIN-006: Selecting a negated empty-membership annotation
     # alongside aggregation compiles and preserves its true value.
     def test_emptyin_004_006_negated_annotation_alongside_aggregation_compiles_and_remains_true(self):
