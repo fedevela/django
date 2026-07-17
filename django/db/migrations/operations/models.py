@@ -289,6 +289,32 @@ class DeleteModel(ModelOperation):
 class RenameModel(ModelOperation):
     """Rename a model."""
 
+    # ARCHITECTURE (GUID: RMN-001, RMN-002, RMN-003, RMN-004): Migration-state
+    # identity remains owned by state_forwards(). The database boundary remains
+    # owned by database_forwards(), where effective table identity is the gate
+    # in front of every schema_editor integration seam. PostgreSQL foreign-key
+    # lifecycle and SQLite table-recreation mechanics remain behind that seam
+    # and are reached only for a database-visible transition; no
+    # backend-specific RenameModel contract is required. This keeps the
+    # dependency directed from the migration operation to the schema editor,
+    # without coupling migration state to backend schema implementation.
+    #
+    # ARCHITECTURE (GUID: RMN-005, RMN-006, RMN-007, RMN-008): The effective
+    # table-identity gate in database_forwards() is also the preservation
+    # boundary for stored rows, constraints, indexes, and relationships. When
+    # identity is unchanged, those objects remain owned by the existing
+    # physical database table and no schema-editor adapter is entered. For a
+    # database-visible rename, the existing schema-editor seams continue to
+    # own table, related-field, and M2M transitions. Preservation therefore
+    # adds no backend dependency, runtime adapter, or public operation API.
+    #
+    # ARCHITECTURE (GUID: RMN-009): RenameModel owns the coordination between
+    # its two existing boundaries: state_forwards() establishes the new model
+    # identity, and database_forwards() compares the rendered models' effective
+    # table names before delegating a database-visible rename to the schema
+    # editor. The schema editor remains the sole owner of physical table DDL;
+    # migration state has no dependency on backend schema implementation.
+
     def __init__(self, old_name, new_name):
         self.old_name = old_name
         self.new_name = new_name
@@ -314,12 +340,148 @@ class RenameModel(ModelOperation):
         )
 
     def state_forwards(self, app_label, state):
+        # GUID: RMN-009
+        # LOGIC OBLIGATION
+        # (test_rmn_009_rename_model_different_effective_table_exposes_new_state_name):
+        # - INPUT: app_label, old_name, new_name, and the current migration
+        #   state for a rename whose effective database table names differ.
+        # - TRANSITION: rename the model identity in state from old_name to
+        #   new_name independently of the later physical-table transition.
+        # - OUTPUT: the resulting state resolves the model by new_name and no
+        #   longer exposes it by old_name.
+        # - FAILURE: propagate a missing or invalid old state identity; do not
+        #   report a successful state transition when the rename cannot occur.
+        # GUID: RMN-001
+        # LOGIC OBLIGATION:
+        # - INPUT: app_label, old_name, new_name, and the current migration
+        #   state; effective database table equality does not alter this flow.
+        # - TRANSITION: rename the state identity from old_name to new_name,
+        #   removing the old state key, creating the new state key, preserving
+        #   the model definition, and updating references to its identity.
+        # - OUTPUT: state contains only the new model identity.
+        # - FAILURE: propagate an invalid or missing state identity error; do
+        #   not substitute a database-table decision for the state transition.
         state.rename_model(app_label, self.old_name, self.new_name)
 
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
+        # GUID: RMN-009
+        # LOGIC OBLIGATION
+        # (test_rmn_009_rename_model_different_effective_table_renames_physical_table):
+        # - INPUT: resolve old_model from from_state and new_model from
+        #   to_state after state_forwards() has established the new identity.
+        # - DECISION: compare old_model._meta.db_table with
+        #   new_model._meta.db_table to determine physical table identity.
+        # - IF equal: follow the separately specified database-no-op path;
+        #   this branch is outside RMN-009.
+        # - ELSE IF migration is disallowed for new_model on this connection:
+        #   terminate without issuing schema changes.
+        # - ELSE: hand the old and new effective table names to
+        #   schema_editor.alter_db_table(), then update dependent related
+        #   fields and eligible auto-created M2M tables and columns in their
+        #   existing deterministic iteration order.
+        # - OUTPUT: the physical table bears the new effective table name and
+        #   the already-transitioned migration state exposes new_name.
+        # - FAILURE: propagate model-resolution or schema-editor failure at
+        #   its point of occurrence; do not claim completion of later related
+        #   or M2M handoffs after an earlier transition fails.
+        # GUID: RMN-002
+        # LOGIC OBLIGATION:
+        # - INPUT: resolve the old model from from_state and the renamed model
+        #   from to_state; failure to resolve either model propagates before
+        #   any schema mutation.
+        # - DECISION: compare the models' effective _meta.db_table names.
+        # - IF equal: return with no schema_editor calls, including table,
+        #   related-field, or M2M alterations.
+        # - ELSE IF migration is disallowed: return with no schema mutation.
+        # - ELSE: execute the existing database-visible rename flow.
+        # - OUTPUT: equal table names leave the database schema unchanged;
+        #   unequal table names follow the normal RenameModel effects.
+        old_model = from_state.apps.get_model(app_label, self.old_name)
         new_model = to_state.apps.get_model(app_label, self.new_name)
+        # GUID: RMN-003
+        # LOGIC OBLIGATION (PostgreSQL foreign-key preservation):
+        # - INPUT: the resolved old and new models, their effective table
+        #   names, and the foreign-key constraints already attached to or
+        #   referencing that table.
+        # - DECISION: evaluate effective table-name equality before handing
+        #   any related field to the schema editor.
+        # - IF equal: terminate this database transition; perform neither the
+        #   foreign-key drop transition nor the foreign-key create transition.
+        # - ELSE: continue the existing rename flow; foreign-key handling is
+        #   outside RMN-003 because the effective table name changed.
+        # - OUTPUT: on equality, preserve every existing foreign-key constraint
+        #   and emit no foreign-key DDL.
+        # - FAILURE: propagate model-resolution failure before this decision;
+        #   do not begin constraint mutation or attempt compensating creation.
+        # GUID: RMN-004
+        # LOGIC OBLIGATION (SQLite table-recreation prevention):
+        # - INPUT: the resolved old and new models and their effective
+        #   _meta.db_table names.
+        # - DECISION: compare effective table identity before handing the
+        #   operation to the schema editor.
+        # - IF equal: terminate the database transition before SQLite receives
+        #   alter_db_table(), alter_field(), or any related-model alteration;
+        #   the existing table remains in place and is not remade.
+        # - ELSE: hand off to the existing database-visible rename flow; table
+        #   recreation for a changed effective table is outside RMN-004.
+        # - OUTPUT: an unchanged effective table name produces no SQLite schema
+        #   mutation while the migration-state rename remains preserved.
+        # - FAILURE: propagate model-resolution failure before the equality
+        #   decision; do not initiate or compensate for a partial table remake.
+        # GUID: RMN-005
+        # LOGIC OBLIGATION (stored-row preservation):
+        # - INPUT: the resolved models, their effective table names, and the
+        #   rows and stored values already present in the old model's table.
+        # - DECISION: compare effective table identity before requesting any
+        #   table, field, or relationship alteration from the schema editor.
+        # - IF equal: terminate the database transition without copying,
+        #   rewriting, deleting, or recreating the table or its rows.
+        # - ELSE: continue the existing database-visible rename flow; content
+        #   handling for a changed effective table is outside RMN-005.
+        # - OUTPUT: the same physical table retains every row and stored value.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not start a data mutation or a compensating transition.
+        # GUID: RMN-006
+        # LOGIC OBLIGATION (constraint preservation):
+        # - INPUT: the resolved models, their effective table names, and all
+        #   constraints attached to or referencing the existing table.
+        # - DECISION: compare effective table identity before any schema-editor
+        #   handoff can drop, create, rename, or rebuild a constraint.
+        # - IF equal: terminate with no constraint transition.
+        # - ELSE: continue the existing database-visible rename flow;
+        #   constraint changes for a changed table are outside RMN-006.
+        # - OUTPUT: the existing constraint set remains unchanged.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not begin or compensate for a partial constraint transition.
+        # GUID: RMN-007
+        # LOGIC OBLIGATION (index preservation):
+        # - INPUT: the resolved models, their effective table names, and all
+        #   indexes belonging to the existing table.
+        # - DECISION: compare effective table identity before any schema-editor
+        #   handoff can drop, create, rename, or rebuild an index.
+        # - IF equal: terminate with no index transition.
+        # - ELSE: continue the existing database-visible rename flow; index
+        #   changes for a changed table are outside RMN-007.
+        # - OUTPUT: the existing index set remains unchanged.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not begin or compensate for a partial index transition.
+        # GUID: RMN-008
+        # LOGIC OBLIGATION (relationship preservation):
+        # - INPUT: the resolved models, their effective table names, related
+        #   fields, and M2M tables and columns participating in relationships.
+        # - DECISION: compare effective table identity before iterating related
+        #   objects or paired local M2M fields.
+        # - IF equal: terminate before altering a related field, M2M table, or
+        #   M2M column; retain every physical table-and-column reference.
+        # - ELSE: continue the existing database-visible rename flow;
+        #   relationship changes for a changed table are outside RMN-008.
+        # - OUTPUT: relationships remain present and reference the same
+        #   physical tables and columns.
+        # - FAILURE: propagate model-resolution failure before the decision;
+        #   do not begin or compensate for a partial relationship transition.
+        if old_model._meta.db_table == new_model._meta.db_table:
+            return
         if self.allow_migrate_model(schema_editor.connection.alias, new_model):
-            old_model = from_state.apps.get_model(app_label, self.old_name)
             # Move the main table
             schema_editor.alter_db_table(
                 new_model,

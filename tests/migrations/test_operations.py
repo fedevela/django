@@ -1,3 +1,6 @@
+import unittest
+from unittest import mock
+
 from django.core.exceptions import FieldDoesNotExist
 from django.db import (
     IntegrityError, connection, migrations, models, transaction,
@@ -650,6 +653,316 @@ class OperationTests(OperationTestBase):
         self.assertEqual(definition[0], "RenameModel")
         self.assertEqual(definition[1], [])
         self.assertEqual(definition[2], {'old_name': "Pony", 'new_name': "Horse"})
+
+    def test_rmn_001_rename_model_same_effective_table_updates_state_model_name(self):
+        """GUID: RMN-001"""
+        project_state = ProjectState()
+        project_state.add_model(ModelState(
+            "migrations",
+            "Pony",
+            [],
+            options={"db_table": "stable_pony_table"},
+        ))
+        operation = migrations.RenameModel("Pony", "Horse")
+
+        new_state = project_state.clone()
+        operation.state_forwards("migrations", new_state)
+
+        self.assertNotIn(("migrations", "pony"), new_state.models)
+        self.assertIn(("migrations", "horse"), new_state.models)
+        self.assertEqual(
+            project_state.apps.get_model("migrations", "Pony")._meta.db_table,
+            new_state.apps.get_model("migrations", "Horse")._meta.db_table,
+        )
+
+    def test_rmn_002_rename_model_explicit_unchanged_db_table_skips_schema_mutation(self):
+        """GUID: RMN-002"""
+        project_state = ProjectState()
+        project_state.add_model(ModelState(
+            "migrations",
+            "Pony",
+            [],
+            options={"db_table": "stable_pony_table"},
+        ))
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards("migrations", new_state)
+        schema_editor = mock.Mock()
+
+        operation.database_forwards(
+            "migrations", schema_editor, project_state, new_state,
+        )
+
+        self.assertEqual(schema_editor.method_calls, [])
+
+    def _apply_rmn_003_rename_model(self, app_label):
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(
+            app_label,
+            related_model=True,
+            db_table=db_table,
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        rider_table = "%s_rider" % app_label
+
+        self.assertFKExists(rider_table, ["pony_id"], (db_table, "id"))
+        with CaptureQueriesContext(connection) as captured_queries:
+            with connection.schema_editor() as editor:
+                operation.database_forwards(
+                    app_label, editor, project_state, new_state,
+                )
+        self.assertFKExists(rider_table, ["pony_id"], (db_table, "id"))
+        return [query["sql"] for query in captured_queries]
+
+    @unittest.skipUnless(
+        connection.vendor == "postgresql", "PostgreSQL specific test.",
+    )
+    def test_rmn_003_postgresql_rename_model_same_table_does_not_drop_fk_constraints(self):
+        """GUID: RMN-003 - Existing foreign-key constraints aren't dropped."""
+        queries = self._apply_rmn_003_rename_model("test_rmn_003_drop")
+
+        self.assertFalse(any("DROP CONSTRAINT" in query for query in queries))
+
+    @unittest.skipUnless(
+        connection.vendor == "postgresql", "PostgreSQL specific test.",
+    )
+    def test_rmn_003_postgresql_rename_model_same_table_does_not_recreate_fk_constraints(self):
+        """GUID: RMN-003 - Existing foreign-key constraints aren't recreated."""
+        queries = self._apply_rmn_003_rename_model("test_rmn_003_create")
+
+        self.assertFalse(any("ADD CONSTRAINT" in query for query in queries))
+
+    @unittest.skipUnless(connection.vendor == "sqlite", "SQLite specific test.")
+    def test_rmn_004_sqlite_rename_model_same_effective_table_does_not_recreate_table(self):
+        """
+        GUID: RMN-004 - Applying RenameModel on SQLite when the old and new
+        migration states resolve to the same effective database table name
+        does not recreate that table.
+        """
+        app_label = "test_rmn_004"
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(app_label, db_table=db_table)
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        old_model = project_state.apps.get_model(app_label, "Pony")
+        new_model = new_state.apps.get_model(app_label, "Horse")
+
+        self.assertEqual(old_model._meta.db_table, new_model._meta.db_table)
+        self.assertTableExists(db_table)
+
+        with CaptureQueriesContext(connection) as captured_queries:
+            with connection.schema_editor() as editor:
+                operation.database_forwards(
+                    app_label, editor, project_state, new_state,
+                )
+
+        self.assertEqual(captured_queries.captured_queries, [])
+        self.assertTableExists(db_table)
+
+    def test_rmn_005_no_op_rename_model_preserves_existing_table_rows_and_values(self):
+        """GUID: RMN-005 - Existing rows and their values are unchanged."""
+        app_label = "test_rmn_005"
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(app_label, db_table=db_table)
+        Pony = project_state.apps.get_model(app_label, "Pony")
+        Pony.objects.create(pink=2, weight=3.5)
+        Pony.objects.create(pink=7, weight=11.25)
+        expected_rows = list(
+            Pony.objects.order_by("id").values_list("id", "pink", "weight")
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        Horse = new_state.apps.get_model(app_label, "Horse")
+        self.assertEqual(
+            list(Horse.objects.order_by("id").values_list("id", "pink", "weight")),
+            expected_rows,
+        )
+
+    def test_rmn_006_no_op_rename_model_preserves_existing_table_constraints(self):
+        """GUID: RMN-006 - Existing constraints are unchanged."""
+        app_label = "test_rmn_006"
+        db_table = "%s_pony" % app_label
+        constraint_name = "rmn_006_pink_weight_uniq"
+        project_state = self.set_up_test_model(
+            app_label,
+            db_table=db_table,
+            constraints=[models.UniqueConstraint(
+                fields=["pink", "weight"],
+                name=constraint_name,
+            )],
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        with connection.cursor() as cursor:
+            constraints_before = connection.introspection.get_constraints(
+                cursor, db_table,
+            )
+        self.assertIn(constraint_name, constraints_before)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        with connection.cursor() as cursor:
+            constraints_after = connection.introspection.get_constraints(
+                cursor, db_table,
+            )
+        self.assertEqual(constraints_after, constraints_before)
+
+    def test_rmn_007_no_op_rename_model_preserves_existing_table_indexes(self):
+        """GUID: RMN-007 - Existing indexes are unchanged."""
+        app_label = "test_rmn_007"
+        db_table = "%s_pony" % app_label
+        index_name = "rmn_007_pink_idx"
+        project_state = self.set_up_test_model(
+            app_label,
+            db_table=db_table,
+            indexes=[models.Index(fields=["pink"], name=index_name)],
+        )
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        with connection.cursor() as cursor:
+            indexes_before = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, db_table,
+                ).items()
+                if details["index"]
+            }
+        self.assertIn(index_name, indexes_before)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        with connection.cursor() as cursor:
+            indexes_after = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, db_table,
+                ).items()
+                if details["index"]
+            }
+        self.assertEqual(indexes_after, indexes_before)
+
+    def test_rmn_008_no_op_rename_model_preserves_relationship_tables_and_columns(self):
+        """GUID: RMN-008 - Existing relationship topology is unchanged."""
+        app_label = "test_rmn_008"
+        db_table = "%s_pony" % app_label
+        project_state = self.set_up_test_model(
+            app_label,
+            related_model=True,
+            db_table=db_table,
+        )
+        rider_table = "%s_rider" % app_label
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        columns_before = [
+            field.name for field in self.get_table_description(rider_table)
+        ]
+        with connection.cursor() as cursor:
+            relationships_before = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, rider_table,
+                ).items()
+                if details["foreign_key"]
+            }
+        if connection.features.supports_foreign_keys:
+            self.assertTrue(relationships_before)
+            self.assertFKExists(
+                rider_table, ["pony_id"], (db_table, "id"),
+            )
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        self.assertTableExists(db_table)
+        self.assertTableExists(rider_table)
+        self.assertEqual(
+            [field.name for field in self.get_table_description(rider_table)],
+            columns_before,
+        )
+        with connection.cursor() as cursor:
+            relationships_after = {
+                name: details
+                for name, details in connection.introspection.get_constraints(
+                    cursor, rider_table,
+                ).items()
+                if details["foreign_key"]
+            }
+        self.assertEqual(relationships_after, relationships_before)
+        if connection.features.supports_foreign_keys:
+            self.assertFKExists(
+                rider_table, ["pony_id"], (db_table, "id"),
+            )
+
+    def test_rmn_009_rename_model_different_effective_table_renames_physical_table(self):
+        """
+        GUID: RMN-009 - Given different old and new effective table names,
+        applying RenameModel renames the physical table to the new name.
+        """
+        app_label = "test_rmn_009_table"
+        project_state = self.set_up_test_model(app_label)
+        operation = migrations.RenameModel("Pony", "Horse")
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+        old_table = project_state.apps.get_model(
+            app_label, "Pony",
+        )._meta.db_table
+        new_table = new_state.apps.get_model(
+            app_label, "Horse",
+        )._meta.db_table
+        self.assertNotEqual(old_table, new_table)
+        self.assertTableExists(old_table)
+        self.assertTableNotExists(new_table)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(
+                app_label, editor, project_state, new_state,
+            )
+
+        self.assertTableNotExists(old_table)
+        self.assertTableExists(new_table)
+
+    def test_rmn_009_rename_model_different_effective_table_exposes_new_state_name(self):
+        """
+        GUID: RMN-009 - Given different old and new effective table names,
+        applying RenameModel makes the model available under its new state name.
+        """
+        app_label = "test_rmn_009_state"
+        project_state = ProjectState()
+        project_state.add_model(ModelState(app_label, "Pony", []))
+        operation = migrations.RenameModel("Pony", "Horse")
+        old_table = project_state.apps.get_model(
+            app_label, "Pony",
+        )._meta.db_table
+
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
+
+        Horse = new_state.apps.get_model(app_label, "Horse")
+        self.assertNotEqual(Horse._meta.db_table, old_table)
+        self.assertEqual(Horse._meta.model_name, "horse")
+        self.assertNotIn((app_label, "pony"), new_state.models)
+        self.assertIn((app_label, "horse"), new_state.models)
 
     def test_rename_model_state_forwards(self):
         """
