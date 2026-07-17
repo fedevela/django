@@ -210,6 +210,18 @@ class ForwardManyToOneDescriptor:
         - ``instance`` is the ``child`` instance
         - ``value`` is the ``parent`` instance on the right of the equal sign
         """
+        # FKPK-006 pseudocode -- assignment and related-object cache:
+        # GIVEN a supported forward foreign-key assignment:
+        #     IF the assigned value is neither null nor an instance of the
+        #     related model, RAISE the existing assignment error.
+        #     RESOLVE database routing and relation permission exactly as for
+        #     every existing supported foreign-key assignment.
+        #     IF the value is null, CLEAR the local foreign-key identity and
+        #     any applicable reverse cache; OTHERWISE COPY each target-field
+        #     identity to its corresponding local foreign-key field.
+        #     CACHE the assigned related object on the referencing instance.
+        # WHEN the relation is subsequently accessed, RETURN that cached object
+        # without changing the copied foreign-key identity or issuing a query.
         # An object must be an instance of the related class.
         if value is not None and not isinstance(value, self.field.remote_field.model._meta.concrete_model):
             raise ValueError(

@@ -909,6 +909,19 @@ class Model(metaclass=ModelBase):
         )
 
     def _prepare_related_fields_for_save(self, operation_name):
+        # FKPK-006 pseudocode -- supported model-save and persisted identity:
+        # FOR EACH concrete relation field on the referencing model:
+        #     IF no related object is cached, LEAVE the existing local identity
+        #     unchanged and CONTINUE through the normal save path.
+        #     IF the cached object has no primary key, INVALIDATE any applicable
+        #     reverse cache and RAISE the existing unsaved-related-object error.
+        #     IF the local foreign-key identity is empty and the cached object
+        #     now has a key, COPY that key into the local field before writing.
+        #     IF cached target identity and local identity differ, CLEAR the
+        #     stale relation cache; do not define changed-primary-key behavior.
+        # HAND OFF the prepared local identity to the existing INSERT/UPDATE.
+        #     IF preparation or persistence fails, PROPAGATE the existing error;
+        #     OTHERWISE the stored foreign key MUST equal the prepared identity.
         # Ensure that a model instance without a PK hasn't been assigned to
         # a ForeignKey or OneToOneField on this model. If the field is
         # nullable, allowing the save would result in silent data loss.
