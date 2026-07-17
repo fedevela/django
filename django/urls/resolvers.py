@@ -45,6 +45,8 @@ class ResolverMatch:
         self.namespaces = [x for x in namespaces if x] if namespaces else []
         self.namespace = ':'.join(self.namespaces)
 
+        # ResolverMatch owns the stable ordinary-callable display path consumed
+        # by __repr__; request resolution only transports this state (GUID: RPR-005).
         if not hasattr(func, '__name__'):
             # A class-based view
             self._func_path = func.__class__.__module__ + '.' + func.__class__.__name__
@@ -59,6 +61,9 @@ class ResolverMatch:
         return (self.func, self.args, self.kwargs)[index]
 
     def __repr__(self):
+        # Representation boundary (GUID: RPR-005): partial display adaptation
+        # is isolated here and depends on stored match state. The ordinary-view
+        # contract continues to depend on the initializer-owned _func_path.
         # Ordinary-view compatibility pseudocode (GUID: RPR-005):
         # - INPUT: the callable and representation fields retained by this
         #   ResolverMatch, whether created directly or attached by resolution.
