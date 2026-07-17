@@ -335,10 +335,10 @@ class BaseCommand:
         # MCFMT-001 integration seam: parser construction receives the
         # command-owned formatter selection here. The existing
         # DjangoHelpFormatter argument is the default side of that contract.
+        kwargs.setdefault("formatter_class", DjangoHelpFormatter)
         parser = CommandParser(
             prog="%s %s" % (os.path.basename(prog_name), subcommand),
             description=self.help or None,
-            formatter_class=DjangoHelpFormatter,
             missing_args_message=getattr(self, "missing_args_message", None),
             called_from_command_line=getattr(self, "_called_from_command_line", None),
             **kwargs,

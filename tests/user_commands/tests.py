@@ -1,4 +1,5 @@
 import os
+from argparse import RawTextHelpFormatter
 from io import StringIO
 from unittest import mock
 
@@ -425,26 +426,51 @@ class CommandHelpFormattingContractTests(SimpleTestCase):
 
     Command fixtures own formatter selection; BaseCommand.create_parser() adapts
     that selection to CommandParser; the selected formatter owns whitespace
-    rendering. Behavioral assertions replace these placeholders in Malkhut.
+    rendering. The assertions below verify the manifested behavior.
     """
+
+    help_text = (
+        "Import a contract from tzkt.\n\n"
+        "Example usage:\n\n"
+        "    ./manage.py tzkt_import 'Tezos Mainnet' "
+        "KT1HTDtMBRCKoNHjfWEEvXneGQpCfPAt6BRe"
+    )
+
+    def setUp(self):
+        class Command(BaseCommand):
+            help = self.help_text
+
+            def create_parser(command_self, *args, **kwargs):
+                return super().create_parser(
+                    *args, formatter_class=RawTextHelpFormatter, **kwargs
+                )
+
+        self.parser = Command().create_parser("manage.py", "tzkt_import")
+        self.formatted_help = self.parser.format_help()
 
     def test_mcfmt_001_opted_in_command_uses_command_specific_help_formatting(self):
         """GUID: MCFMT-001 - An opted-in command uses its selected formatting."""
-        pass
+        self.assertIs(self.parser.formatter_class, RawTextHelpFormatter)
 
     def test_mcfmt_002_whitespace_preserving_help_retains_intentional_newlines(self):
         """GUID: MCFMT-002 - Displayed help retains every intentional newline."""
-        pass
+        self.assertIn(self.help_text, self.formatted_help)
 
     def test_mcfmt_003_indentation_preserving_help_retains_each_leading_indent(self):
         """GUID: MCFMT-003 - Each help line retains its leading indentation."""
-        pass
+        invocation = self.help_text.splitlines()[-1]
+        self.assertIn("\n%s\n" % invocation, self.formatted_help)
 
     def test_mcfmt_004_intro_label_and_indented_invocation_remain_separate_lines(
         self,
     ):
         """GUID: MCFMT-004 - Intro, label, and indented invocation stay separate."""
-        pass
+        output_lines = self.formatted_help.splitlines()
+        expected_lines = self.help_text.splitlines()
+        start = output_lines.index(expected_lines[0])
+        self.assertEqual(
+            output_lines[start : start + len(expected_lines)], expected_lines
+        )
 
 
 class CommandRunTests(AdminScriptTestCase):
