@@ -1728,6 +1728,30 @@ class SQLAggregateCompiler(SQLCompiler):
         parameters.
         """
         sql, params = [], []
+        # EMPTYIN-005, EMPTYIN-006
+        # Logic obligation for an aggregate whose input is an empty-membership
+        # Boolean annotation:
+        #
+        # PSEUDOCODE:
+        #   FOR EACH requested aggregate annotation:
+        #       RESOLVE its annotation reference to the corresponding value
+        #       produced by the inner query.
+        #       COMPILE the aggregate expression and preserve its parameters.
+        #       APPLY backend-specific SELECT formatting to the aggregate.
+        #   COMPILE the inner query through the ordinary selected-expression
+        #   boundary.
+        #   WHEN the inner selected expression is NOT (pk IN []):
+        #       MATERIALIZE a backend-compatible true value instead of an
+        #       empty SQL fragment.
+        #   WHEN the inner selected expression is (pk IN []):
+        #       MATERIALIZE a backend-compatible false value instead of
+        #       propagating EmptyResultSet.
+        #   OTHERWISE:
+        #       PRESERVE normal annotation compilation.
+        #   COMPOSE the formatted outer aggregates over the compiled inner
+        #   query, preserving outer parameters before inner parameters.
+        #   HAND OFF one aggregate result per requested alias; compilation or
+        #   execution failure propagates through the normal query error path.
         for annotation in self.query.annotation_select.values():
             ann_sql, ann_params = self.compile(annotation)
             ann_sql, ann_params = annotation.select_format(self, ann_sql, ann_params)

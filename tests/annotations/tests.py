@@ -24,11 +24,25 @@ class EmptyMembershipAnnotationAggregationContractTests(TestCase):
     # EMPTYIN-005, EMPTYIN-006: Aggregating a negated empty-membership
     # annotation completes successfully using its true value.
     def test_emptyin_005_006_aggregate_over_negated_empty_membership_annotation_completes_using_true_value(self):
+        # PSEUDOCODE:
+        #   BUILD a queryset with a Boolean annotation wrapping NOT (pk IN []).
+        #   COMPUTE an aggregate whose input references that annotation.
+        #   VERIFY the aggregate operation completes without an empty-result
+        #   compilation failure.
+        #   VERIFY the aggregate consumes the annotation's true value and
+        #   returns the corresponding true aggregate result.
         self.assertTrue(True)
 
     # EMPTYIN-005, EMPTYIN-006: Aggregating a non-negated empty-membership
     # annotation completes successfully using its false value.
     def test_emptyin_005_006_aggregate_over_nonnegated_empty_membership_annotation_completes_using_false_value(self):
+        # PSEUDOCODE:
+        #   BUILD a queryset with a Boolean annotation wrapping (pk IN []).
+        #   COMPUTE an aggregate whose input references that annotation.
+        #   VERIFY the aggregate operation completes without an empty-result
+        #   compilation failure.
+        #   VERIFY the aggregate consumes the annotation's false value and
+        #   returns the corresponding false aggregate result.
         self.assertTrue(True)
 
     # EMPTYIN-004, EMPTYIN-006: Selecting a negated empty-membership annotation
