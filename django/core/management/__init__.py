@@ -186,6 +186,12 @@ class ManagementUtility:
     Encapsulate the logic of the django-admin and manage.py utilities.
     """
     def __init__(self, argv=None):
+        # DJANGO-008 pseudocode:
+        # INPUT: the valid supplied argument vector and its first element.
+        # DERIVE: take the basename of argv[0] as the computed program name.
+        # BRANCH: if that basename is "__main__.py", normalize the computed
+        # program name to "python -m django"; otherwise preserve the basename.
+        # OUTPUT: retain the computed name for every later rendered usage.
         self.argv = argv or sys.argv[:]
         self.prog_name = os.path.basename(self.argv[0])
         if self.prog_name == '__main__.py':
@@ -344,6 +350,15 @@ class ManagementUtility:
         # Preprocess options to extract --settings and --pythonpath.
         # These options could affect the commands that are available, so they
         # must be processed early.
+        # DJANGO-003 / DJANGO-008 pseudocode:
+        # INPUT: self.prog_name computed from the valid supplied argv, including
+        # the "python -m django" normalization required by DJANGO-008.
+        # CREATE: configure the early parser with self.prog_name and the fixed
+        # "%(prog)s subcommand [options] [args]" usage template.
+        # RENDER: substitute the parser's configured program name for %(prog)s;
+        # never read the differing process-global sys.argv[0] for this output.
+        # ERROR FLOW: early option errors follow the existing CommandError path
+        # and do not replace the parser's configured program name.
         parser = CommandParser(
             prog=self.prog_name,
             usage='%(prog)s subcommand [options] [args]',
