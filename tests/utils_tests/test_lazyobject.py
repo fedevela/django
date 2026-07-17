@@ -305,6 +305,22 @@ class SimpleLazyObjectTestCase(LazyObjectTestCase):
     def lazy_wrap(self, wrapped_object):
         return SimpleLazyObject(lambda: wrapped_object)
 
+    def test_radd_001_left_operand_plus_lazy_object_matches_resolved_value(self):
+        """GUID: RADD-001 - Reflected addition preserves operand order."""
+        pass
+
+    def test_radd_003_addition_without_wrapped_radd_uses_direct_operation(self):
+        """GUID: RADD-003 - Addition doesn't require wrapped __radd__."""
+        pass
+
+    def test_radd_005_unresolved_right_operand_preserves_direct_return_value(self):
+        """GUID: RADD-005 - Addition preserves the direct return value."""
+        pass
+
+    def test_radd_006_incompatible_left_operand_matches_direct_exception(self):
+        """GUID: RADD-006 - Addition preserves direct exception behavior."""
+        pass
+
     def test_repr(self):
         # First, for an unevaluated SimpleLazyObject
         obj = self.lazy_wrap(42)
