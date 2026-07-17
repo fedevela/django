@@ -932,6 +932,16 @@ class BasicExpressionsTests(TestCase):
             [self.example_inc.ceo, self.foobar_ltd.ceo, self.max],
         )
 
+    # QEX-010 architecture:
+    # - BasicExpressionsTests owns this regression seam because it already owns
+    #   Employee/Company fixtures and ORM filtering of correlated Exists and Q.
+    # - Each case composes public Q and Exists operands directly at the
+    #   Employee.objects.filter() boundary; test code depends on ORM expression
+    #   contracts, while production expression modules remain unchanged.
+    # - The eight methods below are the implementation loci for the nonempty or
+    #   empty Q, AND or OR, and Q-first or Exists-first coverage matrix. Their
+    #   bodies remain independent so every operand order reaches the query seam.
+
     def test_qex_010_nonempty_q_and_exists_orm_filter_returns_intersection(self):
         """QEX-010: Q(...) & Exists(...) has query intersection semantics."""
         # QEX-010 logic:
