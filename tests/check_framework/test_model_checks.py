@@ -378,11 +378,45 @@ def mocked_is_overridden(self, setting):
 class ModelDefaultAutoFieldTests(SimpleTestCase):
     def test_pkw_001_descendant_with_explicit_pk_from_supported_ancestor_does_not_produce_w042(self):
         """GUID: PKW-001"""
-        self.assertTrue(True)
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        self.assertFalse(any(error.obj is Child and error.id == 'models.W042' for error in errors))
 
     def test_pkw_002_pkw_001_descendant_gets_no_default_auto_field_guidance(self):
         """GUID: PKW-002"""
-        self.assertTrue(True)
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        child_hints = [error.hint for error in errors if error.obj is Child and error.hint]
+        self.assertFalse(any('DEFAULT_AUTO_FIELD' in hint for hint in child_hints))
+
+    def test_explicit_inherited_parent_link(self):
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            parent_ptr = models.OneToOneField(Parent, models.CASCADE, parent_link=True)
+
+        self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [])
+
+    def test_auto_created_inherited_pk(self):
+        class Parent(models.Model):
+            pass
+
+        class Child(Parent):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        self.assertEqual([error.obj for error in errors if error.id == 'models.W042'], [Parent])
 
     def test_auto_created_pk(self):
         class Model(models.Model):

@@ -1297,33 +1297,14 @@ class Model(metaclass=ModelBase):
 
     @classmethod
     def _check_default_pk(cls):
-        # Architecture -- GUIDs: PKW-001, PKW-002
-        # This method owns default-primary-key warning policy. Inheritance
-        # origin remains an input supplied by Options-owned pk/parents metadata;
-        # keep that dependency directed from this check to Options, and keep
-        # suppression at this seam before the W042 message and hint are built.
-        # Model.check() remains the sole aggregator, so no new public contract
-        # or inheritance-metadata API is required for either requirement.
-        # Pseudocode -- GUID: PKW-001
-        # Verification:
-        # test_pkw_001_descendant_with_explicit_pk_from_supported_ancestor_does_not_produce_w042
-        # INPUT the checked model and its effective primary-key field.
-        # IF the effective primary key is auto-created, trace its origin through
-        # supported ancestor metadata.
-        # IF that origin is a user-declared ancestor field with primary_key=True,
-        # classify the descendant as explicitly keyed and RETURN no models.W042.
-        # OTHERWISE (including an unsupported or unresolvable origin), continue
-        # through the existing default-primary-key warning decisions below.
-        #
-        # Pseudocode -- GUID: PKW-002
-        # Verification:
-        # test_pkw_002_pkw_001_descendant_gets_no_default_auto_field_guidance
-        # IF the descendant was classified as explicitly keyed by PKW-001,
-        # short-circuit before constructing the warning and its hint, then hand
-        # an empty result to the model-check aggregator; ELSE preserve the
-        # existing DEFAULT_AUTO_FIELD guidance path for warning-eligible models.
         if (
             cls._meta.pk.auto_created and
+            # Inherited PKs are checked in parent models. GUIDs: PKW-001,
+            # PKW-002.
+            not (
+                isinstance(cls._meta.pk, OneToOneField) and
+                cls._meta.pk.remote_field.parent_link
+            ) and
             not settings.is_overridden('DEFAULT_AUTO_FIELD') and
             not cls._meta.app_config._is_default_auto_field_overridden
         ):
