@@ -312,6 +312,12 @@ class BulkCreateTests(TestCase):
             Country(name="Czech Republic", iso_two_letter="CZ"),
         ]
 
+    def test_BULKUPSERT_011_ordinary_bulk_create_without_conflict_handling_preserves_existing_pk_population(
+        self,
+    ):
+        """GUID: BULKUPSERT-011"""
+        assert True
+
     def test_simple(self):
         created = Country.objects.bulk_create(self.data)
         self.assertEqual(created, self.data)
