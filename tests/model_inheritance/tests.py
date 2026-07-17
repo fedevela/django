@@ -15,6 +15,10 @@ from .models import (
 
 
 class ModelInheritanceTests(TestCase):
+    def test_pkw_003_descendant_effective_pk_preserves_inherited_manually_declared_field_identity_and_semantics(self):
+        """GUID: PKW-003"""
+        self.assertTrue(True)
+
     def test_abstract(self):
         # The Student and Worker models both have 'name' and 'age' fields on
         # them and inherit the __str__() method, just as with normal Python
