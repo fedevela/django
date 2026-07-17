@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 from django.contrib import admin
 from django.contrib.admin.actions import delete_selected
 from django.contrib.auth.models import User
@@ -76,26 +78,90 @@ class SiteEachContextTest(TestCase):
         self.assertEqual(user['name'], 'Users')
 
 
+@override_settings(ROOT_URLCONF='admin_views.test_adminsite')
 class SiteAppListModelClassContractTests(SimpleTestCase):
+    request_factory = RequestFactory()
+
+    def request_with_permissions(self, has_permissions):
+        request = self.request_factory.get('/test_admin/admin/')
+        request.user = Mock()
+        request.user.has_module_perms.return_value = True
+        request.user.has_perm.return_value = has_permissions
+        return request
+
     def test_admin_001_visible_registered_model_dictionary_exposes_exact_registered_model_class(self):
         """ADMIN-001: A visible model gains its exact registered class."""
-        self.assertTrue(True)
+        app_list = site.get_app_list(self.request_with_permissions(True))
+
+        models = {
+            model['object_name']: model
+            for app in app_list
+            for model in app['models']
+        }
+        self.assertIs(models['Article']['model'], Article)
+        self.assertIs(models['User']['model'], User)
 
     def test_admin_005_invisible_registered_model_and_class_reference_remain_unexposed(self):
         """ADMIN-005: Permissions hide both the model and its class reference."""
-        self.assertTrue(True)
+        request = self.request_with_permissions(False)
+
+        self.assertEqual(site._build_app_dict(request), {})
+        self.assertEqual(site.get_app_list(request), [])
 
     def test_admin_006_model_class_field_is_only_change_to_existing_model_dictionary_contract(self):
         """ADMIN-006: Existing model dictionary data remains unchanged."""
-        self.assertTrue(True)
+        app = site._build_app_dict(
+            self.request_with_permissions(True), label='admin_views',
+        )
+
+        self.assertEqual(len(app['models']), 1)
+        model_dict = app['models'][0]
+        self.assertEqual(set(model_dict), {
+            'model', 'name', 'object_name', 'perms', 'admin_url', 'add_url',
+            'view_only',
+        })
+        self.assertIs(model_dict['model'], Article)
+        self.assertEqual(model_dict['name'], 'Articles')
+        self.assertEqual(model_dict['object_name'], 'Article')
+        self.assertEqual(model_dict['perms'], {
+            'add': True,
+            'change': True,
+            'delete': True,
+            'view': True,
+        })
+        self.assertEqual(
+            model_dict['admin_url'],
+            '/test_admin/admin/admin_views/article/',
+        )
+        self.assertEqual(
+            model_dict['add_url'],
+            '/test_admin/admin/admin_views/article/add/',
+        )
+        self.assertIs(model_dict['view_only'], False)
 
     def test_admin_007_registration_permissions_and_app_label_filter_preserve_app_list_behavior(self):
         """ADMIN-007: Inclusion, filtering, and ordering remain unchanged."""
-        self.assertTrue(True)
+        request = self.request_with_permissions(True)
+
+        app_list = site.get_app_list(request)
+        self.assertEqual(
+            [app['app_label'] for app in app_list],
+            ['admin_views', 'auth'],
+        )
+        auth_app = site._build_app_dict(request, label='auth')
+        self.assertEqual(auth_app['app_label'], 'auth')
+        self.assertEqual(len(auth_app['models']), 1)
+        self.assertIs(auth_app['models'][0]['model'], User)
+        self.assertIsNone(site._build_app_dict(request, label='sessions'))
 
     def test_admin_007_empty_app_list_result_preserves_empty_behavior(self):
         """ADMIN-007: An established empty app list remains empty."""
-        self.assertTrue(True)
+        empty_site = admin.AdminSite(name='empty')
+
+        self.assertEqual(
+            empty_site.get_app_list(self.request_with_permissions(True)),
+            [],
+        )
 
 
 class SiteActionsTests(SimpleTestCase):

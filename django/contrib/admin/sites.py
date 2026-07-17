@@ -488,6 +488,7 @@ class AdminSite:
             # the surrounding permission boundary and existing fields remain
             # owned by this method.
             model_dict = {
+                'model': model,
                 'name': capfirst(model._meta.verbose_name_plural),
                 'object_name': model._meta.object_name,
                 'perms': perms,
