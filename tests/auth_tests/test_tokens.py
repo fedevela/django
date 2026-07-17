@@ -24,11 +24,36 @@ class PasswordResetTokenEmailBindingContractTests(TestCase):
 
     def test_PRT_006_token_generated_for_one_user_checked_against_another_is_rejected(self):
         """GUID: PRT-006 - A token cannot be transferred between users."""
-        self.assertTrue(True)
+        token_user = User.objects.create_user(
+            'tokenuser', 'token@example.com', 'testpw',
+        )
+        validation_user = User.objects.create_user(
+            'validationuser', 'validation@example.com', 'testpw',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(token_user)
+
+        self.assertIs(generator.check_token(token_user, token), True)
+        self.assertIs(generator.check_token(validation_user, token), False)
 
     def test_PRT_006_same_effective_email_token_checked_against_another_user_is_rejected(self):
         """GUID: PRT-006 - A shared effective email doesn't make a token transferable."""
-        self.assertTrue(True)
+        token_user = User.objects.create_user(
+            'tokenuser', 'shared@example.com', 'testpw',
+        )
+        validation_user = User.objects.create_user(
+            'validationuser', 'shared@example.com', 'testpw',
+        )
+        # Make every token-relevant value except the primary key identical so
+        # this assertion specifically verifies the user identity binding.
+        validation_user.password = token_user.password
+        validation_user.last_login = token_user.last_login
+        validation_user.save(update_fields=['password', 'last_login'])
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(token_user)
+
+        self.assertIs(generator.check_token(token_user, token), True)
+        self.assertIs(generator.check_token(validation_user, token), False)
 
     def test_PRT_004_unchanged_token_relevant_state_within_lifetime_accepts_token(self):
         """GUID: PRT-004 - Unchanged token state remains valid within its lifetime."""
