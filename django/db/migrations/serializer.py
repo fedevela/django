@@ -161,28 +161,8 @@ class FrozensetSerializer(BaseUnorderedSequenceSerializer):
         return "frozenset([%s])"
 
 
-# MIGSER-003, MIGSER-005, MIGSER-006 architecture contract:
-# FunctionTypeSerializer owns stable importable references for every supported
-# callable shape routed here by Serializer._registry. Class-bound callables use
-# their owning class boundary; top-level functions and unbound methods use their
-# callable boundary. Both paths expose the same (reference, module imports)
-# contract to MigrationWriter, which remains the downstream consumer.
-# Dependency direction: callable metadata -> serializer -> generated migration.
 class FunctionTypeSerializer(BaseSerializer):
     def serialize(self):
-        # MIGSER-005, MIGSER-006 pseudocode -- supported callable dispatch:
-        # INPUT: a callable selected by the migration serializer registry.
-        # IF the callable is bound to a class:
-        #   READ the owning class module and complete qualified class name.
-        #   BUILD module + complete class path + callable name.
-        #   HAND OFF that reference with the owning module import.
-        # ELSE IF the callable is a lambda or has no module:
-        #   FAIL with the corresponding unsupported-callable error.
-        # ELSE IF its qualified name has no local-scope marker:
-        #   BUILD module + complete callable qualified name.
-        #   HAND OFF that reference with the callable module import.
-        # ELSE:
-        #   FAIL because a local-scope callable has no stable importable path.
         if getattr(self.value, "__self__", None) and isinstance(
             self.value.__self__, type
         ):
