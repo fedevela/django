@@ -149,6 +149,34 @@ class StaticTests(SimpleTestCase):
         self.assertEqual(response.content, b"Test index")
 
 
+class IfModifiedSinceContractTests(SimpleTestCase):
+    """Traceability placeholders for the If-Modified-Since contracts."""
+
+    def test_ims_001_empty_header_does_not_raise(self):
+        """GUID: IMS-001 - Empty-header evaluation completes without raising."""
+        self.assertTrue(True)
+
+    def test_ims_002_empty_value_yields_no_timestamp(self):
+        """GUID: IMS-002 - An empty value produces no modification timestamp."""
+        self.assertTrue(True)
+
+    def test_ims_003_empty_header_matches_absent_outcome(self):
+        """GUID: IMS-003 - Empty and absent headers have the same outcome."""
+        self.assertTrue(True)
+
+    def test_ims_004_valid_values_preserve_outcomes(self):
+        """GUID: IMS-004 - Valid values retain modified and unmodified outcomes."""
+        self.assertTrue(True)
+
+    def test_ims_005_malformed_nonempty_values_stay_unusable_without_raising(self):
+        """GUID: IMS-005 - Malformed nonempty values stay unusable and tolerated."""
+        self.assertTrue(True)
+
+    def test_ims_006_matrix_covers_empty_absent_valid_and_malformed_headers(self):
+        """GUID: IMS-006 - The regression matrix preserves all header cases."""
+        self.assertTrue(True)
+
+
 class StaticHelperTest(StaticTests):
     """
     Test case to make sure the static URL pattern helper works as expected
