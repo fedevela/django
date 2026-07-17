@@ -309,6 +309,27 @@ class Options:
                 field.primary_key = True
                 self.setup_pk(field)
             else:
+                # AUTOPK-003 pseudocode -- instantiate the configured custom
+                # implicit primary-key class:
+                # PRECONDITION: the model has no primary key and no parent
+                # link is eligible for promotion.
+                # RESOLVE and validate the effective DEFAULT_AUTO_FIELD class.
+                # IF resolution or validation fails:
+                #     PROPAGATE the existing error without attaching a field.
+                # PRESERVE the resolved class without replacing it with a
+                # built-in automatic-field superclass.
+                # IF it is a valid custom BigAutoField descendant:
+                #     INSTANTIATE that configured custom class.
+                # ELSE IF it is a valid custom SmallAutoField descendant:
+                #     INSTANTIATE that configured custom class.
+                # CONFIGURE the instance as the auto-created primary-key ID.
+                # HAND OFF the instance to model field registration.
+                # TRANSITION model state from "implicit primary key absent" to
+                # "implicit primary key is an instance of the configured
+                # custom field class".
+                # IF instantiation or registration fails:
+                #     PROPAGATE the existing error; do not substitute another
+                #     automatic-field class.
                 pk_class = self._get_default_pk_class()
                 auto = pk_class(verbose_name='ID', primary_key=True, auto_created=True)
                 model.add_to_class('id', auto)
