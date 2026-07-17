@@ -58,31 +58,14 @@ class BaseDatabaseCreation:
         settings.DATABASES[self.connection.alias]["NAME"] = test_database_name
         self.connection.settings_dict["NAME"] = test_database_name
 
-        # Architecture boundary — GUID: DJANGO-001, DJANGO-002, DJANGO-007
-        # BaseDatabaseCreation owns schema-strategy selection. Keep the
-        # migration-disabled adapter local to this management-command seam so
-        # backend subclasses remain responsible only for physical database
-        # creation and the test runner remains unaware of schema strategy.
-        # Pseudocode contract — GUID: DJANGO-001, DJANGO-002, DJANGO-007
-        # INPUT: the isolated database exists and TEST["MIGRATE"] selects the
-        # schema-setup strategy.
-        # IF migrations are enabled:
-        #     apply the configured migration plan and synchronize unmigrated apps.
-        # ELSE:
-        #     mark every installed app as having no migration module for the
-        #     duration of schema setup.
-        #     synchronize the model-defined schema without applying or validating
-        #     the project's migration history.
-        #     do not require migration-history repair, model changes, manual table
-        #     creation, or removal of TEST["MIGRATE"].
-        # FINALLY:
-        #     restore temporary migration configuration, including on failure.
-        # ON schema-setup failure:
-        #     propagate the failure after restoration; do not report setup complete.
-        # ON success:
-        #     rejoin the common serialization, cache-table, connection, and return
-        #     path so migration-disabled setup completes like ordinary setup.
-        if self.connection.settings_dict['TEST']['MIGRATE']:
+        # GUID: DJANGO-001, DJANGO-002, DJANGO-007. Use migrate's syncdb path
+        # to create the model-defined schema without loading migration history.
+        try:
+            if self.connection.settings_dict['TEST']['MIGRATE'] is False:
+                old_migration_modules = settings.MIGRATION_MODULES
+                settings.MIGRATION_MODULES = {
+                    app.label: None for app in apps.get_app_configs()
+                }
             # We report migrate messages at one level lower than that
             # requested. This ensures we don't get flooded with messages during
             # testing (unless you really ask to be flooded).
@@ -93,6 +76,9 @@ class BaseDatabaseCreation:
                 database=self.connection.alias,
                 run_syncdb=True,
             )
+        finally:
+            if self.connection.settings_dict['TEST']['MIGRATE'] is False:
+                settings.MIGRATION_MODULES = old_migration_modules
 
         # We then serialize the current state of the database into a string
         # and store it on the connection. This slightly horrific process is so people

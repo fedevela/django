@@ -1,11 +1,14 @@
 import copy
 from unittest import mock
 
+from django.apps import apps
+from django.conf import settings
 from django.db import DEFAULT_DB_ALIAS, connection, connections
 from django.db.backends.base.creation import (
     TEST_DATABASE_PREFIX, BaseDatabaseCreation,
 )
 from django.test import SimpleTestCase, TransactionTestCase
+from django.test.runner import DiscoverRunner
 
 from ..models import (
     CircularA, CircularB, Object, ObjectReference, ObjectSelfReference,
@@ -53,14 +56,30 @@ class TestDbSignatureTests(SimpleTestCase):
 @mock.patch('django.core.management.commands.migrate.Command.handle', return_value=None)
 class TestDbCreationTests(SimpleTestCase):
     def test_migrate_test_setting_false(self, mocked_migrate, mocked_ensure_connection):
+        """GUID: DJANGO-001, DJANGO-002, DJANGO-007."""
         test_connection = get_connection_copy()
         test_connection.settings_dict['TEST']['MIGRATE'] = False
         creation = test_connection.creation_class(test_connection)
         old_database_name = test_connection.settings_dict['NAME']
+        expected_test_database_name = creation._get_test_db_name()
+        old_migration_modules = settings.MIGRATION_MODULES
+
+        def assert_migrations_disabled(**kwargs):
+            self.assertEqual(
+                settings.MIGRATION_MODULES,
+                {app.label: None for app in apps.get_app_configs()},
+            )
+
+        mocked_migrate.side_effect = assert_migrations_disabled
         try:
             with mock.patch.object(creation, '_create_test_db'):
-                creation.create_test_db(verbosity=0, autoclobber=True, serialize=False)
-            mocked_migrate.assert_not_called()
+                test_database_name = creation.create_test_db(
+                    verbosity=0, autoclobber=True, serialize=False,
+                )
+            mocked_migrate.assert_called_once()
+            mocked_ensure_connection.assert_called_once()
+            self.assertEqual(test_database_name, expected_test_database_name)
+            self.assertIs(settings.MIGRATION_MODULES, old_migration_modules)
         finally:
             with mock.patch.object(creation, '_destroy_test_db'):
                 creation.destroy_test_db(old_database_name, verbosity=0)
@@ -78,39 +97,64 @@ class TestDbCreationTests(SimpleTestCase):
             with mock.patch.object(creation, '_destroy_test_db'):
                 creation.destroy_test_db(old_database_name, verbosity=0)
 
+    def test_migrate_test_setting_false_restores_migration_modules_on_failure(
+            self, mocked_migrate, mocked_ensure_connection):
+        """GUID: DJANGO-002, DJANGO-007."""
+        test_connection = get_connection_copy()
+        test_connection.settings_dict['TEST']['MIGRATE'] = False
+        creation = test_connection.creation_class(test_connection)
+        old_database_name = test_connection.settings_dict['NAME']
+        old_migration_modules = settings.MIGRATION_MODULES
+        mocked_migrate.side_effect = RuntimeError('migrate failed')
+        try:
+            with mock.patch.object(creation, '_create_test_db'):
+                with self.assertRaisesMessage(RuntimeError, 'migrate failed'):
+                    creation.create_test_db(
+                        verbosity=0, autoclobber=True, serialize=False,
+                    )
+            self.assertIs(settings.MIGRATION_MODULES, old_migration_modules)
+            mocked_ensure_connection.assert_not_called()
+        finally:
+            with mock.patch.object(creation, '_destroy_test_db'):
+                creation.destroy_test_db(old_database_name, verbosity=0)
 
-class MigrationDisabledTestDatabaseLifecycleContractTests(SimpleTestCase):
-    def test_django_001_migrate_false_creation_skips_applying_migrations(self):
-        """GUID: DJANGO-001"""
-        pass
 
-    def test_django_002_migrate_false_database_setup_completes_successfully(self):
-        """GUID: DJANGO-002"""
-        pass
+class MigrationDisabledTestDatabaseLifecycleTests(SimpleTestCase):
+    def get_runner(self, run_suite_side_effect=None):
+        runner = DiscoverRunner(verbosity=0)
+        runner.setup_test_environment = mock.Mock()
+        runner.build_suite = mock.Mock(return_value=mock.sentinel.suite)
+        runner.get_databases = mock.Mock(return_value={'default'})
+        runner.setup_databases = mock.Mock(return_value=mock.sentinel.old_config)
+        runner.run_checks = mock.Mock()
+        runner.run_suite = mock.Mock(
+            return_value=mock.sentinel.result,
+            side_effect=run_suite_side_effect,
+        )
+        runner.teardown_databases = mock.Mock()
+        runner.teardown_test_environment = mock.Mock()
+        runner.suite_result = mock.Mock(return_value=0)
+        return runner
 
-    def test_django_004_completed_migrate_false_setup_proceeds_to_test_execution(self):
-        """GUID: DJANGO-004"""
-        pass
+    def test_setup_proceeds_to_execution_and_teardown(self):
+        """GUID: DJANGO-004, DJANGO-008."""
+        runner = self.get_runner()
+        runner.run_tests([])
+        runner.run_suite.assert_called_once_with(mock.sentinel.suite)
+        runner.teardown_databases.assert_called_once_with(
+            mock.sentinel.old_config,
+        )
+        runner.teardown_test_environment.assert_called_once()
 
-    def test_django_007_migrate_false_setup_does_not_require_repairing_legacy_migration_history(self):
-        """GUID: DJANGO-007"""
-        pass
-
-    def test_django_007_migrate_false_setup_does_not_require_changing_models(self):
-        """GUID: DJANGO-007"""
-        pass
-
-    def test_django_007_migrate_false_setup_does_not_require_manual_table_creation(self):
-        """GUID: DJANGO-007"""
-        pass
-
-    def test_django_007_migrate_false_setup_does_not_require_removing_migrate_setting(self):
-        """GUID: DJANGO-007"""
-        pass
-
-    def test_django_008_completed_migrate_false_test_execution_uses_normal_isolated_database_teardown(self):
-        """GUID: DJANGO-008"""
-        pass
+    def test_execution_failure_still_uses_normal_teardown(self):
+        """GUID: DJANGO-008."""
+        runner = self.get_runner(RuntimeError('test execution failed'))
+        with self.assertRaisesMessage(RuntimeError, 'test execution failed'):
+            runner.run_tests([])
+        runner.teardown_databases.assert_called_once_with(
+            mock.sentinel.old_config,
+        )
+        runner.teardown_test_environment.assert_called_once()
 
 
 class TestDeserializeDbFromString(TransactionTestCase):
