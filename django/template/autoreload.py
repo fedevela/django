@@ -42,6 +42,10 @@ def reset_loaders():
 
 @receiver(autoreload_started, dispatch_uid='template_loaders_watch_changes')
 def watch_for_template_changes(sender, **kwargs):
+    # Architecture boundary (ARLD-005): this receiver may only contribute
+    # template-directory registrations through the reloader's watch_dir port.
+    # Project-file discovery and change handling remain reloader-owned and
+    # must not depend on the presence or location of template directories.
     # Pseudocode contract — ARLD-005
     # Verification: test_arld_005_empty_template_dirs_file_change_preserves_existing_autoreload
     # Verification: test_arld_005_template_dirs_exclude_base_dir_file_change_preserves_existing_autoreload
@@ -64,6 +68,10 @@ def watch_for_template_changes(sender, **kwargs):
 
 @receiver(file_changed, dispatch_uid='template_loaders_file_changed')
 def template_changed(sender, file_path, **kwargs):
+    # Event-consumption seam (ARLD-006): all watcher sources converge on the
+    # file_changed contract before this template-owned classifier runs. Watch
+    # provenance is deliberately outside this receiver's input contract; only
+    # template cache invalidation may be owned here.
     # Pseudocode contract — ARLD-006
     # Verification: test_arld_006_overlapping_template_and_project_watches_template_change_remains_detected
     # INPUT: a monitored changed path delivered from template-directory and/or
