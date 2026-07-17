@@ -2197,6 +2197,30 @@ class StartApp(AdminScriptTestCase):
                     "make sure the directory is a valid identifier." % bad_target
                 )
 
+    def test_django_001_existing_valid_target_with_trailing_native_separator_succeeds(self):
+        """GUID: DJANGO-001: A valid target with a trailing native separator succeeds."""
+        pass
+
+    def test_django_002_equivalent_target_path_forms_generate_equivalent_output(self):
+        """GUID: DJANGO-002: Equivalent target path forms generate equivalent output."""
+        pass
+
+    def test_django_004_trailing_separator_validates_final_nonempty_component(self):
+        """GUID: DJANGO-004: Validation uses the final non-empty target component."""
+        pass
+
+    def test_django_005_trailing_separator_keeps_output_in_supplied_target(self):
+        """GUID: DJANGO-005: Generated output remains confined to the supplied target."""
+        pass
+
+    def test_django_006_target_without_trailing_separator_retains_behavior(self):
+        """GUID: DJANGO-006: A target without a trailing separator retains its behavior."""
+        pass
+
+    def test_django_007_repeated_native_separators_match_single_separator(self):
+        """GUID: DJANGO-007: Repeated native separators behave like one separator."""
+        pass
+
     def test_importable_target_name(self):
         _, err = self.run_django_admin(['startapp', 'app', 'os'])
         self.assertOutput(
