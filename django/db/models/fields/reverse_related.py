@@ -306,6 +306,14 @@ class ManyToManyRel(ForeignObjectRel):
         self.symmetrical = symmetrical
         self.db_constraint = db_constraint
 
+    # Identity normalization boundary (M2MR-001, M2MR-002, M2MR-004,
+    # M2MR-005, M2MR-006, M2MR-007, M2MR-008, M2MR-009):
+    # ManyToManyRel.identity owns normalization of the through_fields tuple
+    # slot. The constructor retains the caller's value, and
+    # ForeignObjectRel.__eq__() and __hash__() remain unchanged consumers of
+    # the completed identity. The dependency therefore points from this
+    # subclass identity seam to make_hashable(), not into relation storage or
+    # the inherited comparison protocol.
     @property
     def identity(self):
         # Pseudocode contract for GUIDs M2MR-001, M2MR-002, M2MR-004,
