@@ -215,6 +215,23 @@ class CreateModel(ModelOperation):
                     managers=self.managers,
                 ),
             ]
+        # GUID: DJANGO-001, DJANGO-002, DJANGO-006
+        # LOGIC OBLIGATION: During normal migration optimization, fold a later
+        # RenameIndex(old_fields=...) transition into this CreateModel when it
+        # replaces an index_together entry on the same model.
+        # INPUTS: this CreateModel's options and the candidate later operation.
+        # IF the candidate is a same-model RenameIndex identified by old_fields:
+        #   - Locate the equivalent field tuple in options["index_together"].
+        #   - IF the tuple is present, copy the options before changing state.
+        #   - Remove only that superseded tuple; remove the index_together key
+        #     itself when no active tuples remain.
+        #   - Append the named replacement Index to options["indexes"], keeping
+        #     any existing final indexes.
+        #   - Return one replacement CreateModel carrying the resulting final
+        #     options, so serialization contains no obsolete transition and
+        #     model construction cannot emit its attributable deprecation warning.
+        # ELSE preserve the normal reduction handoff; unmatched or still-active
+        # index_together state is not suppressed and retains existing behavior.
         elif (
             isinstance(operation, FieldOperation)
             and self.name_lower == operation.model_name_lower
