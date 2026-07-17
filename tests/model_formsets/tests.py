@@ -160,6 +160,24 @@ class DeletionTests(TestCase):
 
 
 class ModelFormsetTest(TestCase):
+    def test_eform_006_bound_model_formset_empty_form_stays_unbound_template(self):
+        """GUID: EFORM-006; submitted data doesn't bind or validate empty_form."""
+        AuthorFormSet = modelformset_factory(Author, fields="__all__", extra=1)
+        data = {
+            "form-TOTAL_FORMS": "1",
+            "form-INITIAL_FORMS": "0",
+            "form-0-name": "Arthur Dent",
+        }
+        formset = AuthorFormSet(data, queryset=Author.objects.none())
+
+        self.assertIs(formset.forms[0].is_bound, True)
+        empty_form = formset.empty_form
+        self.assertIs(empty_form.is_bound, False)
+        self.assertEqual(empty_form.prefix, "form-__prefix__")
+        self.assertIsNone(empty_form["name"].value())
+        self.assertIs(empty_form.is_valid(), False)
+        self.assertFalse(hasattr(empty_form, "cleaned_data"))
+
     def test_modelformset_factory_without_fields(self):
         """Regression for #19733"""
         message = (

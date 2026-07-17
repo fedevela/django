@@ -179,6 +179,125 @@ class FormsFormsetTestCase(SimpleTestCase):
         self.assertTrue(hasattr(formset.empty_form, "custom_kwarg"))
         self.assertEqual(formset.empty_form.custom_kwarg, 1)
 
+    def test_eform_001_empty_form_with_true_access_and_render_do_not_raise(self):
+        """GUID: EFORM-001; empty_permitted=True permits access and rendering."""
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": True})
+
+        empty_form = formset.empty_form
+        empty_form.as_p()
+
+    def test_eform_001_empty_form_with_false_access_and_render_do_not_raise(self):
+        """GUID: EFORM-001; empty_permitted=False permits access and rendering."""
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": False})
+
+        empty_form = formset.empty_form
+        empty_form.as_p()
+
+    def test_eform_002_empty_form_with_true_retains_internal_empty_permitted(self):
+        """GUID: EFORM-002; supplied True doesn't replace the internal value."""
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": True})
+
+        self.assertIs(formset.empty_form.empty_permitted, True)
+
+    def test_eform_002_empty_form_with_false_retains_internal_empty_permitted(self):
+        """GUID: EFORM-002; supplied False doesn't replace the internal value."""
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": False})
+
+        self.assertIs(formset.empty_form.empty_permitted, True)
+
+    def test_eform_003_ordinary_forms_honor_supplied_empty_permitted_true(self):
+        """GUID: EFORM-003; ordinary forms preserve supplied True state."""
+        FormSet = formset_factory(Choice, extra=0)
+        formset = FormSet(
+            initial=[{"choice": "Calexico", "votes": 100}],
+            form_kwargs={"empty_permitted": True},
+        )
+
+        self.assertIs(formset.forms[0].empty_permitted, True)
+
+    def test_eform_003_ordinary_forms_honor_supplied_empty_permitted_false(self):
+        """GUID: EFORM-003; ordinary forms preserve supplied False state."""
+        FormSet = formset_factory(Choice)
+        formset = FormSet(form_kwargs={"empty_permitted": False})
+
+        self.assertIs(formset.forms[0].empty_permitted, False)
+
+    def test_eform_004_empty_form_receives_other_kwargs_but_ignores_empty_permitted(
+        self,
+    ):
+        """GUID: EFORM-004; only empty_permitted is excluded from empty_form."""
+        FormSet = formset_factory(CustomKwargForm)
+        formset = FormSet(
+            form_kwargs={"custom_kwarg": "sentinel", "empty_permitted": False}
+        )
+
+        empty_form = formset.empty_form
+        self.assertEqual(empty_form.custom_kwarg, "sentinel")
+        self.assertIs(empty_form.empty_permitted, True)
+
+    def test_eform_005_single_empty_form_access_preserves_supplied_form_kwargs(self):
+        """GUID: EFORM-005; one empty_form access leaves form_kwargs unchanged."""
+        FormSet = formset_factory(CustomKwargForm)
+        form_kwargs = {"custom_kwarg": "sentinel", "empty_permitted": False}
+        formset = FormSet(form_kwargs=form_kwargs)
+
+        formset.empty_form
+
+        self.assertEqual(
+            form_kwargs, {"custom_kwarg": "sentinel", "empty_permitted": False}
+        )
+        self.assertEqual(formset.form_kwargs, form_kwargs)
+
+    def test_eform_005_repeated_empty_form_access_preserves_supplied_form_kwargs(
+        self,
+    ):
+        """GUID: EFORM-005; repeated empty_form access leaves form_kwargs unchanged."""
+        FormSet = formset_factory(CustomKwargForm)
+        form_kwargs = {"custom_kwarg": "sentinel", "empty_permitted": False}
+        formset = FormSet(form_kwargs=form_kwargs)
+
+        for _ in range(2):
+            formset.empty_form
+            self.assertEqual(
+                form_kwargs,
+                {"custom_kwarg": "sentinel", "empty_permitted": False},
+            )
+            self.assertEqual(formset.form_kwargs, form_kwargs)
+
+    def test_eform_005_ordinary_forms_after_empty_form_access_receive_original_kwargs(
+        self,
+    ):
+        """GUID: EFORM-005; later forms receive the original supplied kwargs."""
+        FormSet = formset_factory(CustomKwargForm)
+        form_kwargs = {"custom_kwarg": "sentinel", "empty_permitted": False}
+        formset = FormSet(form_kwargs=form_kwargs)
+
+        formset.empty_form
+        formset.empty_form
+        form = formset.forms[0]
+
+        self.assertEqual(form.custom_kwarg, "sentinel")
+        self.assertIs(form.empty_permitted, False)
+
+    def test_eform_007_omitted_empty_permitted_keeps_empty_form_access_and_rendering(
+        self,
+    ):
+        """GUID: EFORM-007; omission preserves empty_form state and rendering."""
+        FormSet = formset_factory(Choice)
+        formset = FormSet(auto_id=False, prefix="choices")
+
+        empty_form = formset.empty_form
+        self.assertIs(empty_form.empty_permitted, True)
+        self.assertHTMLEqual(
+            empty_form.as_ul(),
+            """<li>Choice: <input type="text" name="choices-__prefix__-choice"></li>
+<li>Votes: <input type="number" name="choices-__prefix__-votes"></li>""",
+        )
+
     def test_formset_validation(self):
         # FormSet instances can also have an error attribute if validation failed for
         # any of the forms.
