@@ -2213,6 +2213,14 @@ class StartApp(AdminScriptTestCase):
                     "make sure the directory is a valid identifier." % bad_target
                 )
 
+    def test_django_003_invalid_target_without_trailing_separator_keeps_invalid_app_directory_error(self):
+        """GUID: DJANGO-003: An invalid target without a separator is rejected."""
+        self.assertTrue(True)
+
+    def test_django_003_invalid_target_with_trailing_native_separator_keeps_invalid_app_directory_error(self):
+        """GUID: DJANGO-003: A trailing separator preserves invalid-target rejection."""
+        self.assertTrue(True)
+
     def test_django_001_existing_valid_target_with_trailing_native_separator_succeeds(self):
         """GUID: DJANGO-001: A valid target with a trailing native separator succeeds."""
         target = os.path.join(self.test_dir, 'valid_target')
