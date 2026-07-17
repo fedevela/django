@@ -100,8 +100,19 @@ class AdminTemplateTagsTest(AdminViewBasicTestCase):
 
 
 class SubmitRowSaveAsNewContractTests(TestCase):
+    # SAVEAS-007/SAVEAS-008 architecture:
+    # This class owns the focused Save as new visibility contract at the
+    # admin_modify.submit_row boundary. submit_row_context() is the single
+    # test adapter from contract inputs to that template-tag boundary; the
+    # dependency points from this test module to admin_modify, never back into
+    # the test suite. Keeping the cases in this module also places them inside
+    # the existing admin template-tag discovery seam required by SAVEAS-008.
+
     @staticmethod
     def submit_row_context(**overrides):
+        # SAVEAS-007 contract fixture: the baseline represents every required
+        # visibility condition; individual contract tests own only their input
+        # override and the observation of show_save_as_new.
         context = {
             "add": False,
             "change": True,
