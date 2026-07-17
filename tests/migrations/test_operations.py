@@ -1,3 +1,5 @@
+import unittest
+
 from django.core.exceptions import FieldDoesNotExist
 from django.db import IntegrityError, connection, migrations, models, transaction
 from django.db.migrations.migration import Migration
@@ -3120,25 +3122,51 @@ class OperationTests(OperationTestBase):
         self.assertIndexNameNotExists(table_name, old_index_name)
         self.assertIndexNameExists(table_name, "new_pony_test_idx")
 
-    def test_rix_006_supported_backends_unnamed_unique_together_forward_sets_requested_name_backward_restores_generated_name_and_forward_again_sets_requested_name_without_collision(
-        self,
-    ):
-        """
-        RIX-006: Supported backends preserve the expected unnamed unique_together
-        index name across forward, backward, and forward-again renames without a
-        collision or database exception.
-        """
-        self.assertTrue(True)
+    def _assert_rix_006_unnamed_index_rename_sequence(self, app_label):
+        table_name = app_label + "_pony"
+        project_state = self.set_up_test_model(app_label, index_together=True)
+        old_index_name = self._get_unnamed_index_name(
+            project_state, app_label, ("weight", "pink")
+        )
+        new_index_name = "new_pony_test_idx"
+        operation = migrations.RenameIndex(
+            "Pony",
+            new_name=new_index_name,
+            old_fields=("weight", "pink"),
+        )
+        new_state = project_state.clone()
+        operation.state_forwards(app_label, new_state)
 
-    def test_rix_006_postgresql_forward_backward_forward_again_avoids_existing_new_index_name_programming_error(
-        self,
-    ):
+        with connection.schema_editor() as editor:
+            operation.database_forwards(app_label, editor, project_state, new_state)
+        self.assertIndexNameNotExists(table_name, old_index_name)
+        self.assertIndexNameExists(table_name, new_index_name)
+
+        with connection.schema_editor() as editor:
+            operation.database_backwards(app_label, editor, new_state, project_state)
+        self.assertIndexNameExists(table_name, old_index_name)
+        self.assertIndexNameNotExists(table_name, new_index_name)
+
+        with connection.schema_editor() as editor:
+            operation.database_forwards(app_label, editor, project_state, new_state)
+        self.assertIndexNameNotExists(table_name, old_index_name)
+        self.assertIndexNameExists(table_name, new_index_name)
+
+    def test_rix_006_supported_backends_unnamed_index_rename_consistency(self):
+        """
+        RIX-006: Supported backends preserve the expected unnamed index name
+        across forward, backward, and forward-again renames.
+        """
+        self._assert_rix_006_unnamed_index_rename_sequence("test_rix006")
+
+    @unittest.skipUnless(connection.vendor == "postgresql", "PostgreSQL specific")
+    def test_rix_006_postgresql_avoids_existing_new_index_name(self):
         """
         RIX-006: PostgreSQL completes the unnamed unique_together forward,
         backward, and forward-again rename without an existing-new-name
         ProgrammingError.
         """
-        self.assertTrue(True)
+        self._assert_rix_006_unnamed_index_rename_sequence("test_rix006_postgresql")
 
     def test_rename_index_unknown_unnamed_index(self):
         app_label = "test_rninuui"
