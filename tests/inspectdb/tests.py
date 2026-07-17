@@ -3,10 +3,12 @@ import re
 from io import StringIO
 from unittest import mock, skipUnless
 
+from django.core import checks
 from django.core.management import call_command
 from django.db import connection, models
 from django.db.backends.base.introspection import TableInfo
 from django.test import TestCase, TransactionTestCase, skipUnlessDBFeature
+from django.test.utils import isolate_apps
 
 from .models import PeopleMoreData, test_collation
 
@@ -268,6 +270,14 @@ class InspectDBTestCase(TestCase):
         call_command("inspectdb", table_name, stdout=out)
         return re.findall(r"related_name='([^']+)'", out.getvalue())
 
+    def load_inspected_models(self, *table_names):
+        out = StringIO()
+        call_command("inspectdb", *table_names, stdout=out)
+        source = out.getvalue()
+        namespace = {"__name__": "inspectdb.generated_models"}
+        exec(compile(source, "<inspectdb output>", "exec"), namespace)
+        return namespace
+
     @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_001_two_relations_to_same_target_receive_distinct_related_names(self):
         """GUID: INSP-001 - Two repeated-target relations have distinct names."""
@@ -294,9 +304,16 @@ class InspectDBTestCase(TestCase):
         second_run = self.get_related_names("inspectdb_relationsthree")
         self.assertEqual(first_run, second_run)
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
+    @isolate_apps("inspectdb")
     def test_insp_003_loaded_repeated_target_relations_report_no_fields_e304(self):
         """GUID: INSP-003 - Loaded repeated relations have no E304 clashes."""
-        self.assertTrue(True)
+        namespace = self.load_inspected_models(
+            "inspectdb_people", "inspectdb_relationstwo"
+        )
+        model = namespace["InspectdbRelationsTwo"]
+        errors = checks.run_checks(app_configs=[model._meta.app_config])
+        self.assertNotIn("fields.E304", {error.id for error in errors})
 
     @skipUnlessDBFeature("can_introspect_foreign_keys")
     def test_insp_004_generated_related_names_are_valid_reverse_namespace_names(self):
@@ -308,13 +325,34 @@ class InspectDBTestCase(TestCase):
             self.assertEqual([], field._check_related_name_is_valid())
             self.assertEqual([], field._check_related_query_name_is_valid())
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
+    @isolate_apps("inspectdb")
     def test_insp_005_repeated_target_output_loads_as_django_model_code(self):
         """GUID: INSP-005 - Repeated-target output is valid loadable model code."""
-        self.assertTrue(True)
+        namespace = self.load_inspected_models(
+            "inspectdb_people", "inspectdb_relationstwo"
+        )
+        self.assertTrue(issubclass(namespace["InspectdbPeople"], models.Model))
+        self.assertTrue(issubclass(namespace["InspectdbRelationsTwo"], models.Model))
 
+    @skipUnlessDBFeature("can_introspect_foreign_keys")
+    @isolate_apps("inspectdb")
     def test_insp_005_repeated_target_output_with_other_fields_loads(self):
         """GUID: INSP-005 - Mixed-field repeated-target output loads cleanly."""
-        self.assertTrue(True)
+        namespace = self.load_inspected_models(
+            "inspectdb_people", "inspectdb_relationsthree"
+        )
+        people = namespace["InspectdbPeople"]
+        relations = namespace["InspectdbRelationsThree"]
+        self.assertIsInstance(people._meta.get_field("name"), models.CharField)
+        self.assertEqual(
+            {"class_field_set", "editor_set", "reviewer_set"},
+            {
+                field.remote_field.related_name
+                for field in relations._meta.fields
+                if field.is_relation
+            },
+        )
 
     def test_digits_column_name_introspection(self):
         """Introspection of column names consist/start with digits (#16536/#17676)"""
