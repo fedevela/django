@@ -446,6 +446,10 @@ class AdminSite:
     #     no visible match exists) when filtered.
     # EXPOSE this procedure as a callable attribute named build_app_dict;
     # do not require or retain a private compatibility entry point.
+    # Architecture placement — ADMIN-002: AdminSite owns this capability at
+    # the registry boundary. Its implementation-ready public contract is
+    # build_app_dict(request, label=None); the existing builder body remains
+    # the single implementation locus, with no adapter or private alias layer.
     def _build_app_dict(self, request, label=None):
         """
         Build the app dictionary. The optional `label` parameter filters models
@@ -553,6 +557,9 @@ class AdminSite:
         # FOR EACH app, SORT its model dictionaries by the existing name key.
         # RETURN the sorted list; if the dictionary is empty, RETURN the same
         # empty list produced by the established behavior.
+        # Integration seam — ADMIN-002: get_app_list() depends on AdminSite's
+        # public build_app_dict(request) contract; it does not own registry
+        # selection, permission projection, or app-label filtering.
         app_dict = self._build_app_dict(request)
 
         # Sort the apps alphabetically.
@@ -587,6 +594,9 @@ class AdminSite:
         return TemplateResponse(request, self.index_template or 'admin/index.html', context)
 
     def app_index(self, request, app_label, extra_context=None):
+        # Integration seam — ADMIN-002: app_index() is the label-filtered
+        # consumer of AdminSite.build_app_dict(request, label); its HTTP 404
+        # and presentation responsibilities remain outside the builder.
         app_dict = self._build_app_dict(request, app_label)
         if not app_dict:
             raise Http404('The requested admin page does not exist.')
