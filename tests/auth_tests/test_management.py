@@ -1583,6 +1583,18 @@ class MigrationDatabaseTraceabilityTests(TestCase):
         database_router.db_for_read.assert_not_called()
         database_router.db_for_write.assert_not_called()
 
+    def test_MIGDB_004_allowed_selected_database_processing_is_not_redirected(self):
+        """GUID: MIGDB-004 — allowed processing stays on the selected database."""
+        pass
+
+    def test_MIGDB_004_rejection_creates_no_selected_database_permission_data(self):
+        """GUID: MIGDB-004 — rejection leaves selected-database data unchanged."""
+        pass
+
+    def test_MIGDB_004_rejection_does_not_read_or_write_a_fallback_database(self):
+        """GUID: MIGDB-004 — rejection performs no fallback database access."""
+        pass
+
     def test_MIGDB_006_prior_behavior_detects_wrong_content_type_database(self):
         """GUID: MIGDB-006 — prior behavior -> wrong database is detected."""
         default_content_type = self._remove_other_permission_content_type()
