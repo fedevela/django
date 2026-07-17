@@ -1244,43 +1244,118 @@ class FormsFormsetTestCase(SimpleTestCase):
 
 
 class FormsetNonFormErrorTraceabilityTests(SimpleTestCase):
-    """Placeholder contracts for FormSet non-form error classification."""
+    """FormSet non-form errors have their own error list classification."""
+
+    @staticmethod
+    def custom_clean_formset(error_class=ErrorList):
+        class CustomCleanFormSet(BaseFormSet):
+            def clean(self):
+                raise ValidationError('Non-form error.')
+
+        FormSet = formset_factory(
+            Choice, formset=CustomCleanFormSet, extra=0,
+        )
+        return FormSet({
+            'form-TOTAL_FORMS': '0',
+            'form-INITIAL_FORMS': '0',
+        }, error_class=error_class)
 
     def test_nonform_001_non_form_error_list_is_classified_as_exact_nonform_class(self):
         """GUID: NONFORM-001"""
-        pass
+        errors = self.custom_clean_formset().non_form_errors()
+        self.assertEqual(errors.error_class, 'errorlist nonform')
 
     def test_nonform_002_default_rendering_adds_nonform_to_error_list_element(self):
         """GUID: NONFORM-002"""
-        pass
+        errors = self.custom_clean_formset().non_form_errors()
+        self.assertHTMLEqual(
+            errors.as_ul(),
+            '<ul class="errorlist nonform"><li>Non-form error.</li></ul>',
+        )
 
     def test_nonform_004_minimum_count_error_list_is_classified_as_nonform(self):
         """GUID: NONFORM-004; minimum-count validation path."""
-        pass
+        FormSet = formset_factory(
+            Choice, extra=0, min_num=1, validate_min=True,
+        )
+        formset = FormSet({
+            'form-TOTAL_FORMS': '0',
+            'form-INITIAL_FORMS': '0',
+        })
+        self.assertEqual(
+            formset.non_form_errors().error_class, 'errorlist nonform',
+        )
 
     def test_nonform_004_maximum_count_error_list_is_classified_as_nonform(self):
         """GUID: NONFORM-004; maximum-count validation path."""
-        pass
+        FormSet = formset_factory(
+            Choice, extra=0, max_num=0, validate_max=True,
+        )
+        formset = FormSet({
+            'form-TOTAL_FORMS': '1',
+            'form-INITIAL_FORMS': '0',
+            'form-0-choice': 'Calexico',
+            'form-0-votes': '100',
+        })
+        self.assertEqual(
+            formset.non_form_errors().error_class, 'errorlist nonform',
+        )
 
     def test_nonform_004_custom_clean_error_list_is_classified_as_nonform(self):
         """GUID: NONFORM-004; custom-cleaning validation path."""
-        pass
+        errors = self.custom_clean_formset().non_form_errors()
+        self.assertEqual(errors.error_class, 'errorlist nonform')
 
     def test_nonform_004_access_triggers_validation_and_classifies_error_list_as_nonform(self):
         """GUID: NONFORM-004; lazy non_form_errors() validation path."""
-        pass
+        formset = self.custom_clean_formset()
+        self.assertIsNone(formset._non_form_errors)
+        errors = formset.non_form_errors()
+        self.assertEqual(errors.error_class, 'errorlist nonform')
+        self.assertIs(errors, formset._non_form_errors)
 
     def test_nonform_007_configured_error_list_subclass_is_preserved_and_classified_as_nonform(self):
         """GUID: NONFORM-007"""
-        pass
+        class CustomErrorList(ErrorList):
+            renderer_name = 'custom'
+
+        errors = self.custom_clean_formset(CustomErrorList).non_form_errors()
+        self.assertIsInstance(errors, CustomErrorList)
+        self.assertEqual(errors.error_class, 'errorlist nonform')
 
     def test_nonform_008_renderer_distinguishes_field_nonfield_and_nonform_metadata(self):
         """GUID: NONFORM-008"""
-        pass
+        class CustomErrorList(ErrorList):
+            renderer_name = 'custom'
+
+        class InvalidForm(Form):
+            name = CharField()
+
+            def clean(self):
+                raise ValidationError('Non-field error.')
+
+        form = InvalidForm({}, error_class=CustomErrorList)
+        field_errors = form.errors['name']
+        nonfield_errors = form.non_field_errors()
+        nonform_errors = self.custom_clean_formset(
+            CustomErrorList,
+        ).non_form_errors()
+        self.assertEqual(
+            [
+                field_errors.error_class,
+                nonfield_errors.error_class,
+                nonform_errors.error_class,
+            ],
+            ['errorlist', 'errorlist nonfield', 'errorlist nonform'],
+        )
 
     def test_nonform_011_default_markup_only_adds_nonform_class(self):
         """GUID: NONFORM-011"""
-        pass
+        errors = self.custom_clean_formset().non_form_errors()
+        self.assertEqual(
+            errors.as_ul(),
+            '<ul class="errorlist nonform"><li>Non-form error.</li></ul>',
+        )
 
 
 class FormsetAsTagTests(SimpleTestCase):

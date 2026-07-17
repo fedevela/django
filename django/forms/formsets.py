@@ -354,7 +354,7 @@ class BaseFormSet:
         # PRESERVE the configured subclass by constructing through that constructor.
         # IF validation stops early or appends an error directly,
         #     KEEP this same classified instance as the observable result.
-        self._non_form_errors = self.error_class()
+        self._non_form_errors = self.error_class(error_class='nonform')
         empty_forms_count = 0
 
         if not self.is_bound:  # Stop further processing.
@@ -418,7 +418,7 @@ class BaseFormSet:
             # HAND OFF the existing messages and ``nonform`` metadata to rendering.
             # REQUIRE default rendering to add only ``nonform`` to the existing
             # error-list classes; preserve its element, children, and other markup.
-            self._non_form_errors = self.error_class(e.error_list)
+            self._non_form_errors = self.error_class(e.error_list, error_class='nonform')
 
     def clean(self):
         """
