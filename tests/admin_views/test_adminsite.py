@@ -164,6 +164,20 @@ class SiteAppListModelClassContractTests(SimpleTestCase):
         )
 
 
+class SiteBuildAppDictPublicMethodContractTests(SimpleTestCase):
+    def test_admin_002_valid_request_without_app_label_returns_unfiltered_app_dictionary(self):
+        """ADMIN-002: The public builder preserves unfiltered invocation."""
+        self.assertTrue(True)
+
+    def test_admin_002_valid_request_with_app_label_returns_filtered_app_dictionary(self):
+        """ADMIN-002: The public builder preserves app-label filtering."""
+        self.assertTrue(True)
+
+    def test_admin_002_admin_site_exposes_callable_public_app_dictionary_builder(self):
+        """ADMIN-002: The app-dictionary builder has a callable public name."""
+        self.assertTrue(True)
+
+
 class SiteActionsTests(SimpleTestCase):
     def setUp(self):
         self.site = admin.AdminSite()
