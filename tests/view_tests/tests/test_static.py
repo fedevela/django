@@ -1,6 +1,7 @@
 import mimetypes
 import unittest
 from os import path
+from unittest import mock
 from urllib.parse import quote
 
 from django.conf.urls.static import static
@@ -149,48 +150,69 @@ class StaticTests(SimpleTestCase):
         self.assertEqual(response.content, b"Test index")
 
 
+@override_settings(DEBUG=True, ROOT_URLCONF="view_tests.urls")
 class IfModifiedSinceContractTests(SimpleTestCase):
-    """Traceability placeholders for the If-Modified-Since contracts."""
+    """Requirement coverage for the If-Modified-Since contracts."""
 
     # ARCHITECTURE VERIFICATION LOCUS (IMS-001, IMS-002, IMS-003, IMS-004,
     # IMS-005, IMS-006): this existing static-view test module owns both the
     # ``serve()`` integration seam and direct ``was_modified_since()`` contract.
-    # Later behavioral coverage belongs here without a test-only production API.
-    # PSEUDOCODE VERIFICATION MATRIX: IMS-006
-    # ARRANGE otherwise-equivalent static-file requests for these header classes:
-    #     absent; empty; valid older; valid newer; malformed nonempty.
-    # ACT by evaluating conditional static-file delivery for every request.
-    # VERIFY IMS-001: empty completes without an exception.
-    # VERIFY IMS-002: empty yields no usable modification timestamp.
-    # VERIFY IMS-003: empty and absent produce the same delivery outcome.
-    # VERIFY IMS-004: valid older remains modified and valid newer not modified.
-    # VERIFY IMS-005: each established malformed value remains unusable, tolerated,
-    #     and modified rather than becoming a valid timestamp.
-    # VERIFY IMS-006: all classes above remain represented in the regression matrix.
+    # Behavioral coverage belongs here without a test-only production API.
+
+    file_url = "/site_media/file.txt"
+    older = "Thu, 1 Jan 1970 00:00:00 GMT"
+    newer = "Mon, 18 Jan 2038 05:14:07 GMT"
+    malformed = (
+        "Mon, 28 May 999999999999 28:25:26 GMT",
+        ": 1291108438, Wed, 20 Oct 2010 14:05:00 GMT",
+    )
 
     def test_ims_001_empty_header_does_not_raise(self):
         """GUID: IMS-001 - Empty-header evaluation completes without raising."""
-        self.assertTrue(True)
+        self.assertTrue(was_modified_since(""))
 
     def test_ims_002_empty_value_yields_no_timestamp(self):
         """GUID: IMS-002 - An empty value produces no modification timestamp."""
-        self.assertTrue(True)
+        with mock.patch("django.views.static.parse_http_date") as parse_http_date:
+            self.assertTrue(was_modified_since(""))
+        parse_http_date.assert_not_called()
 
     def test_ims_003_empty_header_matches_absent_outcome(self):
         """GUID: IMS-003 - Empty and absent headers have the same outcome."""
-        self.assertTrue(True)
+        absent_response = self.client.get(self.file_url)
+        empty_response = self.client.get(
+            self.file_url,
+            HTTP_IF_MODIFIED_SINCE="",
+        )
+        self.assertEqual(empty_response.status_code, absent_response.status_code)
+        self.assertEqual(b"".join(empty_response), b"".join(absent_response))
+        empty_response.close()
+        absent_response.close()
 
     def test_ims_004_valid_values_preserve_outcomes(self):
         """GUID: IMS-004 - Valid values retain modified and unmodified outcomes."""
-        self.assertTrue(True)
+        self.assertTrue(was_modified_since(self.older, mtime=1))
+        self.assertFalse(was_modified_since(self.newer, mtime=1))
 
     def test_ims_005_malformed_nonempty_values_stay_unusable_without_raising(self):
         """GUID: IMS-005 - Malformed nonempty values stay unusable and tolerated."""
-        self.assertTrue(True)
+        for header in self.malformed:
+            with self.subTest(header=header):
+                self.assertTrue(was_modified_since(header))
 
     def test_ims_006_matrix_covers_empty_absent_valid_and_malformed_headers(self):
         """GUID: IMS-006 - The regression matrix preserves all header cases."""
-        self.assertTrue(True)
+        cases = (
+            ("absent", None, True),
+            ("empty", "", True),
+            ("valid older", self.older, True),
+            ("valid newer", self.newer, False),
+            ("malformed date", self.malformed[0], True),
+            ("malformed shape", self.malformed[1], True),
+        )
+        for name, header, expected in cases:
+            with self.subTest(name=name):
+                self.assertIs(was_modified_since(header, mtime=1), expected)
 
 
 class StaticHelperTest(StaticTests):

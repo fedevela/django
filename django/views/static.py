@@ -133,24 +133,8 @@ def was_modified_since(header=None, mtime=0, size=0):
     # existing private helper is the conditional-modification policy boundary.
     # Its only date-decoding dependency is ``parse_http_date``; callers consume
     # the boolean contract and must not depend on an intermediate timestamp.
-    # PSEUDOCODE CONTRACT: IMS-001, IMS-002, IMS-003, IMS-004, IMS-005
-    # INPUT: header value, resource modification time, and resource size.
-    # IF header is absent OR empty:
-    #     classify the value as unusable; do not derive a header timestamp.
-    #     return "modified" so empty and absent headers have the same outcome.
-    # OTHERWISE attempt to match the established date and optional-length shape.
-    # IF the nonempty value does not match OR its date cannot be parsed:
-    #     classify it as malformed without producing a timestamp or raising.
-    #     return the established "modified" outcome.
-    # IF an optional header length exists and differs from the resource size:
-    #     return "modified".
-    # IF the resource modification time is later than the parsed header time:
-    #     return "modified".
-    # OTHERWISE return "not modified".
-    # FAILURE PATH: parsing, conversion, range, or shape failures are unusable input
-    # and converge on "modified"; none escape as a new exception.
     try:
-        if header is None:
+        if not header:
             raise ValueError
         matches = re.match(r"^([^;]+)(; length=([0-9]+))?$", header, re.IGNORECASE)
         header_mtime = parse_http_date(matches[1])
