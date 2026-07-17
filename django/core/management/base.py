@@ -348,6 +348,22 @@ class BaseCommand:
         #       pass the command help and complete argument model to it without
         #       altering the established wrapping, ordering, or section format.
         #
+        # MCFMT-007:
+        #   retain the command help as the authoritative ordered sequence of
+        #   words and semantic statements;
+        #   pass that same help value to the parser for every formatter choice;
+        #   WHEN customized help is rendered:
+        #       allow the selected formatter to change presentation only;
+        #       emit every source word once, in source order, without adding,
+        #       removing, substituting, or reinterpreting semantic content.
+        #
+        # MCFMT-008 parser boundary:
+        #   construct one argument model from the same base arguments and the
+        #   same command-defined arguments for every formatter choice;
+        #   keep formatter selection outside argument definitions, parsing
+        #   rules, defaults, validation, and the values produced by parsing;
+        #   hand the unchanged model to the command-line parsing path.
+        #
         # MCFMT-009:
         #   determine customized formatting from explicit command selection,
         #   not from the presence of newline characters in the help text;
@@ -362,6 +378,8 @@ class BaseCommand:
         # FAILURE: if a selected behavior cannot format the help text, surface
         # that failure through the parser help-formatting path; do not silently
         # substitute the default behavior and violate the command's selection;
+        # do not repair a formatting failure by mutating help words or meaning,
+        # argument definitions, parsed values, or execution inputs;
         # likewise, do not infer a fallback or customized branch from help-text
         # line breaks, and do not return partially rendered argument sections.
         # MCFMT-001, MCFMT-006, MCFMT-009 integration seam: parser construction
@@ -477,6 +495,21 @@ class BaseCommand:
         to stderr. If the ``--traceback`` option is present or the raised
         ``Exception`` is not ``CommandError``, raise it.
         """
+        # MCFMT-008 — formatting-independent parse and execution flow:
+        #   INPUT: the command-line token sequence after program and command.
+        #   create the parser, allowing its formatter choice to affect help
+        #   presentation only;
+        #   parse the input tokens through the parser's unchanged argument
+        #   model;
+        #   IF parsing fails:
+        #       preserve the established parser error and stop before execute;
+        #   ELSE:
+        #       separate positional values from option values exactly as in the
+        #       default-formatting path;
+        #       apply the same default-option environment transitions;
+        #       hand the same positional and option values to execute;
+        #       preserve execute's output, side effects, return behavior, and
+        #       exception flow without consulting the selected formatter.
         self._called_from_command_line = True
         parser = self.create_parser(argv[0], argv[1])
 
