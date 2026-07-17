@@ -17,7 +17,8 @@ from unittest import mock
 from django import conf, get_version
 from django.conf import settings
 from django.core.management import (
-    BaseCommand, CommandError, call_command, color,
+    BaseCommand, CommandError, CommandParser, ManagementUtility, call_command,
+    color,
 )
 from django.core.management.commands.loaddata import Command as LoaddataCommand
 from django.core.management.commands.runserver import (
@@ -1817,15 +1818,35 @@ class Discovery(SimpleTestCase):
 class EarlyParserArgumentVectorContractTests(SimpleTestCase):
     def test_DJANGO_001_early_parser_uses_supplied_argv_program_name(self):
         """DJANGO-001: The early parser receives ManagementUtility.prog_name."""
-        self.assertTrue(True)
+        utility = ManagementUtility(['custom-manage.py', 'version'])
+        with mock.patch(
+            'django.core.management.CommandParser', wraps=CommandParser,
+        ) as parser_class, mock.patch('sys.stdout', new=StringIO()):
+            utility.execute()
+
+        parser_class.assert_called_once_with(
+            prog=utility.prog_name,
+            usage='%(prog)s subcommand [options] [args]',
+            add_help=False,
+            allow_abbrev=False,
+        )
 
     def test_DJANGO_002_supplied_argv_parses_when_global_program_name_is_none(self):
         """DJANGO-002: A usable supplied argv is independent of sys.argv[0]."""
-        self.assertTrue(True)
+        with mock.patch.object(sys, 'argv', [None]), mock.patch(
+            'sys.stdout', new=StringIO(),
+        ):
+            ManagementUtility(['custom-manage.py', 'version']).execute()
 
     def test_DJANGO_010_supplied_argv_early_parsing_preserves_global_argv(self):
         """DJANGO-010: Early parsing leaves process-global sys.argv unchanged."""
-        self.assertTrue(True)
+        global_argv = ['global-manage.py', 'check']
+        recorded_argv = global_argv[:]
+        with mock.patch.object(sys, 'argv', global_argv), mock.patch(
+            'sys.stdout', new=StringIO(),
+        ):
+            ManagementUtility(['custom-manage.py', 'version']).execute()
+            self.assertEqual(sys.argv, recorded_argv)
 
 
 class ArgumentOrder(AdminScriptTestCase):
