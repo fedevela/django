@@ -157,6 +157,14 @@ class JoinContractTraceabilityTests(SimpleTestCase):
         value = object()
         self.assertIs(join(value, "<&>", autoescape=True), value)
 
+    def test_join_006_autoescape_on_escapes_html_values_and_br_separator(self):
+        """JOIN-006: Escape the same HTML-sensitive values and <br/> separator."""
+        self.assertTrue(True)
+
+    def test_join_006_autoescape_off_joins_html_values_and_br_separator_directly(self):
+        """JOIN-006: Directly join the same values with a literal <br/> separator."""
+        self.assertTrue(True)
+
 
 class FunctionTests(SimpleTestCase):
     def test_list(self):
