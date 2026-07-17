@@ -110,7 +110,14 @@ class Command(BaseCommand):
         #   an interactive shell.
         # OTHERWISE, when stdin is unsupported, interactive, or not ready:
         #   CONTINUE to the existing interactive-shell selection flow.
-        # Windows stdin is unsupported due to select.select() limitations.
+        # Standard-input execution boundary — GUID: SHELL-002, GUID: SHELL-004.
+        # This branch owns reading and executing a supported non-interactive
+        # stdin snippet, including its shared namespace and terminal return.
+        # The exec() call is the namespace integration seam: its implementation
+        # must provide one mapping as both the globals and locals namespaces.
+        # Keep interactive-shell selection downstream of this branch so a
+        # successful stdin execution cannot depend on or enter that subsystem.
+        # Windows stdin is outside this boundary due to select.select() limits.
         if sys.platform != 'win32' and not sys.stdin.isatty() and select.select([sys.stdin], [], [], 0)[0]:
             exec(sys.stdin.read())
             return
