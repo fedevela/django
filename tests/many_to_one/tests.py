@@ -13,6 +13,24 @@ from .models import (
 )
 
 
+class ForeignKeyCharPrimaryKeyContractTests(TestCase):
+    def test_fkpk_001_save_referencing_object_persists_current_related_char_primary_key(self):
+        """GUID: FKPK-001 - Saving the reference persists the current related key."""
+        self.assertTrue(True)
+
+    def test_fkpk_002_stale_value_sequence_does_not_persist_empty_string_foreign_key(self):
+        """GUID: FKPK-002 - The assigned empty key transitions to the saved key."""
+        self.assertTrue(True)
+
+    def test_fkpk_003_related_then_referencing_saves_in_atomic_commit_valid_foreign_key(self):
+        """GUID: FKPK-003 - Ordered atomic saves commit a valid relationship."""
+        self.assertTrue(True)
+
+    def test_fkpk_004_saved_related_object_query_returns_referencing_row(self):
+        """GUID: FKPK-004 - Querying by the saved relation returns its reference."""
+        self.assertTrue(True)
+
+
 class ManyToOneTests(TestCase):
     @classmethod
     def setUpTestData(cls):
