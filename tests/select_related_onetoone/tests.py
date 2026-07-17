@@ -90,21 +90,48 @@ class ReverseSelectRelatedTestCase(TestCase):
         and its existing reverse one-to-one instance with the correct
         relationship.
         """
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            profile = user.userprofile
+            self.assertIsInstance(user, User)
+            self.assertIsInstance(profile, UserProfile)
+            self.assertEqual(profile.user_id, user.pk)
+            self.assertIs(profile.user, user)
 
     def test_django_004_requested_primary_and_reverse_fields_need_no_query(self):
         """
         DJANGO-004: After restricted queryset evaluation, explicitly requested
         primary and reverse-related fields are available without another query.
         """
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            self.assertEqual(user.username, "test")
+            self.assertEqual(user.userprofile.state, "KS")
 
     def test_django_005_omitted_primary_and_reverse_fields_remain_deferred(self):
         """
         DJANGO-005: After restricted queryset evaluation and before field
         access, omitted primary and reverse-related fields remain deferred.
         """
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        self.assertEqual(user.get_deferred_fields(), {"email"})
+        with self.assertNumQueries(0):
+            self.assertEqual(user.userprofile.get_deferred_fields(), {"city"})
 
     def test_django_006_accessing_deferred_reverse_field_preserves_relationship(self):
         """
@@ -112,7 +139,21 @@ class ReverseSelectRelatedTestCase(TestCase):
         deferred retrieval, makes its value available, and preserves the
         populated reverse one-to-one relationship.
         """
-        self.assertTrue(True)
+        with self.assertNumQueries(1):
+            user = (
+                User.objects.select_related("userprofile")
+                .only("username", "userprofile__user", "userprofile__state")
+                .get(username="test")
+            )
+        with self.assertNumQueries(0):
+            profile = user.userprofile
+        self.assertIn("city", profile.get_deferred_fields())
+        with self.assertNumQueries(1):
+            self.assertEqual(profile.city, "Lawrence")
+        self.assertNotIn("city", profile.get_deferred_fields())
+        with self.assertNumQueries(0):
+            self.assertIs(user.userprofile, profile)
+            self.assertIs(profile.user, user)
 
     def test_follow_next_level(self):
         with self.assertNumQueries(1):
