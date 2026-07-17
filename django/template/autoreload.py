@@ -48,6 +48,20 @@ def watch_for_template_changes(sender, **kwargs):
 
 @receiver(file_changed, dispatch_uid='template_loaders_file_changed')
 def template_changed(sender, file_path, **kwargs):
+    # Pseudocode contract — ARLD-001, ARLD-003, ARLD-004:
+    # INPUT: a changed path, the general autoreloader's monitored-project-file
+    # classification, and the configured template directories.
+    # IF the changed path is independently monitored as a non-template project
+    # file, THEN decline to consume the event and hand it back to the general
+    # autoreloader so that it can trigger a development-server reload.
+    # OTHERWISE, FOR EACH valid, accessible template directory:
+    #     IF the changed path is below that directory, reset the template
+    #     loaders, consume the event, and stop checking directories.
+    # IF no template directory contains the changed path, decline to consume
+    # the event so that normal autoreload processing remains unchanged.
+    # Overlap transition: project-file monitoring retains precedence even when
+    # an encompassing template directory (including BASE_DIR) also contains
+    # the path; directory containment must not replace the broader monitor.
     for template_dir in get_template_directories():
         if template_dir in file_path.parents:
             reset_loaders()
