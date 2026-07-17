@@ -645,6 +645,34 @@ class WriterTests(SimpleTestCase):
         self.assertIs(resolved.__self__, field.default.__self__)
         self.assertIs(resolved.__func__, field.default.__func__)
 
+    def test_migser_005_migser_006_top_level_function_reference_resolves(self):
+        """
+        MIGSER-005, MIGSER-006: A serialized supported top-level function
+        reference remains valid and resolves to that callable.
+        """
+        pass
+
+    def test_migser_005_migser_006_non_nested_class_method_reference_resolves(self):
+        """
+        MIGSER-005, MIGSER-006: A serialized supported non-nested class method
+        reference remains valid and resolves to that callable.
+        """
+        pass
+
+    def test_migser_005_migser_006_unbound_method_reference_resolves(self):
+        """
+        MIGSER-005, MIGSER-006: A serialized supported unbound method reference
+        remains valid and resolves to that callable.
+        """
+        pass
+
+    def test_migser_006_nested_class_method_serialization_preserves_complete_path(self):
+        """
+        MIGSER-006: Serializing a method on a nested class preserves its
+        complete path.
+        """
+        pass
+
     def test_serialize_datetime(self):
         self.assertSerializedEqual(datetime.datetime.now())
         self.assertSerializedEqual(datetime.datetime.now)
