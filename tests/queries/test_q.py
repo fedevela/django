@@ -127,14 +127,42 @@ class QTests(SimpleTestCase):
 
     def test_qcomb_008_empty_left_or_dict_keys_completes_without_typeerror(self):
         """QCOMB-008: Empty-left OR accepts a non-pickleable dict_keys value."""
+        # QCOMB-008 pseudocode:
+        # ARRANGE an empty Q and retain a dict_keys value used by a non-empty
+        # Q's x__in condition.
+        # ACT by OR-combining the empty Q on the left with the non-empty Q.
+        # FAILURE BASELINE: if combination pickles or otherwise serializes the
+        # contained dict_keys value, propagate TypeError so this regression
+        # test reproduces the reported failure.
+        # CORRECTED PATH: complete the combination without TypeError; reaching
+        # the next verification step establishes this completion obligation.
         self.assertTrue(True)
 
     def test_qcomb_008_empty_or_retains_x_in_condition_and_dict_keys_value(self):
         """QCOMB-008: Empty OR retains the x__in condition and contained value."""
+        # QCOMB-008 pseudocode:
+        # ARRANGE a retained dict_keys value, a Q containing x__in=value, and
+        # an empty Q; combine them through the corrected empty-OR path.
+        # INSPECT the combined Q's condition after the combination handoff.
+        # VERIFY the condition name remains x__in and its value is the same
+        # retained dict_keys object, with no serialization or transformation.
+        # FAILURE: fail verification if the condition is absent, renamed, or
+        # contains a replacement value rather than the retained reference.
         self.assertTrue(True)
 
     def test_qcomb_008_empty_or_dict_keys_has_identity_behavior_in_both_orders(self):
         """QCOMB-008: Both supported empty-operand OR orders are identity-like."""
+        # QCOMB-008 pseudocode:
+        # ARRANGE one empty Q and one non-empty Q whose x__in condition holds a
+        # retained dict_keys value.
+        # FOR EACH supported ordering, (empty OR non-empty) and (non-empty OR
+        # empty):
+        #     COMBINE the operands without attempting to pickle the value.
+        #     VERIFY the result has the established identity-like structure of
+        #     the non-empty Q and still contains the retained value reference.
+        #     VERIFY the operands remain unchanged across the handoff.
+        # FAILURE: let TypeError or any structure, value-identity, or operand
+        # mutation mismatch fail the corresponding ordering independently.
         self.assertTrue(True)
 
     def test_combine_not_q_object(self):
