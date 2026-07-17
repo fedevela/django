@@ -65,6 +65,20 @@ def json_script(value, element_id=None, encoder=None):
     value is safe to be output anywhere except for inside a tag attribute. Wrap
     the escaped JSON in a script tag.
     """
+    # JSONSCRIPT-004 pseudocode:
+    # - Serialize VALUE with the selected default or custom encoder.
+    # - If serialization fails, propagate the error without producing a script result.
+    # - Translate every protected character in the serialized content through the
+    #   existing script-safe escape map, independent of which encoder produced it.
+    # JSONSCRIPT-006 / JSONSCRIPT-007 pseudocode:
+    # - If ELEMENT_ID is present, select the existing ID-bearing script template
+    #   and pass ELEMENT_ID followed by the escaped content to that template.
+    # - Otherwise, select the existing no-ID script template and pass only the
+    #   escaped content to that template.
+    # JSONSCRIPT-005 pseudocode:
+    # - Mark the already script-safe content safe for interpolation.
+    # - Format the selected template so the complete returned script remains a
+    #   safe template-rendering value on both encoder paths.
     from django.core.serializers.json import DjangoJSONEncoder
 
     json_str = json.dumps(value, cls=encoder or DjangoJSONEncoder).translate(
