@@ -1816,13 +1816,50 @@ class Discovery(SimpleTestCase):
 
 
 class EarlyParserArgumentVectorContractTests(SimpleTestCase):
+    def render_early_parser_usage(self, argv, global_argv):
+        rendered_usages = []
+
+        class UsageCapturingCommandParser(CommandParser):
+            def parse_known_args(self, *args, **kwargs):
+                rendered_usages.append(self.format_usage())
+                return super().parse_known_args(*args, **kwargs)
+
+        with mock.patch.object(sys, 'argv', global_argv), mock.patch(
+            'django.core.management.CommandParser',
+            UsageCapturingCommandParser,
+        ), mock.patch('sys.stdout', new=StringIO()):
+            utility = ManagementUtility(argv)
+            utility.execute()
+
+        self.assertEqual(len(rendered_usages), 1)
+        return utility, rendered_usages[0]
+
     def test_DJANGO_003_early_parser_renders_supplied_argv_program_name(self):
         """DJANGO-003: Render supplied argv's computed program name in usage."""
-        self.assertTrue(True)
+        utility, usage = self.render_early_parser_usage(
+            ['/project/custom-manage.py', 'version'],
+            ['/different/global-manage.py', 'check'],
+        )
+
+        self.assertEqual(utility.prog_name, 'custom-manage.py')
+        self.assertEqual(
+            usage,
+            'usage: custom-manage.py subcommand [options] [args]\n',
+        )
+        self.assertNotIn('global-manage.py', usage)
 
     def test_DJANGO_008_main_py_argv_renders_python_m_django_program_name(self):
         """DJANGO-008: Render python -m django in usage for __main__.py argv."""
-        self.assertTrue(True)
+        utility, usage = self.render_early_parser_usage(
+            ['/project/django/__main__.py', 'version'],
+            ['/different/global-manage.py', 'check'],
+        )
+
+        self.assertEqual(utility.prog_name, 'python -m django')
+        self.assertEqual(
+            usage,
+            'usage: python -m django subcommand [options] [args]\n',
+        )
 
     def test_DJANGO_001_early_parser_uses_supplied_argv_program_name(self):
         """DJANGO-001: The early parser receives ManagementUtility.prog_name."""
