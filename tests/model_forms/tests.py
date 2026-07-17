@@ -3103,7 +3103,23 @@ class OtherModelFormTests(TestCase):
         default retains its established initial value when no submitted value
         supersedes it.
         """
-        self.assertTrue(True)
+        calls = []
+
+        def default():
+            calls.append(True)
+            return datetime.date(2000, 1, 1)
+
+        model_field = PublicationDefaults._meta.get_field("date_published")
+        with mock.patch.object(model_field, "default", default):
+            class PublicationDefaultsForm(forms.ModelForm):
+                class Meta:
+                    model = PublicationDefaults
+                    fields = ("date_published",)
+
+            form = PublicationDefaultsForm()
+            self.assertEqual(form["date_published"].initial, datetime.date(2000, 1, 1))
+            self.assertEqual(form["date_published"].value(), datetime.date(2000, 1, 1))
+            self.assertEqual(calls, [True])
 
     def test_django_006_valid_callable_default_modelform_retains_outcomes(self):
         """
@@ -3111,7 +3127,23 @@ class OtherModelFormTests(TestCase):
         field retains its established submission, changed-data, and validation
         outcomes.
         """
-        self.assertTrue(True)
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("title", "date_published")
+
+        form = PublicationDefaultsForm(
+            {
+                "title": "Django",
+                "date_published": "2000-01-02",
+                "initial-date_published": "2000-01-01",
+            }
+        )
+
+        self.assertTrue(form.is_valid())
+        self.assertEqual(form.changed_data, ["title", "date_published"])
+        self.assertEqual(form.cleaned_data["date_published"], datetime.date(2000, 1, 2))
+        self.assertEqual(form.instance.date_published, datetime.date(2000, 1, 2))
 
     def test_django_007_noncallable_default_modelform_retains_hidden_initial(self):
         """
@@ -3119,7 +3151,18 @@ class OtherModelFormTests(TestCase):
         model default retains its established hidden-initial and changed-data
         behavior.
         """
-        self.assertTrue(True)
+        class PublicationDefaultsForm(forms.ModelForm):
+            class Meta:
+                model = PublicationDefaults
+                fields = ("active",)
+
+        form = PublicationDefaultsForm()
+        self.assertFalse(form.fields["active"].show_hidden_initial)
+        self.assertNotIn("initial-active", str(form["active"]))
+
+        bound_form = PublicationDefaultsForm({"active": "on"})
+        self.assertTrue(bound_form.is_valid())
+        self.assertEqual(bound_form.changed_data, [])
 
     def test_django_001_invalid_callable_default_form_redisplays_submitted_value(self):
         """

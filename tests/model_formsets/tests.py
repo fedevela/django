@@ -1771,7 +1771,28 @@ class ModelFormsetTest(TestCase):
         callable-default field retains its established submission,
         changed-data, and validation outcomes.
         """
-        self.assertTrue(True)
+        person = Person.objects.create(name="Ringo")
+        FormSet = inlineformset_factory(
+            Person, Membership, can_delete=False, extra=1, fields="__all__"
+        )
+        initial_date = datetime.datetime.now().replace(microsecond=0)
+        initial_date_string = initial_date.strftime("%Y-%m-%d %H:%M:%S")
+        formset = FormSet(
+            {
+                "membership_set-TOTAL_FORMS": "1",
+                "membership_set-INITIAL_FORMS": "0",
+                "membership_set-MAX_NUM_FORMS": "",
+                "membership_set-0-date_joined": initial_date_string,
+                "initial-membership_set-0-date_joined": initial_date_string,
+                "membership_set-0-karma": "5",
+            },
+            instance=person,
+        )
+
+        self.assertTrue(formset.is_valid())
+        self.assertEqual(formset.forms[0].changed_data, ["karma"])
+        self.assertEqual(formset.forms[0].cleaned_data["karma"], 5)
+        self.assertNotIn("date_joined", formset.forms[0].changed_data)
 
     def test_django_007_noncallable_default_inline_retains_hidden_initial(self):
         """
@@ -1779,7 +1800,25 @@ class ModelFormsetTest(TestCase):
         model default retains its established hidden-initial and changed-data
         behavior.
         """
-        self.assertTrue(True)
+        author = Author.objects.create(name="Charles Dickens")
+        FormSet = inlineformset_factory(
+            Author, Book, can_delete=False, extra=1, fields=("title",)
+        )
+        formset = FormSet(instance=author)
+        self.assertFalse(formset.forms[0].fields["title"].show_hidden_initial)
+        self.assertNotIn("initial-book_set-0-title", str(formset.forms[0]["title"]))
+
+        bound_formset = FormSet(
+            {
+                "book_set-TOTAL_FORMS": "1",
+                "book_set-INITIAL_FORMS": "0",
+                "book_set-MAX_NUM_FORMS": "",
+                "book_set-0-title": "Great Expectations",
+            },
+            instance=author,
+        )
+        self.assertTrue(bound_formset.is_valid())
+        self.assertEqual(bound_formset.forms[0].changed_data, ["title"])
 
     def test_inlineformset_factory_with_null_fk(self):
         # inlineformset_factory tests with fk having null=True. see #9462.
