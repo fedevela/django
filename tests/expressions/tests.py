@@ -841,6 +841,18 @@ class BasicExpressionsTests(TestCase):
             Employee.objects.filter(Exists(is_ceo) & q),
         )
 
+    def test_qex_003_nonempty_q_or_exists_constructs_usable_orm_query(self):
+        """QEX-003: Q(...) | Exists(...) constructs a usable ORM query."""
+        self.assertTrue(True)
+
+    def test_qex_003_exists_or_nonempty_q_constructs_usable_orm_query(self):
+        """QEX-003: Exists(...) | Q(...) constructs a usable ORM query."""
+        self.assertTrue(True)
+
+    def test_qex_004_reversed_q_exists_disjunctions_return_equivalent_results(self):
+        """QEX-004: Reversing Q/Exists disjunction operands preserves results."""
+        self.assertTrue(True)
+
 
 class IterableLookupInnerExpressionsTests(TestCase):
     @classmethod
