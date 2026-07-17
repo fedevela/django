@@ -672,6 +672,14 @@ class QuerySet(AltersData):
     def _check_bulk_create_options(
         self, ignore_conflicts, update_conflicts, update_fields, unique_fields
     ):
+        """
+        Resolve bulk-create options into the conflict mode owned by the insert
+        pipeline.
+
+        Conflict-mode contract (BULKUPSERT-006): this boundary owns selection
+        of OnConflict.IGNORE; returned-field and primary-key assignment remain
+        downstream responsibilities.
+        """
         if ignore_conflicts and update_conflicts:
             raise ValueError(
                 "ignore_conflicts and update_conflicts are mutually exclusive."
@@ -1877,6 +1885,11 @@ class QuerySet(AltersData):
         Return-set contract (BULKUPSERT-004, BULKUPSERT-013): this boundary
         passes the model-governed db_returning_fields to the insert compiler;
         it does not derive returned fields from conflict-update inputs.
+
+        Ignore-conflicts contract (BULKUPSERT-006): OnConflict.IGNORE crosses
+        this insert boundary without a returning-fields request. Consequently,
+        bulk_create() receives no positional result set from which to assign
+        primary keys to ignored inputs.
         """
         connection = connections[self.db]
         ops = connection.ops
