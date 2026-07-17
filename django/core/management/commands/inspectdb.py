@@ -132,6 +132,10 @@ class Command(BaseCommand):
                 yield ""
                 yield "class %s(models.Model):" % table2model(table_name)
                 known_models.append(table2model(table_name))
+                # Architecture boundary (GUID: INSP-003): This table-scoped
+                # classification owns repeated-target detection. Per-column
+                # relation construction consumes it but doesn't depend on the
+                # model-check framework that ultimately validates the output.
                 # GUID: INSP-001 - Track relation targets within this model so all
                 # members of a repeated-target group can receive a reverse name.
                 relation_target_counts = Counter(
@@ -176,6 +180,10 @@ class Command(BaseCommand):
                     if is_relation:
                         ref_db_column, ref_db_table = relations[column_name]
                         if column_name in repeated_relation_columns:
+                            # Integration seam (GUID: INSP-003, INSP-005): The
+                            # normalized model attribute is the source contract;
+                            # extra_params carries the derived reverse namespace
+                            # into the shared field-constructor serializer below.
                             # GUID: INSP-003 - Logic obligation for a repeated target:
                             # FOR EACH relation, derive its reverse accessor from the
                             # already-unique normalized field name; reject an invalid
@@ -255,6 +263,10 @@ class Command(BaseCommand):
                         "" if "." in field_type else "models.",
                         field_type,
                     )
+                    # Emission boundary (GUID: INSP-005): field_desc and
+                    # extra_params are the complete inputs to source assembly;
+                    # relation-specific code must communicate through these
+                    # values rather than writing partial model source directly.
                     # GUID: INSP-005 - Logic obligation for loadable output:
                     # BEGIN with the normalized attribute and field constructor;
                     # IF relational, append the required deletion argument;
