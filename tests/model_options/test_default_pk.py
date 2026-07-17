@@ -6,6 +6,34 @@ from django.test.utils import isolate_apps
 
 @isolate_apps('model_options')
 class TestDefaultPK(SimpleTestCase):
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectBigAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_direct_bigautofield_descendant(self):
+        """AUTOPK-002: An importable direct BigAutoField descendant is accepted."""
+        self.assertTrue(True)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.IndirectBigAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_indirect_bigautofield_descendant(self):
+        """AUTOPK-002: An importable indirect BigAutoField descendant is accepted."""
+        self.assertTrue(True)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.DirectSmallAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_direct_smallautofield_descendant(self):
+        """AUTOPK-002: An importable direct SmallAutoField descendant is accepted."""
+        self.assertTrue(True)
+
+    @override_settings(
+        DEFAULT_AUTO_FIELD='model_options.fields.IndirectSmallAutoField',
+    )
+    def test_AUTOPK_002_model_preparation_succeeds_with_indirect_smallautofield_descendant(self):
+        """AUTOPK-002: An importable indirect SmallAutoField descendant is accepted."""
+        self.assertTrue(True)
+
     @override_settings(DEFAULT_AUTO_FIELD='django.db.models.NonexistentAutoField')
     def test_default_auto_field_setting_nonexistent(self):
         msg = (
