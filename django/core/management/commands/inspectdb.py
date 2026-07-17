@@ -138,6 +138,16 @@ class Command(BaseCommand):
                 # model-check framework that ultimately validates the output.
                 # GUID: INSP-001 - Track relation targets within this model so all
                 # members of a repeated-target group can receive a reverse name.
+                # GUID: INSP-007 - Logic obligations for
+                # test_insp_007_singleton_target_relation_has_no_disambiguating_related_name,
+                # test_insp_007_only_repeated_target_group_gains_related_names, and
+                # test_insp_007_shared_target_across_models_does_not_gain_related_names:
+                # INPUT only this generated model's inspected relation mapping;
+                # COUNT occurrences of each target within that mapping;
+                # MARK a relation column only when its target count exceeds one;
+                # LEAVE singleton-target columns unmarked, even when another model
+                # independently refers to the same target; OUTPUT the marked columns
+                # to the per-relation decision below, with no cross-model state.
                 relation_target_counts = Counter(
                     ref_db_table for _, ref_db_table in relations.values()
                 )
@@ -178,7 +188,20 @@ class Command(BaseCommand):
                         extra_params["unique"] = True
 
                     if is_relation:
+                        # GUID: INSP-006 - Logic obligation for
+                        # test_insp_006_repeated_target_relations_preserve_field_names_and_targets:
+                        # FOR EACH recognized relation, retain the normalized att_name
+                        # and read its inspected target tuple unchanged; IF the column
+                        # belongs to a repeated-target group, add only its disambiguating
+                        # related_name; THEN continue through the common relation-type
+                        # and rel_to flow so the field, generated name, and target are
+                        # emitted. An invalid derived reverse name follows CommandError;
+                        # disambiguation never drops or retargets the relation.
                         ref_db_column, ref_db_table = relations[column_name]
+                        # GUID: INSP-007 - IF this column is marked repeated, add a
+                        # related_name; ELSE add no disambiguating related_name and
+                        # preserve the existing singleton relation-generation path.
+                        # In a mixed model this branch changes only marked group members.
                         if column_name in repeated_relation_columns:
                             # Integration seam (GUID: INSP-003, INSP-005): The
                             # normalized model attribute is the source contract;
