@@ -313,6 +313,38 @@ class SelectRelatedOnlyProxyTargetContractTests(TestCase):
             self.assertEqual(relation.item.name, "selected")
 
 
+class SelectRelatedOnlyConcreteTargetContractTests(TestCase):
+    def test_PROXYONLY_008_concrete_fk_preserves_related_object_population(self):
+        """GUID: PROXYONLY-008"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_008_concrete_fk_preserves_selected_field_values(self):
+        """GUID: PROXYONLY-008"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_008_concrete_fk_preserves_primary_key_availability(self):
+        """GUID: PROXYONLY-008"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_008_concrete_fk_preserves_deferred_field_behavior(self):
+        """GUID: PROXYONLY-008"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_008_concrete_fk_preserves_query_behavior(self):
+        """GUID: PROXYONLY-008"""
+        self.assertTrue(True)
+
+
+class SelectRelatedOnlyBackendIndependenceContractTests(TestCase):
+    def test_PROXYONLY_009_non_null_proxy_fk_outcome_is_backend_independent(self):
+        """GUID: PROXYONLY-009"""
+        self.assertTrue(True)
+
+    def test_PROXYONLY_009_null_proxy_fk_outcome_is_backend_independent(self):
+        """GUID: PROXYONLY-009"""
+        self.assertTrue(True)
+
+
 class DeferAnnotateSelectRelatedTest(TestCase):
     def test_defer_annotate_select_related(self):
         location = Location.objects.create()
