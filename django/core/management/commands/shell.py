@@ -85,6 +85,9 @@ class Command(BaseCommand):
         if options['command']:
             # GUID: SHELL-001 - Use a single namespace for the entire snippet.
             namespace = {}
+            # GUID: SHELL-005 - Execute the command without an exception
+            # boundary; if user code raises, stop this path and propagate the
+            # original exception to the invoking context unchanged.
             exec(options['command'], namespace, namespace)
             # GUID: SHELL-003 - Don't start an interactive shell afterwards.
             return
@@ -94,6 +97,9 @@ class Command(BaseCommand):
         if sys.platform != 'win32' and not sys.stdin.isatty() and select.select([sys.stdin], [], [], 0)[0]:
             # GUID: SHELL-002 - Use a single namespace for the entire snippet.
             namespace = {}
+            # GUID: SHELL-005 - Execute stdin without an exception boundary;
+            # if user code raises, stop this path and propagate the original
+            # exception to the invoking context unchanged.
             exec(sys.stdin.read(), namespace, namespace)
             # GUID: SHELL-004 - Don't start an interactive shell afterwards.
             return
