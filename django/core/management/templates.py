@@ -73,6 +73,22 @@ class TemplateCommand(BaseCommand):
             except OSError as e:
                 raise CommandError(e)
         else:
+            # Target-path pseudocode contract:
+            # DJANGO-001, DJANGO-004: DERIVE the actual final non-empty path
+            # component using native path semantics; VALIDATE that component,
+            # not an empty component introduced by a trailing separator.
+            # DJANGO-006: IF no trailing separator is present, DERIVE the same
+            # component as before and preserve the existing validation result.
+            # DJANGO-007: IF native path semantics equate repeated trailing
+            # separators with one, DERIVE the same component for both forms.
+            # ON component validation failure, RAISE the existing app-directory
+            # error before generating output.
+            # DJANGO-002, DJANGO-005: RESOLVE the supplied target independently
+            # as the destination root; IF equivalent path forms resolve to the
+            # same root, render identical template-relative paths and contents
+            # there, never substituting the component's parent or a sibling.
+            # ON a missing destination, RAISE the existing destination error;
+            # otherwise HAND OFF that root unchanged to context and rendering.
             if app_or_project == 'app':
                 self.validate_name(os.path.basename(target), 'directory')
             top_dir = os.path.abspath(os.path.expanduser(target))
