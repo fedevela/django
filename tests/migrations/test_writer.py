@@ -650,6 +650,13 @@ class WriterTests(SimpleTestCase):
         MIGSER-005, MIGSER-006: A serialized supported top-level function
         reference remains valid and resolves to that callable.
         """
+        # MIGSER-005, MIGSER-006 pseudocode:
+        # SELECT a supported module-level function with a stable import path.
+        # SERIALIZE the function and collect its generated module import.
+        # RESOLVE the serialized reference in a namespace containing that import.
+        # VERIFY the resolved object is the selected top-level function.
+        # FAIL the regression check if serialization or resolution raises, or if
+        # the resolved reference identifies a different callable.
         pass
 
     def test_migser_005_migser_006_non_nested_class_method_reference_resolves(self):
@@ -657,6 +664,15 @@ class WriterTests(SimpleTestCase):
         MIGSER-005, MIGSER-006: A serialized supported non-nested class method
         reference remains valid and resolves to that callable.
         """
+        # MIGSER-005, MIGSER-006 pseudocode:
+        # SELECT a supported class method whose owning class is module-level.
+        # SERIALIZE the bound method using the owner module, complete class path,
+        # and method name; retain the generated module import.
+        # RESOLVE the serialized reference in a namespace containing that import.
+        # VERIFY the resolved method has the same owning class and function as the
+        # selected method.
+        # FAIL the regression check on serialization/resolution error or identity
+        # mismatch.
         pass
 
     def test_migser_005_migser_006_unbound_method_reference_resolves(self):
@@ -664,6 +680,15 @@ class WriterTests(SimpleTestCase):
         MIGSER-005, MIGSER-006: A serialized supported unbound method reference
         remains valid and resolves to that callable.
         """
+        # MIGSER-005, MIGSER-006 pseudocode:
+        # SELECT a supported method through its module-level owning class without
+        # binding it to an instance.
+        # SERIALIZE the function by its stable complete qualified name and retain
+        # the generated module import.
+        # RESOLVE the serialized reference in a namespace containing that import.
+        # VERIFY the resolved object is the selected unbound method.
+        # FAIL the regression check on serialization/resolution error or identity
+        # mismatch.
         pass
 
     def test_migser_006_nested_class_method_serialization_preserves_complete_path(self):
@@ -671,6 +696,15 @@ class WriterTests(SimpleTestCase):
         MIGSER-006: Serializing a method on a nested class preserves its
         complete path.
         """
+        # MIGSER-006 pseudocode:
+        # SELECT a supported class method whose class is nested in an importable
+        # module-level class.
+        # SERIALIZE the bound method.
+        # DERIVE the expected reference as module + every enclosing class + method.
+        # VERIFY the serialized reference equals that complete expected path and
+        # the import set contains the owning module import.
+        # FAIL the regression check if an enclosing class segment is absent, the
+        # import is wrong, or serialization raises.
         pass
 
     def test_serialize_datetime(self):
