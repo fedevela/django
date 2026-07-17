@@ -909,6 +909,11 @@ class Model(metaclass=ModelBase):
         )
 
     def _prepare_related_fields_for_save(self, operation_name):
+        # FKPK-006 architecture -- integration seam: Model owns the pre-write
+        # relation-validity boundary and hands field-local identities to the
+        # existing INSERT/UPDATE path. Descriptor cache management remains in
+        # the relation field/descriptor contract; query preparation is
+        # downstream and independent of this save seam.
         # FKPK-006 pseudocode -- supported model-save and persisted identity:
         # FOR EACH concrete relation field on the referencing model:
         #     IF no related object is cached, LEAVE the existing local identity

@@ -103,6 +103,11 @@ class RelatedIn(In):
 
 class RelatedLookupMixin:
     def get_prep_lookup(self):
+        # FKPK-006 architecture -- query boundary: related lookups own the
+        # conversion from related-object/scalar identity to target-field lookup
+        # identity, then delegate to normal lookup compilation. This layer reads
+        # persisted field identity and has no dependency on descriptor caches or
+        # model-save preparation.
         # FKPK-006 pseudocode -- foreign-key and post-save relation querying:
         # GIVEN an existing supported single-column relation lookup:
         #     IF the right-hand value is a related model instance, EXTRACT its

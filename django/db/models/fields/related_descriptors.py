@@ -210,6 +210,11 @@ class ForwardManyToOneDescriptor:
         - ``instance`` is the ``child`` instance
         - ``value`` is the ``parent`` instance on the right of the equal sign
         """
+        # FKPK-006 architecture -- ownership boundary: the forward descriptor
+        # owns assignment-time local identity synchronization and relation-cache
+        # state. Persistence consumes that local identity through Model's save
+        # preparation boundary; this descriptor doesn't depend on save/query
+        # internals.
         # FKPK-006 pseudocode -- assignment and related-object cache:
         # GIVEN a supported forward foreign-key assignment:
         #     IF the assigned value is neither null nor an instance of the
