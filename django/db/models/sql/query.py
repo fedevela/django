@@ -675,7 +675,7 @@ class Query(BaseExpression):
         "target", and the model and list of fields being added for that model.
         """
         field_names, defer = self.deferred_loading
-        if not field_names and defer:
+        if not field_names:
             return
         orig_opts = self.get_meta()
         seen = {}
@@ -2083,7 +2083,11 @@ class Query(BaseExpression):
             self.deferred_loading = existing.union(field_names), True
         else:
             # Remove names from the set of any existing "immediate load" names.
-            self.deferred_loading = existing.difference(field_names), False
+            new_only = existing.difference(field_names)
+            if new_only:
+                self.deferred_loading = new_only, False
+            else:
+                self.deferred_loading = frozenset(field_names).difference(existing), True
 
     def add_immediate_loading(self, field_names):
         """
