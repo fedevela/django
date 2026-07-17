@@ -312,11 +312,19 @@ class BulkCreateTests(TestCase):
             Country(name="Czech Republic", iso_two_letter="CZ"),
         ]
 
+    @skipUnlessDBFeature("can_return_rows_from_bulk_insert")
     def test_BULKUPSERT_011_ordinary_bulk_create_without_conflict_handling_preserves_existing_pk_population(
         self,
     ):
         """GUID: BULKUPSERT-011"""
-        assert True
+        created = Country.objects.bulk_create(self.data)
+
+        self.assertEqual(created, self.data)
+        self.assertTrue(all(country.pk is not None for country in created))
+        self.assertEqual(
+            {country.iso_two_letter: country.pk for country in created},
+            dict(Country.objects.values_list("iso_two_letter", "pk")),
+        )
 
     def test_simple(self):
         created = Country.objects.bulk_create(self.data)
