@@ -89,6 +89,16 @@ class FileBasedCache(BaseCache):
         return True
 
     def has_key(self, key, version=None):
+        # Pseudocode contract for has_key(key, version):
+        # FBC-007: Resolve fname once through the existing _key_to_file() mapping.
+        # FBC-001, FBC-002: Attempt to open fname; if opening reports that fname
+        # is missing, return False whether it was absent initially or disappeared
+        # between resolution and opening.
+        # FBC-003, FBC-004, FBC-005: For an opened file, ask _is_expired() for its
+        # state; return False when expired (preserving that helper's file removal)
+        # and return True when unexpired.
+        # FBC-006: Do not absorb any exception other than the missing-file outcome
+        # from the open attempt; propagate every unrelated failure to the caller.
         fname = self._key_to_file(key, version)
         if os.path.exists(fname):
             with open(fname, "rb") as f:
