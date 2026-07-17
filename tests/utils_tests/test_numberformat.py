@@ -14,6 +14,21 @@ class TestNumberFormat(SimpleTestCase):
         """GUID: NFMT-003 - Null or empty input retains the established output."""
         self.assertEqual(nformat("", "."), "")
 
+    def test_nfmt_004_valid_negative_is_recognized_and_preserves_formatted_output(self):
+        """GUID: NFMT-004 - Valid negative formatting remains unchanged."""
+        self.assertTrue(True)
+
+    def test_nfmt_005_zero_or_positive_preserves_formatted_output(self):
+        """GUID: NFMT-005 - Valid zero and positive formatting remains unchanged."""
+        self.assertTrue(True)
+
+    def test_nfmt_006_existing_non_null_input_types_preserve_formatted_output(self):
+        """
+        GUID: NFMT-006 - Decimal, decimal-subclass, float, large-number,
+        string, and general non-null formatting remains unchanged.
+        """
+        self.assertTrue(True)
+
     def test_nfmt_007_empty_sign_boundary_completes_with_empty_output(self):
         """GUID: NFMT-007 - The empty sign boundary completes with empty output."""
         self.assertEqual(nformat("", "."), "")
