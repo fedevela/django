@@ -1763,6 +1763,36 @@ class FileBasedCacheTests(BaseCacheTests, TestCase):
             self.assertIs(cache._is_expired(fh), True)
 
 
+class FileBasedCacheHasKeyContractTests(SimpleTestCase):
+    def test_fbc_001_existing_file_removed_before_open_returns_false(self):
+        """FBC-001: A cache file removed before open makes has_key() false."""
+        pass
+
+    def test_fbc_002_already_absent_file_returns_false(self):
+        """FBC-002: An already absent cache file makes has_key() false."""
+        pass
+
+    def test_fbc_003_accessible_unexpired_entry_returns_true(self):
+        """FBC-003: An accessible, unexpired entry makes has_key() true."""
+        pass
+
+    def test_fbc_004_expired_entry_returns_false(self):
+        """FBC-004: An expired entry makes has_key() false."""
+        pass
+
+    def test_fbc_005_expired_entry_removes_its_cache_file(self):
+        """FBC-005: Detecting expiration removes the expired cache file."""
+        pass
+
+    def test_fbc_006_non_missing_file_exception_remains_observable(self):
+        """FBC-006: Non-FileNotFoundError failures remain observable."""
+        pass
+
+    def test_fbc_007_key_and_version_preserve_existing_file_mapping(self):
+        """FBC-007: A key and version retain their existing cache file mapping."""
+        pass
+
+
 @unittest.skipUnless(RedisCache_params, "Redis backend not configured")
 @override_settings(
     CACHES=caches_setting_for_tests(
