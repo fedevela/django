@@ -327,12 +327,14 @@ class Options:
                 field.primary_key = True
                 self.setup_pk(field)
             else:
-                # AUTOPK-003 architecture: _prepare() owns implicit-primary-key
-                # construction. _get_default_pk_class() supplies the admitted
-                # concrete class across this seam without normalization to a
-                # built-in superclass; model.add_to_class() owns registration
-                # of the resulting instance. Both custom BigAutoField and
-                # SmallAutoField descendants use this same dependency path.
+                # AUTOPK-003, AUTOPK-005 architecture: _prepare() owns
+                # implicit-primary-key construction. _get_default_pk_class()
+                # supplies the admitted concrete class across this seam
+                # without normalization to a built-in superclass;
+                # model.add_to_class() owns registration of the resulting
+                # instance. Directly configured AutoField, BigAutoField, and
+                # SmallAutoField classes and supported custom descendants all
+                # use this same dependency path.
                 # AUTOPK-003 pseudocode -- instantiate the configured custom
                 # implicit primary-key class:
                 # PRECONDITION: the model has no primary key and no parent
