@@ -23,15 +23,14 @@ from django.utils.safestring import mark_safe
 class JSONScriptUnsupportedValue:
     """JSONSCRIPT-009 test-only value for the custom-encoder seam."""
 
-    pass
-
 
 class JSONScriptCustomEncoder(json.JSONEncoder):
-    """JSONSCRIPT-001/002/009 test-only encoder contract scaffold."""
+    """JSONSCRIPT-001/002/009 test-only encoder."""
 
-    # The behavioral phase supplies default() so this encoder can translate
-    # JSONScriptUnsupportedValue without changing DjangoJSONEncoder.
-    pass
+    def default(self, obj):
+        if isinstance(obj, JSONScriptUnsupportedValue):
+            return "custom encoded"
+        return super().default(obj)
 
 
 class TestUtilsHtml(SimpleTestCase):
@@ -234,32 +233,39 @@ class TestUtilsHtml(SimpleTestCase):
 
     def test_jsonscript_001_optional_custom_encoder_argument_is_accepted(self):
         """JSONSCRIPT-001: A supplied custom encoder class is accepted."""
-        # Arrange JSONScriptCustomEncoder and a value it can serialize.
-        # Call json_script() with the encoder through its optional argument.
-        # Verify the call succeeds and returns the expected script representation.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script(
+                JSONScriptUnsupportedValue(), encoder=JSONScriptCustomEncoder
+            ),
+            '<script type="application/json">"custom encoded"</script>',
+        )
 
     def test_jsonscript_002_supplied_encoder_serializes_the_value(self):
         """JSONSCRIPT-002: Serialization uses the supplied encoder class."""
-        # Arrange JSONScriptUnsupportedValue with a distinct custom representation.
-        # Serialize the value while supplying the custom encoder.
-        # Verify the script contains that distinct custom-encoded representation.
-        self.assertTrue(True)
+        self.assertIn(
+            '"custom encoded"',
+            json_script(
+                JSONScriptUnsupportedValue(), "test_id", JSONScriptCustomEncoder
+            ),
+        )
 
     def test_jsonscript_003_no_encoder_keeps_django_json_encoder_output(self):
         """JSONSCRIPT-003: Existing calls keep DjangoJSONEncoder and their output."""
-        # Arrange a value with stable existing DjangoJSONEncoder output.
-        # Call json_script() using only the previously supported arguments.
-        # Verify the complete script output is unchanged.
-        self.assertTrue(True)
+        self.assertEqual(
+            json_script(datetime(2022, 5, 9, 10, 11, 12), "test_id"),
+            '<script id="test_id" type="application/json">'
+            '"2022-05-09T10:11:12"</script>',
+        )
 
     def test_jsonscript_009_custom_encoder_handles_unsupported_value(self):
         """JSONSCRIPT-009: A custom encoder handles a default-unsupported value."""
-        # Arrange JSONScriptUnsupportedValue and JSONScriptCustomEncoder.
-        # Verify json_script() without the encoder follows the serialization failure path.
-        # Call json_script() with the custom encoder and verify serialization succeeds.
-        # Verify the resulting script contains the custom-encoded representation.
-        self.assertTrue(True)
+        value = JSONScriptUnsupportedValue()
+        with self.assertRaises(TypeError):
+            json_script(value)
+        self.assertEqual(
+            json_script(value, encoder=JSONScriptCustomEncoder),
+            '<script type="application/json">"custom encoded"</script>',
+        )
 
     def test_smart_urlquote(self):
         items = (
