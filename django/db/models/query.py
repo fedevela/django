@@ -2561,10 +2561,12 @@ def prefetch_one_level(instances, prefetcher, lookup, level):
     return all_related_objects, additional_lookups
 
 
-# Architecture contract (DJANGO-003, DJANGO-004, DJANGO-005, DJANGO-006):
+# Architecture contract (DJANGO-003, DJANGO-004, DJANGO-005, DJANGO-006,
+# DJANGO-008):
 # RelatedPopulator is the joined related-instance boundary. It owns construction
-# from the selected row slice and establishment of both relationship caches;
-# later loading of absent field values remains DeferredAttribute's concern.
+# from the selected row slice and establishment of relationship cache state,
+# including cached absence for a null related identity. Later loading of absent
+# field values remains DeferredAttribute's concern.
 class RelatedPopulator:
     """
     RelatedPopulator is used for select_related() object instantiation.

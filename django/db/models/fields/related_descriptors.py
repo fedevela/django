@@ -385,6 +385,10 @@ class ForwardOneToOneDescriptor(ForwardManyToOneDescriptor):
                 setattr(instance, rel_model_pk_name, raw_value)
 
 
+# Architecture contract (DJANGO-008): ReverseOneToOneDescriptor is the absence
+# presentation boundary. It consumes relation cache state established during
+# joined population and owns the existing relation-specific missing-object
+# exception; SQL join and row-population concerns remain upstream.
 class ReverseOneToOneDescriptor:
     """
     Accessor to the related object on the reverse side of a one-to-one

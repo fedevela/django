@@ -1140,6 +1140,10 @@ class SQLCompiler:
                 result.append(", %s" % self.quote_name_unless_alias(alias))
         return result, params
 
+    # Architecture contract (DJANGO-007, DJANGO-008): This is the reverse
+    # one-to-one joined-selection boundary. Query.setup_joins() owns join
+    # topology and linking predicates; this compiler consumes its alias and
+    # places the masked related columns in the root query's selection metadata.
     def get_related_selections(
         self,
         select,
