@@ -107,6 +107,17 @@ class BaseDatabaseCreation:
         Designed only for test runner usage; will not handle large
         amounts of data.
         """
+        # Pseudocode -- GUID: DJANGO-003, DJANGO-005.
+        # INPUT: the backend-neutral connection after test schema creation.
+        # existing_tables <- SET(connection.introspection.table_names()).
+        # FOR EACH model otherwise eligible for test-database serialization:
+        #     IF model.db_table IS NOT IN existing_tables:
+        #         SKIP the model before constructing or evaluating a queryset.
+        #     ELSE:
+        #         ORDER the model's objects by primary key and YIELD them.
+        # OUTPUT: the serializer receives objects only from existing tables.
+        # FAILURE: propagate introspection and serialization failures normally;
+        # do not catch or classify backend-specific missing-table exceptions.
         # Iteratively return every object for all models to serialize.
         def get_objects():
             from django.db.migrations.loader import MigrationLoader

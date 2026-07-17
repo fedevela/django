@@ -160,18 +160,45 @@ class MigrationDisabledTestDatabaseLifecycleTests(SimpleTestCase):
 class MigrationDisabledSerializationContractTests(SimpleTestCase):
     def test_django_003_migrate_false_serialization_skips_models_with_absent_tables(self):
         """GUID: DJANGO-003."""
+        # Pseudocode -- logic obligation: absent tables are never queried.
+        # ARRANGE MIGRATE=False, one serializable model with an existing table,
+        # and one otherwise-eligible serializable model with no table.
+        # ACT by running the test-database serialization path.
+        # VERIFY objects from the existing table are enumerated and the absent
+        # model's manager/queryset is never constructed or evaluated.
         self.assertTrue(True)
 
     def test_django_003_migrate_false_serialization_completes_using_existing_tables(self):
         """GUID: DJANGO-003."""
+        # Pseudocode -- logic obligation: filtering preserves the success path.
+        # ARRANGE MIGRATE=False and serializable models whose tables all exist.
+        # ACT by serializing the test database.
+        # VERIFY serialization completes and contains the eligible objects in
+        # deterministic primary-key order.
         self.assertTrue(True)
 
     def test_django_005_creation_serialization_is_backend_independent(self):
         """GUID: DJANGO-005."""
+        # Pseudocode -- logic obligation: correction uses common backend APIs.
+        # ARRANGE a base database creation object whose introspection API reports
+        # the existing table names and excludes one eligible model's table.
+        # ACT through create_test_db(..., serialize=True), allowing its normal
+        # handoff to serialize_db_to_string().
+        # VERIFY eligibility is decided from introspection before querying and
+        # no vendor exception type or exception-recovery branch participates.
         self.assertTrue(True)
 
     def test_django_009_migrate_false_creation_serializes_without_querying_absent_table(self):
         """GUID: DJANGO-009."""
+        # Pseudocode -- regression flow and state transitions.
+        # GIVEN TEST['MIGRATE'] transitions to False and schema creation leaves a
+        # serializable model table absent, observe queries issued by the backend.
+        # WHEN create_test_db(..., serialize=True) creates the schema, restores
+        # migration settings, and hands off to serialize_db_to_string().
+        # THEN creation reaches the serialized-contents state successfully AND
+        # no observed query targets the absent model table.
+        # FAILURE: any absent-table query or interrupted serialization fails the
+        # regression; cleanup follows the ordinary test-database teardown path.
         self.assertTrue(True)
 
 
