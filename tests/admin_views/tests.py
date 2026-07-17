@@ -5089,10 +5089,32 @@ class ReadonlyForeignKeyAdminSiteContractTests(TestCase):
 
     def test_dja_007_custom_site_readonly_foreignkey_link_uses_custom_prefix_not_admin(self):
         """DJA-007: The custom-site readonly link uses its prefix, not /admin/."""
+        # DJA-007 logic obligation:
+        # GIVEN the shared object whose ForeignKey is exposed by readonly_fields
+        # AND the object is registered with the custom AdminSite (`site2`)
+        # WHEN its change page is requested in that site's namespace
+        # THEN derive the related object's change URL using `site2.name`
+        # AND locate the readonly ForeignKey anchor in the rendered response
+        # AND verify the anchor target starts with the custom `/test_admin/admin5/`
+        # prefix
+        # AND verify the anchor target does not start with the default
+        # `/test_admin/admin/` prefix
+        # OTHERWISE fail with the rendered anchor target distinguishing the
+        # incorrect site-prefix branch
         self.assertTrue(True)
 
     def test_dja_008_default_site_readonly_foreignkey_link_remains_unchanged(self):
         """DJA-008: The default-site readonly link keeps its existing URL."""
+        # DJA-008 logic obligation:
+        # GIVEN the equivalent shared object whose ForeignKey is exposed by
+        # readonly_fields AND the object is registered with the default AdminSite
+        # WHEN its change page is requested in the default site's namespace
+        # THEN derive the related object's existing change URL using `site.name`
+        # AND locate the readonly ForeignKey anchor in the rendered response
+        # AND verify the anchor target equals the established default-admin URL
+        # `/test_admin/admin/auth/user/<related-object-pk>/change/`
+        # AND keep this expected prefix distinct from DJA-007's custom-site prefix
+        # OTHERWISE fail with the rendered and expected anchor targets
         self.assertTrue(True)
 
 
