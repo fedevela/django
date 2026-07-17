@@ -229,6 +229,17 @@ class Widget(metaclass=MediaDefiningClass):
             return formats.localize_input(value)
         return str(value)
 
+    # PSEUDOCODE — GUID: MWLABEL-008 (non-MultiWidget continuity):
+    # PROCEDURE preserve_single_widget_id_and_label_target(name, value, attrs):
+    #   MERGE the widget's configured attrs with the attrs supplied for render.
+    #   PRESERVE any resulting ID without adding, removing, or indexing it.
+    #   RENDER the widget with that unchanged ID.
+    #   WHEN the field resolves its label target, PASS the same ID to the
+    #   concrete widget's established id_for_label() hook.
+    #   IF this default hook owns the decision and the ID exists, RETURN the
+    #   ID unchanged; IF no ID exists, RETURN no target.
+    #   IF a non-MultiWidget subclass overrides the hook, PRESERVE its result.
+    #   DO NOT enter MultiWidget component-ID or label-target behavior.
     def get_context(self, name, value, attrs):
         return {
             'widget': {
@@ -618,6 +629,17 @@ class ChoiceWidget(Widget):
                     subindex += 1
         return groups
 
+    # PSEUDOCODE — GUID: MWLABEL-008 (ChoiceWidget ID-index continuity):
+    # PROCEDURE preserve_choice_id_and_label_target(base_id, option_index):
+    #   WHEN building an option with a base ID, DELEGATE its ID to the
+    #   concrete id_for_label(base_id, option_index) hook.
+    #   IN this ChoiceWidget hook, IF add_id_index is enabled, RETURN
+    #   "<base ID>_<option index>"; OTHERWISE, RETURN the base ID unchanged.
+    #   WHEN resolving the field label, DELEGATE through the same concrete
+    #   hook with its established default index and PRESERVE that result,
+    #   including any subclass-defined target omission.
+    #   IF no base ID exists, RETURN no ID and introduce no label target.
+    #   PRESERVE all unrelated option attributes and rendering behavior.
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         index = str(index) if subindex is None else "%s_%s" % (index, subindex)
         option_attrs = self.build_attrs(self.attrs, attrs) if self.option_inherits_attrs else {}
