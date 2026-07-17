@@ -435,6 +435,26 @@ class AdminSite:
         Build the app dictionary. The optional `label` parameter filters models
         of a specific app.
         """
+        # Pseudocode contract — ADMIN-001, ADMIN-005, ADMIN-006, ADMIN-007:
+        # INPUT request, optional app label, and the existing model registry.
+        # SELECT the existing registry entries matching label, when supplied;
+        # otherwise SELECT every existing registry entry.
+        # FOR EACH (registered_model_class, model_admin) in selection order:
+        #     IF module permission is absent, SKIP the entry.
+        #     COMPUTE the existing model permissions.
+        #     IF every permission is false, SKIP the entry.
+        #     BUILD the existing model dictionary with its established keys
+        #     and values; TRY each permitted URL resolution and, on the
+        #     existing no-match failure, RETAIN its established fallback.
+        #     ADD only "model": registered_model_class, preserving the exact
+        #     class object used as the registry key.  (ADMIN-001, ADMIN-006)
+        #     APPEND the dictionary through the existing app grouping flow.
+        # Therefore a class reference crosses the handoff only after the same
+        # visibility decisions as its model; skipped entries expose neither.
+        # (ADMIN-005)
+        # RETURN the same label-filtered app dictionary (including None) or the
+        # same complete dictionary, without changing inclusion or empty state.
+        # (ADMIN-007)
         app_dict = {}
 
         if label:
@@ -503,6 +523,12 @@ class AdminSite:
         Return a sorted list of all the installed apps that have been
         registered in this site.
         """
+        # Pseudocode contract — ADMIN-007:
+        # RECEIVE the app dictionary from the unchanged build/filter flow.
+        # SORT apps by the existing case-insensitive name key.
+        # FOR EACH app, SORT its model dictionaries by the existing name key.
+        # RETURN the sorted list; if the dictionary is empty, RETURN the same
+        # empty list produced by the established behavior.
         app_dict = self._build_app_dict(request)
 
         # Sort the apps alphabetically.
