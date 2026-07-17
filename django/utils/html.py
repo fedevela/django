@@ -59,15 +59,40 @@ _json_script_escapes = {
 }
 
 
-def json_script(value, element_id=None):
+def json_script(value, element_id=None, encoder=None):
     """
     Escape all the HTML/XML special characters with their unicode escapes, so
     value is safe to be output anywhere except for inside a tag attribute. Wrap
     the escaped JSON in a script tag.
     """
+    # JSONSCRIPT-011 pseudocode:
+    # Logic obligation: expose the complete json_script() contract in the public
+    # utility documentation.
+    # INPUT: the public utility documentation entry for json_script().
+    # DECISION: require a description of script-safe JSON output as its purpose.
+    #   VERIFY: test_jsonscript_011_public_docs_describe_script_safe_output_purpose
+    # DECISION: describe ENCODER as optional; if supplied, identify it as the
+    # serializer selection; otherwise, identify DjangoJSONEncoder as the default.
+    #   VERIFY:
+    #   test_jsonscript_011_docs_state_optional_encoder_djangojsonencoder_default
+    # DECISION: describe ELEMENT_ID as optional and as controlling the script ID.
+    #   VERIFY: test_jsonscript_011_public_docs_describe_optional_element_id
+    # TRANSITION: once all descriptions are present, mark the entry contract-complete.
+    # OUTPUT: a public utility entry covering purpose, optional inputs, and default.
+    # FAILURE: if any description is absent, keep JSONSCRIPT-011 incomplete.
+    # JSONSCRIPT-011 architecture:
+    # - Runtime contract owner: this symbol and its signature.
+    # - Public contract owner: the django.utils.html section of docs/ref/utils.txt.
+    # - Documentation dependency: the public entry describes this symbol's
+    #   script-safe purpose, encoder default, and optional element_id; runtime
+    #   code must not depend on the documentation layer.
+    # - Verification seam: the JSONSCRIPT-011 placeholders in
+    #   tests/utils_tests/test_html.py, adjacent to existing json_script tests.
     from django.core.serializers.json import DjangoJSONEncoder
 
-    json_str = json.dumps(value, cls=DjangoJSONEncoder).translate(_json_script_escapes)
+    json_str = json.dumps(value, cls=encoder or DjangoJSONEncoder).translate(
+        _json_script_escapes
+    )
     if element_id:
         template = '<script id="{}" type="application/json">{}</script>'
         args = (element_id, mark_safe(json_str))

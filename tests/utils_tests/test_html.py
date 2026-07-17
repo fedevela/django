@@ -1,5 +1,7 @@
+import json
 import os
 from datetime import datetime
+from pathlib import Path
 
 from django.test import SimpleTestCase
 from django.utils.functional import lazystr
@@ -16,7 +18,20 @@ from django.utils.html import (
     strip_tags,
     urlize,
 )
-from django.utils.safestring import mark_safe
+from django.utils.safestring import SafeData, mark_safe
+
+
+class JSONScriptUnsupportedValue:
+    """JSONSCRIPT-009 test-only value for the custom-encoder seam."""
+
+
+class JSONScriptCustomEncoder(json.JSONEncoder):
+    """JSONSCRIPT-001/002/009 test-only encoder."""
+
+    def default(self, obj):
+        if isinstance(obj, JSONScriptUnsupportedValue):
+            return "custom encoded"
+        return super().default(obj)
 
 
 class TestUtilsHtml(SimpleTestCase):
@@ -216,6 +231,129 @@ class TestUtilsHtml(SimpleTestCase):
             json_script({"key": "value"}),
             '<script type="application/json">{"key": "value"}</script>',
         )
+
+    def test_jsonscript_001_optional_custom_encoder_argument_is_accepted(self):
+        """JSONSCRIPT-001: A supplied custom encoder class is accepted."""
+        self.assertEqual(
+            json_script(
+                JSONScriptUnsupportedValue(), encoder=JSONScriptCustomEncoder
+            ),
+            '<script type="application/json">"custom encoded"</script>',
+        )
+
+    def test_jsonscript_002_supplied_encoder_serializes_the_value(self):
+        """JSONSCRIPT-002: Serialization uses the supplied encoder class."""
+        self.assertIn(
+            '"custom encoded"',
+            json_script(
+                JSONScriptUnsupportedValue(), "test_id", JSONScriptCustomEncoder
+            ),
+        )
+
+    def test_jsonscript_003_no_encoder_keeps_django_json_encoder_output(self):
+        """JSONSCRIPT-003: Existing calls keep DjangoJSONEncoder and their output."""
+        self.assertEqual(
+            json_script(datetime(2022, 5, 9, 10, 11, 12), "test_id"),
+            '<script id="test_id" type="application/json">'
+            '"2022-05-09T10:11:12"</script>',
+        )
+
+    def test_jsonscript_009_custom_encoder_handles_unsupported_value(self):
+        """JSONSCRIPT-009: A custom encoder handles a default-unsupported value."""
+        value = JSONScriptUnsupportedValue()
+        with self.assertRaises(TypeError):
+            json_script(value)
+        self.assertEqual(
+            json_script(value, encoder=JSONScriptCustomEncoder),
+            '<script type="application/json">"custom encoded"</script>',
+        )
+
+    def test_jsonscript_004_default_encoder_escapes_script_safe_characters(self):
+        """JSONSCRIPT-004: Default-encoded content remains script-safe escaped."""
+        self.assertEqual(
+            json_script("<>&"),
+            '<script type="application/json">"\\u003C\\u003E\\u0026"</script>',
+        )
+
+    def test_jsonscript_004_jsonscript_010_custom_encoder_content_is_escaped(self):
+        """JSONSCRIPT-004/JSONSCRIPT-010: Custom-encoded content is escaped."""
+        self.assertEqual(
+            json_script("<>&", encoder=JSONScriptCustomEncoder),
+            '<script type="application/json">"\\u003C\\u003E\\u0026"</script>',
+        )
+
+    def test_jsonscript_005_default_encoder_result_remains_safe(self):
+        """JSONSCRIPT-005: The default-encoder result remains marked safe."""
+        self.assertIsInstance(json_script({"key": "value"}), SafeData)
+
+    def test_jsonscript_005_custom_encoder_result_remains_safe(self):
+        """JSONSCRIPT-005: The custom-encoder result remains marked safe."""
+        self.assertIsInstance(
+            json_script(
+                JSONScriptUnsupportedValue(), encoder=JSONScriptCustomEncoder
+            ),
+            SafeData,
+        )
+
+    def test_jsonscript_006_default_encoder_with_id_keeps_script_structure(self):
+        """JSONSCRIPT-006: The default-encoder ID-bearing structure is retained."""
+        self.assertEqual(
+            json_script({"key": "value"}, "test_id"),
+            '<script id="test_id" type="application/json">'
+            '{"key": "value"}</script>',
+        )
+
+    def test_jsonscript_006_custom_encoder_with_id_keeps_script_structure(self):
+        """JSONSCRIPT-006: The custom-encoder ID-bearing structure is retained."""
+        self.assertEqual(
+            json_script(
+                JSONScriptUnsupportedValue(), "test_id", JSONScriptCustomEncoder
+            ),
+            '<script id="test_id" type="application/json">'
+            '"custom encoded"</script>',
+        )
+
+    def test_jsonscript_007_default_encoder_without_id_keeps_script_structure(self):
+        """JSONSCRIPT-007: The default-encoder no-ID structure is retained."""
+        self.assertEqual(
+            json_script({"key": "value"}),
+            '<script type="application/json">{"key": "value"}</script>',
+        )
+
+    def test_jsonscript_007_custom_encoder_without_id_keeps_script_structure(self):
+        """JSONSCRIPT-007: The custom-encoder no-ID structure is retained."""
+        self.assertEqual(
+            json_script(
+                JSONScriptUnsupportedValue(), encoder=JSONScriptCustomEncoder
+            ),
+            '<script type="application/json">"custom encoded"</script>',
+        )
+
+    def test_jsonscript_011_public_docs_describe_script_safe_output_purpose(self):
+        """JSONSCRIPT-011: Public docs describe the script-safe output purpose."""
+        documentation = self.get_json_script_documentation()
+        self.assertIn("Safely outputs a Python object as JSON", documentation)
+        self.assertIn("wrapped in a ``<script>`` tag", documentation)
+
+    def test_jsonscript_011_docs_state_optional_encoder_djangojsonencoder_default(self):
+        """JSONSCRIPT-011: Docs state the encoder and DjangoJSONEncoder default."""
+        documentation = self.get_json_script_documentation()
+        self.assertIn("optional ``encoder`` argument", documentation)
+        self.assertIn("DjangoJSONEncoder", documentation)
+        self.assertIn("By default", documentation)
+
+    def test_jsonscript_011_public_docs_describe_optional_element_id(self):
+        """JSONSCRIPT-011: Public docs describe the optional element ID."""
+        documentation = self.get_json_script_documentation()
+        self.assertIn("element_id=None", documentation)
+        self.assertIn("optional ``element_id`` argument", documentation)
+
+    def get_json_script_documentation(self):
+        docs_path = Path(__file__).parents[2] / "docs" / "ref" / "utils.txt"
+        documentation = docs_path.read_text(encoding="utf-8")
+        start = documentation.index(".. function:: json_script(")
+        end = documentation.index("\n.. function::", start)
+        return documentation[start:end]
 
     def test_smart_urlquote(self):
         items = (

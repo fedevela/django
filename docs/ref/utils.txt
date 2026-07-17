@@ -655,6 +655,16 @@ escaping HTML.
             ((u.first_name, u.last_name) for u in users)
         )
 
+.. function:: json_script(value, element_id=None, encoder=None)
+
+    Safely outputs a Python object as JSON, wrapped in a ``<script>`` tag,
+    ready for use with JavaScript.
+
+    The optional ``element_id`` argument sets the ``id`` attribute of the
+    ``<script>`` tag. The optional ``encoder`` argument can be used to specify
+    a custom JSON encoder class. By default,
+    :class:`~django.core.serializers.json.DjangoJSONEncoder` is used.
+
 .. function:: strip_tags(value)
 
     Tries to remove anything that looks like an HTML tag from the string, that
