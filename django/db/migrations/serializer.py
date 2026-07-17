@@ -163,6 +163,20 @@ class FrozensetSerializer(BaseUnorderedSequenceSerializer):
 
 class FunctionTypeSerializer(BaseSerializer):
     def serialize(self):
+        # MIGSER-001, MIGSER-002, MIGSER-004 — nested class-method reference flow:
+        # INPUT: the callable supplied as a field default.
+        # IF the callable is bound to a class:
+        #   READ the class module, the class's complete qualified name (including
+        #   every enclosing class), and the callable name.
+        #   IF those components do not describe a stable importable path:
+        #     HAND OFF to the existing unsupported-callable error flow.
+        #   BUILD the reference as <module>.<complete class path>.<callable name>.
+        #   REQUIRE Profile.Capability.default from appname.models to produce
+        #   exactly appname.models.Profile.Capability.default.  [MIGSER-002]
+        #   EMIT the reference together with the module import.  [MIGSER-001]
+        #   ON resolution, import the module and traverse each remaining path
+        #   component in order; REQUIRE the result to identify the input
+        #   callable, otherwise fail serialization as non-importable.  [MIGSER-004]
         if getattr(self.value, "__self__", None) and isinstance(
             self.value.__self__, type
         ):
