@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from django.contrib import admin
 from django.contrib.admin.tests import AdminSeleniumTestCase
 from django.contrib.admin.views.autocomplete import AutocompleteJsonView
-from django.contrib.auth.models import Permission, User
+from django.contrib.auth.models import AnonymousUser, Permission, User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
@@ -251,15 +251,61 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
 
     def test_ACJ_008_unauthenticated_request_after_serialization_refactor_is_rejected_as_before(self):
         """GUID: ACJ-008 unauthenticated requests remain rejected as before."""
-        self.assertTrue(True)
+        self.client.logout()
+        response = self.client.get(self.url, self.opts)
+        self.assertEqual(response.status_code, 302)
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            serialized_objects = []
+
+            def serialize_result(self, obj, to_field_name):
+                self.serialized_objects.append(obj)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, self.opts)
+        request.user = AnonymousUser()
+
+        with self.assertRaises(PermissionDenied):
+            RecordingAutocompleteJsonView.as_view(**self.as_view_args)(request)
+        self.assertEqual(RecordingAutocompleteJsonView.serialized_objects, [])
 
     def test_ACJ_008_authenticated_user_without_related_model_permission_is_denied_as_before(self):
         """GUID: ACJ-008 missing related-model permission remains denied as before."""
-        self.assertTrue(True)
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            serialized_objects = []
+
+            def serialize_result(self, obj, to_field_name):
+                self.serialized_objects.append(obj)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, self.opts)
+        request.user = self.user
+
+        with self.assertRaises(PermissionDenied):
+            RecordingAutocompleteJsonView.as_view(**self.as_view_args)(request)
+        self.assertEqual(RecordingAutocompleteJsonView.serialized_objects, [])
 
     def test_ACJ_008_authenticated_user_with_related_model_permission_proceeds_as_before(self):
         """GUID: ACJ-008 related-model permission continues to allow processing."""
-        self.assertTrue(True)
+        question = Question.objects.create(question='A question')
+        permission = Permission.objects.get(
+            content_type=ContentType.objects.get_for_model(Question),
+            codename='view_question',
+        )
+        self.user.user_permissions.add(permission)
+        request = self.factory.get(self.url, self.opts)
+        request.user = User.objects.get(pk=self.user.pk)
+
+        response = AutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(json.loads(response.content), {
+            'results': [{
+                'id': str(question.big_id),
+                'text': question.question,
+            }],
+            'pagination': {'more': False},
+        })
 
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
