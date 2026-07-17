@@ -1276,6 +1276,15 @@ class ModelChoiceField(ChoiceField):
         return super().prepare_value(value)
 
     def to_python(self, value):
+        # Pseudocode — GUID: MCF-006, MCF-009
+        # INPUT submitted value and this field's queryset boundary.
+        # IF the value is empty, RETURN the empty sentinel for validation.
+        # OTHERWISE derive the configured lookup key; for a model instance,
+        # replace the lookup value with that instance's key.
+        # LOOK UP the value through this field's queryset only.
+        # IF the lookup succeeds, RETURN that same resolved model object.
+        # IF conversion fails or no object exists inside the queryset, RAISE
+        # invalid_choice; never resolve or return an object outside the queryset.
         if value in self.empty_values:
             return None
         submitted_value = value
@@ -1293,6 +1302,12 @@ class ModelChoiceField(ChoiceField):
         return value
 
     def validate(self, value):
+        # Pseudocode — GUID: MCF-007, MCF-008
+        # RECEIVE the value produced by to_python() in the normal clean flow.
+        # DELEGATE empty-value policy unchanged to Field.validate():
+        # IF empty and required, PROPAGATE the existing required ValidationError
+        # (message, code, and parameters); IF empty and optional, ALLOW it.
+        # OTHERWISE continue without altering the resolved model object.
         return Field.validate(self, value)
 
     def has_changed(self, initial, data):
