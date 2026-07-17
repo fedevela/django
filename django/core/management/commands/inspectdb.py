@@ -131,6 +131,11 @@ class Command(BaseCommand):
                 yield ""
                 yield "class %s(models.Model):" % table2model(table_name)
                 known_models.append(table2model(table_name))
+                # Architecture contract — GUID: INSP-001:
+                # Repeated-target membership is table-scoped metadata owned by
+                # handle_inspection(). Its structural home is between relation
+                # introspection and this model's field-emission loop, so backend
+                # introspection and field-name normalization remain independent.
                 # Pseudocode — GUID: INSP-001 (repeated-target detection):
                 #   GROUP relation columns by their referenced database table.
                 #   MARK every column in each group whose size is at least two;
@@ -148,6 +153,10 @@ class Command(BaseCommand):
                     att_name, params, notes = self.normalize_col_name(
                         column_name, used_column_names, is_relation
                     )
+                    # Architecture contract — GUID: INSP-002:
+                    # normalize_col_name() owns the final generated attribute name;
+                    # repeated-target naming may consume att_name only through this
+                    # existing return boundary and must not duplicate normalization.
                     extra_params.update(params)
                     comment_notes.extend(notes)
 
@@ -168,6 +177,12 @@ class Command(BaseCommand):
 
                     if is_relation:
                         ref_db_column, ref_db_table = relations[column_name]
+                        # Integration seam — GUID: INSP-001, INSP-002, INSP-004:
+                        # The table-scoped membership metadata selects fields here;
+                        # att_name supplies the deterministic name component, and
+                        # extra_params is the private contract with the existing
+                        # serializer. Reverse-name validation belongs before that
+                        # mapping is mutated; relation construction stays unchanged.
                         # Pseudocode — GUID: INSP-001, INSP-002, INSP-004:
                         #   IF column_name is marked as a repeated-target relation:
                         #     TAKE att_name only after normalize_col_name() has
