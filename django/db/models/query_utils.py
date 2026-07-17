@@ -40,6 +40,20 @@ class Q(tree.Node):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
+        # QEX-005 / QEX-006 logic (Q() first, plus the Q handoff for
+        # Exists(...) first):
+        # - Accept only AND or OR when adapting a non-Q operand, and require
+        #   that operand to advertise conditional semantics; otherwise fail
+        #   with TypeError.
+        # - Normalize the accepted conditional operand into a Q node before
+        #   testing either side for emptiness, including when `self` is Q().
+        # - If the normalized right side is empty, return an independent clone
+        #   of the left side; if the left side is empty, return an independent
+        #   clone of the normalized right side. Thus Q() is the identity for
+        #   both required connectors and the surviving Exists condition stays
+        #   usable by ORM query construction.
+        # - Otherwise create a Q node with the requested connector, add left
+        #   then right in operand order, and return the composed condition.
         if not isinstance(other, Q):
             if conn in (self.AND, self.OR) and self and getattr(other, 'conditional', False):
                 other = Q(other)

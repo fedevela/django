@@ -92,6 +92,13 @@ class Combinable:
     def __and__(self, other):
         # QEX-001 / QEX-002 integration seam: conditional expression pairs
         # depend on Q for logical-tree composition and query handoff.
+        # QEX-005 logic (Exists(...) & Q()):
+        # - Require both operands to advertise conditional semantics.
+        # - Wrap the Exists-side conditional as a Q node, preserve the empty
+        #   Q operand without nesting it, and hand off with the AND connector.
+        # - Let Q._combine() discard the empty side and return an independent,
+        #   query-usable clone of the Exists condition; otherwise follow the
+        #   existing unsupported-operation failure path.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
             return Q(self) & Q(other)
         raise NotImplementedError(
@@ -113,6 +120,13 @@ class Combinable:
     def __or__(self, other):
         # QEX-003 / QEX-004 integration seam: conditional expression pairs
         # depend on Q for logical-tree composition and query handoff.
+        # QEX-006 logic (Exists(...) | Q()):
+        # - Require both operands to advertise conditional semantics.
+        # - Wrap the Exists-side conditional as a Q node, preserve the empty
+        #   Q operand without nesting it, and hand off with the OR connector.
+        # - Let Q._combine() discard the empty side and return an independent,
+        #   query-usable clone of the Exists condition; otherwise follow the
+        #   existing unsupported-operation failure path.
         if getattr(self, 'conditional', False) and getattr(other, 'conditional', False):
             return Q(self) | Q(other)
         raise NotImplementedError(
