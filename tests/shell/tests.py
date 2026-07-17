@@ -10,17 +10,56 @@ from django.test.utils import captured_stdin, captured_stdout
 
 class ShellCommandTestCase(SimpleTestCase):
 
+    @unittest.skipIf(sys.platform == 'win32', "Windows select() doesn't support file descriptors.")
     def test_shell_002_noninteractive_stdin_function_resolves_imported_global_name(self):
         """GUID: SHELL-002 - Stdin function resolves an imported global name."""
-        self.assertTrue(True)
+        with captured_stdin() as stdin, captured_stdout() as stdout:
+            stdin.write(
+                'import django\n'
+                'def get_version():\n'
+                '    return django.__version__\n'
+                'print(get_version())'
+            )
+            stdin.seek(0)
+            with mock.patch(
+                'django.core.management.commands.shell.select.select',
+                return_value=([stdin], [], []),
+            ):
+                call_command('shell')
+        self.assertEqual(stdout.getvalue().strip(), __version__)
 
+    @unittest.skipIf(sys.platform == 'win32', "Windows select() doesn't support file descriptors.")
     def test_shell_002_noninteractive_stdin_function_resolves_earlier_top_level_name(self):
         """GUID: SHELL-002 - Stdin function resolves an earlier top-level name."""
-        self.assertTrue(True)
+        with captured_stdin() as stdin, captured_stdout() as stdout:
+            stdin.write(
+                'value = "available"\n'
+                'def get_value():\n'
+                '    return value\n'
+                'print(get_value())'
+            )
+            stdin.seek(0)
+            with mock.patch(
+                'django.core.management.commands.shell.select.select',
+                return_value=([stdin], [], []),
+            ):
+                call_command('shell')
+        self.assertEqual(stdout.getvalue().strip(), 'available')
 
-    def test_shell_004_successful_noninteractive_stdin_produces_effect_and_exits(self):
+    @unittest.skipIf(sys.platform == 'win32', "Windows select() doesn't support file descriptors.")
+    @mock.patch('django.core.management.commands.shell.Command.python')
+    def test_shell_004_successful_noninteractive_stdin_produces_effect_and_exits(self, python):
         """GUID: SHELL-004 - Successful stdin takes effect and exits."""
-        self.assertTrue(True)
+        with captured_stdin() as stdin, captured_stdout() as stdout:
+            stdin.write('print("effect")')
+            stdin.seek(0)
+            with mock.patch(
+                'django.core.management.commands.shell.select.select',
+                return_value=([stdin], [], []),
+            ):
+                call_command('shell', interface='python')
+        self.assertEqual(stdout.getvalue().strip(), 'effect')
+        python.assert_not_called()
 
     def test_shell_001_command_function_resolves_imported_global_name(self):
         """GUID: SHELL-001 - A function resolves an imported global name."""

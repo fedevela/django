@@ -89,37 +89,13 @@ class Command(BaseCommand):
             # GUID: SHELL-003 - Don't start an interactive shell afterwards.
             return
 
-        # PSEUDOCODE: GUID SHELL-002
-        # Verifications:
-        # - test_shell_002_noninteractive_stdin_function_resolves_imported_global_name
-        # - test_shell_002_noninteractive_stdin_function_resolves_earlier_top_level_name
-        # WHEN supported stdin is non-interactive and ready to read:
-        #   READ the complete snippet from stdin.
-        #   CREATE one namespace for the complete snippet.
-        #   EXECUTE the snippet with that namespace as both globals and locals,
-        #   so imports and top-level definitions enter the same namespace and
-        #   functions resolve names from it when invoked later in the snippet.
-        #   IF execution raises an exception, PROPAGATE it to the command caller.
-        #
-        # PSEUDOCODE: GUID SHELL-004
-        # Verification:
-        # - test_shell_004_successful_noninteractive_stdin_produces_effect_and_exits
-        # WHEN execution succeeds:
-        #   PRESERVE every observable effect requested by the snippet.
-        #   RETURN from the command immediately without selecting or starting
-        #   an interactive shell.
-        # OTHERWISE, when stdin is unsupported, interactive, or not ready:
-        #   CONTINUE to the existing interactive-shell selection flow.
-        # Standard-input execution boundary — GUID: SHELL-002, GUID: SHELL-004.
-        # This branch owns reading and executing a supported non-interactive
-        # stdin snippet, including its shared namespace and terminal return.
-        # The exec() call is the namespace integration seam: its implementation
-        # must provide one mapping as both the globals and locals namespaces.
-        # Keep interactive-shell selection downstream of this branch so a
-        # successful stdin execution cannot depend on or enter that subsystem.
-        # Windows stdin is outside this boundary due to select.select() limits.
+        # Execute stdin if it has anything to read and exit. Not supported on
+        # Windows due to select.select() limitations.
         if sys.platform != 'win32' and not sys.stdin.isatty() and select.select([sys.stdin], [], [], 0)[0]:
-            exec(sys.stdin.read())
+            # GUID: SHELL-002 - Use a single namespace for the entire snippet.
+            namespace = {}
+            exec(sys.stdin.read(), namespace, namespace)
+            # GUID: SHELL-004 - Don't start an interactive shell afterwards.
             return
 
         available_shells = [options['interface']] if options['interface'] else self.shells
