@@ -215,6 +215,15 @@ class CreateModel(ModelOperation):
                     managers=self.managers,
                 ),
             ]
+        # ARCHITECTURE: DJANGO-001, DJANGO-002, DJANGO-006
+        # OWNER: CreateModel.reduce() owns this squash-time integration seam;
+        # RenameIndex remains the operation/state contract, while migration
+        # commands, serialization, and system checks consume the reduced state.
+        # DEPENDENCY: CreateModel -> RenameIndex contract -> replacement
+        # CreateModel options. No command or checks-layer dependency belongs here.
+        # BOUNDARY: Only same-model RenameIndex(old_fields=...) operations may
+        # cross this seam; unmatched or retained index_together state stays with
+        # the existing reduction handoff and deprecation policy.
         # GUID: DJANGO-001, DJANGO-002, DJANGO-006
         # LOGIC OBLIGATION: During normal migration optimization, fold a later
         # RenameIndex(old_fields=...) transition into this CreateModel when it
