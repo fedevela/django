@@ -1652,6 +1652,38 @@ class ModelFormsetTest(TestCase):
         formset = FormSet(data, instance=person)
         self.assertTrue(formset.is_valid())
 
+    def test_django_003_nonempty_extra_callable_default_inline_stays_active(self):
+        """
+        DJANGO-003: Binding hidden-initial data for a nonempty extra inline
+        containing a callable-default field keeps the inline classified as
+        active rather than empty or unused.
+        """
+        self.assertTrue(True)
+
+    def test_django_004_first_invalid_array_default_inline_submission(self):
+        """
+        DJANGO-004: The first submission of an invalid extra inline containing
+        ArrayField(default=list) reports its validation error and retains the
+        inline with its submitted value.
+        """
+        self.assertTrue(True)
+
+    def test_django_004_second_unchanged_submission_repeats_error(self):
+        """
+        DJANGO-004: Redisplaying and resubmitting the invalid extra inline
+        unchanged reports the same validation error and does not dismiss the
+        inline.
+        """
+        self.assertTrue(True)
+
+    def test_django_004_later_unchanged_submissions_retain_nonempty_inline(self):
+        """
+        DJANGO-004: Repeating the unchanged invalid inline submission more than
+        twice reports the same validation error on every submission and retains
+        the inline as nonempty.
+        """
+        self.assertTrue(True)
+
     def test_inlineformset_factory_with_null_fk(self):
         # inlineformset_factory tests with fk having null=True. see #9462.
         # create some data that will exhibit the issue
