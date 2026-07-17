@@ -954,6 +954,26 @@ class ModelAdminChecks(BaseModelAdminChecks):
                         id="admin.E108",
                     )
                 ]
+        else:
+            # GEV-001 / GEV-002: Reverse relations are also addressable by
+            # their query name in Options.get_field(), but only their accessor
+            # name is available when lookup_field() renders a model instance.
+            if field.auto_created and not hasattr(obj.model, item):
+                return [
+                    checks.Error(
+                        "The value of '%s' refers to '%s', which is not a "
+                        "callable, an attribute of '%s', or an attribute or "
+                        "method on '%s'."
+                        % (
+                            label,
+                            item,
+                            obj.__class__.__name__,
+                            obj.model._meta.label,
+                        ),
+                        obj=obj.__class__,
+                        id="admin.E108",
+                    )
+                ]
         if isinstance(field, models.ManyToManyField) or (
             getattr(field, "rel", None) and field.rel.field.many_to_one
         ):

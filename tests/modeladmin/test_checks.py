@@ -509,12 +509,45 @@ class ListDisplayTests(CheckTestCase):
     def test_gev_001_unresolvable_model_or_modeladmin_entry_emits_e108_at_check_time(
         self,
     ):
-        self.assertTrue(True)
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["song"]
+
+        self.assertIsInvalid(
+            TestModelAdmin,
+            Band,
+            "The value of 'list_display[0]' refers to 'song', which is not a "
+            "callable, an attribute of 'TestModelAdmin', or an attribute or method "
+            "on 'modeladmin.Band'.",
+            "admin.E108",
+        )
 
     def test_gev_002_questionadmin_choice_entry_emits_e108_before_changelist_request(
         self,
     ):
-        self.assertTrue(True)
+        class Question(Model):
+            pass
+
+        class Choice(Model):
+            question = ForeignKey(Question, CASCADE)
+
+        class QuestionAdmin(ModelAdmin):
+            list_display = ["choice"]
+
+        site = AdminSite()
+        site.register(Question, QuestionAdmin)
+
+        self.assertEqual(
+            site.check([Question._meta.app_config]),
+            [
+                Error(
+                    "The value of 'list_display[0]' refers to 'choice', which is "
+                    "not a callable, an attribute of 'QuestionAdmin', or an "
+                    "attribute or method on 'modeladmin.Question'.",
+                    obj=QuestionAdmin,
+                    id="admin.E108",
+                )
+            ],
+        )
 
     def test_not_iterable(self):
         class TestModelAdmin(ModelAdmin):
