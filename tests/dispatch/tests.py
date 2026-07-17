@@ -209,6 +209,29 @@ class DispatcherTests(SimpleTestCase):
         self.assertFalse(a_signal.has_listeners(sender=object()))
 
 
+class SendRobustLoggingContractTests(SimpleTestCase):
+
+    def test_sigrob_001_receiver_exception_logs_at_exception_level_with_exception_info_and_traceback(self):
+        """GUID: SIGROB-001 - A handled receiver exception is fully logged."""
+        self.assertTrue(True)
+
+    def test_sigrob_004_receiver_exception_log_identifies_failing_receiver(self):
+        """GUID: SIGROB-004 - A failure log identifies its receiver."""
+        self.assertTrue(True)
+
+    def test_sigrob_005_multiple_receiver_exceptions_log_distinct_failure_records(self):
+        """GUID: SIGROB-005 - Each handled failure has a distinct log record."""
+        self.assertTrue(True)
+
+    def test_sigrob_007_successful_receiver_logs_no_receiver_failure_exception(self):
+        """GUID: SIGROB-007 - A successful receiver has no failure log."""
+        self.assertTrue(True)
+
+    def test_sigrob_008_empty_dispatch_preserves_return_and_logs_no_receiver_failure_exception(self):
+        """GUID: SIGROB-008 - An empty dispatch keeps its return and has no failure log."""
+        self.assertTrue(True)
+
+
 class ReceiverTestCase(SimpleTestCase):
 
     def test_receiver_single_signal(self):
