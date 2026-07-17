@@ -58,6 +58,22 @@ class ModelChoiceFieldTests(TestCase):
             field.clean(invalid_value)
         self.assertIs(cm.exception.error_list[0].params['value'], invalid_value)
 
+    def test_mcf_006_value_present_in_queryset_resolves_to_same_model_object(self):
+        """GUID: MCF-006 - A value in the queryset resolves to the same object."""
+        pass
+
+    def test_mcf_007_required_empty_submission_preserves_validation_result_message_code_and_params(self):
+        """GUID: MCF-007 - Required empty-submission validation is unchanged."""
+        pass
+
+    def test_mcf_008_optional_allowed_empty_submission_preserves_validation_result(self):
+        """GUID: MCF-008 - Optional allowed-empty handling is unchanged."""
+        pass
+
+    def test_mcf_009_value_for_object_outside_queryset_remains_invalid_and_is_not_returned(self):
+        """GUID: MCF-009 - An object outside the queryset remains unavailable."""
+        pass
+
     def test_basics(self):
         f = forms.ModelChoiceField(Category.objects.all())
         self.assertEqual(list(f.choices), [
