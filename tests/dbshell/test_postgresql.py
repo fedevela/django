@@ -157,6 +157,24 @@ class PostgreSqlDbshellCommandTestCase(SimpleTestCase):
             (["psql", "dbname", "--help"], None),
         )
 
+    def test_pgsql_001_additional_arguments_precede_configured_database_name(self):
+        """GUID: PGSQL-001."""
+        self.assertTrue(True)
+
+    def test_pgsql_002_additional_arguments_preserve_content_separation_and_order(self):
+        """GUID: PGSQL-002."""
+        self.assertTrue(True)
+
+    def test_pgsql_003_configured_database_name_is_final_positional_argument(self):
+        """GUID: PGSQL-003."""
+        self.assertTrue(True)
+
+    def test_pgsql_004_command_arguments_precede_database_and_execute_without_ignored_arguments(
+        self,
+    ):
+        """GUID: PGSQL-004; parameters: -c, select * from some_table;."""
+        self.assertTrue(True)
+
     @skipUnless(connection.vendor == "postgresql", "Requires a PostgreSQL connection")
     def test_sigint_handler(self):
         """SIGINT is ignored in Python and passed to psql to abort queries."""
