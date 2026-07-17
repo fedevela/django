@@ -21,23 +21,53 @@ class QTests(SimpleTestCase):
 
     def test_qcomb_001_empty_or_dict_keys_does_not_require_pickling(self):
         """QCOMB-001: Empty OR with dict_keys completes without pickling."""
-        self.assertTrue(True)
+        Q() | Q(x__in={}.keys())
 
     def test_qcomb_002_empty_or_retains_original_condition_and_value(self):
         """QCOMB-002: Empty OR retains the x__in condition and value."""
-        self.assertTrue(True)
+        value = {}.keys()
+
+        combined = Q() | Q(x__in=value)
+
+        self.assertEqual(combined.children[0][0], 'x__in')
+        self.assertIs(combined.children[0][1], value)
 
     def test_qcomb_003_empty_or_preserves_identity_in_both_operand_orders(self):
         """QCOMB-003: Empty OR preserves identity-like operand semantics."""
-        self.assertTrue(True)
+        q = Q(x__in={}.keys())
+
+        self.assertEqual(Q() | q, q)
+        self.assertEqual(q | Q(), q)
 
     def test_qcomb_005_empty_or_does_not_mutate_operands_or_value(self):
         """QCOMB-005: Empty OR leaves both operands and their value unchanged."""
-        self.assertTrue(True)
+        empty = Q()
+        value = {}.keys()
+        q = Q(x__in=value)
+        empty_children = empty.children[:]
+        q_children = q.children[:]
+
+        left_combined = empty | q
+        right_combined = q | empty
+
+        self.assertEqual(empty.children, empty_children)
+        self.assertEqual(q.children, q_children)
+        self.assertIs(q.children[0][1], value)
+        self.assertIs(left_combined.children[0][1], value)
+        self.assertIs(right_combined.children[0][1], value)
+        self.assertIsNot(left_combined.children, q.children)
+        self.assertIsNot(right_combined.children, q.children)
 
     def test_qcomb_006_empty_or_accepts_standalone_non_pickleable_value(self):
         """QCOMB-006: Empty OR doesn't reject an accepted non-pickleable value."""
-        self.assertTrue(True)
+        class NonPickleable:
+            def __reduce__(self):
+                raise TypeError('cannot be pickled')
+
+        value = NonPickleable()
+        q = Q(x__in=value)
+
+        self.assertIs((q | Q()).children[0][1], value)
 
     def test_combine_not_q_object(self):
         obj = object()
