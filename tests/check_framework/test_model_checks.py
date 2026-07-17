@@ -3,6 +3,7 @@ from unittest import mock
 from django.core import checks
 from django.core.checks import Error, Warning
 from django.db import models
+from django.db.migrations.state import ModelState
 from django.test import SimpleTestCase, TestCase, skipUnlessDBFeature
 from django.test.utils import (
     isolate_apps, modify_settings, override_settings, override_system_checks,
@@ -376,6 +377,129 @@ def mocked_is_overridden(self, setting):
 @isolate_apps('check_framework.apps.CheckDefaultPKConfig', attr_name='apps')
 @override_system_checks([checks.model_checks.check_all_models])
 class ModelDefaultAutoFieldTests(SimpleTestCase):
+    def test_pkw_004_genuinely_auto_created_pk_continues_to_produce_w042_under_existing_conditions(self):
+        """GUID: PKW-004"""
+        class Model(models.Model):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        self.assertEqual(
+            [(error.id, error.obj) for error in errors],
+            [('models.W042', Model)],
+        )
+
+    def test_pkw_005_regression_distinguishes_inherited_explicit_pk_from_genuinely_auto_created_pk(self):
+        """GUID: PKW-005"""
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            pass
+
+        class AutoCreatedPKModel(models.Model):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        self.assertEqual(
+            [error.obj for error in errors if error.id == 'models.W042'],
+            [AutoCreatedPKModel],
+        )
+
+    def test_pkw_006_correction_leaves_unrelated_system_checks_unchanged(self):
+        """GUID: PKW-006"""
+        class Model1(models.Model):
+            id = models.AutoField(primary_key=True)
+
+            class Meta:
+                db_table = 'duplicate_table'
+
+        class Model2(models.Model):
+            id = models.AutoField(primary_key=True)
+
+            class Meta:
+                db_table = 'duplicate_table'
+
+        self.assertEqual(
+            checks.run_checks(app_configs=self.apps.get_app_configs()),
+            [
+                Error(
+                    "db_table 'duplicate_table' is used by multiple models: "
+                    "check_framework.Model1, check_framework.Model2.",
+                    obj='duplicate_table',
+                    id='models.E028',
+                ),
+            ],
+        )
+
+    def test_pkw_006_correction_leaves_supported_model_inheritance_behavior_unchanged(self):
+        """GUID: PKW-006"""
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            pass
+
+        parent_link = Child._meta.parents[Parent]
+        self.assertIs(Child._meta.pk, parent_link)
+        self.assertIsInstance(parent_link, models.OneToOneField)
+        self.assertTrue(parent_link.remote_field.parent_link)
+        self.assertIs(parent_link.remote_field.model, Parent)
+
+    def test_pkw_006_correction_leaves_migration_behavior_unchanged(self):
+        """GUID: PKW-006"""
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            pass
+
+        state_before_checks = ModelState.from_model(Child)
+        checks.run_checks(app_configs=self.apps.get_app_configs())
+        state_after_checks = ModelState.from_model(Child)
+        self.assertEqual(state_after_checks, state_before_checks)
+
+    def test_pkw_001_descendant_with_explicit_pk_from_supported_ancestor_does_not_produce_w042(self):
+        """GUID: PKW-001"""
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        self.assertFalse(any(error.obj is Child and error.id == 'models.W042' for error in errors))
+
+    def test_pkw_002_pkw_001_descendant_gets_no_default_auto_field_guidance(self):
+        """GUID: PKW-002"""
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        child_hints = [error.hint for error in errors if error.obj is Child and error.hint]
+        self.assertFalse(any('DEFAULT_AUTO_FIELD' in hint for hint in child_hints))
+
+    def test_explicit_inherited_parent_link(self):
+        class Parent(models.Model):
+            id = models.AutoField(primary_key=True)
+
+        class Child(Parent):
+            parent_ptr = models.OneToOneField(Parent, models.CASCADE, parent_link=True)
+
+        self.assertEqual(checks.run_checks(app_configs=self.apps.get_app_configs()), [])
+
+    def test_auto_created_inherited_pk(self):
+        class Parent(models.Model):
+            pass
+
+        class Child(Parent):
+            pass
+
+        errors = checks.run_checks(app_configs=self.apps.get_app_configs())
+        self.assertEqual([error.obj for error in errors if error.id == 'models.W042'], [Parent])
+
     def test_auto_created_pk(self):
         class Model(models.Model):
             pass
