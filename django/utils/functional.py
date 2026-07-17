@@ -435,6 +435,15 @@ class SimpleLazyObject(LazyObject):
     # Reflected addition preserves the direct operation's operand order,
     # return value, and exceptions. (RADD-001, RADD-003, RADD-005, RADD-006)
     def __radd__(self, other):
+        # Lifecycle pseudocode (RADD-002, RADD-004, RADD-007):
+        # - Before this operation is requested, leave an unresolved wrapper in
+        #   its empty state and do not invoke its setup callable. (RADD-007)
+        # - On entry, if the wrapper is empty, invoke setup before selecting
+        #   the wrapped value as the right operand; transition to resolved.
+        #   (RADD-002)
+        # - Otherwise, keep the resolved wrapped value and do not invoke setup
+        #   again. (RADD-004)
+        # - Add ``other`` to that selected wrapped value and return the result.
         if self._wrapped is empty:
             self._setup()
         return operator.add(other, self._wrapped)
