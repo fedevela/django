@@ -65,6 +65,13 @@ def json_script(value, element_id=None):
     value is safe to be output anywhere except for inside a tag attribute. Wrap
     the escaped JSON in a script tag.
     """
+    # JSONSCRIPT-001 pseudocode:
+    # - Accept VALUE, optional ELEMENT_ID, and an optional JSON ENCODER class.
+    # JSONSCRIPT-002 / JSONSCRIPT-003 pseudocode:
+    # - If ENCODER was supplied, select ENCODER for serialization.
+    # - Otherwise, select DjangoJSONEncoder to preserve existing calls and output.
+    # - Serialize VALUE with the selected encoder; propagate serialization errors.
+    # - Escape and wrap the serialized value using the existing script-tag flow.
     from django.core.serializers.json import DjangoJSONEncoder
 
     json_str = json.dumps(value, cls=DjangoJSONEncoder).translate(_json_script_escapes)
