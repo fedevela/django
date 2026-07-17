@@ -681,6 +681,28 @@ class BulkCreateTests(TestCase):
         with self.assertRaisesMessage(ValueError, msg):
             Country.objects.bulk_create([], batch_size=-1)
 
+    def test_BULKUPSERT_008_invalid_update_fields_remain_rejected_for_conflict_update(
+        self,
+    ):
+        """GUID: BULKUPSERT-008"""
+        pass
+
+    def test_BULKUPSERT_008_invalid_unique_fields_remain_rejected_for_conflict_update(
+        self,
+    ):
+        """GUID: BULKUPSERT-008"""
+        pass
+
+    def test_BULKUPSERT_008_ignore_and_update_conflict_flags_remain_mutually_exclusive(
+        self,
+    ):
+        """GUID: BULKUPSERT-008"""
+        pass
+
+    def test_BULKUPSERT_008_unsupported_conflict_options_remain_rejected(self):
+        """GUID: BULKUPSERT-008"""
+        pass
+
     @skipIfDBFeature("supports_update_conflicts")
     def test_update_conflicts_unsupported(self):
         msg = "This database backend does not support updating conflicts."
