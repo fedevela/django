@@ -4,6 +4,8 @@ import io
 import os
 import shutil
 import sys
+import warnings
+from contextlib import contextmanager
 from unittest import mock
 
 from django.apps import apps
@@ -14,15 +16,21 @@ from django.db import (
     OperationalError,
     connection,
     connections,
+    migrations,
     models,
 )
 from django.db.backends.base.schema import BaseDatabaseSchemaEditor
 from django.db.backends.utils import truncate_name
+from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.exceptions import InconsistentMigrationHistory
+from django.db.migrations.loader import MigrationLoader
+from django.db.migrations.optimizer import MigrationOptimizer
 from django.db.migrations.recorder import MigrationRecorder
+from django.db.migrations.state import ProjectState
 from django.test import TestCase, override_settings, skipUnlessDBFeature
 from django.test.utils import captured_stdout
 from django.utils import timezone
+from django.utils.deprecation import RemovedInDjango51Warning
 from django.utils.version import get_docs_version
 
 from .models import UnicodeModel, UnserializableModel
@@ -2718,6 +2726,446 @@ class SquashMigrationsTests(MigrationTestBase):
     """
     Tests running the squashmigrations command.
     """
+
+    migration_module = "migrations.test_migrations_index_together"
+
+    # DJANGO-003, DJANGO-004, DJANGO-005 integration seam: this fixture owns the
+    # temporary original/replacement migration artifacts. Executable-equivalence
+    # tests remain in this class and connect those artifacts to the existing
+    # MigrationLoader/MigrationExecutor and backend-introspection boundaries;
+    # backend normalization belongs to test support, not migration operations.
+    @contextmanager
+    def squash_index_together_migrations(self):
+        with self.temporary_migration_module(
+            module=self.migration_module
+        ) as migration_dir:
+            call_command(
+                "squashmigrations",
+                "migrations",
+                "0002",
+                interactive=False,
+                verbosity=0,
+            )
+            migration_name = "0001_squashed_0002_rename_index"
+            migration_file = os.path.join(migration_dir, f"{migration_name}.py")
+            with open(migration_file, encoding="utf-8") as fp:
+                migration_source = fp.read()
+            historical_sources = []
+            for name in ("0001_initial.py", "0002_rename_index.py"):
+                with open(os.path.join(migration_dir, name), encoding="utf-8") as fp:
+                    historical_sources.append(fp.read())
+            migration = MigrationLoader(connection).get_migration(
+                "migrations", migration_name
+            )
+            yield migration_source, migration, historical_sources
+
+    @contextmanager
+    def squash_index_together_scenario(self, module, migration_name):
+        with self.temporary_migration_module(module=module) as migration_dir:
+            call_command(
+                "squashmigrations",
+                "migrations",
+                "0002",
+                interactive=False,
+                verbosity=0,
+            )
+            migration_file = os.path.join(migration_dir, f"{migration_name}.py")
+            with open(migration_file, encoding="utf-8") as fp:
+                migration_source = fp.read()
+            migration = MigrationLoader(connection).get_migration(
+                "migrations", migration_name
+            )
+            yield migration_source, migration
+
+    def apply_index_together_migrations(self, using, target, replace_migrations=True):
+        database = connections[using]
+        executor = MigrationExecutor(database)
+        if not replace_migrations:
+            executor.loader = MigrationLoader(database, replace_migrations=False)
+        plan = executor.migration_plan([target])
+        state = executor.migrate([target], plan=plan)
+        return executor, plan, state
+
+    def get_book_index_definitions(self, using):
+        database = connections[using]
+        with database.cursor() as cursor:
+            constraints = database.introspection.get_constraints(
+                cursor, "migrations_book"
+            )
+        return {
+            name: {
+                "columns": tuple(definition["columns"]),
+                "orders": tuple(definition.get("orders", ())),
+                "type": definition.get("type"),
+            }
+            for name, definition in constraints.items()
+            if definition["index"] and not definition["unique"]
+        }
+
+    def unapply_index_together_migrations(self, using):
+        executor = MigrationExecutor(connections[using])
+        executor.migrate([("migrations", None)])
+
+    def test_django_001_fully_superseded_index_together_keeps_final_indexes(self):
+        """
+        GUID: DJANGO-001 - Normal squashing of a fully superseded index_together
+        transition keeps only the final indexes state.
+        """
+        with self.squash_index_together_migrations() as (
+            migration_source,
+            migration,
+            _,
+        ):
+            self.assertNotIn("index_together", migration_source)
+            self.assertNotIn("RenameIndex", migration_source)
+            self.assertEqual(len(migration.operations), 1)
+            operation = migration.operations[0]
+            self.assertNotIn("index_together", operation.options)
+            self.assertEqual(
+                operation.options["indexes"],
+                [models.Index(fields=["author", "title"], name="book_idx")],
+            )
+
+    def test_django_002_squashed_transition_emits_no_deprecation_warning(self):
+        """
+        GUID: DJANGO-002 - Checks on the unmodified squashed migration emit no
+        index_together warning attributable to the superseded transition.
+        """
+        with self.squash_index_together_migrations() as (_, migration, _):
+            state = ProjectState()
+            with warnings.catch_warnings(record=True) as caught_warnings:
+                warnings.simplefilter("always", RemovedInDjango51Warning)
+                for operation in migration.operations:
+                    operation.state_forwards("migrations", state)
+                    model = state.apps.get_model("migrations", "Book")
+                    model.check()
+            self.assertFalse(
+                any(
+                    issubclass(warning.category, RemovedInDjango51Warning)
+                    and "index_together" in str(warning.message)
+                    for warning in caught_warnings
+                )
+            )
+
+    def test_django_003_equivalent_databases_reach_equivalent_final_indexes(self):
+        """
+        GUID: DJANGO-003 - Applying the original sequence and its squashed
+        replacement to equivalent databases produces equivalent final indexes.
+        """
+        with self.squash_index_together_migrations():
+            try:
+                self.apply_index_together_migrations(
+                    "default",
+                    ("migrations", "0002_rename_index"),
+                    replace_migrations=False,
+                )
+                self.apply_index_together_migrations(
+                    "other",
+                    ("migrations", "0001_squashed_0002_rename_index"),
+                )
+                self.assertEqual(
+                    self.get_book_index_definitions("default"),
+                    self.get_book_index_definitions("other"),
+                )
+            finally:
+                self.unapply_index_together_migrations("default")
+                self.unapply_index_together_migrations("other")
+
+    def test_django_004_squash_retains_every_final_index_definition(self):
+        """
+        GUID: DJANGO-004 - Every final Meta.indexes entry retains its fields
+        and definition after squashing.
+        """
+        with self.squash_index_together_migrations():
+            try:
+                original_executor, _, _ = self.apply_index_together_migrations(
+                    "default",
+                    ("migrations", "0002_rename_index"),
+                    replace_migrations=False,
+                )
+                _, _, squashed_state = self.apply_index_together_migrations(
+                    "other",
+                    ("migrations", "0001_squashed_0002_rename_index"),
+                )
+                original_state = original_executor.loader.project_state(
+                    ("migrations", "0002_rename_index")
+                )
+                expected_indexes = original_state.models[
+                    "migrations", "book"
+                ].options["indexes"]
+                squashed_indexes = squashed_state.models[
+                    "migrations", "book"
+                ].options["indexes"]
+                self.assertEqual(squashed_indexes, expected_indexes)
+
+                definitions = self.get_book_index_definitions("other")
+                self.assertEqual(
+                    set(definitions), {index.name for index in expected_indexes}
+                )
+                for index in expected_indexes:
+                    definition = definitions[index.name]
+                    self.assertEqual(
+                        definition["columns"],
+                        tuple(field.removeprefix("-") for field in index.fields),
+                    )
+                    if definition["orders"]:
+                        self.assertEqual(
+                            definition["orders"],
+                            tuple(
+                                "DESC" if field.startswith("-") else "ASC"
+                                for field in index.fields
+                            ),
+                        )
+            finally:
+                self.unapply_index_together_migrations("default")
+                self.unapply_index_together_migrations("other")
+
+    def test_django_005_generated_squashed_migration_loads_and_applies(self):
+        """
+        GUID: DJANGO-005 - The generated squashed migration remains valid,
+        loadable, and executable.
+        """
+        target = ("migrations", "0001_squashed_0002_rename_index")
+        with self.squash_index_together_migrations() as (_, migration, _):
+            self.assertEqual(
+                migration.replaces,
+                [
+                    ("migrations", "0001_initial"),
+                    ("migrations", "0002_rename_index"),
+                ],
+            )
+            try:
+                executor, plan, state = self.apply_index_together_migrations(
+                    "default", target
+                )
+                self.assertEqual(plan, [(migration, False)])
+                self.assertIn(("migrations", "book"), state.models)
+                self.assertTableExists("migrations_book")
+                executor.loader.build_graph()
+                self.assertIn(target, executor.recorder.applied_migrations())
+            finally:
+                self.unapply_index_together_migrations("default")
+
+    def test_django_006_normal_squashing_needs_no_manual_history_rewrite(self):
+        """
+        GUID: DJANGO-006 - The normal squashing workflow eliminates the
+        transition warning without manual historical migration rewrites.
+        """
+        with self.squash_index_together_migrations() as (
+            migration_source,
+            _,
+            historical_sources,
+        ):
+            self.assertIn("migrations.CreateModel(", migration_source)
+            self.assertIn("index_together", historical_sources[0])
+            self.assertIn("migrations.RenameIndex(", historical_sources[1])
+
+    # DJANGO-007 through DJANGO-010 integration boundary: scenario migrations
+    # belong to test-only migration modules; this command-test class owns the
+    # squash/load/apply orchestration and comparison of operations and project
+    # state. Database index observations remain behind backend introspection,
+    # and warning observations remain behind Django's model-check boundary.
+    def test_django_007_fully_superseded_transition_with_unrelated_operations_preserves_behavior_and_state(
+        self,
+    ):
+        """
+        GUID: DJANGO-007 - Given unrelated operations squashed alongside a
+        fully superseded index_together transition, applying the squashed
+        migration preserves their observable behavior and resulting state.
+        """
+        module = "migrations.test_migrations_index_together_unrelated"
+        squashed_name = "0001_squashed_0002_rename_index_and_add_code"
+        with self.squash_index_together_scenario(module, squashed_name) as (
+            _,
+            migration,
+        ):
+            self.assertEqual(
+                [type(operation) for operation in migration.operations],
+                [migrations.CreateModel, migrations.CreateModel],
+            )
+            publisher = next(
+                operation
+                for operation in migration.operations
+                if operation.name == "Publisher"
+            )
+            self.assertEqual([name for name, _ in publisher.fields], ["id", "code"])
+            try:
+                original_executor, _, original_state = (
+                    self.apply_index_together_migrations(
+                        "default",
+                        ("migrations", "0002_rename_index_and_add_code"),
+                        replace_migrations=False,
+                    )
+                )
+                _, _, squashed_state = self.apply_index_together_migrations(
+                    "other", ("migrations", squashed_name)
+                )
+                self.assertEqual(
+                    original_state.models[("migrations", "publisher")],
+                    squashed_state.models[("migrations", "publisher")],
+                )
+                self.assertEqual(
+                    original_executor.loader.project_state(
+                        ("migrations", "0002_rename_index_and_add_code")
+                    ).models[("migrations", "publisher")],
+                    squashed_state.models[("migrations", "publisher")],
+                )
+                self.assertColumnExists("migrations_publisher", "code", using="default")
+                self.assertColumnExists("migrations_publisher", "code", using="other")
+            finally:
+                self.unapply_index_together_migrations("default")
+                self.unapply_index_together_migrations("other")
+
+    def test_django_008_partially_superseded_transition_preserves_necessary_index_behavior(
+        self,
+    ):
+        """
+        GUID: DJANGO-008 - Given a final indexes state that only partially
+        supersedes index_together, squashing preserves the necessary earlier
+        index behavior.
+        """
+        module = "migrations.test_migrations_index_together_partial"
+        squashed_name = "0001_squashed_0002_rename_author_title_index"
+        with self.squash_index_together_scenario(module, squashed_name) as (
+            _,
+            migration,
+        ):
+            operation = migration.operations[0]
+            self.assertEqual(
+                operation.options["index_together"], {("title", "isbn")}
+            )
+            self.assertEqual(
+                operation.options["indexes"],
+                [models.Index(fields=("author", "title"), name="book_author_idx")],
+            )
+            try:
+                self.apply_index_together_migrations(
+                    "default",
+                    ("migrations", "0002_rename_author_title_index"),
+                    replace_migrations=False,
+                )
+                self.apply_index_together_migrations(
+                    "other", ("migrations", squashed_name)
+                )
+                self.assertEqual(
+                    self.get_book_index_definitions("default"),
+                    self.get_book_index_definitions("other"),
+                )
+                self.assertIndexExists(
+                    "migrations_book", ["title", "isbn"], using="other"
+                )
+            finally:
+                self.unapply_index_together_migrations("default")
+                self.unapply_index_together_migrations("other")
+
+    def test_django_009_final_state_depending_on_index_together_is_not_fully_transitioned(
+        self,
+    ):
+        """
+        GUID: DJANGO-009 - Given a final state that actively depends on
+        index_together, squashing does not represent it as fully transitioned
+        solely to suppress its deprecation warning.
+        """
+        module = "migrations.test_migrations_index_together_partial"
+        squashed_name = "0001_squashed_0002_rename_author_title_index"
+        with self.squash_index_together_scenario(module, squashed_name) as (
+            migration_source,
+            migration,
+        ):
+            self.assertIn("index_together", migration_source)
+            state = ProjectState()
+            with warnings.catch_warnings(record=True) as caught_warnings:
+                warnings.simplefilter("always", RemovedInDjango51Warning)
+                for operation in migration.operations:
+                    operation.state_forwards("migrations", state)
+                model = state.apps.get_model("migrations", "Book")
+            self.assertEqual(model._meta.index_together, (("title", "isbn"),))
+            self.assertTrue(
+                any(
+                    issubclass(warning.category, RemovedInDjango51Warning)
+                    and "index_together" in str(warning.message)
+                    for warning in caught_warnings
+                )
+            )
+
+    def test_django_010_regression_coverage_reduces_fully_superseded_transition_and_preserves_squashing_behavior(
+        self,
+    ):
+        """
+        GUID: DJANGO-010 - Regression coverage demonstrates reduction of a
+        fully superseded transition while preserving unrelated operations and
+        index behavior that remains necessary during migration squashing.
+        """
+        existing_index = models.Index(fields=["isbn"], name="book_isbn_idx")
+        operations = [
+            migrations.CreateModel(
+                "Book",
+                [
+                    ("author", models.CharField(max_length=255)),
+                    ("title", models.CharField(max_length=255)),
+                    ("isbn", models.CharField(max_length=13)),
+                ],
+                options={
+                    "indexes": [existing_index],
+                    "index_together": {
+                        ("author", "title"),
+                        ("title", "isbn"),
+                    },
+                },
+            ),
+            migrations.RenameIndex(
+                "Book",
+                new_name="book_author_idx",
+                old_fields=("author", "title"),
+            ),
+            migrations.CreateModel(
+                "Publisher", [("code", models.CharField(max_length=8))]
+            ),
+        ]
+        optimized = MigrationOptimizer().optimize(operations, "migrations")
+        self.assertEqual(len(optimized), 2)
+        self.assertEqual(optimized[1], operations[2])
+        self.assertEqual(
+            optimized[0].options["index_together"], {("title", "isbn")}
+        )
+        self.assertEqual(
+            optimized[0].options["indexes"],
+            [
+                existing_index,
+                models.Index(
+                    fields=("author", "title"), name="book_author_idx"
+                ),
+            ],
+        )
+
+        fully_superseded = MigrationOptimizer().optimize(
+            [
+                migrations.CreateModel(
+                    "Book",
+                    [
+                        ("author", models.CharField(max_length=255)),
+                        ("title", models.CharField(max_length=255)),
+                    ],
+                    options={"index_together": {("author", "title")}},
+                ),
+                migrations.RenameIndex(
+                    "Book",
+                    new_name="book_author_idx",
+                    old_fields=("author", "title"),
+                ),
+            ],
+            "migrations",
+        )
+        self.assertEqual(len(fully_superseded), 1)
+        self.assertNotIn("index_together", fully_superseded[0].options)
+        self.assertEqual(
+            fully_superseded[0].options["indexes"],
+            [
+                models.Index(
+                    fields=("author", "title"), name="book_author_idx"
+                )
+            ],
+        )
 
     def test_squashmigrations_squashes(self):
         """

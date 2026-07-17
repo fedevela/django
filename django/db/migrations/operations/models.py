@@ -216,6 +216,70 @@ class CreateModel(ModelOperation):
                 ),
             ]
         elif (
+            isinstance(operation, AddIndex)
+            and self.name_lower == operation.model_name_lower
+        ):
+            options = self.options.copy()
+            options[AddIndex.option_name] = [
+                *options.get(AddIndex.option_name, []),
+                operation.index,
+            ]
+            return [
+                CreateModel(
+                    self.name,
+                    fields=self.fields,
+                    options=options,
+                    bases=self.bases,
+                    managers=self.managers,
+                ),
+            ]
+        elif (
+            isinstance(operation, RemoveIndex)
+            and self.name_lower == operation.model_name_lower
+        ):
+            options = self.options.copy()
+            options[RemoveIndex.option_name] = [
+                index
+                for index in options.get(RemoveIndex.option_name, [])
+                if index.name != operation.name
+            ]
+            return [
+                CreateModel(
+                    self.name,
+                    fields=self.fields,
+                    options=options,
+                    bases=self.bases,
+                    managers=self.managers,
+                ),
+            ]
+        elif (
+            isinstance(operation, RenameIndex)
+            and self.name_lower == operation.model_name_lower
+            and operation.old_fields
+            and tuple(operation.old_fields)
+            in normalize_together(self.options.get("index_together"))
+        ):
+            options = self.options.copy()
+            index_together = set(normalize_together(options["index_together"]))
+            index_together.remove(tuple(operation.old_fields))
+            if index_together:
+                options["index_together"] = index_together
+            else:
+                del options["index_together"]
+            options["indexes"] = [
+                *options.get("indexes", []),
+                models.Index(fields=operation.old_fields, name=operation.new_name),
+            ]
+            return [
+                CreateModel(
+                    self.name,
+                    fields=self.fields,
+                    options=options,
+                    bases=self.bases,
+                    managers=self.managers,
+                ),
+            ]
+        elif (
             isinstance(operation, FieldOperation)
             and self.name_lower == operation.model_name_lower
         ):
