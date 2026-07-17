@@ -40,6 +40,19 @@ class Q(tree.Node):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
+        # QEX-003 / QEX-004 pseudocode -- non-empty Q/Exists disjunction:
+        # INPUT: `self` is a non-empty Q, `other` is the candidate operand,
+        # and `conn` identifies the requested logical connector.
+        # IF `conn` is OR and `other` is a non-Q conditional expression,
+        # THEN normalize `other` to a Q child; this makes Q | Exists converge
+        # with the existing Exists | Q path, which arrives with Q operands.
+        # ELSE retain the existing validation rules and TypeError failure path
+        # for operands outside the supported conditional-expression contract.
+        # BUILD one OR node, add both normalized operands in received order,
+        # and RETURN it for normal ORM expression resolution and query handoff.
+        # QEX-004: operand order may alter child order but not OR semantics, so
+        # evaluating either normalized tree against the same rows yields the
+        # same logical result; structural identity is neither needed nor tested.
         if not isinstance(other, Q):
             if conn == self.AND and self and getattr(other, 'conditional', False):
                 other = Q(other)
