@@ -96,6 +96,10 @@ class BoundField:
             attrs.setdefault(
                 "id", self.html_initial_id if only_initial else self.auto_id
             )
+        # Architecture seam (DJANGO-004): BoundField owns hidden-initial
+        # transport across bound redisplay. Form and formset rendering consume
+        # this value; they must not reconstruct it from visible bound data or
+        # by resolving the callable default again.
         # Pseudocode (DJANGO-004) -- preserve validation state across submits:
         # INPUT: the requested visible-or-hidden widget, form binding state,
         # submitted visible value, and submitted hidden initial baseline.
@@ -153,6 +157,10 @@ class BoundField:
         return self.field.prepare_value(data)
 
     def _has_changed(self):
+        # Architecture contract (DJANGO-003, DJANGO-004): BoundField owns
+        # baseline decoding and field-level change classification. BaseForm
+        # aggregates that result and BaseFormSet only consumes it for extra-form
+        # handling, keeping inline and ArrayField concerns out of this boundary.
         # Pseudocode (DJANGO-003, DJANGO-004) -- classify the extra inline:
         # INPUT: visible submitted data and the callable-default field's hidden
         # initial data when hidden-initial comparison is enabled.
