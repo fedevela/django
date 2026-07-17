@@ -427,19 +427,100 @@ class MethodDecoratorTests(SimpleTestCase):
 
     def test_mdp_005_bound_instance_and_supplied_arguments_are_delivered_unchanged(self):
         """GUID: MDP-005 - Preserve binding and argument delivery."""
-        self.assertTrue(True)
+        observed = []
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self, *args, **kwargs):
+                observed.append((self, args, kwargs))
+
+        instance = Test()
+        positional = (object(), object())
+        keyword_value = object()
+
+        instance.method(*positional, keyword=keyword_value)
+
+        self.assertEqual(len(observed), 1)
+        bound_instance, received_args, received_kwargs = observed[0]
+        self.assertIs(bound_instance, instance)
+        self.assertEqual(received_args, positional)
+        self.assertEqual(received_kwargs, {"keyword": keyword_value})
+        self.assertIs(received_args[0], positional[0])
+        self.assertIs(received_args[1], positional[1])
+        self.assertIs(received_kwargs["keyword"], keyword_value)
 
     def test_mdp_006_original_return_value_is_delivered_unchanged(self):
         """GUID: MDP-006 - Preserve the original return value."""
-        self.assertTrue(True)
+        expected = object()
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                return expected
+
+        self.assertIs(Test().method(), expected)
 
     def test_mdp_007_unhandled_exception_remains_observable_unchanged(self):
         """GUID: MDP-007 - Preserve an unhandled exception for the caller."""
-        self.assertTrue(True)
+        class DistinguishableError(Exception):
+            pass
+
+        expected = DistinguishableError("expected exception")
+
+        def decorator(func):
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                raise expected
+
+        with self.assertRaises(DistinguishableError) as captured:
+            Test().method()
+
+        self.assertIs(captured.exception, expected)
 
     def test_mdp_008_decorator_executes_once_for_every_method_invocation(self):
         """GUID: MDP-008 - Execute the decorator once per invocation."""
-        self.assertTrue(True)
+        executions = 0
+
+        def decorator(func):
+            nonlocal executions
+            executions += 1
+
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+            return wrapper
+
+        class Test:
+            @method_decorator(decorator)
+            def method(self):
+                pass
+
+        # Ignore method_decorator()'s decoration-time metadata probe. This
+        # requirement concerns applying the decorator to each runtime call.
+        executions = 0
+        instance = Test()
+
+        for expected_executions in range(1, 4):
+            instance.method()
+            self.assertEqual(executions, expected_executions)
 
     def test_mdp_009_decorator_custom_attribute_and_value_remain_on_resulting_method(self):
         """GUID: MDP-009 - Preserve a decorator-produced custom attribute and value."""
