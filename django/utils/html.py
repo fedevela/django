@@ -52,6 +52,9 @@ def escapejs(value):
     return mark_safe(str(value).translate(_js_escapes))
 
 
+# JSONSCRIPT-004 / JSONSCRIPT-010 architecture boundary: This module-level map
+# owns the script-safe post-serialization policy shared by the default and custom
+# encoder paths. Tests in utils_tests.test_html own its custom-encoder contract.
 _json_script_escapes = {
     ord(">"): "\\u003E",
     ord("<"): "\\u003C",
@@ -59,6 +62,10 @@ _json_script_escapes = {
 }
 
 
+# JSONSCRIPT-005 / JSONSCRIPT-006 / JSONSCRIPT-007 architecture boundary:
+# json_script() owns both script-element shapes, while format_html() is the sole
+# safe-result assembly seam. Encoder selection ends at the serialized payload and
+# therefore cannot own or vary either output structure or safe-value classification.
 def json_script(value, element_id=None, encoder=None):
     """
     Escape all the HTML/XML special characters with their unicode escapes, so
