@@ -96,6 +96,17 @@ class Combinable:
     def __and__(self, other):
         # QEX-001 / QEX-002 integration seam: conditional expression pairs
         # depend on Q for logical-tree composition and query handoff.
+        # QEX-007 / QEX-008 / QEX-009 AND compatibility logic:
+        # - Receive the expression-led left operand and candidate counterpart.
+        # - If both operands already advertise conditional semantics, preserve
+        #   the established expression-led handoff: place the left expression
+        #   in Q, preserve an existing Q counterpart for the Q boundary (or
+        #   let that boundary classify another conditional), and request AND.
+        #   This keeps Exists-first operand order and query semantics while the
+        #   same branch remains available to supported non-Exists operands.
+        # - Return the resulting Q tree to the unchanged ORM resolution path.
+        # - Otherwise stop at this operator boundary and raise the established
+        #   NotImplementedError; do not construct a logical tree.
         # QEX-005 logic (Exists(...) & Q()):
         # - Require both operands to advertise conditional semantics.
         # - Wrap the Exists-side conditional as a Q node, preserve the empty
@@ -124,6 +135,17 @@ class Combinable:
     def __or__(self, other):
         # QEX-003 / QEX-004 integration seam: conditional expression pairs
         # depend on Q for logical-tree composition and query handoff.
+        # QEX-007 / QEX-008 / QEX-009 OR compatibility logic:
+        # - Receive the expression-led left operand and candidate counterpart.
+        # - If both operands already advertise conditional semantics, preserve
+        #   the established expression-led handoff: place the left expression
+        #   in Q, preserve an existing Q counterpart for the Q boundary (or
+        #   let that boundary classify another conditional), and request OR.
+        #   This keeps Exists-first operand order and query semantics while the
+        #   same branch remains available to supported non-Exists operands.
+        # - Return the resulting Q tree to the unchanged ORM resolution path.
+        # - Otherwise stop at this operator boundary and raise the established
+        #   NotImplementedError; do not construct a logical tree.
         # QEX-006 logic (Exists(...) | Q()):
         # - Require both operands to advertise conditional semantics.
         # - Wrap the Exists-side conditional as a Q node, preserve the empty

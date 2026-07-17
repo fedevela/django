@@ -45,6 +45,19 @@ class Q(tree.Node):
     # compilation continues to consume the resulting Q through the existing
     # resolve_expression()/_add_q() seam.
     def _combine(self, other, conn):
+        # QEX-008 / QEX-009 compatibility-boundary logic:
+        # - Receive a Q left operand, a candidate logical counterpart, and the
+        #   requested connector from __and__() or __or__().
+        # - If the counterpart is already a Q, bypass expression adaptation;
+        #   preserve the established empty-Q clone branches and, when both
+        #   sides are nonempty, preserve connector and left-to-right order in
+        #   the composed Q tree.
+        # - Otherwise, continue only through the separately supported
+        #   conditional-expression path for AND or OR; normalize that operand
+        #   to Q and hand it to the same empty/composition branches.
+        # - If either the connector or counterpart is outside that supported
+        #   path, stop before tree construction and raise TypeError with the
+        #   rejected operand; do not coerce or add a new counterpart type.
         # QEX-005 / QEX-006 logic (Q() first, plus the Q handoff for
         # Exists(...) first):
         # - Accept only AND or OR when adapting a non-Q operand, and require
