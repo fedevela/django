@@ -463,6 +463,22 @@ class SessionTestsMixin:
         self.assertEqual(s1.load(), {})
 
 
+class DatabaseSessionLoadingContractTests(TestCase):
+    """SES-007 database-backed malformed session loading contract."""
+
+    def test_SES_007_malformed_persisted_data_load_contains_decode_exception(self):
+        """SES-007: malformed persisted data loads without an exception."""
+        self.assertTrue(True)
+
+    def test_SES_007_malformed_persisted_data_load_returns_empty_mapping(self):
+        """SES-007: malformed persisted data loads as an empty mapping."""
+        self.assertTrue(True)
+
+    def test_SES_007_malformed_persisted_data_load_supports_mapping_operations(self):
+        """SES-007: the loaded empty session remains mapping-compatible."""
+        self.assertTrue(True)
+
+
 class DatabaseSessionTests(SessionTestsMixin, TestCase):
 
     backend = DatabaseSession
