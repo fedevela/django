@@ -307,21 +307,67 @@ class AutocompleteJsonViewTests(AdminViewBasicTestCase):
             'pagination': {'more': False},
         })
 
+    def assertInvalidSourceFieldRejectedBeforeSerialization(self, field_name):
+        class SerializationMustNotRunView(AutocompleteJsonView):
+            def serialize_result(self, obj, to_field_name):
+                raise AssertionError('Invalid fields must be rejected before serialization.')
+
+        request = self.factory.get(self.url, {
+            **self.opts,
+            'field_name': field_name,
+        })
+        request.user = self.superuser
+
+        with self.assertRaises(PermissionDenied):
+            SerializationMustNotRunView.as_view(**self.as_view_args)(request)
+
     def test_ACJ_009_nonexistent_source_field_after_serialization_refactor_remains_rejected(self):
         """GUID: ACJ-009 a nonexistent source field remains rejected."""
-        pass
+        self.assertInvalidSourceFieldRejectedBeforeSerialization('does_not_exist')
 
     def test_ACJ_009_source_field_without_related_field_after_serialization_refactor_remains_rejected(self):
         """GUID: ACJ-009 a source field without a related field remains rejected."""
-        pass
+        self.assertInvalidSourceFieldRejectedBeforeSerialization('answer')
 
     def test_ACJ_009_disallowed_target_field_after_serialization_refactor_remains_rejected(self):
         """GUID: ACJ-009 a disallowed target field remains rejected."""
-        pass
+        class DisallowTargetQuestionAdmin(QuestionAdmin):
+            checked_to_fields = []
+
+            def to_field_allowed(self, request, to_field):
+                self.checked_to_fields.append(to_field)
+                return False
+
+        with model_admin(Question, DisallowTargetQuestionAdmin):
+            self.assertInvalidSourceFieldRejectedBeforeSerialization(
+                'question_with_to_field',
+            )
+        self.assertEqual(DisallowTargetQuestionAdmin.checked_to_fields, ['uuid'])
 
     def test_ACJ_009_valid_permitted_target_field_after_serialization_refactor_resolves_unchanged(self):
         """GUID: ACJ-009 a valid permitted target field resolves unchanged."""
-        pass
+        question = Question.objects.create(question='A question')
+
+        class RecordingAutocompleteJsonView(AutocompleteJsonView):
+            to_field_names = []
+
+            def serialize_result(self, obj, to_field_name):
+                self.to_field_names.append(to_field_name)
+                return super().serialize_result(obj, to_field_name)
+
+        request = self.factory.get(self.url, {
+            **self.opts,
+            'field_name': 'question_with_to_field',
+        })
+        request.user = self.superuser
+
+        response = RecordingAutocompleteJsonView.as_view(**self.as_view_args)(request)
+
+        self.assertEqual(RecordingAutocompleteJsonView.to_field_names, ['uuid'])
+        self.assertEqual(json.loads(response.content)['results'], [{
+            'id': str(question.uuid),
+            'text': question.question,
+        }])
 
     def test_success(self):
         q = Question.objects.create(question='Is this a question?')
