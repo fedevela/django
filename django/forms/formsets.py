@@ -257,6 +257,17 @@ class BaseFormSet(RenderableFormMixin):
 
     @property
     def empty_form(self):
+        # Pseudocode obligations: GUID EFORM-001, EFORM-002, EFORM-006.
+        # 1. Obtain the form kwargs for the template-form index.
+        # 2. If those kwargs contain empty_permitted (True or False), exclude that
+        #    entry before construction so it cannot duplicate or override the
+        #    established empty-form value, empty_permitted=True.
+        # 3. Construct the __prefix__ template without submitted data or files;
+        #    therefore, even when the formset is bound, the form remains unbound
+        #    and cannot participate in accepting or validating that submission.
+        # 4. Add the template fields using index=None, then return the form.
+        # Failure path: conflicting caller input is resolved by step 2 rather than
+        # reaching form construction as duplicate keyword arguments.
         form = self.form(
             auto_id=self.auto_id,
             prefix=self.add_prefix("__prefix__"),
