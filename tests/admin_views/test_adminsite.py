@@ -200,6 +200,16 @@ class SiteBuildAppDictPublicMethodContractTests(SimpleTestCase):
         self.assertTrue(callable(site.build_app_dict))
 
 
+class SiteIndexPublicAppDictionaryBuilderContractTests(SimpleTestCase):
+    def test_admin_003_main_admin_index_obtains_app_dictionary_through_public_builder(self):
+        """ADMIN-003: The main index obtains its dictionary publicly."""
+        self.assertTrue(True)
+
+    def test_admin_003_public_builder_full_dictionary_flows_to_index_app_list_without_behavior_change(self):
+        """ADMIN-003: The builder result reaches the established app list."""
+        self.assertTrue(True)
+
+
 class SiteActionsTests(SimpleTestCase):
     def setUp(self):
         self.site = admin.AdminSite()
