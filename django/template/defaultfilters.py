@@ -87,6 +87,18 @@ def json_script(value, element_id=None):
     Output value JSON-encoded, wrapped in a <script type="application/json">
     tag (with an optional id).
     """
+    # JSONSCRIPT-008
+    # Logic obligation: preserve the existing template-filter interface and output.
+    # VERIFICATION:
+    # test_jsonscript_008_existing_filter_interface_render_preserves_output
+    # VERIFICATION:
+    # test_jsonscript_008_python_encoder_selection_does_not_extend_filter_interface
+    # INPUT: receive only the template value and the optional element identifier.
+    # DECISION: if an identifier was supplied, forward it; otherwise forward None.
+    # HANDOFF: call the Python utility with exactly value and element_id, without
+    # exposing, accepting, selecting, or forwarding an encoder from the filter.
+    # OUTPUT: return the utility's rendered script unchanged.
+    # FAILURE: allow serialization and rendering failures to propagate unchanged.
     return _json_script(value, element_id)
 
 
