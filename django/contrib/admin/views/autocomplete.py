@@ -129,6 +129,12 @@ class AutocompleteJsonView(BaseListView):
 
         return term, model_admin, source_field, to_field_name
 
+    # Authorization adapter boundary (GUID: ACJ-008): AutocompleteJsonView
+    # owns permission-check sequencing, while the resolved related ModelAdmin
+    # remains the sole permission authority through has_view_permission().
+    # Queryset and serialization dependencies stay downstream of this adapter
+    # and must not participate in, bypass, or translate its decision.
+
     def has_perm(self, request, obj=None):
         """Check if user has permission to access the related model."""
         return self.model_admin.has_view_permission(request, obj=obj)
