@@ -3,7 +3,11 @@ from itertools import chain
 
 from django.apps import apps
 from django.conf import settings
-from django.contrib.admin.utils import NotRelationField, flatten, get_fields_from_path
+from django.contrib.admin.utils import (
+    NotRelationField,
+    flatten,
+    get_fields_from_path,
+)
 from django.core import checks
 from django.core.exceptions import FieldDoesNotExist
 from django.db import models
@@ -877,18 +881,18 @@ class ModelAdminChecks(BaseModelAdminChecks):
 
     def _check_list_display(self, obj):
         """Check that list_display only contains fields or usable attributes."""
-
         if not isinstance(obj.list_display, (list, tuple)):
             return must_be(
                 "a list or tuple", option="list_display", obj=obj, id="admin.E107"
             )
-        else:
-            return list(
-                chain.from_iterable(
-                    self._check_list_display_item(obj, item, "list_display[%d]" % index)
-                    for index, item in enumerate(obj.list_display)
+        errors = []
+        for index, item in enumerate(obj.list_display):
+            errors.extend(
+                self._check_list_display_item(
+                    obj, item, "list_display[%d]" % index
                 )
             )
+        return errors
 
     def _check_list_display_item(self, obj, item, label):
         if callable(item):
@@ -916,7 +920,10 @@ class ModelAdminChecks(BaseModelAdminChecks):
                         id="admin.E108",
                     )
                 ]
-        if isinstance(field, models.ManyToManyField) or (
+        if (
+            getattr(field, "is_relation", False)
+            and (field.many_to_many or field.one_to_many)
+        ) or (
             getattr(field, "rel", None) and field.rel.field.many_to_one
         ):
             return [

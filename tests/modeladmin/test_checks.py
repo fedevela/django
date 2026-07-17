@@ -1,10 +1,12 @@
+from unittest import mock
+
 from django import forms
 from django.contrib import admin
 from django.contrib.admin import BooleanFieldListFilter, SimpleListFilter
 from django.contrib.admin.options import VERTICAL, ModelAdmin, TabularInline
 from django.contrib.admin.sites import AdminSite
 from django.core.checks import Error
-from django.db.models import CASCADE, F, Field, ForeignKey, Model
+from django.db.models import CASCADE, F, Field, ForeignKey, ManyToManyField, Model
 from django.db.models.functions import Upper
 from django.forms.models import BaseModelFormSet
 from django.test import SimpleTestCase
@@ -506,6 +508,232 @@ class PrepopulatedFieldsCheckTests(CheckTestCase):
 
 
 class ListDisplayTests(CheckTestCase):
+    def test_gev_001_unresolvable_model_or_modeladmin_entry_emits_e108_at_check_time(
+        self,
+    ):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["song"]
+
+        self.assertIsInvalid(
+            TestModelAdmin,
+            Band,
+            "The value of 'list_display[0]' refers to 'song', which is not a "
+            "callable, an attribute of 'TestModelAdmin', or an attribute or method "
+            "on 'modeladmin.Band'.",
+            "admin.E108",
+        )
+
+    def test_gev_002_questionadmin_choice_entry_emits_e108_before_changelist_request(
+        self,
+    ):
+        class Question(Model):
+            pass
+
+        class Choice(Model):
+            question = ForeignKey(Question, CASCADE)
+
+        class QuestionAdmin(ModelAdmin):
+            list_display = ["choice"]
+
+        site = AdminSite()
+        site.register(Question, QuestionAdmin)
+
+        self.assertEqual(
+            site.check([Question._meta.app_config]),
+            [
+                Error(
+                    "The value of 'list_display[0]' refers to 'choice', which is "
+                    "not a callable, an attribute of 'QuestionAdmin', or an "
+                    "attribute or method on 'modeladmin.Question'.",
+                    obj=QuestionAdmin,
+                    id="admin.E108",
+                )
+            ],
+        )
+
+    def test_gev_003_metadata_only_reverse_relation_unresolved_by_label_emits_e108(
+        self,
+    ):
+        class ReverseParent(Model):
+            pass
+
+        class ReverseChild(Model):
+            parent = ForeignKey(
+                ReverseParent,
+                CASCADE,
+                related_name="children",
+                related_query_name="child",
+            )
+
+        class ReverseParentAdmin(ModelAdmin):
+            list_display = ["child"]
+
+        self.assertTrue(ReverseParent._meta.get_field("child").one_to_many)
+        self.assertFalse(hasattr(ReverseParent, "child"))
+        with mock.patch(
+            "django.contrib.admin.checks.label_for_field",
+            side_effect=AttributeError,
+        ) as mocked_label_lookup:
+            self.assertIsInvalid(
+                ReverseParentAdmin,
+                ReverseParent,
+                "The value of 'list_display[0]' refers to 'child', which is not a "
+                "callable, an attribute of 'ReverseParentAdmin', or an attribute or "
+                "method on 'modeladmin.ReverseParent'.",
+                "admin.E108",
+            )
+        mocked_label_lookup.assert_called_once()
+
+    def test_gev_004_metadata_only_m2m_related_name_unresolved_by_label_emits_e108(
+        self,
+    ):
+        class M2MParent(Model):
+            pass
+
+        class M2MChild(Model):
+            parents = ManyToManyField(
+                M2MParent,
+                related_name="children",
+                related_query_name="child",
+            )
+
+        class M2MParentAdmin(ModelAdmin):
+            list_display = ["child"]
+
+        self.assertTrue(M2MParent._meta.get_field("child").many_to_many)
+        self.assertFalse(hasattr(M2MParent, "child"))
+        with mock.patch(
+            "django.contrib.admin.checks.label_for_field",
+            side_effect=AttributeError,
+        ) as mocked_label_lookup:
+            self.assertIsInvalid(
+                M2MParentAdmin,
+                M2MParent,
+                "The value of 'list_display[0]' refers to 'child', which is not a "
+                "callable, an attribute of 'M2MParentAdmin', or an attribute or "
+                "method on 'modeladmin.M2MParent'.",
+                "admin.E108",
+            )
+        mocked_label_lookup.assert_called_once()
+
+    def test_gev_005_valid_model_field_passes_list_display_check_without_e108(self):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["name"]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
+
+    def test_gev_006_valid_callable_passes_list_display_check_without_e108(self):
+        @admin.display(description="Uppercase name")
+        def uppercase_name(obj):
+            return obj.name.upper()
+
+        class TestModelAdmin(ModelAdmin):
+            list_display = [uppercase_name]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
+
+    def test_gev_006_valid_model_attribute_passes_list_display_check_without_e108(
+        self,
+    ):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["decade_published_in"]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
+
+    def test_gev_006_valid_modeladmin_attribute_passes_list_display_check_without_e108(
+        self,
+    ):
+        class TestModelAdmin(ModelAdmin):
+            @admin.display(description="Uppercase name")
+            def uppercase_name(self, obj):
+                return obj.name.upper()
+
+            list_display = ["uppercase_name"]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
+
+    def test_gev_007_mixed_valid_and_invalid_entries_report_only_invalid_entry(self):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["name", "missing", "decade_published_in"]
+
+        self.assertIsInvalid(
+            TestModelAdmin,
+            ValidationTestModel,
+            "The value of 'list_display[1]' refers to 'missing', which is not a "
+            "callable, an attribute of 'TestModelAdmin', or an attribute or method "
+            "on 'modeladmin.ValidationTestModel'.",
+            "admin.E108",
+        )
+
+    def test_gev_007_multiple_invalid_entries_each_emit_e108_independently(self):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["missing_one", "name", "missing_two"]
+
+        errors = TestModelAdmin(ValidationTestModel, AdminSite()).check()
+        self.assertEqual(
+            errors,
+            [
+                Error(
+                    "The value of 'list_display[0]' refers to 'missing_one', which "
+                    "is not a callable, an attribute of 'TestModelAdmin', or an "
+                    "attribute or method on 'modeladmin.ValidationTestModel'.",
+                    obj=TestModelAdmin,
+                    id="admin.E108",
+                ),
+                Error(
+                    "The value of 'list_display[2]' refers to 'missing_two', which "
+                    "is not a callable, an attribute of 'TestModelAdmin', or an "
+                    "attribute or method on 'modeladmin.ValidationTestModel'.",
+                    obj=TestModelAdmin,
+                    id="admin.E108",
+                ),
+            ],
+        )
+
+    def test_gev_008_established_valid_list_display_outcome_is_retained(self):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["name", "decade_published_in"]
+
+        self.assertIsValid(TestModelAdmin, ValidationTestModel)
+
+    def test_gev_008_established_invalid_entry_retains_e108_diagnostic_contract(self):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["missing"]
+
+        self.assertIsInvalid(
+            TestModelAdmin,
+            ValidationTestModel,
+            "The value of 'list_display[0]' refers to 'missing', which is not a "
+            "callable, an attribute of 'TestModelAdmin', or an attribute or method "
+            "on 'modeladmin.ValidationTestModel'.",
+            "admin.E108",
+        )
+
+    def test_gev_009_repeated_checks_of_unchanged_configuration_match(self):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["name", "missing"]
+
+        model_admin = TestModelAdmin(ValidationTestModel, AdminSite())
+        first_result = model_admin.check()
+        self.assertEqual(model_admin.check(), first_result)
+        self.assertEqual(model_admin.check(), first_result)
+
+    def test_gev_009_check_without_request_or_model_instance_has_same_result(self):
+        class TestModelAdmin(ModelAdmin):
+            list_display = ["name", "missing"]
+
+        model_admin = TestModelAdmin(ValidationTestModel, AdminSite())
+        expected_result = model_admin.check()
+        with mock.patch.object(
+            ValidationTestModel,
+            "__init__",
+            side_effect=AssertionError("list_display checks must not create models"),
+        ), mock.patch(
+            "django.http.HttpRequest.__init__",
+            side_effect=AssertionError("list_display checks must not create requests"),
+        ):
+            self.assertEqual(model_admin.check(), expected_result)
+
     def test_not_iterable(self):
         class TestModelAdmin(ModelAdmin):
             list_display = 10
