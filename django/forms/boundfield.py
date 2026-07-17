@@ -277,6 +277,17 @@ class BoundWidget:
 
     @property
     def id_for_label(self):
+        # BWID-001 — authoritative subwidget ID contract:
+        #   INPUT: subwidget data with an assigned data['attrs']['id'].
+        #   SELECT assigned_id := data['attrs']['id'].
+        #   RETURN assigned_id unchanged; do not reconstruct it from name/index.
+        #   FAILURE: if the assigned ID is absent, preserve the existing mapping
+        #   access failure; this contract defines no fallback behavior.
+        # BWID-002 — CheckboxSelectMultiple label/input association:
+        #   FOR EACH BoundWidget emitted through BoundField.subwidgets:
+        #     USE this authoritative assigned_id as the rendered label target.
+        #     The associated input renders the same data['attrs']['id'].
+        #     THEREFORE label.for MUST EQUAL input.id for custom auto_id formats.
         return 'id_%s_%s' % (self.data['name'], self.data['index'])
 
     @property
