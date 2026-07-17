@@ -675,40 +675,10 @@ class URLField(CharField):
     }
     default_validators = [validators.URLValidator()]
 
-    # ARCHITECTURE (GUID: URL-004, URL-005, URL-006, URL-007): URLField owns
-    # URL conversion and normalization through to_python(). The inherited
-    # Field.clean() pipeline remains the owner of empty-value policy, validator
-    # sequencing, and the cleaned-value return contract; default_validators is
-    # the dependency seam to URLValidator. Preserve these boundaries when
-    # handling parser failures so unaffected behavior continues through the
-    # established pipeline.
-    # URL-004, URL-005, URL-006 -- inherited clean(value) pseudocode:
-    #   converted_value = to_python(value)
-    #   IF converted_value is empty AND the field is required:
-    #       RAISE the established required-field ValidationError
-    #   IF converted_value is empty AND the field is not required:
-    #       SKIP URL validators and RETURN the configured empty value
-    #   RUN the existing URL validators with converted_value
-    #   IF a validator rejects converted_value:
-    #       RAISE its established ValidationError without changing its behavior
-    #   RETURN converted_value as the established cleaned value
     def __init__(self, **kwargs):
         super().__init__(strip=True, **kwargs)
 
     def to_python(self, value):
-
-        # URL-006, URL-007 -- normalization pseudocode:
-        #   converted_value = the existing CharField conversion of value
-        #   IF converted_value is empty: RETURN converted_value unchanged
-        #   SPLIT converted_value using the existing parser
-        #   IF parsing succeeds:
-        #       IF scheme is absent: SET scheme to the established "http" default
-        #       IF domain is absent:
-        #           MOVE the path into the domain and CLEAR the path
-        #           RE-SPLIT the rebuilt URL using the existing parser
-        #       RETURN the URL rebuilt from the resulting parts
-        #   OTHERWISE propagate the established validation failure path
-
         def split_url(url):
             """
             Return a list of url parts via urlparse.urlsplit(), or raise

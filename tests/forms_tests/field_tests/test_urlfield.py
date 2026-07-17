@@ -134,33 +134,45 @@ class URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
         with self.assertRaises(ValidationError):
             URLField().clean('////]@N.AN')
 
-    # ARCHITECTURE (GUID: URL-004, URL-005, URL-006, URL-007): This group is
-    # the URLField.clean() compatibility seam. Later implementation replaces
-    # these placeholders in place and exercises behavior only through the
-    # public field pipeline, leaving parser mechanics at their owning locus.
     def test_url_004_accepted_url_clean_preserves_established_cleaned_value(self):
         """GUID: URL-004 - Accepted URLs retain their cleaned values."""
-        pass
+        url = 'https://example.com/path?query=value#fragment'
+        self.assertEqual(URLField().clean(url), url)
 
     def test_url_005_required_empty_input_preserves_required_field_behavior(self):
         """GUID: URL-005 - Required empty inputs retain existing behavior."""
-        pass
+        field = URLField()
+        for value in (None, ''):
+            with self.subTest(value=value):
+                with self.assertRaises(ValidationError) as cm:
+                    field.clean(value)
+                self.assertEqual(cm.exception.messages, ['This field is required.'])
+                self.assertEqual(cm.exception.error_list[0].code, 'required')
 
     def test_url_005_optional_empty_input_preserves_empty_value_behavior(self):
         """GUID: URL-005 - Optional empty inputs retain existing behavior."""
-        pass
+        field = URLField(required=False)
+        for value in (None, ''):
+            with self.subTest(value=value):
+                self.assertEqual(field.clean(value), '')
 
     def test_url_006_unaffected_url_preserves_existing_success_behavior(self):
         """GUID: URL-006 - Unaffected valid inputs retain success behavior."""
-        pass
+        self.assertEqual(URLField().clean('http://localhost'), 'http://localhost')
 
     def test_url_006_unaffected_url_preserves_existing_validation_failure(self):
         """GUID: URL-006 - Unaffected invalid inputs retain failure behavior."""
-        pass
+        with self.assertRaises(ValidationError) as cm:
+            URLField().clean('http://example')
+        self.assertEqual(cm.exception.messages, ['Enter a valid URL.'])
+        self.assertEqual(cm.exception.error_list[0].code, 'invalid')
 
     def test_url_007_normalized_url_preserves_established_result(self):
         """GUID: URL-007 - Existing URL normalization remains unchanged."""
-        pass
+        self.assertEqual(
+            URLField().clean('www.example.com/path  '),
+            'http://www.example.com/path',
+        )
 
     def test_urlfield_clean_required(self):
         f = URLField()
