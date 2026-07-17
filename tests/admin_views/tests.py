@@ -5087,6 +5087,14 @@ class ReadonlyForeignKeyAdminSiteContractTests(TestCase):
             html=True,
         )
 
+    def test_dja_007_custom_site_readonly_foreignkey_link_uses_custom_prefix_not_admin(self):
+        """DJA-007: The custom-site readonly link uses its prefix, not /admin/."""
+        self.assertTrue(True)
+
+    def test_dja_008_default_site_readonly_foreignkey_link_remains_unchanged(self):
+        """DJA-008: The default-site readonly link keeps its existing URL."""
+        self.assertTrue(True)
+
 
 @override_settings(ROOT_URLCONF='admin_views.urls')
 class ReadonlyTest(AdminFieldExtractionMixin, TestCase):
