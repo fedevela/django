@@ -160,17 +160,60 @@ class BulkCreateUpdateConflictsContractTests(TestCase):
         self.assertIn(returning_sql, insert_sql)
         self.assertLess(insert_sql.index("DO UPDATE"), insert_sql.index(returning_sql))
 
+    @skipUnlessDBFeature(
+        "supports_update_conflicts",
+        "supports_update_conflicts_with_target",
+        "can_return_rows_from_bulk_insert",
+    )
     def test_BULKUPSERT_007_enabling_returned_fields_preserves_selected_conflict_matching_fields(
         self,
     ):
         """GUID: BULKUPSERT-007"""
-        self.assertTrue(True)
+        existing = Country.objects.create(
+            name="Germany", iso_two_letter="DE", description="old"
+        )
+        same_code = Country(
+            name="Denmark", iso_two_letter="DE", description="inserted"
+        )
+        conflicting = Country(
+            name="Germany", iso_two_letter="DE", description="updated"
+        )
 
+        self.bulk_create([same_code, conflicting])
+
+        self.assertEqual(
+            Country.objects.filter(iso_two_letter="DE").count(),
+            2,
+        )
+        self.assertEqual(same_code.pk, Country.objects.get(name="Denmark").pk)
+        self.assertEqual(conflicting.pk, existing.pk)
+        existing.refresh_from_db()
+        self.assertEqual(existing.description, "updated")
+
+    @skipUnlessDBFeature(
+        "supports_update_conflicts", "can_return_rows_from_bulk_insert"
+    )
     def test_BULKUPSERT_007_conflict_updates_only_selected_update_fields_when_returned_fields_enabled(
         self,
     ):
         """GUID: BULKUPSERT-007"""
-        self.assertTrue(True)
+        existing = UpsertConflict.objects.create(number=1, rank=1, name="original")
+        conflicting = UpsertConflict(number=1, rank=2, name="updated")
+        unique_fields = None
+        if connection.features.supports_update_conflicts_with_target:
+            unique_fields = ["number"]
+
+        UpsertConflict.objects.bulk_create(
+            [conflicting],
+            update_conflicts=True,
+            update_fields=["name"],
+            unique_fields=unique_fields,
+        )
+
+        existing.refresh_from_db()
+        self.assertEqual(conflicting.pk, existing.pk)
+        self.assertEqual(existing.name, "updated")
+        self.assertEqual(existing.rank, 1)
 
     @skipUnlessDBFeature(
         "supports_update_conflicts", "can_return_rows_from_bulk_insert"
