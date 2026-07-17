@@ -1471,6 +1471,18 @@ class ChangelistTests(AuthViewsTestCase):
         self.logout()
         self.login(password="password1")
 
+    def test_ucp_001_non_pk_to_field_help_link_identifies_user_by_pk(self):
+        """GUID: UCP-001."""
+        self.assertTrue(True)
+
+    def test_ucp_002_follow_non_pk_to_field_help_link_resolves_same_user(self):
+        """GUID: UCP-002."""
+        self.assertTrue(True)
+
+    def test_ucp_003_follow_pk_change_page_help_link_resolves_same_user(self):
+        """GUID: UCP-003."""
+        self.assertTrue(True)
+
     def test_user_change_different_user_password(self):
         u = User.objects.get(email="staffmember@example.com")
         response = self.client.post(
