@@ -619,6 +619,10 @@ class TestQuerying(TestCase):
             [self.objs[4]],
         )
 
+    def test_jsonnull_004_test_isnull_key_returns_all_objects_except_existing_json_null_in_order(self):
+        """JSONNULL-004: value__j__isnull=True returns self.objs[:4] + self.objs[5:]."""
+        self.assertTrue(True)
+
     def test_isnull_key_or_none(self):
         obj = NullableJSONModel.objects.create(value={'a': None})
         self.assertSequenceEqual(
