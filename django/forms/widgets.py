@@ -849,6 +849,12 @@ class MultiWidget(Widget):
         return context
 
     def id_for_label(self, id_):
+        # ARCHITECTURE — MWLABEL-001, MWLABEL-003, MWLABEL-004, MWLABEL-007:
+        # MultiWidget owns only label-target resolution through Widget's
+        # id_for_label() hook. BoundField.label_tag() remains the presentation
+        # owner and consumes this result without depending on MultiWidget.
+        # Normal method inheritance is the extension seam: subclasses inherit
+        # this contract or replace it by overriding this method.
         # PSEUDOCODE — MultiWidget label-target contract.
         #
         # PROCEDURE resolve_label_target(candidate_id):
