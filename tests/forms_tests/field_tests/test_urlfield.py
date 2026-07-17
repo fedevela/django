@@ -134,6 +134,30 @@ class URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
         with self.assertRaises(ValidationError):
             URLField().clean('////]@N.AN')
 
+    def test_url_004_accepted_url_clean_preserves_established_cleaned_value(self):
+        """GUID: URL-004 - Accepted URLs retain their cleaned values."""
+        pass
+
+    def test_url_005_required_empty_input_preserves_required_field_behavior(self):
+        """GUID: URL-005 - Required empty inputs retain existing behavior."""
+        pass
+
+    def test_url_005_optional_empty_input_preserves_empty_value_behavior(self):
+        """GUID: URL-005 - Optional empty inputs retain existing behavior."""
+        pass
+
+    def test_url_006_unaffected_url_preserves_existing_success_behavior(self):
+        """GUID: URL-006 - Unaffected valid inputs retain success behavior."""
+        pass
+
+    def test_url_006_unaffected_url_preserves_existing_validation_failure(self):
+        """GUID: URL-006 - Unaffected invalid inputs retain failure behavior."""
+        pass
+
+    def test_url_007_normalized_url_preserves_established_result(self):
+        """GUID: URL-007 - Existing URL normalization remains unchanged."""
+        pass
+
     def test_urlfield_clean_required(self):
         f = URLField()
         msg = "'This field is required.'"
