@@ -49,6 +49,19 @@ def check_string_if_invalid_is_string(app_configs, **kwargs):
 
 @register(Tags.templates)
 def check_for_template_tags_with_the_same_name(app_configs, **kwargs):
+    # PSEUDOCODE — GUID: TPL-001, TPL-002, TPL-003
+    # INPUT: configured and installed-app-discovered (library name, module path)
+    # associations.
+    # STATE: map each library name to a set of its distinct module paths.
+    # FOR each configured association, add its module path to the name's set.
+    # FOR each discovered association, add its module path to the name's set;
+    # an identical configured or previously discovered path leaves the set unchanged.
+    # FOR each library name:
+    #   IF its set contains more than one distinct module path, emit templates.E003
+    #   with those distinct paths.
+    #   ELSE emit no error, regardless of how often or from which sources the sole
+    #   association was collected.
+    # OUTPUT: all templates.E003 errors produced by the distinct-path decision.
     errors = []
     libraries = defaultdict(list)
 
