@@ -497,48 +497,37 @@ class WriterTests(SimpleTestCase):
         self,
     ):
         """GUID: ENFL-008 - represent combined RegexFlag members with bitwise OR."""
-        # Pseudocode (GUID: ENFL-008):
-        # GIVEN combined := re.UNICODE | re.IGNORECASE
-        # WHEN (expression, imports) := MigrationWriter.serialize(combined)
-        # THEN expression equals
-        #      "re.RegexFlag['IGNORECASE'] | re.RegexFlag['UNICODE']"
-        # AND imports equals {"import re"}
-        # OTHERWISE fail because the concrete combined value was not represented
-        #           by its named constituent flags joined with bitwise OR.
-        pass
+        self.assertSerializedResultEqual(
+            re.UNICODE | re.IGNORECASE,
+            (
+                "re.RegexFlag['IGNORECASE'] | re.RegexFlag['UNICODE']",
+                {"import re"},
+            ),
+        )
 
     def test_enfl_008_serialized_unicode_or_ignorecase_reconstructs_equal_value(self):
         """GUID: ENFL-008 - reconstruct the original combined RegexFlag value."""
-        # Pseudocode (GUID: ENFL-008):
-        # GIVEN combined := re.UNICODE | re.IGNORECASE
-        # WHEN reconstructed := serialize_round_trip(combined), which evaluates
-        #      the serialized expression after executing its required imports
-        # THEN reconstructed equals combined
-        # OTHERWISE fail because migration serialization did not preserve the
-        #           combined RegexFlag value through evaluation.
-        pass
+        combined = re.UNICODE | re.IGNORECASE
+        self.assertEqual(self.serialize_round_trip(combined), combined)
 
     def test_enfl_008_serialized_unicode_or_ignorecase_retains_regexflag_type(self):
         """GUID: ENFL-008 - preserve the RegexFlag type after reconstruction."""
-        # Pseudocode (GUID: ENFL-008):
-        # GIVEN combined := re.UNICODE | re.IGNORECASE
-        # WHEN reconstructed := serialize_round_trip(combined)
-        # THEN type(reconstructed) is type(combined)
-        # AND type(reconstructed) is re.RegexFlag
-        # OTHERWISE fail because evaluation degraded the Enum into another type.
-        pass
+        combined = re.UNICODE | re.IGNORECASE
+        reconstructed = self.serialize_round_trip(combined)
+        self.assertIs(type(reconstructed), type(combined))
+        self.assertIs(type(reconstructed), re.RegexFlag)
 
     def test_enfl_008_unicode_or_ignorecase_preserves_named_enum_member_checks(self):
         """GUID: ENFL-008 - retain existing named Enum-member coverage."""
-        # Pseudocode (GUID: ENFL-008):
-        # FOR EACH (member, name) IN
-        #          [(re.UNICODE, "UNICODE"), (re.IGNORECASE, "IGNORECASE")]:
-        #     WHEN serialized := MigrationWriter.serialize(member)
-        #     THEN serialized equals
-        #          ("re.RegexFlag[<quoted name>]", {"import re"})
-        #     OTHERWISE fail because combined-value support weakened the existing
-        #               named Enum-member serialization branch.
-        pass
+        for member, name in [
+            (re.UNICODE, "UNICODE"),
+            (re.IGNORECASE, "IGNORECASE"),
+        ]:
+            with self.subTest(member=member):
+                self.assertSerializedResultEqual(
+                    member,
+                    ("re.RegexFlag[%r]" % name, {"import re"}),
+                )
 
     def test_serialize_choices(self):
         class TextChoices(models.TextChoices):
