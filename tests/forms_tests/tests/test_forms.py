@@ -17,6 +17,7 @@ from django.forms import (
 )
 from django.forms.renderers import DjangoTemplates, get_default_renderer
 from django.forms.utils import ErrorList
+from django.forms.widgets import ChoiceWidget
 from django.http import QueryDict
 from django.template import Context, Template
 from django.test import SimpleTestCase
@@ -3177,15 +3178,79 @@ Password: <input type="password" name="password" required>
 
     def test_mwlabel_008_non_multiwidget_render_preserves_label_target_and_id(self):
         """GUID: MWLABEL-008 - Non-MultiWidget label targets and IDs remain unchanged."""
-        pass
+        class SomeForm(Form):
+            field = CharField()
+
+        bound_field = SomeForm()['field']
+        self.assertHTMLEqual(
+            bound_field.label_tag(),
+            '<label for="id_field">Field:</label>',
+        )
+        self.assertHTMLEqual(
+            str(bound_field),
+            '<input type="text" name="field" id="id_field" required>',
+        )
 
     def test_mwlabel_008_choicewidget_with_id_index_preserves_indexed_id_and_label_target(self):
         """GUID: MWLABEL-008 - Enabled ChoiceWidget ID indexes remain unchanged."""
-        pass
+        class IndexedChoiceWidget(ChoiceWidget):
+            input_type = 'radio'
+            template_name = 'django/forms/widgets/radio.html'
+            option_template_name = 'django/forms/widgets/radio_option.html'
+
+        class SomeForm(Form):
+            field = ChoiceField(
+                choices=[('a', 'A'), ('b', 'B')],
+                widget=IndexedChoiceWidget,
+            )
+
+        bound_field = SomeForm()['field']
+        self.assertHTMLEqual(
+            bound_field.label_tag(),
+            '<label for="id_field_0">Field:</label>',
+        )
+        self.assertHTMLEqual(
+            str(bound_field),
+            '''
+            <div id="id_field">
+              <div><label for="id_field_0"><input type="radio" name="field"
+                    value="a" required id="id_field_0"> A</label></div>
+              <div><label for="id_field_1"><input type="radio" name="field"
+                    value="b" required id="id_field_1"> B</label></div>
+            </div>
+            ''',
+        )
 
     def test_mwlabel_008_choicewidget_without_id_index_preserves_unindexed_id_and_label_target(self):
         """GUID: MWLABEL-008 - Disabled ChoiceWidget ID indexes remain unchanged."""
-        pass
+        class UnindexedChoiceWidget(ChoiceWidget):
+            input_type = 'radio'
+            template_name = 'django/forms/widgets/radio.html'
+            option_template_name = 'django/forms/widgets/radio_option.html'
+            add_id_index = False
+
+        class SomeForm(Form):
+            field = ChoiceField(
+                choices=[('a', 'A'), ('b', 'B')],
+                widget=UnindexedChoiceWidget,
+            )
+
+        bound_field = SomeForm()['field']
+        self.assertHTMLEqual(
+            bound_field.label_tag(),
+            '<label for="id_field">Field:</label>',
+        )
+        self.assertHTMLEqual(
+            str(bound_field),
+            '''
+            <div id="id_field">
+              <div><label for="id_field"><input type="radio" name="field"
+                    value="a" required id="id_field"> A</label></div>
+              <div><label for="id_field"><input type="radio" name="field"
+                    value="b" required id="id_field"> B</label></div>
+            </div>
+            ''',
+        )
 
     def test_boundfield_empty_label(self):
         class SomeForm(Form):
