@@ -15,9 +15,31 @@ from .models import (
 
 
 class ModelInheritanceTests(TestCase):
+    @isolate_apps('model_inheritance')
     def test_pkw_003_descendant_effective_pk_preserves_inherited_manually_declared_field_identity_and_semantics(self):
         """GUID: PKW-003"""
-        self.assertTrue(True)
+        class AbstractParent(models.Model):
+            code = models.CharField(
+                primary_key=True,
+                max_length=8,
+                db_column='parent_code',
+                editable=False,
+            )
+
+            class Meta:
+                abstract = True
+
+        class Child(AbstractParent):
+            pass
+
+        parent_pk = AbstractParent._meta.pk
+        child_pk = Child._meta.pk
+        self.assertIs(child_pk, Child._meta.get_field('code'))
+        self.assertIsNot(child_pk, parent_pk)
+        self.assertEqual(child_pk.deconstruct(), parent_pk.deconstruct())
+        self.assertIs(child_pk.model, Child)
+        self.assertTrue(child_pk.primary_key)
+        self.assertFalse(child_pk.auto_created)
 
     def test_abstract(self):
         # The Student and Worker models both have 'name' and 'age' fields on

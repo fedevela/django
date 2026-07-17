@@ -269,37 +269,14 @@ class ModelBase(type):
             else:
                 base_parents = base._meta.parents.copy()
 
-                # Pseudocode -- GUID: PKW-003
-                # Verification:
-                # test_pkw_003_descendant_effective_pk_preserves_inherited_
-                # manually_declared_field_identity_and_semantics
-                # INPUT a supported abstract ancestor field and the descendant's
-                # declared and previously inherited field names.
-                # IF the ancestor field is overridden or otherwise ineligible for
-                # inheritance, follow the existing exclusion or clash path.
-                # ELSE copy the ancestor declaration into the descendant while
-                # preserving its name, field class, primary_key=True designation,
-                # and all other configured semantics.
-                # REGISTER that descendant-bound inherited field unchanged so
-                # primary-key selection adopts it as the descendant's effective
-                # primary key; DO NOT synthesize, promote, or substitute another
-                # primary-key field.
-                # OUTPUT descendant._meta.pk as that registered inherited field;
-                # propagate existing copy, binding, and registration failures.
-
-                # Architecture contract -- GUID: PKW-003
-                # ModelBase owns inheritance eligibility and the descendant-local
-                # field copy. add_to_class() is the integration boundary: field
-                # contribution must flow to Options.add_field()/setup_pk(), which
-                # owns binding that same field object as descendant._meta.pk before
-                # Options._prepare() considers a generated or promoted replacement.
-
                 # Add fields from abstract base class if it wasn't overridden.
                 for field in parent_fields:
                     if (field.name not in field_names and
                             field.name not in new_class.__dict__ and
                             field.name not in inherited_attributes):
                         new_field = copy.deepcopy(field)
+                        # Preserve the inherited declaration through primary-key
+                        # registration. GUID: PKW-003.
                         new_class.add_to_class(field.name, new_field)
                         # Replace parent links defined on this base by the new
                         # field. It will be appropriately resolved if required.
