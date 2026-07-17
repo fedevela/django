@@ -21,6 +21,7 @@ from django.conf import SettingsReference, settings
 from django.core.validators import EmailValidator, RegexValidator
 from django.db import migrations, models
 from django.db.migrations.serializer import BaseSerializer
+from django.db.migrations.state import ProjectState
 from django.db.migrations.writer import MigrationWriter, OperationWriter
 from django.test import SimpleTestCase
 from django.utils.deconstruct import deconstructible
@@ -50,6 +51,13 @@ class TestModel1:
         return "/somewhere/dynamic/"
 
     thing = models.FileField(upload_to=upload_to)
+
+
+class Profile:
+    class Capability:
+        @classmethod
+        def default(cls):
+            return []
 
 
 class TextEnum(enum.Enum):
@@ -542,6 +550,157 @@ class WriterTests(SimpleTestCase):
         string, imports = MigrationWriter.serialize(models.SET(42))
         self.assertEqual(string, "models.SET(42)")
         self.serialize_round_trip(models.SET(42))
+
+    def test_migser_001_nested_class_method_default_preserves_complete_path(self):
+        """MIGSER-001: Serialization preserves every enclosing class."""
+        field = models.CharField(default=Profile.Capability.default)
+        self.assertSerializedResultEqual(
+            field.default,
+            (
+                f"{__name__}.Profile.Capability.default",
+                {f"import {__name__}"},
+            ),
+        )
+
+    def test_migser_002_profile_capability_default_serializes_exact_path(self):
+        """MIGSER-002: Profile.Capability.default has its exact required path."""
+        with mock.patch.object(Profile.Capability, "__module__", "appname.models"):
+            field = models.CharField(default=Profile.Capability.default)
+            self.assertSerializedResultEqual(
+                field.default,
+                (
+                    "appname.models.Profile.Capability.default",
+                    {"import appname.models"},
+                ),
+            )
+
+    def test_migser_003_generated_migration_imports_without_missing_attribute(self):
+        """MIGSER-003: Import resolves the nested-class method default."""
+        with mock.patch.object(
+            Profile.Capability,
+            "__module__",
+            custom_migration_operations.operations.__name__,
+        ), mock.patch.object(
+            custom_migration_operations.operations, "Profile", Profile, create=True
+        ):
+            migration = migrations.Migration("0001_initial", "testapp")
+            migration.operations = [
+                migrations.CreateModel(
+                    "UserProfile",
+                    [
+                        ("id", models.AutoField(primary_key=True)),
+                        (
+                            "capabilities",
+                            models.JSONField(default=Profile.Capability.default),
+                        ),
+                    ],
+                )
+            ]
+            result = self.safe_exec(MigrationWriter(migration).as_string())
+
+        default = result["Migration"].operations[0].fields[1][1].default
+        self.assertIs(default.__self__, Profile.Capability)
+        self.assertIs(default.__func__, Profile.Capability.default.__func__)
+
+    def test_migser_003_imported_migration_applies_without_missing_attribute(self):
+        """MIGSER-003: Application preserves the resolved default reference."""
+        with mock.patch.object(
+            Profile.Capability,
+            "__module__",
+            custom_migration_operations.operations.__name__,
+        ), mock.patch.object(
+            custom_migration_operations.operations, "Profile", Profile, create=True
+        ):
+            migration = migrations.Migration("0001_initial", "testapp")
+            migration.operations = [
+                migrations.CreateModel(
+                    "UserProfile",
+                    [
+                        ("id", models.AutoField(primary_key=True)),
+                        (
+                            "capabilities",
+                            models.JSONField(default=Profile.Capability.default),
+                        ),
+                    ],
+                )
+            ]
+            result = self.safe_exec(MigrationWriter(migration).as_string())
+        imported_migration = result["Migration"]("0001_initial", "testapp")
+        schema_editor = mock.Mock(atomic_migration=True)
+        schema_editor.connection.alias = "default"
+
+        new_state = imported_migration.apply(ProjectState(), schema_editor)
+
+        schema_editor.create_model.assert_called_once()
+        default = new_state.models["testapp", "userprofile"].fields[
+            "capabilities"
+        ].default
+        self.assertIs(default.__self__, Profile.Capability)
+        self.assertIs(default.__func__, Profile.Capability.default.__func__)
+
+    def test_migser_004_nested_class_method_reference_resolves_same_callable(self):
+        """MIGSER-004: Resolution returns the original field-default callable."""
+        field = models.CharField(default=Profile.Capability.default)
+        resolved = self.serialize_round_trip(field.default)
+        self.assertIs(resolved.__self__, field.default.__self__)
+        self.assertIs(resolved.__func__, field.default.__func__)
+
+    def test_migser_005_migser_006_top_level_function_reference_resolves(self):
+        """
+        MIGSER-005, MIGSER-006: A serialized supported top-level function
+        reference remains valid and resolves to that callable.
+        """
+        self.assertSerializedResultEqual(
+            models.SET_NULL,
+            (
+                "django.db.models.deletion.SET_NULL",
+                {"import django.db.models.deletion"},
+            ),
+        )
+        self.assertIs(self.serialize_round_trip(models.SET_NULL), models.SET_NULL)
+
+    def test_migser_005_migser_006_non_nested_class_method_reference_resolves(self):
+        """
+        MIGSER-005, MIGSER-006: A serialized supported non-nested class method
+        reference remains valid and resolves to that callable.
+        """
+        method = datetime.datetime.today
+        self.assertSerializedResultEqual(
+            method,
+            ("datetime.datetime.today", {"import datetime"}),
+        )
+        resolved = self.serialize_round_trip(method)
+        self.assertEqual(resolved, method)
+        self.assertIs(resolved.__self__, method.__self__)
+        self.assertEqual(resolved.__name__, method.__name__)
+
+    def test_migser_005_migser_006_unbound_method_reference_resolves(self):
+        """
+        MIGSER-005, MIGSER-006: A serialized supported unbound method reference
+        remains valid and resolves to that callable.
+        """
+        method = TestModel1.upload_to
+        self.assertSerializedResultEqual(
+            method,
+            (
+                f"{__name__}.TestModel1.upload_to",
+                {f"import {__name__}"},
+            ),
+        )
+        self.assertIs(self.serialize_round_trip(method), method)
+
+    def test_migser_006_nested_class_method_serialization_preserves_complete_path(self):
+        """
+        MIGSER-006: Serializing a method on a nested class preserves its
+        complete path.
+        """
+        self.assertSerializedResultEqual(
+            Profile.Capability.default,
+            (
+                f"{__name__}.Profile.Capability.default",
+                {f"import {__name__}"},
+            ),
+        )
 
     def test_serialize_datetime(self):
         self.assertSerializedEqual(datetime.datetime.now())

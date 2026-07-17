@@ -168,7 +168,7 @@ class FunctionTypeSerializer(BaseSerializer):
         ):
             klass = self.value.__self__
             module = klass.__module__
-            return "%s.%s.%s" % (module, klass.__name__, self.value.__name__), {
+            return "%s.%s.%s" % (module, klass.__qualname__, self.value.__name__), {
                 "import %s" % module
             }
         # Further error checking
@@ -350,6 +350,9 @@ class Serializer:
             types.FunctionType,
             types.BuiltinFunctionType,
             types.MethodType,
+            # MIGSER-005, MIGSER-006: Keep all supported callable forms behind
+            # the FunctionTypeSerializer boundary; MigrationWriter depends on
+            # its common serialized-reference contract, not callable subtype.
         ): FunctionTypeSerializer,
         collections.abc.Iterable: IterableSerializer,
         (COMPILED_REGEX_TYPE, RegexObject): RegexSerializer,
