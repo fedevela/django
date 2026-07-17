@@ -902,6 +902,14 @@ class ModelAdminChecks(BaseModelAdminChecks):
     # Accepted entries must remain compatible with the separate rendering
     # boundary owned by django.contrib.admin.utils.lookup_field().
     #
+    # GEV-003 / GEV-004 add a second downstream compatibility boundary:
+    # django.contrib.admin.utils.label_for_field() owns changelist label
+    # resolution. Options.get_field() remains only the metadata-discovery port;
+    # a value returned by it is not, by itself, a valid list_display contract.
+    # Dependency direction is ModelAdminChecks -> existing admin.utils lookup
+    # contracts. The utilities and model metadata must not depend on checks or
+    # acquire responsibility for emitting admin.E108.
+    #
     # Verification ownership remains in ListDisplayTests:
     # - GEV-001: unresolvable model/ModelAdmin entries reach admin.E108 here.
     # - GEV-002: the reverse query name "choice" reaches admin.E108 here.
