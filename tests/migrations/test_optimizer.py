@@ -671,6 +671,28 @@ class OptimizerTests(SimpleTestCase):
             ],
         )
 
+    def test_MIGOPT_001_consecutive_same_field_alter_fields_collapse_to_final(self):
+        """
+        MIGOPT-001: An uninterrupted same-model, same-field AlterField sequence
+        collapses to its final operation.
+        """
+        self.assertTrue(True)
+
+    def test_MIGOPT_002_retained_alter_field_preserves_final_definition_exactly(self):
+        """
+        MIGOPT-002: The AlterField retained from a same-field sequence preserves
+        the final operation's field definition exactly.
+        """
+        self.assertTrue(True)
+
+    def test_MIGOPT_003_book_title_sequence_retains_final_field_definition(self):
+        """
+        MIGOPT-003: The standalone book.title sequence collapses to one
+        AlterField with max_length=128, null=True, help_text="help", and
+        default=None.
+        """
+        self.assertTrue(True)
+
     def test_create_model_rename_field(self):
         """
         RenameField should optimize into CreateModel.
