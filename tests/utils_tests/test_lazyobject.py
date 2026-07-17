@@ -307,19 +307,63 @@ class SimpleLazyObjectTestCase(LazyObjectTestCase):
 
     def test_radd_001_left_operand_plus_lazy_object_matches_resolved_value(self):
         """GUID: RADD-001 - Reflected addition preserves operand order."""
-        pass
+        wrapped = ("right",)
+        lazy = SimpleLazyObject(lambda: wrapped)
+
+        self.assertEqual(("left",) + lazy, ("left",) + wrapped)
 
     def test_radd_003_addition_without_wrapped_radd_uses_direct_operation(self):
         """GUID: RADD-003 - Addition doesn't require wrapped __radd__."""
-        pass
+        class RightOperand:
+            pass
+
+        class LeftOperand:
+            def __add__(self, other):
+                if isinstance(other, RightOperand):
+                    return "added"
+                return NotImplemented
+
+        wrapped = RightOperand()
+        self.assertFalse(hasattr(wrapped, "__radd__"))
+
+        self.assertEqual(LeftOperand() + SimpleLazyObject(lambda: wrapped), "added")
 
     def test_radd_005_unresolved_right_operand_preserves_direct_return_value(self):
         """GUID: RADD-005 - Addition preserves the direct return value."""
-        pass
+        class SpecializedResult:
+            pass
+
+        class RightOperand:
+            pass
+
+        expected = SpecializedResult()
+
+        class LeftOperand:
+            def __add__(self, other):
+                if isinstance(other, RightOperand):
+                    return expected
+                return NotImplemented
+
+        left = LeftOperand()
+        wrapped = RightOperand()
+        lazy = SimpleLazyObject(lambda: wrapped)
+        self.assertIs(lazy._wrapped, empty)
+
+        self.assertIs(left + lazy, left + wrapped)
 
     def test_radd_006_incompatible_left_operand_matches_direct_exception(self):
         """GUID: RADD-006 - Addition preserves direct exception behavior."""
-        pass
+        wrapped = 1
+        with self.assertRaises(TypeError) as direct_exception:
+            object() + wrapped
+
+        with self.assertRaises(TypeError) as lazy_exception:
+            object() + SimpleLazyObject(lambda: wrapped)
+
+        self.assertEqual(
+            type(lazy_exception.exception), type(direct_exception.exception)
+        )
+        self.assertEqual(lazy_exception.exception.args, direct_exception.exception.args)
 
     def test_repr(self):
         # First, for an unevaluated SimpleLazyObject

@@ -432,28 +432,12 @@ class SimpleLazyObject(LazyObject):
             return result
         return copy.deepcopy(self._wrapped, memo)
 
-    # Reflected-addition architecture (GUIDs: RADD-001, RADD-003, RADD-005,
-    # RADD-006): SimpleLazyObject owns the class-local __radd__ integration
-    # seam; LazyObject and its generic new_method_proxy() boundary remain
-    # unchanged. The seam resolves through _setup() and depends directly on
-    # operator.add with the external operand first. It is transparent to the
-    # operation's return value and exception boundary, and introduces no
-    # public helper or broader arithmetic-proxy contract.
-
-    # Reflected-addition pseudocode (GUIDs: RADD-001, RADD-003, RADD-005,
-    # RADD-006):
-    # def __radd__(self, left_operand):
-    #     if self._wrapped is empty:
-    #         call self._setup()
-    #         transition self from unresolved to resolved
-    #     resolved_wrapped_value = self._wrapped
-    #     # RADD-001, RADD-003: Preserve operand order and perform the direct
-    #     # addition; do not use operator.radd or access wrapped.__radd__.
-    #     # RADD-006 failure path: If direct addition raises, do not catch,
-    #     # translate, or replace the exception; allow it to propagate.
-    #     result = operator.add(left_operand, resolved_wrapped_value)
-    #     # RADD-005: Return the direct operation's result unchanged.
-    #     return result
+    # Reflected addition preserves the direct operation's operand order,
+    # return value, and exceptions. (RADD-001, RADD-003, RADD-005, RADD-006)
+    def __radd__(self, other):
+        if self._wrapped is empty:
+            self._setup()
+        return operator.add(other, self._wrapped)
 
 
 def partition(predicate, values):
