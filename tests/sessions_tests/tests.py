@@ -466,17 +466,40 @@ class SessionTestsMixin:
 class DatabaseSessionLoadingContractTests(TestCase):
     """SES-007 database-backed malformed session loading contract."""
 
+    session_key = 'malformed-session-key'
+
+    @classmethod
+    def setUpTestData(cls):
+        Session.objects.create(
+            session_key=cls.session_key,
+            session_data='not-a-valid-session',
+            expire_date=timezone.now() + timedelta(days=1),
+        )
+
     def test_SES_007_malformed_persisted_data_load_contains_decode_exception(self):
         """SES-007: malformed persisted data loads without an exception."""
-        self.assertTrue(True)
+        session = DatabaseSession(self.session_key)
+
+        self.assertEqual(session.load(), {})
 
     def test_SES_007_malformed_persisted_data_load_returns_empty_mapping(self):
         """SES-007: malformed persisted data loads as an empty mapping."""
-        self.assertTrue(True)
+        session = DatabaseSession(self.session_key)
+
+        loaded = session.load()
+
+        self.assertEqual(loaded, {})
+        self.assertIsInstance(loaded, dict)
 
     def test_SES_007_malformed_persisted_data_load_supports_mapping_operations(self):
         """SES-007: the loaded empty session remains mapping-compatible."""
-        self.assertTrue(True)
+        session = DatabaseSession(self.session_key)
+
+        self.assertNotIn('key', session)
+        session['key'] = 'value'
+        self.assertEqual(session['key'], 'value')
+        del session['key']
+        self.assertNotIn('key', session)
 
 
 class DatabaseSessionTests(SessionTestsMixin, TestCase):
