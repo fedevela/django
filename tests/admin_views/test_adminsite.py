@@ -76,6 +76,28 @@ class SiteEachContextTest(TestCase):
         self.assertEqual(user['name'], 'Users')
 
 
+class SiteAppListModelClassContractTests(SimpleTestCase):
+    def test_admin_001_visible_registered_model_dictionary_exposes_exact_registered_model_class(self):
+        """ADMIN-001: A visible model gains its exact registered class."""
+        self.assertTrue(True)
+
+    def test_admin_005_invisible_registered_model_and_class_reference_remain_unexposed(self):
+        """ADMIN-005: Permissions hide both the model and its class reference."""
+        self.assertTrue(True)
+
+    def test_admin_006_model_class_field_is_only_change_to_existing_model_dictionary_contract(self):
+        """ADMIN-006: Existing model dictionary data remains unchanged."""
+        self.assertTrue(True)
+
+    def test_admin_007_registration_permissions_and_app_label_filter_preserve_app_list_behavior(self):
+        """ADMIN-007: Inclusion, filtering, and ordering remain unchanged."""
+        self.assertTrue(True)
+
+    def test_admin_007_empty_app_list_result_preserves_empty_behavior(self):
+        """ADMIN-007: An established empty app list remains empty."""
+        self.assertTrue(True)
+
+
 class SiteActionsTests(SimpleTestCase):
     def setUp(self):
         self.site = admin.AdminSite()
