@@ -432,6 +432,14 @@ class SimpleLazyObject(LazyObject):
             return result
         return copy.deepcopy(self._wrapped, memo)
 
+    # Reflected-addition architecture (GUIDs: RADD-001, RADD-003, RADD-005,
+    # RADD-006): SimpleLazyObject owns the class-local __radd__ integration
+    # seam; LazyObject and its generic new_method_proxy() boundary remain
+    # unchanged. The seam resolves through _setup() and depends directly on
+    # operator.add with the external operand first. It is transparent to the
+    # operation's return value and exception boundary, and introduces no
+    # public helper or broader arithmetic-proxy contract.
+
     # Reflected-addition pseudocode (GUIDs: RADD-001, RADD-003, RADD-005,
     # RADD-006):
     # def __radd__(self, left_operand):
