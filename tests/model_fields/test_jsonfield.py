@@ -606,6 +606,14 @@ class TestQuerying(TestCase):
 
     def test_isnull_key(self):
         # key__isnull=False works the same as has_key='key'.
+        # JSONNULL-004 logic obligation:
+        # GIVEN the established ordered objects in self.objs,
+        # WHEN value__j__isnull=True is evaluated,
+        # THEN build the expected sequence as self.objs[:4] + self.objs[5:],
+        # preserving that established order and excluding self.objs[4], whose
+        # j key exists with a JSON null value.
+        # ASSERT the evaluated queryset is sequence-equal to that expectation;
+        # FAIL if membership or order differs, including if self.objs[4] occurs.
         self.assertSequenceEqual(
             NullableJSONModel.objects.filter(value__a__isnull=True),
             self.objs[:3] + self.objs[5:],
