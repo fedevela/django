@@ -298,6 +298,13 @@ class LazyObjectTestCase(TestCase):
         self.assertIs(obj2._wrapped, empty)
 
 
+# Requirement-to-test architecture (GUIDs: RADD-008, RADD-009): this contract
+# scaffold records the remaining regression obligations without becoming a new
+# proxy-behavior owner. RADD-008 compatibility evidence stays with the existing
+# LazyObjectTestCase operation tests and their SimpleLazyObjectTestCase reuse;
+# RADD-009's focused assertions belong beside the established reflected-addition
+# cases on SimpleLazyObjectTestCase. Implementation should consume these
+# placeholders at those owning loci and add no production-side test dependency.
 class ReflectedAdditionContractTestCase(TestCase):
     def test_radd_008_existing_proxy_operations_retain_established_results(self):
         """GUID: RADD-008 - Existing proxy-operation results are preserved."""
@@ -359,6 +366,10 @@ class ReflectedAdditionContractTestCase(TestCase):
 
 
 class SimpleLazyObjectTestCase(LazyObjectTestCase):
+    # Reflected-addition regression integration seam (GUIDs: RADD-008,
+    # RADD-009): inheritance supplies the shared LazyObject compatibility
+    # boundary, while class-local reflected-addition cases own result-equivalence
+    # and first-use setup coverage for unresolved SimpleLazyObject instances.
     # By inheriting from LazyObjectTestCase and redefining the lazy_wrap()
     # method which all testcases use, we get to make sure all behaviors
     # tested in the parent testcase also apply to SimpleLazyObject.
