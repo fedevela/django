@@ -891,6 +891,30 @@ class ModelAdminChecks(BaseModelAdminChecks):
             )
 
     def _check_list_display_item(self, obj, item, label):
+        # GEV-001 / GEV-002 — list_display check-time resolution parity.
+        # Logic obligations:
+        # - GEV-001 maps to
+        #   test_gev_001_unresolvable_model_or_modeladmin_entry_emits_e108_at_check_time.
+        # - GEV-002 maps to
+        #   test_gev_002_questionadmin_choice_entry_emits_e108_before_changelist_request.
+        #
+        # INPUT: the registered ModelAdmin, one list_display entry, and its label.
+        # PROCEDURE:
+        # 1. If the entry is callable, accept it and stop.
+        # 2. Otherwise, if the ModelAdmin exposes the named entry, accept it and stop.
+        # 3. Otherwise, resolve the name against both the registered model's usable
+        #    attributes and its field metadata, applying the same accessibility rule
+        #    that changelist value lookup will apply to a model instance.
+        # 4. If neither source yields a renderable value, emit admin.E108 naming the
+        #    entry and stop; do not defer this failure to a changelist request.
+        # 5. In particular, if metadata resolves a reverse relation only by its query
+        #    name but that name is not accessible on model instances, treat it as
+        #    unresolvable. Thus QuestionAdmin.list_display = ["choice"] transitions
+        #    directly to admin.E108 during system checks.
+        # 6. If the entry is renderable but its resolved field kind is prohibited for
+        #    list_display, continue through the existing field-kind error path;
+        #    otherwise accept it.
+        # OUTPUT: either no errors or the deterministic check error for this entry.
         if callable(item):
             return []
         elif hasattr(obj, item):
