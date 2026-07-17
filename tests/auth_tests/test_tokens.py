@@ -24,19 +24,61 @@ class PasswordResetTokenEmailBindingContractTests(TestCase):
 
     def test_PRT_004_unchanged_token_relevant_state_within_lifetime_accepts_token(self):
         """GUID: PRT-004 - Unchanged token state remains valid within its lifetime."""
-        self.assertTrue(True)
+        user = User.objects.create_user(
+            'unchangedstate', 'unchanged@example.com', 'testpw',
+        )
+        now = datetime(2021, 1, 1)
+        generator = MockedPasswordResetTokenGenerator(now)
+        token = generator.make_token(user)
+
+        within_lifetime = MockedPasswordResetTokenGenerator(
+            now + timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT),
+        )
+
+        self.assertIs(within_lifetime.check_token(user, token), True)
 
     def test_PRT_005_elapsed_lifetime_after_email_binding_rejects_token(self):
         """GUID: PRT-005 - Expiration remains a token invalidation input."""
-        self.assertTrue(True)
+        user = User.objects.create_user(
+            'expiredtoken', 'unchanged@example.com', 'testpw',
+        )
+        now = datetime(2021, 1, 1)
+        generator = MockedPasswordResetTokenGenerator(now)
+        token = generator.make_token(user)
+
+        after_lifetime = MockedPasswordResetTokenGenerator(
+            now + timedelta(seconds=settings.PASSWORD_RESET_TIMEOUT + 1),
+        )
+
+        self.assertIs(after_lifetime.check_token(user, token), False)
 
     def test_PRT_005_password_change_after_email_binding_rejects_prior_token(self):
         """GUID: PRT-005 - A password change remains a token invalidation input."""
-        self.assertTrue(True)
+        user = User.objects.create_user(
+            'passwordchange', 'unchanged@example.com', 'testpw',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.set_password('new-testpw')
+        user.save(update_fields=['password'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
 
     def test_PRT_005_last_login_change_after_email_binding_rejects_prior_token(self):
         """GUID: PRT-005 - A last-login change remains a token invalidation input."""
-        self.assertTrue(True)
+        user = User.objects.create_user(
+            'lastloginchange', 'unchanged@example.com', 'testpw',
+        )
+        generator = PasswordResetTokenGenerator()
+        token = generator.make_token(user)
+
+        user.last_login = datetime(2021, 1, 1)
+        user.save(update_fields=['last_login'])
+        user.refresh_from_db()
+
+        self.assertIs(generator.check_token(user, token), False)
 
     def test_PRT_001_token_before_persisted_effective_email_change_is_rejected(self):
         """GUID: PRT-001 - A persisted effective email change rejects the prior token."""
