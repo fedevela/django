@@ -948,7 +948,7 @@ class RenameIndex(IndexOperation):
             )
 
     def database_forwards(self, app_label, schema_editor, from_state, to_state):
-        # RIX-001 / RIX-003 / RIX-004 forward-transition pseudocode:
+        # RIX-001 / RIX-003 / RIX-004 / RIX-006 forward-transition pseudocode:
         # INPUT: historical from_state, forward to_state, and the target database.
         # IF migration is disallowed for the target model, RETURN without mutation.
         # IF old_fields identifies an unnamed index:
@@ -962,6 +962,12 @@ class RenameIndex(IndexOperation):
         # OUTPUT: only new_name exists and the schema agrees with to_state; after a
         # backward restoration, the same discovery selects the original identity,
         # so a subsequent forward rename cannot collide with a leftover new_name.
+        # RIX-006 capable-backend sequence obligation:
+        #   PRECONDITION: the backend supports the schema editor's index rename.
+        #   ON each forward call, require exactly one unnamed source identity and
+        #   transition GENERATED_NAME -> new_name through the backend schema editor.
+        #   IF source discovery is ambiguous, FAIL before issuing the rename; IF the
+        #   backend rename fails, PROPAGATE its database exception unchanged.
         model = to_state.apps.get_model(app_label, self.model_name)
         if not self.allow_migrate_model(schema_editor.connection.alias, model):
             return
@@ -996,7 +1002,7 @@ class RenameIndex(IndexOperation):
         schema_editor.rename_index(model, old_index, new_index)
 
     def database_backwards(self, app_label, schema_editor, from_state, to_state):
-        # RIX-002 / RIX-003 / RIX-004 backward-transition pseudocode:
+        # RIX-002 / RIX-003 / RIX-004 / RIX-006 backward-transition pseudocode:
         # INPUT: current from_state (new_name) and historical to_state (unnamed index).
         # IF old_fields identifies the historical unnamed index:
         #   RESOLVE the current named index from from_state.
@@ -1010,6 +1016,16 @@ class RenameIndex(IndexOperation):
         # rename procedure, and RESTORE the operation attributes even after use.
         # A later forward call therefore receives the original operation identity
         # and can transition the restored schema to new_name again without collision.
+        # RIX-006 forward/backward/forward-again sequence obligation:
+        #   START with the backend-generated unnamed index identity.
+        #   FORWARD leaves {new_name present, generated name absent}.
+        #   BACKWARD must rename new_name -> generated name and leave
+        #   {generated name present, new_name absent}; it must not be a no-op.
+        #   FORWARD-AGAIN repeats generated name -> new_name using the unchanged
+        #   operation identity and leaves {new_name present, generated name absent}.
+        #   REQUIRE these transitions on every capable backend via its schema editor.
+        #   On PostgreSQL, absence of new_name after BACKWARD is the precondition that
+        #   prevents the final FORWARD from raising an existing-name ProgrammingError.
         if self.old_fields:
             model = to_state.apps.get_model(app_label, self.model_name)
             if not self.allow_migrate_model(schema_editor.connection.alias, model):
