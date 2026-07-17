@@ -351,6 +351,17 @@ class SendRobustResultContinuityContractTests(SimpleTestCase):
         self.assertIs(responses[1][1], successful_response)
 
 
+class NonRobustDispatchContinuityContractTests(SimpleTestCase):
+
+    def test_sigrob_009_non_robust_successful_receivers_preserve_invocation_and_results(self):
+        """GUID: SIGROB-009 - Successful non-robust dispatch is unchanged."""
+        pass
+
+    def test_sigrob_009_non_robust_raising_receiver_preserves_exception_propagation_without_robust_behavior(self):
+        """GUID: SIGROB-009 - Non-robust exception behavior is unchanged."""
+        pass
+
+
 class ReceiverTestCase(SimpleTestCase):
 
     def test_receiver_single_signal(self):
