@@ -10,6 +10,7 @@ from django.contrib.admin.utils import (
     flatten_fieldsets, help_text_for_field, label_for_field, lookup_field,
     quote,
 )
+from django.contrib.auth.forms import ReadOnlyPasswordHashField
 from django.db import DEFAULT_DB_ALIAS, models
 from django.test import SimpleTestCase, TestCase, override_settings
 from django.utils.formats import localize
@@ -410,3 +411,84 @@ class UtilsTests(SimpleTestCase):
 
     def test_quote(self):
         self.assertEqual(quote('something\nor\nother'), 'something_0Aor_0Aother')
+
+
+class ReadOnlyPasswordHashWidgetLabelContractTests(SimpleTestCase):
+    password = (
+        'pbkdf2_sha256$100000$a6Pucb1qSFcD$'
+        'WmCkn9Hqidj48NVe5x0FEM6A9YiOqQcl/83m2Z5udm0='
+    )
+
+    class PasswordForm(forms.Form):
+        password = ReadOnlyPasswordHashField(label='Password digest')
+
+    def _render_password_hash_admin_field(self, initial=None):
+        """Render the RPH-005 label and widget from the same admin field."""
+        form = self.PasswordForm(initial={'password': initial})
+        admin_field = helpers.AdminField(form, 'password', is_first=True)
+        return admin_field.label_tag(), str(admin_field.field)
+
+    def test_RPH_005_rendered_admin_field_label_has_no_for_attribute(self):
+        """RPH-005: The rendered field label has no for attribute."""
+        label, _ = self._render_password_hash_admin_field()
+        self.assertHTMLEqual(label, '<label>Password digest:</label>')
+
+    def test_RPH_005_rendered_admin_field_keeps_human_readable_label_text(self):
+        """RPH-005: The rendered field keeps its human-readable label text."""
+        label, _ = self._render_password_hash_admin_field()
+        self.assertIn('Password digest', label)
+
+    def test_RPH_005_rendered_widget_keeps_password_hash_information(self):
+        """RPH-005: The rendered widget keeps password-hash information."""
+        _, widget = self._render_password_hash_admin_field(self.password)
+        self.assertHTMLEqual(
+            widget,
+            """
+            <div id="id_password">
+                <strong>algorithm</strong>: pbkdf2_sha256
+                <strong>iterations</strong>: 100000
+                <strong>salt</strong>: a6Pucb******
+                <strong>hash</strong>: WmCkn9**************************************
+            </div>
+            """,
+        )
+
+    def test_RPH_001_admin_label_omits_for_when_widget_is_read_only_password_hash(self):
+        """RPH-001: The admin label omits for for ReadOnlyPasswordHashWidget."""
+        form = self.PasswordForm()
+        label = helpers.AdminField(form, 'password', is_first=True).label_tag()
+        self.assertHTMLEqual(label, '<label>Password digest:</label>')
+
+    def test_RPH_002_admin_field_keeps_human_readable_label_text(self):
+        """RPH-002: The admin field keeps its human-readable label text."""
+        form = self.PasswordForm()
+        label = helpers.AdminField(form, 'password', is_first=True).label_tag()
+        self.assertIn('Password digest', label)
+
+    def test_RPH_003_password_hash_information_remains_after_label_association_removal(self):
+        """RPH-003: Removing label association preserves password-hash details."""
+        form = self.PasswordForm(initial={'password': self.password})
+        helpers.AdminField(form, 'password', is_first=True).label_tag()
+        self.assertHTMLEqual(
+            str(form['password']),
+            """
+            <div id="id_password">
+                <strong>algorithm</strong>: pbkdf2_sha256
+                <strong>iterations</strong>: 100000
+                <strong>salt</strong>: a6Pucb******
+                <strong>hash</strong>: WmCkn9**************************************
+            </div>
+            """,
+        )
+
+    def test_RPH_004_admin_label_keeps_for_when_widget_control_is_labelable(self):
+        """RPH-004: A labelable widget control keeps its admin label association."""
+        class LabelableForm(forms.Form):
+            username = forms.CharField(label='Username')
+
+        form = LabelableForm()
+        label = helpers.AdminField(form, 'username', is_first=True).label_tag()
+        self.assertHTMLEqual(
+            label,
+            '<label for="id_username" class="required">Username:</label>',
+        )
