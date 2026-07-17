@@ -32,6 +32,17 @@ class ManagementForm(Form):
     as well.
     """
 
+    # Pseudocode — management-form rendering contract:
+    # MGMT-001: When rendering this specialized form, select an explicit,
+    # non-deprecated form-rendering path; do not enter or suppress the inherited
+    # default-template warning path.
+    # MGMT-002: For each declared management field, preserve its HiddenInput
+    # widget and emit exactly one hidden input in declaration order.
+    # MGMT-003: Pass each field's existing prefixed name, value, attributes, and
+    # hidden-input presentation through unchanged, then return their combined
+    # output. If ordinary field or template rendering fails, propagate that
+    # failure unchanged rather than altering validation or warning behavior.
+
     TOTAL_FORMS = IntegerField(widget=HiddenInput)
     INITIAL_FORMS = IntegerField(widget=HiddenInput)
     # MIN_NUM_FORM_COUNT and MAX_NUM_FORM_COUNT are output with the rest of the
