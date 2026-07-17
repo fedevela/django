@@ -298,73 +298,6 @@ class LazyObjectTestCase(TestCase):
         self.assertIs(obj2._wrapped, empty)
 
 
-# Requirement-to-test architecture (GUIDs: RADD-008, RADD-009): this contract
-# scaffold records the remaining regression obligations without becoming a new
-# proxy-behavior owner. RADD-008 compatibility evidence stays with the existing
-# LazyObjectTestCase operation tests and their SimpleLazyObjectTestCase reuse;
-# RADD-009's focused assertions belong beside the established reflected-addition
-# cases on SimpleLazyObjectTestCase. Implementation should consume these
-# placeholders at those owning loci and add no production-side test dependency.
-class ReflectedAdditionContractTestCase(TestCase):
-    def test_radd_008_existing_proxy_operations_retain_established_results(self):
-        """GUID: RADD-008 - Existing proxy-operation results are preserved."""
-        # Verification pseudocode (RADD-008: established results):
-        # - Select the existing LazyObject and SimpleLazyObject operation cases
-        #   that assert successful return values.
-        # - Execute each case with its established inputs and proxy state.
-        # - Compare each observed value with that case's established expected
-        #   value; report the originating case if any comparison differs.
-        # - Complete successfully only after every selected result is unchanged.
-        self.assertTrue(True)
-
-    def test_radd_008_existing_proxy_operations_retain_established_exceptions(self):
-        """GUID: RADD-008 - Existing proxy-operation exceptions are preserved."""
-        # Verification pseudocode (RADD-008: established exceptions):
-        # - Select the existing proxy-operation cases whose expected outcome is
-        #   an exception, including incompatible reflected addition.
-        # - Execute the direct wrapped-value operation and capture its exception.
-        # - Execute the corresponding proxy operation and capture its exception.
-        # - Fail if either operation does not raise, or if the proxy exception's
-        #   type and arguments differ from the direct operation's exception.
-        self.assertTrue(True)
-
-    def test_radd_008_existing_proxy_operations_retain_lazy_initialization(self):
-        """GUID: RADD-008 - Existing proxy lazy initialization is preserved."""
-        # Verification pseudocode (RADD-008: lazy-initialization compatibility):
-        # - For each established lazy-initialization case, create a fresh proxy
-        #   whose setup callable records every invocation.
-        # - Confirm operations documented as non-evaluating leave the proxy empty
-        #   and record no setup invocation.
-        # - Confirm each evaluating operation transitions empty -> resolved at
-        #   its established point and does not repeat setup after resolution.
-        # - Fail on any earlier, later, missing, or repeated transition.
-        self.assertTrue(True)
-
-    def test_radd_009_unresolved_reflected_addition_matches_wrapped_value(self):
-        """GUID: RADD-009 - Reflected addition matches the wrapped value."""
-        # Verification pseudocode (RADD-009: reflected-addition result):
-        # - Choose a left operand and wrapped value for which direct addition is
-        #   supported, then create an unresolved SimpleLazyObject for that value.
-        # - Compute the expected result as left operand + wrapped value.
-        # - Compute the observed result as left operand + lazy object.
-        # - Fail if the observed result differs in value or result semantics from
-        #   the expected direct-operation result; otherwise return success.
-        self.assertTrue(True)
-
-    def test_radd_009_first_reflected_addition_initializes_not_before_use(self):
-        """GUID: RADD-009 - First reflected addition triggers initialization."""
-        # Verification pseudocode (RADD-009: initialization at first use):
-        # - Create an invocation recorder and an unresolved SimpleLazyObject whose
-        #   setup callable records once before returning an add-compatible value.
-        # - Before addition, confirm the wrapper is empty and the recorder has no
-        #   invocation; fail immediately if setup has occurred eagerly.
-        # - Evaluate left operand + lazy object for the first time.
-        # - Confirm setup was invoked exactly once during that evaluation, the
-        #   wrapper transitioned to resolved, and the addition returned normally.
-        # - On later observation, fail if setup is missing or invoked again.
-        self.assertTrue(True)
-
-
 class SimpleLazyObjectTestCase(LazyObjectTestCase):
     # Reflected-addition regression integration seam (GUIDs: RADD-008,
     # RADD-009): inheritance supplies the shared LazyObject compatibility
@@ -375,6 +308,30 @@ class SimpleLazyObjectTestCase(LazyObjectTestCase):
     # tested in the parent testcase also apply to SimpleLazyObject.
     def lazy_wrap(self, wrapped_object):
         return SimpleLazyObject(lambda: wrapped_object)
+
+    def test_radd_009_unresolved_addition_matches_wrapped_value(self):
+        """GUID: RADD-009 - Reflected addition matches the wrapped value."""
+        left = ("left",)
+        wrapped = ("right",)
+        lazy = SimpleLazyObject(lambda: wrapped)
+
+        self.assertEqual(left + lazy, left + wrapped)
+
+    def test_radd_009_first_reflected_addition_initializes_at_first_use(self):
+        """GUID: RADD-009 - First reflected addition triggers initialization."""
+        setup_calls = []
+        wrapped = ("right",)
+        lazy = SimpleLazyObject(lambda: setup_calls.append(None) or wrapped)
+
+        self.assertIs(lazy._wrapped, empty)
+        self.assertEqual(setup_calls, [])
+
+        self.assertEqual(("left",) + lazy, ("left", "right"))
+        self.assertIs(lazy._wrapped, wrapped)
+        self.assertEqual(setup_calls, [None])
+
+        self.assertEqual(("another",) + lazy, ("another", "right"))
+        self.assertEqual(setup_calls, [None])
 
     def test_radd_001_left_operand_plus_lazy_object_matches_resolved_value(self):
         """GUID: RADD-001 - Reflected addition preserves operand order."""
