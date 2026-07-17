@@ -276,6 +276,10 @@ class Widget(metaclass=MediaDefiningClass):
     def value_omitted_from_data(self, data, files, name):
         return name not in data
 
+    # ARCHITECTURE — GUID: MWLABEL-008:
+    # This hook is the widget-side label-target contract consumed by
+    # BoundField. Widget owns the identity-preserving default; specialized
+    # widget families own any override without changing this dependency seam.
     def id_for_label(self, id_):
         """
         Return the HTML ID attribute of this Widget for use by a <label>,
@@ -560,6 +564,10 @@ class CheckboxInput(Input):
 
 
 class ChoiceWidget(Widget):
+    # ARCHITECTURE — GUID: MWLABEL-008:
+    # ChoiceWidget owns indexed-ID policy through add_id_index and
+    # id_for_label(). Both field-label integration and option construction
+    # delegate to that contract, leaving subclasses responsible for overrides.
     allow_multiple_selected = False
     input_type = None
     template_name = None
