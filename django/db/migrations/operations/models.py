@@ -215,10 +215,13 @@ class CreateModel(ModelOperation):
                     managers=self.managers,
                 ),
             ]
-        # DJANGO-001 through DJANGO-006 architecture boundary: CreateModel.reduce()
-        # owns folding the superseded index_together entry into ordinary final
-        # indexes state. Migration writing, loading, and execution must consume
-        # that state through their existing generic operation contracts.
+        # DJANGO-001 through DJANGO-010 architecture boundary: CreateModel.reduce()
+        # owns folding only a matched index_together tuple into ordinary final
+        # indexes state. Unmatched tuples remain in CreateModel.options, while
+        # unrelated operations remain outside this reduction branch and retain
+        # their existing optimizer contracts. Migration writing, loading,
+        # warning checks, and execution consume the reduced operation through
+        # their existing generic boundaries.
         elif (
             isinstance(operation, RenameIndex)
             and self.name_lower == operation.model_name_lower

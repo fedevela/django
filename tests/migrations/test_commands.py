@@ -2940,6 +2940,11 @@ class SquashMigrationsTests(MigrationTestBase):
             self.assertIn("index_together", historical_sources[0])
             self.assertIn("migrations.RenameIndex(", historical_sources[1])
 
+    # DJANGO-007 through DJANGO-010 integration boundary: scenario migrations
+    # belong to test-only migration modules; this command-test class owns the
+    # squash/load/apply orchestration and comparison of operations and project
+    # state. Database index observations remain behind backend introspection,
+    # and warning observations remain behind Django's model-check boundary.
     def test_django_007_fully_superseded_transition_with_unrelated_operations_preserves_behavior_and_state(
         self,
     ):
