@@ -5,7 +5,6 @@ Factored out from django.db.models.query to avoid making the main module very
 large and/or so that they can be used by other modules without getting into
 circular import difficulties.
 """
-import copy
 import functools
 import inspect
 from collections import namedtuple
@@ -41,15 +40,74 @@ class Q(tree.Node):
         super().__init__(children=[*args, *sorted(kwargs.items())], connector=_connector, negated=_negated)
 
     def _combine(self, other, conn):
+        # QCOMB-001/QCOMB-002/QCOMB-003/QCOMB-005/QCOMB-006 architecture:
+        # This method owns the empty-operand identity seam. Its structural-copy
+        # boundary is the inherited Node._new_instance() factory, supplied with
+        # the surviving Q's children, connector, and negated state. Node owns
+        # allocating an independent children container; Q owns selecting the
+        # survivor. Leaf lookup values remain opaque references across this
+        # boundary, so the seam must not depend on deepcopy or serialization.
+        # QCOMB-004/QCOMB-007 architecture:
+        # Q.__or__ owns OR-connector selection; this method owns combination
+        # topology and the empty-operand compatibility boundary. For two
+        # non-empty operands it delegates child placement, in operand order,
+        # to the inherited Node.add() contract. Query compilation remains the
+        # downstream consumer of the resulting Q tree, while condition values
+        # stay opaque to this boundary. Thus dependency points from Q's public
+        # operator seam through _combine() to Node's tree contract, without a
+        # serialization, lookup-resolution, or evaluation dependency here.
+        # QCOMB-008 architecture:
+        # This existing empty-operand branch is the production ownership and
+        # integration seam for both supported OR operand orders. It selects the
+        # non-empty Q and delegates allocation of the identity-like result to
+        # Node._new_instance(), whose children-list copy is the structural
+        # boundary. The x__in leaf and its dict_keys value remain opaque,
+        # reference-preserved children of that copied container. Regression
+        # ownership remains in QTests beside the established Q combination
+        # coverage; no lookup, pickle, or query-compiler dependency belongs on
+        # this seam.
+        # QCOMB-001/QCOMB-002/QCOMB-003/QCOMB-005/QCOMB-006 pseudocode:
+        # INPUT: the left Q (`self`), the proposed right operand, and connector.
+        # IF the right operand is not a Q, follow the existing type-error path
+        # before inspecting, copying, or otherwise processing either operand.
+        # IF connector is OR and either Q is empty:
+        #     SELECT the non-empty Q as the survivor; when both are empty,
+        #     preserve the established operand-order choice.
+        #     CREATE an independent structural result from the survivor's Q
+        #     state and children container, retaining each condition and its
+        #     contained value by reference rather than serializing, pickling,
+        #     or recursively copying those accepted values.  [QCOMB-001/002/006]
+        #     RETURN the result without changing either operand, either
+        #     operand's child container, or any contained value.  [QCOMB-003/005]
+        # OTHERWISE continue through the established non-empty combination
+        # flow; failures from that flow are outside this empty-OR obligation.
+        # QCOMB-004/QCOMB-007 pseudocode:
+        # INPUT: two Q operands and the OR connector supplied by Q.__or__().
+        # IF either operand is empty:
+        #     RETURN the established structural result selected above: a copy
+        #     of the non-empty operand, or the established left-operand result
+        #     when both operands are empty.  [QCOMB-007]
+        # ELSE both operands are non-empty:
+        #     CREATE a fresh Q combination node and set its connector to OR.
+        #     ADD the left condition tree, then the right condition tree, using
+        #     the established node-combination rules so both distinct
+        #     conditions remain represented as logical alternatives.
+        #     PRESERVE accepted condition values, including pickleable values,
+        #     and preserve the established connector and condition structure;
+        #     do not introduce serialization or value transformation.
+        #     RETURN the OR node for the existing query-evaluation handoff.
+        #     [QCOMB-004/QCOMB-007]
+        # FAILURE: reject a non-Q operand through the established TypeError
+        # path before either empty or non-empty combination processing.
         if not isinstance(other, Q):
             raise TypeError(other)
 
         # If the other Q() is empty, ignore it and just use `self`.
         if not other:
-            return copy.deepcopy(self)
+            return self._new_instance(self.children, self.connector, self.negated)
         # Or if this Q is empty, ignore it and just use `other`.
         elif not self:
-            return copy.deepcopy(other)
+            return other._new_instance(other.children, other.connector, other.negated)
 
         obj = type(self)()
         obj.connector = conn

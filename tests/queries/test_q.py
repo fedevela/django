@@ -1,8 +1,64 @@
+import pickle
+
 from django.db.models import F, Q
 from django.test import SimpleTestCase
 
 
 class QTests(SimpleTestCase):
+    def test_qcomb_004_nonempty_distinct_conditions_or_represents_both_conditions(self):
+        """QCOMB-004: OR joins two non-empty distinct query conditions."""
+        left = Q(price__gt=10)
+        right = Q(category='books')
+
+        combined = left | right
+
+        self.assertEqual(combined.connector, Q.OR)
+        self.assertEqual(combined.children, [
+            ('price__gt', 10),
+            ('category', 'books'),
+        ])
+
+    def test_qcomb_007_empty_operand_or_retains_established_observable_result(self):
+        """QCOMB-007: OR with either operand empty retains existing behavior."""
+        q = ~Q(Q(price__gt=10), Q(category='books'), _connector=Q.OR)
+
+        empty_on_left = Q() | q
+        empty_on_right = q | Q()
+
+        self.assertEqual(empty_on_left, q)
+        self.assertEqual(empty_on_right, q)
+        self.assertIsNot(empty_on_left.children, q.children)
+        self.assertIsNot(empty_on_right.children, q.children)
+
+    def test_qcomb_007_nonempty_pickleable_values_or_retains_conditions_connector_and_result(self):
+        """QCOMB-007: Valid pickleable-value OR combinations remain compatible."""
+        statuses = ['new', 'queued']
+        owners = ('alice', 'bob')
+        left = Q(status__in=statuses)
+        right = Q(owner__in=owners)
+
+        combined = left | right
+
+        self.assertEqual(combined.connector, Q.OR)
+        self.assertEqual(combined.children, [
+            ('status__in', statuses),
+            ('owner__in', owners),
+        ])
+        self.assertIs(combined.children[0][1], statuses)
+        self.assertIs(combined.children[1][1], owners)
+        self.assertEqual(pickle.loads(pickle.dumps(combined)), combined)
+
+    def test_qcomb_007_two_empty_operands_or_retains_established_combination_result(self):
+        """QCOMB-007: Combining two empty Q operands retains existing behavior."""
+        left = Q(_connector=Q.OR, _negated=True)
+        right = Q()
+
+        combined = left | right
+
+        self.assertEqual(combined, left)
+        self.assertIsNot(combined, left)
+        self.assertIsNot(combined.children, left.children)
+
     def test_combine_and_empty(self):
         q = Q(x=1)
         self.assertEqual(q & Q(), q)
@@ -18,6 +74,94 @@ class QTests(SimpleTestCase):
 
     def test_combine_or_both_empty(self):
         self.assertEqual(Q() | Q(), Q())
+
+    def test_qcomb_001_empty_or_dict_keys_does_not_require_pickling(self):
+        """QCOMB-001: Empty OR with dict_keys completes without pickling."""
+        Q() | Q(x__in={}.keys())
+
+    def test_qcomb_002_empty_or_retains_original_condition_and_value(self):
+        """QCOMB-002: Empty OR retains the x__in condition and value."""
+        value = {}.keys()
+
+        combined = Q() | Q(x__in=value)
+
+        self.assertEqual(combined.children[0][0], 'x__in')
+        self.assertIs(combined.children[0][1], value)
+
+    def test_qcomb_003_empty_or_preserves_identity_in_both_operand_orders(self):
+        """QCOMB-003: Empty OR preserves identity-like operand semantics."""
+        q = Q(x__in={}.keys())
+
+        self.assertEqual(Q() | q, q)
+        self.assertEqual(q | Q(), q)
+
+    def test_qcomb_005_empty_or_does_not_mutate_operands_or_value(self):
+        """QCOMB-005: Empty OR leaves both operands and their value unchanged."""
+        empty = Q()
+        value = {}.keys()
+        q = Q(x__in=value)
+        empty_children = empty.children[:]
+        q_children = q.children[:]
+
+        left_combined = empty | q
+        right_combined = q | empty
+
+        self.assertEqual(empty.children, empty_children)
+        self.assertEqual(q.children, q_children)
+        self.assertIs(q.children[0][1], value)
+        self.assertIs(left_combined.children[0][1], value)
+        self.assertIs(right_combined.children[0][1], value)
+        self.assertIsNot(left_combined.children, q.children)
+        self.assertIsNot(right_combined.children, q.children)
+
+    def test_qcomb_006_empty_or_accepts_standalone_non_pickleable_value(self):
+        """QCOMB-006: Empty OR doesn't reject an accepted non-pickleable value."""
+        class NonPickleable:
+            def __reduce__(self):
+                raise TypeError('cannot be pickled')
+
+        value = NonPickleable()
+        q = Q(x__in=value)
+
+        self.assertIs((q | Q()).children[0][1], value)
+
+    def test_qcomb_008_empty_left_or_dict_keys_completes_without_typeerror(self):
+        """QCOMB-008: Empty-left OR accepts a non-pickleable dict_keys value."""
+        value = {}.keys()
+
+        Q() | Q(x__in=value)
+
+    def test_qcomb_008_empty_or_retains_x_in_condition_and_dict_keys_value(self):
+        """QCOMB-008: Empty OR retains the x__in condition and contained value."""
+        value = {}.keys()
+
+        combined = Q() | Q(x__in=value)
+
+        condition, contained_value = combined.children[0]
+        self.assertEqual(condition, 'x__in')
+        self.assertIs(contained_value, value)
+
+    def test_qcomb_008_empty_or_dict_keys_has_identity_behavior_in_both_orders(self):
+        """QCOMB-008: Both supported empty-operand OR orders are identity-like."""
+        value = {}.keys()
+        empty = Q()
+        q = Q(x__in=value)
+        empty_children = empty.children[:]
+        q_children = q.children[:]
+
+        for ordering, combined in (
+            ('empty-left', empty | q),
+            ('empty-right', q | empty),
+        ):
+            with self.subTest(ordering=ordering):
+                self.assertEqual(combined, q)
+                self.assertIsNot(combined, q)
+                self.assertIsNot(combined.children, q.children)
+                self.assertIs(combined.children[0][1], value)
+
+        self.assertEqual(empty.children, empty_children)
+        self.assertEqual(q.children, q_children)
+        self.assertIs(q.children[0][1], value)
 
     def test_combine_not_q_object(self):
         obj = object()
