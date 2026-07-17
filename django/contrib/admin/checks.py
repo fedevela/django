@@ -929,8 +929,8 @@ class ModelAdminChecks(BaseModelAdminChecks):
                 )
             )
 
-    # GEV-001 / GEV-002 / GEV-003 / GEV-004 / GEV-005 / GEV-006 —
-    # architecture contract for list_display resolution.
+    # GEV-001 / GEV-002 / GEV-003 / GEV-004 / GEV-005 / GEV-006 / GEV-007 /
+    # GEV-008 / GEV-009 — architecture contract for list_display resolution.
     # ModelAdminChecks owns pre-request acceptance or rejection of each entry.
     # _check_list_display() is the sole inbound collection seam; admin.E108 and
     # admin.E109 are the existing outbound validation contracts.
@@ -959,6 +959,27 @@ class ModelAdminChecks(BaseModelAdminChecks):
     # rendering utilities. Field-kind rejection remains the separate admin.E109
     # contract and must not be folded into unresolved-reference admin.E108.
     #
+    # GEV-007 assigns collection orchestration to _check_list_display() and
+    # keeps entry resolution in _check_list_display_item(). The collection seam
+    # depends on the item seam, aggregates its ordered diagnostics, and owns no
+    # item-resolution state; the item seam neither observes siblings nor owns
+    # complete-run control. This boundary lets every configured entry retain an
+    # independent validation result without adding an adapter or shared state.
+    #
+    # GEV-008 keeps diagnostic ownership at the existing item seam. Unsupported
+    # references leave that seam through admin.E108 with its established indexed
+    # label, message, and ModelAdmin owner; supported references leave without a
+    # diagnostic, and prohibited field kinds retain the separate admin.E109 port.
+    # No new diagnostic type or public validation contract is introduced.
+    #
+    # GEV-009 constrains both seams to the system-check lifecycle. Their inputs
+    # are the registered ModelAdmin configuration, class namespaces, and model
+    # metadata, and their output is invocation-local diagnostics. Dependency
+    # direction remains checks -> configuration/class metadata; request objects,
+    # model instances, changelist construction, and cross-run caches remain
+    # outside this boundary, so repeated checks traverse the same integration
+    # path.
+    #
     # Verification ownership remains in ListDisplayTests:
     # - GEV-001: unresolvable model/ModelAdmin entries reach admin.E108 here.
     # - GEV-002: the reverse query name "choice" reaches admin.E108 here.
@@ -967,6 +988,12 @@ class ModelAdminChecks(BaseModelAdminChecks):
     # - GEV-005: valid model fields remain accepted without admin.E108 here.
     # - GEV-006: valid callable, model attribute, and ModelAdmin attribute entries
     #   remain accepted without admin.E108 here.
+    # - GEV-007: mixed and multiple invalid entries exercise collection-to-item
+    #   isolation and ordered aggregation here.
+    # - GEV-008: established valid outcomes and admin.E108 diagnostics remain
+    #   owned by the item seam here.
+    # - GEV-009: repeated and context-free checks exercise the same check-time
+    #   seams here without request or model-instance dependencies.
     def _check_list_display_item(self, obj, item, label):
         # GEV-008 / GEV-009 — preserve the established item-validation contract.
         # Logic obligations and verification loci:
