@@ -568,6 +568,11 @@ class AdminSite:
         # changing permissions, filtering, ordering, navigation, or rendering.
         # PROPAGATE any builder or app-list-flow failure through the established
         # error path; do not substitute a private builder or fallback result.
+        # Architecture seam — ADMIN-003: index() depends on app-dictionary
+        # construction only through get_app_list(), whose upstream builder
+        # dependency is the public build_app_dict() contract. The context
+        # boundary consumes the returned list opaquely so construction and
+        # ordering ownership remain outside the view.
         app_list = self.get_app_list(request)
 
         context = {
