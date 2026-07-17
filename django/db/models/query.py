@@ -2660,6 +2660,26 @@ class RelatedPopulator:
         self.remote_setter = klass_info["remote_setter"]
 
     def populate(self, row, from_obj):
+        # DJANGO-010 pseudocode (supported only()/select_related()
+        # non-regression):
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_preserve_deferred_fields:
+        #     INPUT the compiler-designated selected indexes and field names;
+        #     extract only those values from the joined row, reordering solely
+        #     when the established inheritance path requires it;
+        #     construct the related model with only the selected field names so
+        #     every omitted field remains absent and therefore deferred.
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_populate_relationships_as_before:
+        #     IF the selected related identity is NULL, retain the established
+        #     absent-relation result;
+        #     ELSE construct the metadata-designated related instance and
+        #     recursively populate any nested joined relations from the row;
+        #     apply the existing local cache setter in all cases and the remote
+        #     cache setter only when a related instance exists;
+        #     OUTPUT the same related instance type, identity, field values,
+        #     bidirectional cache state, and query-free relationship access as
+        #     before for every unaffected supported combination.
         # DJANGO-009 pseudocode (equivalent and inherited reverse O2O
         # population):
         # LOGIC OBLIGATION

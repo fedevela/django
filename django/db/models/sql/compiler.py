@@ -248,6 +248,32 @@ class SQLCompiler:
         klass_info = None
         annotations = {}
         select_idx = 0
+        # DJANGO-010 pseudocode (supported only()/select_related()
+        # non-regression):
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_preserve_selected_columns:
+        #     INPUT the query's established deferred-loading and related-field
+        #     requests;
+        #     derive the selected-field mask through the existing mask rules;
+        #     append the same base, annotation, and mask-admitted related
+        #     columns in their established order;
+        #     OUTPUT unchanged column positions for every supported combination
+        #     outside the corrected reverse one-to-one case.
+        # LOGIC OBLIGATION
+        # test_django_010_supported_combinations_preserve_join_behavior:
+        #     IF related selection is requested, traverse only relations
+        #     admitted by the established request and selection masks;
+        #     reuse the normal relation join resolution and its alias, join
+        #     type, and linking conditions;
+        #     do not add, remove, or replace joins for unaffected combinations.
+        # LOGIC OBLIGATION
+        # test_django_010_relevant_existing_regression_suite_remains_passing:
+        #     FOR EACH previously supported deferral/related-selection path,
+        #     preserve its projection and relation metadata invariants;
+        #     IF a combination remains invalid, propagate its established
+        #     validation failure instead of producing a changed query;
+        #     otherwise hand the unchanged selected indexes and cache setters
+        #     to related-object population.
         for alias, (sql, params) in self.query.extra_select.items():
             annotations[alias] = select_idx
             select.append((RawSQL(sql, params), alias))
