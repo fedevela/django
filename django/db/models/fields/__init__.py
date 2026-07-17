@@ -1011,6 +1011,10 @@ class Field(RegisterLookupMixin):
             "label": capfirst(self.verbose_name),
             "help_text": self.help_text,
         }
+        # Architecture contract (DJANGO-005, DJANGO-007): Model Field owns
+        # translation of default metadata into generated form-field options.
+        # BaseForm owns callable initial resolution, and BoundField owns hidden
+        # transport and comparison; neither may infer model-default semantics.
         # Pseudocode (DJANGO-005, DJANGO-007) -- preserve generated field
         # initial and hidden-initial contracts:
         # INPUT: model-field default metadata and explicit formfield options.

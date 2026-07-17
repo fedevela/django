@@ -460,6 +460,10 @@ class BaseModelForm(BaseForm, AltersData):
         self.add_error(None, errors)
 
     def _post_clean(self):
+        # Architecture integration seam (DJANGO-006): BaseModelForm owns the
+        # handoff from form cleaning to model construction and validation.
+        # Inline formsets compose this contract through their forms; they do
+        # not own a callable-default-specific validation path.
         # Pseudocode (DJANGO-006) -- preserve valid ModelForm and inline-form
         # submission and validation outcomes:
         # INPUT: field-cleaned submission data, the target model instance, and

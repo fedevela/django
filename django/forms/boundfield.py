@@ -161,6 +161,10 @@ class BoundField:
         # baseline decoding and field-level change classification. BaseForm
         # aggregates that result and BaseFormSet only consumes it for extra-form
         # handling, keeping inline and ArrayField concerns out of this boundary.
+        # Architecture compatibility boundary (DJANGO-006, DJANGO-007): this
+        # same generic comparison seam serves ModelForms and inline forms.
+        # Model-specific validation consumes its result downstream and must not
+        # introduce callable-default or non-callable-default comparison forks.
         # Pseudocode (DJANGO-003, DJANGO-004) -- classify the extra inline:
         # INPUT: visible submitted data and the callable-default field's hidden
         # initial data when hidden-initial comparison is enabled.
