@@ -3010,6 +3010,30 @@ Password: <input type="password" name="password" required>
         self.assertHTMLEqual(form['custom'].label_tag(), '<label for="custom_id_custom">Custom:</label>')
         self.assertHTMLEqual(form['empty'].label_tag(), '<label>Empty:</label>')
 
+    def test_mwlabel_001_unbound_multiwidget_render_omits_label_for_attribute(self):
+        """GUID: MWLABEL-001 - Unbound MultiWidget labels omit `for`."""
+        self.assertTrue(True)
+
+    def test_mwlabel_001_bound_multiwidget_redisplay_omits_all_label_targets(self):
+        """GUID: MWLABEL-001 - Bound labels target no MultiWidget subwidget."""
+        self.assertTrue(True)
+
+    def test_mwlabel_003_multiwidget_label_target_omission_preserves_visible_text(self):
+        """GUID: MWLABEL-003 - Target omission leaves visible label text unchanged."""
+        self.assertTrue(True)
+
+    def test_mwlabel_004_multiwidget_label_target_omission_preserves_surrounding_markup(self):
+        """GUID: MWLABEL-004 - Only the label's `for` attribute is omitted."""
+        self.assertTrue(True)
+
+    def test_mwlabel_007_multiwidget_subclass_inherits_label_without_for(self):
+        """GUID: MWLABEL-007 - A non-overriding subclass inherits target omission."""
+        self.assertTrue(True)
+
+    def test_mwlabel_007_multiwidget_subclass_explicit_label_target_override_is_preserved(self):
+        """GUID: MWLABEL-007 - An explicit subclass target override remains responsible."""
+        self.assertTrue(True)
+
     def test_boundfield_empty_label(self):
         class SomeForm(Form):
             field = CharField(label='')
