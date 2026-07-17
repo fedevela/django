@@ -480,6 +480,13 @@ class AdminSite:
                 continue
 
             info = (app_label, model._meta.model_name)
+            # Architecture contract — ADMIN-001, ADMIN-005, ADMIN-006:
+            # _build_app_dict() owns the permission-gated projection from an
+            # AdminSite registry entry to its model dictionary. The registry
+            # key is the authoritative model-class dependency, and this
+            # dictionary-construction seam is the sole home for exposing it;
+            # the surrounding permission boundary and existing fields remain
+            # owned by this method.
             model_dict = {
                 'name': capfirst(model._meta.verbose_name_plural),
                 'object_name': model._meta.object_name,
@@ -534,6 +541,9 @@ class AdminSite:
         # Sort the apps alphabetically.
         app_list = sorted(app_dict.values(), key=lambda x: x['name'].lower())
 
+        # Architecture boundary — ADMIN-007: get_app_list() consumes model
+        # dictionaries opaquely and retains sole ownership of presentation
+        # ordering; adding registry-derived data must not widen this boundary.
         # Sort the models alphabetically within each app.
         for app in app_list:
             app['models'].sort(key=lambda x: x['name'])
