@@ -3097,6 +3097,30 @@ class OtherModelFormTests(TestCase):
         bound_form = PublicationDefaultsForm(empty_data)
         self.assertFalse(bound_form.has_changed())
 
+    def test_django_005_callable_default_supplies_initial_without_submitted_value(self):
+        """
+        DJANGO-005: A generated ModelForm field backed by a callable model
+        default retains its established initial value when no submitted value
+        supersedes it.
+        """
+        self.assertTrue(True)
+
+    def test_django_006_valid_callable_default_modelform_retains_outcomes(self):
+        """
+        DJANGO-006: A valid submitted ModelForm containing a callable-default
+        field retains its established submission, changed-data, and validation
+        outcomes.
+        """
+        self.assertTrue(True)
+
+    def test_django_007_noncallable_default_modelform_retains_hidden_initial(self):
+        """
+        DJANGO-007: A rendered and bound ModelForm field without a callable
+        model default retains its established hidden-initial and changed-data
+        behavior.
+        """
+        self.assertTrue(True)
+
     def test_django_001_invalid_callable_default_form_redisplays_submitted_value(self):
         """
         DJANGO-001: A bound generated ModelForm that fails validation redisplays

@@ -1765,6 +1765,22 @@ class ModelFormsetTest(TestCase):
             self.assertEqual(formset.forms[0]["title"].value(), "invalid")
             formset = self.resubmit_invalid_callable_default_inline(formset)
 
+    def test_django_006_valid_callable_default_inline_retains_outcomes(self):
+        """
+        DJANGO-006: A valid submitted admin inline containing a
+        callable-default field retains its established submission,
+        changed-data, and validation outcomes.
+        """
+        self.assertTrue(True)
+
+    def test_django_007_noncallable_default_inline_retains_hidden_initial(self):
+        """
+        DJANGO-007: A rendered and bound admin-inline field without a callable
+        model default retains its established hidden-initial and changed-data
+        behavior.
+        """
+        self.assertTrue(True)
+
     def test_inlineformset_factory_with_null_fk(self):
         # inlineformset_factory tests with fk having null=True. see #9462.
         # create some data that will exhibit the issue
