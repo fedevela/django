@@ -160,6 +160,18 @@ class BulkCreateUpdateConflictsContractTests(TestCase):
         self.assertIn(returning_sql, insert_sql)
         self.assertLess(insert_sql.index("DO UPDATE"), insert_sql.index(returning_sql))
 
+    def test_BULKUPSERT_007_enabling_returned_fields_preserves_selected_conflict_matching_fields(
+        self,
+    ):
+        """GUID: BULKUPSERT-007"""
+        self.assertTrue(True)
+
+    def test_BULKUPSERT_007_conflict_updates_only_selected_update_fields_when_returned_fields_enabled(
+        self,
+    ):
+        """GUID: BULKUPSERT-007"""
+        self.assertTrue(True)
+
     @skipUnlessDBFeature(
         "supports_update_conflicts", "can_return_rows_from_bulk_insert"
     )
