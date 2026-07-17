@@ -108,6 +108,10 @@ class URLValidator(RegexValidator):
     #   OTHERWISE preserve every existing validation branch and result.
     #   OUTPUT either successful validation or the established invalid-URL
     #   ValidationError; never expose the parser-originated ValueError.
+    # ARCHITECTURE (GUID: URL-001, URL-002): URLValidator owns translation of
+    # parser failures from every urlsplit() in this method. URLField reaches
+    # this boundary through default_validators; translation must reuse this
+    # validator's message and code rather than introduce a field-level contract.
     def __call__(self, value):
         if not isinstance(value, str):
             raise ValidationError(self.message, code=self.code, params={'value': value})

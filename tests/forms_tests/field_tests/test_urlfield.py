@@ -107,6 +107,10 @@ class URLFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
                 with self.assertRaisesMessage(ValidationError, msg):
                     f.clean(value)
 
+    # ARCHITECTURE (GUID: URL-001, URL-002, URL-003): These placeholders are
+    # the public URLField.clean() integration seam for the URLValidator
+    # boundary. Later phases should replace them in place, keeping parser
+    # mechanics owned by validator tests rather than duplicating them here.
     def test_url_001_parser_valueerror_during_clean_becomes_validationerror(self):
         """GUID: URL-001 - Parser ValueError becomes ValidationError."""
         self.assertTrue(True)
