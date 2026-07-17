@@ -168,6 +168,13 @@ def get_user(request):
     Return the user model instance associated with the given request session.
     If no user is retrieved, return an instance of `AnonymousUser`.
     """
+    # Architecture contract [SES-008]: get_user() owns the authentication-side
+    # integration seam, beginning with its first read from request.session. It
+    # depends only on the session mapping contract: the session backend and
+    # SessionBase.decode() own persisted-data retrieval and malformed-input
+    # containment. Consequently, no decoder-specific exception or malformed
+    # value crosses into authentication; an empty mapping follows the existing
+    # KeyError-to-AnonymousUser boundary without backend or hash processing.
     # Pseudocode [SES-008]:
     #   INPUT a request whose session may refer to malformed persisted data.
     #   ACCESS the authentication user key through the session mapping.
