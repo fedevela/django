@@ -1,6 +1,7 @@
 """
 Unit tests for reverse URL lookups.
 """
+import functools
 import sys
 import threading
 
@@ -1104,6 +1105,106 @@ class NoRootUrlConfTests(SimpleTestCase):
 
 @override_settings(ROOT_URLCONF='urlpatterns_reverse.namespace_urls')
 class ResolverMatchTests(SimpleTestCase):
+
+    def test_rpr_001_partial_view_repr_identifies_underlying_callable(self):
+        """GUID: RPR-001 - Partial repr identifies its underlying callable."""
+        func = functools.partial(empty_view)
+        match = ResolverMatch(func, (), {})
+        self.assertIn('func=%r' % func, repr(match))
+        self.assertIn(repr(empty_view), repr(match))
+
+    def test_rpr_002_partial_view_repr_preserves_all_bound_positional_arguments_in_order(self):
+        """GUID: RPR-002 - Partial repr preserves bound positional arguments."""
+        func = functools.partial(empty_view, 'first', 2, ('third',))
+        match = ResolverMatch(func, (), {})
+        self.assertIn('func=%r' % func, repr(match))
+        self.assertIn(", 'first', 2, ('third',))", repr(match))
+
+    def test_rpr_003_partial_view_repr_preserves_all_bound_keyword_arguments(self):
+        """GUID: RPR-003 - Partial repr preserves bound keyword arguments."""
+        func = functools.partial(empty_view, alpha='first', beta=2)
+        match = ResolverMatch(func, (), {})
+        self.assertIn('func=%r' % func, repr(match))
+        self.assertIn("alpha='first'", repr(match))
+        self.assertIn('beta=2', repr(match))
+
+    @override_settings(ROOT_URLCONF='urlpatterns_reverse.urls')
+    def test_rpr_004_request_attached_partial_view_repr_preserves_callable_and_bound_arguments(self):
+        """GUID: RPR-004 - Request-attached repr preserves the partial contract."""
+        response = self.client.get('/partial_nested/')
+        match = response.resolver_match
+        self.assertIs(match.func, views.empty_view_nested_partial)
+        self.assertIn('func=%r' % views.empty_view_nested_partial, repr(match))
+        self.assertIn(repr(empty_view), repr(match))
+        self.assertIn("template_name='nested_partial.html'", repr(match))
+
+    def test_rpr_005_created_ordinary_view_resolver_match_repr_remains_identical(self):
+        """GUID: RPR-005 - Created ordinary-view repr remains identical."""
+        match = ResolverMatch(
+            empty_view,
+            ('argument',),
+            {'keyword': 'value'},
+            url_name='ordinary-view',
+            app_names=['ordinary-app'],
+            namespaces=['ordinary-namespace'],
+            route='ordinary/<str:argument>/',
+        )
+        self.assertEqual(
+            repr(match),
+            "ResolverMatch(func=urlpatterns_reverse.views.empty_view, "
+            "args=('argument',), kwargs={'keyword': 'value'}, "
+            "url_name=ordinary-view, app_names=['ordinary-app'], "
+            "namespaces=['ordinary-namespace'], route=ordinary/<str:argument>/)",
+        )
+
+    def test_rpr_005_request_resolved_ordinary_view_repr_preserves_callable_identity_and_fields(self):
+        """GUID: RPR-005 - Request-attached ordinary-view identity and fields persist."""
+        response = self.client.get('/resolver_match/')
+        match = response.resolver_match
+        self.assertIs(match.func, views.pass_resolver_match_view)
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {})
+        self.assertEqual(match.url_name, 'test-resolver-match')
+        self.assertEqual(match.app_names, [])
+        self.assertEqual(match.namespaces, [])
+        self.assertEqual(match.route, 'resolver_match/')
+        self.assertEqual(
+            repr(match),
+            "ResolverMatch(func=urlpatterns_reverse.views.pass_resolver_match_view, "
+            "args=(), kwargs={}, url_name=test-resolver-match, app_names=[], "
+            "namespaces=[], route=resolver_match/)",
+        )
+
+    def test_rpr_005_partial_aware_repr_keeps_ordinary_view_test_expectations_unchanged(self):
+        """GUID: RPR-005 - Ordinary-view regression expectations remain unchanged."""
+        self.assertEqual(
+            repr(resolve('/no_kwargs/42/37/')),
+            "ResolverMatch(func=urlpatterns_reverse.views.empty_view, "
+            "args=('42', '37'), kwargs={}, url_name=no-kwargs, app_names=[], "
+            "namespaces=[], route=^no_kwargs/([0-9]+)/([0-9]+)/$)",
+        )
+
+    @override_settings(ROOT_URLCONF='urlpatterns_reverse.urls')
+    def test_rpr_006_partial_aware_initialization_preserves_url_resolution_outcome(self):
+        """GUID: RPR-006 - Partial-aware initialization preserves resolution."""
+        match = resolve('/partial/')
+        self.assertIs(match.func, views.empty_view_partial)
+        self.assertEqual(match.args, ())
+        self.assertEqual(match.kwargs, {})
+        self.assertEqual(match.url_name, 'partial')
+
+    def test_rpr_006_partial_aware_initialization_preserves_invocation_meaning(self):
+        """GUID: RPR-006 - Partial-aware initialization preserves invocation."""
+        request = HttpRequest()
+        func = functools.partial(
+            empty_view, request, 'first', 'second', alpha=1, beta=2,
+        )
+        match = ResolverMatch(func, (), {})
+        self.assertIs(match.func, func)
+        self.assertIs(match.func.func, empty_view)
+        self.assertEqual(match.func.args, (request, 'first', 'second'))
+        self.assertEqual(match.func.keywords, {'alpha': 1, 'beta': 2})
+        self.assertEqual(match.func().status_code, 200)
 
     def test_urlpattern_resolve(self):
         for path_, url_name, app_name, namespace, view_name, func, args, kwargs in resolve_test_data:
